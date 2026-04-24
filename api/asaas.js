@@ -80,9 +80,9 @@ module.exports = async function handler(req, res) {
 
       console.log('[Password Recovery] Gerando token de reset para:', email);
 
-      // Salvar token em uma "tabela virtual" ou simplesmente retornar com o token no link
-      // Para simplicidade, construir o link com token e validar depois ao resetar
-      const resetLink = `${process.env.ALLOWED_ORIGIN || 'https://gestescolar.com.br'}/login?reset_token=${resetToken}&email=${encodeURIComponent(email)}`;
+      // Construir link com token no fragment (#) para não enviar ao servidor
+      // Frontend extrai parâmetros de getHashParams() que procura no fragment
+      const resetLink = `${process.env.ALLOWED_ORIGIN || 'https://gestescolar.com.br'}/login#reset_token=${resetToken}&reset_email=${encodeURIComponent(email)}`;
 
       console.log('[Password Recovery] Link de reset gerado:', resetLink.slice(0, 100) + '...');
 
