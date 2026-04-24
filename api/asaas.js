@@ -490,13 +490,16 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;color:#3
         break;
 
       // ── COBRANÇAS PIX ──────────────────────────
-      case 'createPixCharge':
+      case 'createPixCharge': {
+        // Asaas rejeita dueDate no passado — normaliza para hoje se necessário
+        const hojeProxy = new Date().toISOString().slice(0, 10);
+        const dueDateProxy = data.dueDate && data.dueDate >= hojeProxy ? data.dueDate : hojeProxy;
         asaasPath = '/payments';
         body = {
           customer: data.customerId,
           billingType: 'PIX',
           value: data.value,
-          dueDate: data.dueDate,
+          dueDate: dueDateProxy,
           description: data.description,
           externalReference: data.externalReference,
           fine:     data.fine     ? { value: data.fine.value }     : undefined,
@@ -511,6 +514,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;color:#3
           ] : undefined,
         };
         break;
+      }
 
       // ── CRIAR CLIENTE NO ASAAS ─────────────────
       case 'createCustomer':
@@ -694,44 +698,80 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;color:#3
     }
 
     // ── IDOR: verificar propriedade do pagamento ───
-    // Para getPayment e getPixQrCode, o externalReference deve conter o school_id do usuário
-    // Superadmin pode consultar qualquer pagamento; outros usuários só o da própria escola
+    // Superadmin pode consultar qualquer pagamento; outros usuários só o da própria escola.
     if ((action === 'getPayment' || action === 'getPixQrCode') && userRole !== 'superadmin') {
-      // Para getPixQrCode a resposta NÃO contém externalReference.
-      // Busca o payment separadamente para obter o externalReference.
-      let extRef = asaasData.externalReference || '';
-      if (!extRef && action === 'getPixQrCode' && data.paymentId) {
+      let ownershipOk = false;
+
+      // Tentativa 1 (mais rápida): verificar via externalReference no formato schoolId|invoiceId
+      // (cobranças geradas com o novo formato automaticamente passam aqui)
+      if (!ownershipOk && userSchoolId) {
+        let extRef = asaasData.externalReference || '';
+        if (!extRef && action === 'getPixQrCode' && data.paymentId) {
+          try {
+            const payLookup = await fetch(`${ASAAS_BASE}/payments/${data.paymentId}`, {
+              headers: { access_token: apiKeyToUse, 'Content-Type': 'application/json' },
+            });
+            if (payLookup.ok) {
+              const payData = await payLookup.json();
+              extRef = payData.externalReference || '';
+            }
+          } catch(_) {}
+        }
+        const refSchoolId = extRef.split('|')[0];
+        if (refSchoolId && refSchoolId === String(userSchoolId)) ownershipOk = true;
+      }
+
+      // Tentativa 2 (qualquer role da escola): verifica pelo campo users.school_id
+      if (!ownershipOk && data.paymentId && userSchoolId && SUPABASE_SERVICE_KEY) {
         try {
-          const payLookup = await fetch(`${ASAAS_BASE}/payments/${data.paymentId}`, {
-            headers: { access_token: apiKeyToUse, 'Content-Type': 'application/json' },
-          });
-          if (payLookup.ok) {
-            const payData = await payLookup.json();
-            extRef = payData.externalReference || '';
+          const userRes = await fetch(
+            `${SUPABASE_URL}/rest/v1/users?auth_id=eq.${authUserId}&school_id=eq.${userSchoolId}&select=id&limit=1`,
+            { headers: { apikey: SUPABASE_SERVICE_KEY, Authorization: `Bearer ${SUPABASE_SERVICE_KEY}` } }
+          );
+          if (userRes.ok) {
+            const arr = await userRes.json();
+            if (arr && arr[0]) {
+              // Confirma que o paymentId existe nas invoices da escola
+              const invRes = await fetch(
+                `${SUPABASE_URL}/rest/v1/invoices?asaas_id=eq.${data.paymentId}&school_id=eq.${userSchoolId}&select=id&limit=1`,
+                { headers: { apikey: SUPABASE_SERVICE_KEY, Authorization: `Bearer ${SUPABASE_SERVICE_KEY}` } }
+              );
+              if (invRes.ok) {
+                const invData = await invRes.json();
+                if (invData && invData[0]) ownershipOk = true;
+              }
+            }
           }
         } catch(_) {}
       }
-      const refSchoolId = extRef.split('|')[0];
-      let ownershipOk = userSchoolId && refSchoolId === String(userSchoolId);
 
-      // Fallback: aceita QUALQUER role (gestor, pai, professor) desde que o
-      // usuário esteja vinculado à escola do pagamento. Responsáveis precisam
-      // pagar PIX dos filhos, professores podem consultar cobranças da turma, etc.
-      if (!ownershipOk && refSchoolId && authUserId && SUPABASE_SERVICE_KEY) {
+      // Tentativa 3 (formato legado ou externalReference simples sem '|'):
+      // verifica se o usuário pertence a QUALQUER escola que possui invoice com esse asaas_id
+      if (!ownershipOk && data.paymentId && authUserId && SUPABASE_SERVICE_KEY) {
         try {
           const ownRes = await fetch(
-            `${SUPABASE_URL}/rest/v1/users?school_id=eq.${refSchoolId}&auth_id=eq.${authUserId}&select=id,role&limit=1`,
+            `${SUPABASE_URL}/rest/v1/users?auth_id=eq.${authUserId}&select=school_id&limit=1`,
             { headers: { apikey: SUPABASE_SERVICE_KEY, Authorization: `Bearer ${SUPABASE_SERVICE_KEY}` } }
           );
           if (ownRes.ok) {
             const arr = await ownRes.json();
-            if (arr && arr[0]) ownershipOk = true;
+            if (arr && arr[0]?.school_id) {
+              const sid = arr[0].school_id;
+              const invRes2 = await fetch(
+                `${SUPABASE_URL}/rest/v1/invoices?asaas_id=eq.${data.paymentId}&school_id=eq.${sid}&select=id&limit=1`,
+                { headers: { apikey: SUPABASE_SERVICE_KEY, Authorization: `Bearer ${SUPABASE_SERVICE_KEY}` } }
+              );
+              if (invRes2.ok) {
+                const invData2 = await invRes2.json();
+                if (invData2 && invData2[0]) ownershipOk = true;
+              }
+            }
           }
         } catch(_) {}
       }
 
       if (!ownershipOk) {
-        console.warn(`[Asaas IDOR] user ${authUserId} tentou acessar pagamento de outra escola: ${data.paymentId} (extRef=${extRef})`);
+        console.warn(`[Asaas IDOR] user ${authUserId} negado para paymentId=${data.paymentId}, userSchoolId=${userSchoolId}`);
         return res.status(403).json({ error: 'Acesso negado a este pagamento.' });
       }
     }
