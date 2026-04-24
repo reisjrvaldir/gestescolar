@@ -778,14 +778,16 @@ const AdminSettings = {
   _cepTimeout: null,
 
   debouncedBuscarCep(cep) {
-    clearTimeout(this._cepTimeout);
     const input = document.getElementById('cfg-postal-code');
-    input.style.borderColor = '';
-
     const digits = cep.replace(/\D/g, '');
+
+    clearTimeout(this._cepTimeout);
+
     if (digits.length === 8) {
       input.style.borderColor = '#2196F3';
       this._cepTimeout = setTimeout(() => this.buscarCep(cep), 500);
+    } else {
+      input.style.borderColor = '';
     }
   },
 
