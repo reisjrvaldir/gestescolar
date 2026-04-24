@@ -1407,6 +1407,31 @@ const FinEntradas = {
     );
   },
 
+  _calcularValorComJuros(inv, school) {
+    // Calcular juros se a data for passada
+    let valorFinal = inv.amount || 0;
+    if (inv.dueDate) {
+      const dueDate = new Date(inv.dueDate);
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      dueDate.setHours(0, 0, 0, 0);
+
+      if (dueDate < today) {
+        const diasAtraso = Math.floor((today - dueDate) / (1000 * 60 * 60 * 24));
+        const finePercent = Number(school?.finePercent ?? 2.0);
+        const interestDayPercent = Number(school?.interestDayPercent ?? 0.033);
+
+        // Multa fixa (uma vez)
+        const multa = valorFinal * (finePercent / 100);
+        // Juros compostos diários
+        const juros = valorFinal * Math.pow(1 + (interestDayPercent / 100), diasAtraso) - valorFinal;
+
+        valorFinal = valorFinal + multa + juros;
+      }
+    }
+    return Number(valorFinal.toFixed(2));
+  },
+
   async sendPix(studentId, invoiceId) {
     const s    = DB.getStudents().find(s => s.id === studentId);
     const inv  = DB.getInvoices().find(i => i.id === invoiceId);
@@ -1416,12 +1441,16 @@ const FinEntradas = {
 
     if (!s || !inv) return;
 
+    // Calcular valor com juros se estiver vencido
+    const valorComJuros = this._calcularValorComJuros(inv, school);
+    const invAtualized = { ...inv, amount: valorComJuros };
+
     Utils.toast('Gerando cobrança PIX...', 'info');
 
-    // Tentar gerar cobrança Asaas real
+    // Tentar gerar cobrança Asaas real (com valor atualizado)
     let pixCode = null;
     if (school?.asaasWalletId) {
-      const result = await AsaasClient.chargeInvoice(inv, s, school);
+      const result = await AsaasClient.chargeInvoice(invAtualized, s, school);
       if (result) pixCode = result.pixCopiaECola;
     }
 
@@ -1432,8 +1461,8 @@ const FinEntradas = {
     }
 
     const msgPix = pixCode
-      ? `Olá, ${resp?.nome || 'responsável'}! A cobrança de ${s.name} no valor de ${Utils.currency(inv.amount)} vence em ${Utils.date(inv.dueDate)}.\n\n📱 PIX Copia e Cola:\n${pixCode}`
-      : `Olá, ${resp?.nome || 'responsável'}! A cobrança de ${s.name} no valor de ${Utils.currency(inv.amount)} vence em ${Utils.date(inv.dueDate)}. Entre em contato com a escola para realizar o pagamento.`;
+      ? `Olá, ${resp?.nome || 'responsável'}! A cobrança de ${s.name} no valor de ${Utils.currency(valorComJuros)} vence em ${Utils.date(inv.dueDate)}.\n\n📱 PIX Copia e Cola:\n${pixCode}`
+      : `Olá, ${resp?.nome || 'responsável'}! A cobrança de ${s.name} no valor de ${Utils.currency(valorComJuros)} vence em ${Utils.date(inv.dueDate)}. Entre em contato com a escola para realizar o pagamento.`;
 
     // Envia mensagem no chat interno
     if (s.parentId) {
