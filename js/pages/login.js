@@ -295,11 +295,21 @@ Router.register('school-register', () => {
   `;
 
   // Adiciona listener de CEP após renderizar o HTML
+  console.log('[CEP] Rota school-register carregada. Versão: v2025-04-24');
   const cepInput = document.getElementById('regPostalCode');
   if (cepInput) {
-    cepInput.addEventListener('input', (e) => {
+    console.log('[CEP] ✅ Campo regPostalCode encontrado. Registrando listener...');
+    cepInput.addEventListener('input', function (e) {
+      console.log('[CEP] 🔵 Evento input disparado. Valor:', e.target.value);
+      if (typeof LoginPage === 'undefined') {
+        console.error('[CEP] ❌ LoginPage não está definido!');
+        return;
+      }
       LoginPage.debouncedBuscarCep(e.target.value);
     });
+    console.log('[CEP] ✅ Listener registrado com sucesso');
+  } else {
+    console.error('[CEP] ❌ Campo regPostalCode NÃO encontrado no DOM!');
   }
 });
 
