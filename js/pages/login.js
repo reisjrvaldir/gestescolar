@@ -187,7 +187,8 @@ Router.register('school-register', () => {
           <div style="display:flex;gap:8px;">
             <div class="form-group" style="flex:1;">
               <label class="form-label">CEP *</label>
-              <input class="form-control" id="regPostalCode" placeholder="00000-000" data-mask="cep" maxlength="9" required />
+              <input class="form-control" id="regPostalCode" placeholder="00000-000" data-mask="cep" maxlength="9" required
+                oninput="LoginPage.debouncedBuscarCep(this.value)" />
             </div>
             <div class="form-group" style="flex:2;">
               <label class="form-label">Endereço *</label>
@@ -312,6 +313,48 @@ Router.register('school-plans', () => {
 
 const LoginPage = {
   _pendingUser: null,
+  _cepTimeout: null,
+
+  debouncedBuscarCep(cep) {
+    const input = document.getElementById('regPostalCode');
+    const digits = cep.replace(/\D/g, '');
+    clearTimeout(this._cepTimeout);
+    if (digits.length === 8) {
+      input.style.borderColor = '#2196F3';
+      this._cepTimeout = setTimeout(() => this._buscarCep(digits), 500);
+    } else {
+      input.style.borderColor = '';
+    }
+  },
+
+  async _buscarCep(digits) {
+    const input = document.getElementById('regPostalCode');
+    try {
+      input.style.opacity = '0.6';
+      const res = await fetch(`https://viacep.com.br/ws/${digits}/json/`);
+      const d = await res.json();
+      if (d.erro) {
+        input.style.borderColor = '#f44336';
+        input.style.opacity = '1';
+        Utils.toast('CEP não encontrado', 'error');
+        return;
+      }
+      const set = (id, val) => { const el = document.getElementById(id); if (el) el.value = val || ''; };
+      set('regAddress', d.logradouro);
+      set('regProvince', d.bairro);
+      set('regCity', d.localidade);
+      // Estado: select — seleciona pelo value (UF)
+      const stateEl = document.getElementById('regState');
+      if (stateEl && d.uf) stateEl.value = d.uf;
+      input.style.borderColor = '#4caf50';
+      input.style.opacity = '1';
+      Utils.toast('Endereço preenchido com sucesso', 'success');
+    } catch (e) {
+      input.style.borderColor = '#f44336';
+      input.style.opacity = '1';
+      Utils.toast('Erro ao buscar CEP. Tente novamente.', 'error');
+    }
+  },
 
   _injectModals() {
     // Remove modais antigos se existirem
