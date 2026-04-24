@@ -749,16 +749,26 @@ const ParentInvoices = {
     const inv = DB.getInvoices().find(i => i.id === invId);
     if (!inv) return;
 
-    // Se já tem cobrança Asaas, tentar buscar QR existente
-    if (inv.asaasId) {
+    // Se a fatura está vencida, NÃO reutiliza cobrança antiga:
+    // o valor precisa ser recalculado com multa + juros atualizados.
+    const hoje = new Date(); hoje.setHours(0, 0, 0, 0);
+    const dueD = inv.dueDate ? new Date(inv.dueDate + 'T00:00:00') : null;
+    const isOverdue = dueD && !isNaN(dueD.getTime()) && dueD < hoje;
+
+    // Se já tem cobrança Asaas e NÃO está vencida, tenta buscar QR existente
+    // (silent: true — evita toast "Acesso negado" caso cobrança seja de versão antiga)
+    if (inv.asaasId && !isOverdue) {
       Utils.toast('Buscando QR Code...', 'info');
-      const qr = await AsaasClient.getPixQrCode(inv.asaasId);
+      const qr = await AsaasClient.getPixQrCode(inv.asaasId, { silent: true });
       if (qr && qr.payload) {
         this._showPixModal(inv, qr.payload, qr.encodedImage);
         this._startPaymentPolling(inv);
         return;
       }
       // QR existente inválido — limpa e regenera
+      DB.updateInvoice(invId, { asaasId: null });
+    } else if (inv.asaasId && isOverdue) {
+      // Cobrança antiga para fatura vencida — descartar, será gerada nova com juros
       DB.updateInvoice(invId, { asaasId: null });
     }
 
@@ -772,8 +782,10 @@ const ParentInvoices = {
     const result = await AsaasClient.chargeInvoice(inv, student, school);
     if (!result) return; // erro já foi exibido pelo chargeInvoice
 
-    // Recarrega a invoice com asaasId atualizado
-    const updated = DB.getInvoices().find(i => i.id === invId);
+    // Recarrega a invoice com asaasId atualizado.
+    // Expõe no objeto o valor efetivamente cobrado (com multa+juros) para
+    // o modal mostrar o total correto quando a fatura estiver vencida.
+    const updated = { ...(DB.getInvoices().find(i => i.id === invId) || inv), amountCharged: Number(result.value) || inv.amount };
     this._showPixModal(updated, result.pixCopiaECola, result.pixQrCodeBase64);
     this._startPaymentPolling(updated);
   },
@@ -954,10 +966,16 @@ const ParentInvoices = {
   },
 
   _showPixModal(inv, copiaECola, qrBase64) {
+    // Se houver amountCharged (valor com multa+juros), exibe esse no topo
+    // e mostra discreto o valor original + diferença.
+    const valorExibir = Number(inv.amountCharged) || Number(inv.amount) || 0;
+    const temJuros = inv.amountCharged && Number(inv.amountCharged) > Number(inv.amount);
+    const diferenca = temJuros ? (Number(inv.amountCharged) - Number(inv.amount)) : 0;
     Utils.modal(
       `Pagar via PIX – ${Utils.escape(inv.description)}`,
       `<div style="text-align:center;">
-        <div style="font-size:32px;font-weight:900;color:var(--secondary);margin-bottom:4px;">${Utils.currency(inv.amount)}</div>
+        <div style="font-size:32px;font-weight:900;color:var(--secondary);margin-bottom:4px;">${Utils.currency(valorExibir)}</div>
+        ${temJuros ? `<div style="font-size:12px;color:#d93025;margin-bottom:4px;">Original: ${Utils.currency(inv.amount)} + multa/juros: ${Utils.currency(diferenca)}</div>` : ''}
         <div class="text-muted">Vencimento: ${Utils.date(inv.dueDate)}</div>
         <div style="margin:20px 0;">
           <div style="font-size:13px;font-weight:700;color:var(--text-muted);margin-bottom:8px;">QR CODE PIX</div>

@@ -1441,28 +1441,30 @@ const FinEntradas = {
 
     if (!s || !inv) return;
 
-    // Calcular valor com juros se estiver vencido
-    const valorComJuros = this._calcularValorComJuros(inv, school);
-    const invAtualized = { ...inv, amount: valorComJuros };
-
     Utils.toast('Gerando cobrança PIX...', 'info');
 
-    // Tentar gerar cobrança Asaas real (com valor atualizado)
+    // chargeInvoice aplica internamente multa+juros e ajusta dueDate se vencida
     let pixCode = null;
+    let valorCobrado = inv.amount;
     if (school?.asaasWalletId) {
-      const result = await AsaasClient.chargeInvoice(invAtualized, s, school);
-      if (result) pixCode = result.pixCopiaECola;
+      const result = await AsaasClient.chargeInvoice(inv, s, school);
+      if (result) {
+        pixCode = result.pixCopiaECola;
+        valorCobrado = Number(result.value) || inv.amount;
+      }
     }
 
     // Fallback para chave PIX configurada
     if (!pixCode) {
       const cfg = DB.getSchoolConfig();
       pixCode = cfg.pixKey || null;
+      // Sem Asaas, calcular juros manualmente para exibir no chat
+      valorCobrado = this._calcularValorComJuros(inv, school);
     }
 
     const msgPix = pixCode
-      ? `Olá, ${resp?.nome || 'responsável'}! A cobrança de ${s.name} no valor de ${Utils.currency(valorComJuros)} vence em ${Utils.date(inv.dueDate)}.\n\n📱 PIX Copia e Cola:\n${pixCode}`
-      : `Olá, ${resp?.nome || 'responsável'}! A cobrança de ${s.name} no valor de ${Utils.currency(valorComJuros)} vence em ${Utils.date(inv.dueDate)}. Entre em contato com a escola para realizar o pagamento.`;
+      ? `Olá, ${resp?.nome || 'responsável'}! A cobrança de ${s.name} no valor de ${Utils.currency(valorCobrado)} vence em ${Utils.date(inv.dueDate)}.\n\n📱 PIX Copia e Cola:\n${pixCode}`
+      : `Olá, ${resp?.nome || 'responsável'}! A cobrança de ${s.name} no valor de ${Utils.currency(valorCobrado)} vence em ${Utils.date(inv.dueDate)}. Entre em contato com a escola para realizar o pagamento.`;
 
     // Envia mensagem no chat interno
     if (s.parentId) {

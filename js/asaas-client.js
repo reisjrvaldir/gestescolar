@@ -13,10 +13,11 @@ const AsaasClient = {
     return data?.session?.access_token || null;
   },
 
-  async _call(action, data = {}) {
+  async _call(action, data = {}, opts = {}) {
+    const silent = !!opts.silent;
     const token = await this._getToken();
     if (!token) {
-      Utils.toast('Sessão expirada. Faça login novamente.', 'error');
+      if (!silent) Utils.toast('Sessão expirada. Faça login novamente.', 'error');
       return null;
     }
     try {
@@ -31,13 +32,13 @@ const AsaasClient = {
       const json = await res.json();
       if (!res.ok) {
         console.error(`[Asaas] ${action} erro:`, json);
-        Utils.toast(json.error || 'Erro na API de pagamentos.', 'error');
+        if (!silent) Utils.toast(json.error || 'Erro na API de pagamentos.', 'error');
         return null;
       }
       return json;
     } catch (err) {
       console.error(`[Asaas] ${action} falha:`, err);
-      Utils.toast('Erro de conexão com o servidor de pagamentos.', 'error');
+      if (!silent) Utils.toast('Erro de conexão com o servidor de pagamentos.', 'error');
       return null;
     }
   },
@@ -55,8 +56,8 @@ const AsaasClient = {
   },
 
   // ── QR CODE PIX ──────────────────────────────
-  async getPixQrCode(paymentId) {
-    return this._call('getPixQrCode', { paymentId });
+  async getPixQrCode(paymentId, opts = {}) {
+    return this._call('getPixQrCode', { paymentId }, opts);
   },
 
   // ── CONSULTAR PAGAMENTO ──────────────────────
@@ -126,10 +127,31 @@ const AsaasClient = {
     });
     if (!customer) return null;
 
-    // 2. Calcular split via fixedValue (mais seguro que percentualValue)
+    // 2. Ajustar fatura vencida: aplicar multa + juros e mover dueDate para hoje
+    //    (Asaas rejeita cobranças com dueDate no passado)
+    const finePercent        = Number(school.finePercent        ?? 2.0);
+    const interestDayPercent = Number(school.interestDayPercent ?? 0.033);
+    const hojeStr = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
+
+    let chargeAmount = Number(invoice.amount) || 0;
+    let chargeDueDate = invoice.dueDate;
+
+    if (invoice.dueDate) {
+      const hoje = new Date(hojeStr + 'T00:00:00');
+      const due  = new Date(invoice.dueDate + 'T00:00:00');
+      if (!isNaN(due.getTime()) && due < hoje) {
+        const diasAtraso = Math.floor((hoje - due) / (1000 * 60 * 60 * 24));
+        const multa = chargeAmount * (finePercent / 100);
+        const juros = chargeAmount * Math.pow(1 + (interestDayPercent / 100), diasAtraso) - chargeAmount;
+        chargeAmount = Number((chargeAmount + multa + juros).toFixed(2));
+        chargeDueDate = hojeStr; // Asaas exige data >= hoje
+      }
+    }
+
+    // 3. Calcular split via fixedValue (mais seguro que percentualValue)
     //    O Asaas valida split contra o valor LÍQUIDO (bruto − taxa PIX ~R$1,99).
     //    Reservamos R$2,50 de margem de segurança para a taxa do gateway.
-    const grossValue = Number(invoice.amount);
+    const grossValue = chargeAmount;
     const gatewayFeeReserve = 2.50; // taxa Asaas PIX (~R$1,99) + margem
     const commissionRate = Number(school.commissionRate) || 3;
 
@@ -147,29 +169,21 @@ const AsaasClient = {
     // Escola recebe o restante
     const schoolReceives = Number((netValue - platformCommission).toFixed(2));
 
-    // 3. Criar cobrança PIX com split em valor fixo
+    // 4. Criar cobrança PIX com split em valor fixo
     const splitConfig = {
       walletId: school.asaasWalletId,
       fixedValue: schoolReceives,
     };
 
-    // log removido: continha walletId e valores sensíveis
-
-    // Juros e multa configurados pela escola
-    const finePercent        = Number(school.finePercent        ?? 2.0);
-    const interestDayPercent = Number(school.interestDayPercent ?? 0.033);
-
     const charge = await this.createPixCharge({
       customerId: customer.id,
       value: grossValue,
-      dueDate: invoice.dueDate,
+      dueDate: chargeDueDate,
       description: invoice.description || `Mensalidade - ${student.name}`,
       // Formato schoolId|invoiceId — necessário para a verificação de
       // propriedade (IDOR) no proxy /api/asaas ao buscar o QR Code.
       externalReference: `${school.id}|${invoice.id}`,
       split: splitConfig,
-      fine:     { value: finePercent },
-      interest: { value: interestDayPercent },
     });
 
     if (!charge || !charge.id) return null;
