@@ -1,0 +1,1444 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>GestEscolar — Checklist de Testes</title>
+  <style>
+    :root {
+      --primary: #1a73e8;
+      --success: #2e7d32;
+      --warning: #e65100;
+      --danger:  #c62828;
+      --bg:      #f5f7fa;
+      --card:    #ffffff;
+      --border:  #e0e0e0;
+      --text:    #212121;
+      --muted:   #757575;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: 'Segoe UI', Arial, sans-serif; background: var(--bg); color: var(--text); }
+
+    /* ── Header ── */
+    header {
+      background: linear-gradient(135deg, #1a73e8, #0d47a1);
+      color: #fff; padding: 20px 32px;
+      display: flex; align-items: center; justify-content: space-between;
+      flex-wrap: wrap; gap: 12px;
+      position: sticky; top: 0; z-index: 100;
+      box-shadow: 0 2px 8px rgba(0,0,0,.2);
+    }
+    header h1 { font-size: 20px; font-weight: 800; }
+    header p  { font-size: 13px; opacity: .85; margin-top: 2px; }
+    .header-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+    .btn { padding: 8px 16px; border-radius: 7px; border: none; cursor: pointer; font-size: 13px; font-weight: 600; transition: opacity .15s; }
+    .btn:hover { opacity: .85; }
+    .btn-white   { background: #fff; color: var(--primary); }
+    .btn-outline { background: transparent; color: #fff; border: 1px solid rgba(255,255,255,.6); }
+    .btn-danger  { background: #ef5350; color: #fff; }
+
+    /* ── Progress global ── */
+    #progress-bar-wrap {
+      background: #fff; border-bottom: 1px solid var(--border);
+      padding: 10px 32px; display: flex; align-items: center; gap: 16px; flex-wrap: wrap;
+    }
+    .prog-label { font-size: 13px; font-weight: 700; color: var(--text); white-space: nowrap; }
+    .prog-track { flex: 1; min-width: 200px; height: 10px; background: #e0e0e0; border-radius: 5px; overflow: hidden; }
+    .prog-fill  { height: 100%; border-radius: 5px; background: linear-gradient(90deg, #1a73e8, #2e7d32); transition: width .4s; }
+    .prog-pct   { font-size: 14px; font-weight: 800; color: var(--primary); }
+    .chip { display: inline-flex; align-items: center; gap: 5px; padding: 3px 10px; border-radius: 20px; font-size: 12px; font-weight: 600; }
+    .chip-ok      { background: #e8f5e9; color: #2e7d32; }
+    .chip-warn    { background: #fff3e0; color: #e65100; }
+    .chip-danger  { background: #ffebee; color: #c62828; }
+    .chip-neutral { background: #e3f2fd; color: #1565c0; }
+
+    /* ── Layout ── */
+    .container { max-width: 1100px; margin: 0 auto; padding: 24px 16px; }
+
+    /* ── Fases ── */
+    .fase {
+      background: var(--card); border-radius: 12px; margin-bottom: 20px;
+      box-shadow: 0 1px 4px rgba(0,0,0,.08); overflow: hidden;
+    }
+    .fase-header {
+      padding: 16px 20px; display: flex; align-items: center; justify-content: space-between;
+      cursor: pointer; user-select: none; gap: 12px; flex-wrap: wrap;
+    }
+    .fase-header:hover { background: #fafafa; }
+    .fase-title { display: flex; align-items: center; gap: 10px; }
+    .fase-num { width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 900; font-size: 14px; color: #fff; flex-shrink: 0; }
+    .fase-name { font-size: 15px; font-weight: 700; }
+    .fase-sub  { font-size: 12px; color: var(--muted); }
+    .fase-prog { display: flex; align-items: center; gap: 8px; }
+    .mini-track { width: 100px; height: 6px; background: #e0e0e0; border-radius: 3px; overflow: hidden; }
+    .mini-fill  { height: 100%; border-radius: 3px; transition: width .4s; }
+    .fase-body  { border-top: 1px solid var(--border); display: block; }
+    .fase-body.collapsed { display: none; }
+
+    /* ── Itens ── */
+    .test-item {
+      display: flex; align-items: flex-start; gap: 14px;
+      padding: 12px 20px; border-bottom: 1px solid #f0f0f0;
+      transition: background .1s;
+    }
+    .test-item:last-child { border-bottom: none; }
+    .test-item:hover { background: #fafafa; }
+    .test-item.done  { background: #f1f8e9; }
+    .test-item.fail  { background: #fff3e0; }
+    .test-item.block { background: #ffebee; }
+
+    .check-col { display: flex; gap: 6px; flex-shrink: 0; padding-top: 2px; }
+    .ico { width: 26px; height: 26px; border-radius: 6px; border: 2px solid var(--border); display: flex; align-items: center; justify-content: center; cursor: pointer; font-size: 13px; transition: all .15s; flex-shrink: 0; }
+    .ico:hover { transform: scale(1.1); }
+    .ico-ok    { background: #2e7d32; border-color: #2e7d32; color: #fff; }
+    .ico-fail  { background: #e65100; border-color: #e65100; color: #fff; }
+    .ico-block { background: #c62828; border-color: #c62828; color: #fff; }
+
+    .item-content { flex: 1; }
+    .item-title { font-size: 13px; font-weight: 600; line-height: 1.4; }
+    .item-desc  { font-size: 12px; color: var(--muted); margin-top: 3px; line-height: 1.5; }
+    .item-tags  { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px; }
+    .tag { padding: 2px 8px; border-radius: 10px; font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: .3px; }
+    .tag-auth    { background: #e3f2fd; color: #1565c0; }
+    .tag-fin     { background: #e8f5e9; color: #2e7d32; }
+    .tag-pix     { background: #f3e5f5; color: #6a1b9a; }
+    .tag-card    { background: #fff3e0; color: #e65100; }
+    .tag-email   { background: #e0f7fa; color: #00695c; }
+    .tag-admin   { background: #fce4ec; color: #ad1457; }
+    .tag-critical{ background: #ffebee; color: #c62828; border: 1px solid #ef9a9a; }
+
+    .note-area {
+      width: 100%; margin-top: 6px; padding: 6px 8px; font-size: 11px;
+      border: 1px solid #e0e0e0; border-radius: 5px; resize: vertical; min-height: 36px;
+      font-family: inherit; background: #fafafa; color: var(--text);
+    }
+
+    /* ── Legenda ── */
+    .legend {
+      display: flex; gap: 16px; flex-wrap: wrap; padding: 12px 20px;
+      border-bottom: 1px solid var(--border); background: #fafafa; font-size: 12px;
+    }
+    .legend-item { display: flex; align-items: center; gap: 6px; }
+
+    /* ── Seção de funcionalidades ── */
+    .feat-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px,1fr)); gap: 16px; margin-top: 20px; }
+    .feat-card { background: var(--card); border-radius: 10px; padding: 18px; box-shadow: 0 1px 4px rgba(0,0,0,.07); }
+    .feat-card h3 { font-size: 14px; font-weight: 700; margin-bottom: 10px; display: flex; align-items: center; gap: 8px; }
+    .feat-card ul { list-style: none; }
+    .feat-card li { font-size: 12px; color: #444; padding: 4px 0; border-bottom: 1px solid #f5f5f5; display: flex; align-items: flex-start; gap: 6px; }
+    .feat-card li:last-child { border-bottom: none; }
+    .feat-card li::before { content: "✓"; color: #2e7d32; font-weight: 900; flex-shrink: 0; }
+
+    /* ── Cronograma ── */
+    .timeline { position: relative; padding-left: 28px; margin-top: 20px; }
+    .timeline::before { content: ''; position: absolute; left: 10px; top: 0; bottom: 0; width: 2px; background: var(--border); }
+    .tl-item { position: relative; margin-bottom: 24px; }
+    .tl-dot { position: absolute; left: -24px; top: 4px; width: 14px; height: 14px; border-radius: 50%; border: 2px solid #fff; box-shadow: 0 0 0 2px var(--primary); background: var(--primary); }
+    .tl-card { background: var(--card); border-radius: 10px; padding: 16px 18px; box-shadow: 0 1px 4px rgba(0,0,0,.07); }
+    .tl-card h4 { font-size: 14px; font-weight: 700; margin-bottom: 6px; }
+    .tl-card p  { font-size: 12px; color: var(--muted); margin-bottom: 8px; }
+    .tl-card ul { list-style: none; }
+    .tl-card li { font-size: 12px; padding: 3px 0; display: flex; align-items: flex-start; gap: 6px; }
+    .tl-card li::before { content: "→"; color: var(--primary); flex-shrink: 0; font-weight: 700; }
+    .tl-sprint { display: inline-block; padding: 2px 10px; border-radius: 20px; font-size: 11px; font-weight: 700; margin-bottom: 8px; }
+
+    /* ── Tabs ── */
+    .tabs { display: flex; gap: 4px; border-bottom: 2px solid var(--border); margin-bottom: 24px; flex-wrap: wrap; }
+    .tab-btn { padding: 10px 18px; border: none; background: none; cursor: pointer; font-size: 14px; font-weight: 600; color: var(--muted); border-bottom: 3px solid transparent; margin-bottom: -2px; transition: all .15s; }
+    .tab-btn:hover { color: var(--primary); }
+    .tab-btn.active { color: var(--primary); border-bottom-color: var(--primary); }
+    .tab-pane { display: none; }
+    .tab-pane.active { display: block; }
+
+    @media (max-width: 600px) {
+      header { padding: 16px; }
+      .container { padding: 16px 10px; }
+      .test-item { flex-direction: column; gap: 8px; }
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <div>
+    <h1>🏫 GestEscolar — Checklist de Testes</h1>
+    <p id="last-save">Progresso salvo automaticamente no navegador</p>
+  </div>
+  <div class="header-actions">
+    <button class="btn btn-white" onclick="exportReport()">📄 Exportar Relatório</button>
+    <button class="btn btn-outline" onclick="expandAll()">Expandir Tudo</button>
+    <button class="btn btn-outline" onclick="collapseAll()">Recolher Tudo</button>
+    <button class="btn btn-danger" onclick="confirmReset()">🗑 Resetar</button>
+  </div>
+</header>
+
+<div id="progress-bar-wrap">
+  <span class="prog-label">Progresso Geral:</span>
+  <div class="prog-track"><div class="prog-fill" id="prog-fill" style="width:0%"></div></div>
+  <span class="prog-pct" id="prog-pct">0%</span>
+  <span class="chip chip-ok"   id="cnt-ok">✅ 0 OK</span>
+  <span class="chip chip-warn" id="cnt-fail">⚠️ 0 Falhou</span>
+  <span class="chip chip-danger" id="cnt-block">🚫 0 Bloqueado</span>
+  <span class="chip chip-neutral" id="cnt-pending">⏳ 0 Pendente</span>
+</div>
+
+<div class="container">
+
+  <!-- TABS -->
+  <div class="tabs">
+    <button class="tab-btn active" onclick="switchTab('checklist')">✅ Checklist de Testes</button>
+    <button class="tab-btn" onclick="switchTab('features')">🗂 Funcionalidades do MVP</button>
+    <button class="tab-btn" onclick="switchTab('devops')">🚀 Cronograma DevOps</button>
+  </div>
+
+  <!-- ═══════════════════════════════════════════════════════════ -->
+  <!-- TAB 1 — CHECKLIST                                          -->
+  <!-- ═══════════════════════════════════════════════════════════ -->
+  <div id="tab-checklist" class="tab-pane active">
+
+    <div style="background:#e3f2fd;border-left:4px solid #1565c0;padding:12px 16px;border-radius:6px;margin-bottom:20px;font-size:13px;">
+      <strong>Como usar:</strong> Clique em <strong>✅</strong> para marcar como OK, <strong>⚠</strong> para falhou, <strong>🚫</strong> para bloqueado.
+      Adicione notas no campo de texto. Tudo é salvo automaticamente.
+    </div>
+
+    <div class="legend">
+      <div class="legend-item"><div class="ico ico-ok">✓</div> Passou</div>
+      <div class="legend-item"><div class="ico ico-fail">!</div> Falhou</div>
+      <div class="legend-item"><div class="ico ico-block">✕</div> Bloqueado / N/A</div>
+      <div class="legend-item"><div class="ico" style="background:#f5f5f5;">?</div> Não testado</div>
+    </div>
+
+    <!-- ── FASE 1 ─────────────────────────────────────────── -->
+    <div class="fase" id="fase-1">
+      <div class="fase-header" onclick="toggleFase('fase-1')">
+        <div class="fase-title">
+          <div class="fase-num" style="background:#1565c0;">1</div>
+          <div>
+            <div class="fase-name">Autenticação & Acesso</div>
+            <div class="fase-sub">Login, registro, recuperação de senha, bloqueios</div>
+          </div>
+        </div>
+        <div class="fase-prog">
+          <div class="mini-track"><div class="mini-fill" id="fase-1-fill" style="width:0%;background:#1565c0;"></div></div>
+          <span id="fase-1-pct" style="font-size:12px;font-weight:700;color:#1565c0;">0%</span>
+        </div>
+      </div>
+      <div class="fase-body" id="fase-1-body">
+
+        <div class="test-item" id="item-1-1">
+          <div class="check-col">
+            <div class="ico" onclick="setStatus('1-1','ok')" title="OK">✓</div>
+            <div class="ico" onclick="setStatus('1-1','fail')" title="Falhou">!</div>
+            <div class="ico" onclick="setStatus('1-1','block')" title="Bloqueado">✕</div>
+          </div>
+          <div class="item-content">
+            <div class="item-title">Login com e-mail e senha válidos (gestor)</div>
+            <div class="item-desc">Acessar gestescolar.com.br/login → informar credenciais do gestor → deve redirecionar para dashboard do gestor</div>
+            <div class="item-tags"><span class="tag tag-auth">auth</span><span class="tag tag-critical">crítico</span></div>
+            <textarea class="note-area" placeholder="Notas..." oninput="saveNote('1-1',this.value)"></textarea>
+          </div>
+        </div>
+
+        <div class="test-item" id="item-1-2">
+          <div class="check-col">
+            <div class="ico" onclick="setStatus('1-2','ok')">✓</div>
+            <div class="ico" onclick="setStatus('1-2','fail')">!</div>
+            <div class="ico" onclick="setStatus('1-2','block')">✕</div>
+          </div>
+          <div class="item-content">
+            <div class="item-title">Login com senha errada</div>
+            <div class="item-desc">Deve exibir mensagem de erro sem revelar se o e-mail existe</div>
+            <div class="item-tags"><span class="tag tag-auth">auth</span></div>
+            <textarea class="note-area" placeholder="Notas..." oninput="saveNote('1-2',this.value)"></textarea>
+          </div>
+        </div>
+
+        <div class="test-item" id="item-1-3">
+          <div class="check-col">
+            <div class="ico" onclick="setStatus('1-3','ok')">✓</div>
+            <div class="ico" onclick="setStatus('1-3','fail')">!</div>
+            <div class="ico" onclick="setStatus('1-3','block')">✕</div>
+          </div>
+          <div class="item-content">
+            <div class="item-title">Login com conta superadmin</div>
+            <div class="item-desc">Deve redirecionar para painel superadmin e não mostrar menu de escola</div>
+            <div class="item-tags"><span class="tag tag-auth">auth</span><span class="tag tag-admin">superadmin</span><span class="tag tag-critical">crítico</span></div>
+            <textarea class="note-area" placeholder="Notas..." oninput="saveNote('1-3',this.value)"></textarea>
+          </div>
+        </div>
+
+        <div class="test-item" id="item-1-4">
+          <div class="check-col">
+            <div class="ico" onclick="setStatus('1-4','ok')">✓</div>
+            <div class="ico" onclick="setStatus('1-4','fail')">!</div>
+            <div class="ico" onclick="setStatus('1-4','block')">✕</div>
+          </div>
+          <div class="item-content">
+            <div class="item-title">Recuperação de senha (link por email)</div>
+            <div class="item-desc">Informar e-mail cadastrado → verificar se email de recuperação chega → clicar no link → redefinir senha → logar com nova senha</div>
+            <div class="item-tags"><span class="tag tag-auth">auth</span><span class="tag tag-email">email</span></div>
+            <textarea class="note-area" placeholder="Notas..." oninput="saveNote('1-4',this.value)"></textarea>
+          </div>
+        </div>
+
+        <div class="test-item" id="item-1-5">
+          <div class="check-col">
+            <div class="ico" onclick="setStatus('1-5','ok')">✓</div>
+            <div class="ico" onclick="setStatus('1-5','fail')">!</div>
+            <div class="ico" onclick="setStatus('1-5','block')">✕</div>
+          </div>
+          <div class="item-content">
+            <div class="item-title">Escola em trial — acesso liberado</div>
+            <div class="item-desc">Escola com school_status=trial deve ter acesso normal ao sistema durante os 7 dias. Banner de trial deve aparecer no topo direito.</div>
+            <div class="item-tags"><span class="tag tag-auth">auth</span><span class="tag tag-critical">crítico</span></div>
+            <textarea class="note-area" placeholder="Notas..." oninput="saveNote('1-5',this.value)"></textarea>
+          </div>
+        </div>
+
+        <div class="test-item" id="item-1-6">
+          <div class="check-col">
+            <div class="ico" onclick="setStatus('1-6','ok')">✓</div>
+            <div class="ico" onclick="setStatus('1-6','fail')">!</div>
+            <div class="ico" onclick="setStatus('1-6','block')">✕</div>
+          </div>
+          <div class="item-content">
+            <div class="item-title">Escola bloqueada — modal de bloqueio sem fechar</div>
+            <div class="item-desc">Escola vencida deve mostrar modal "Assinatura Vencida" sem X, sem clicar fora para fechar. Saldo/Resgate ainda acessível. Novo Cadastro bloqueado.</div>
+            <div class="item-tags"><span class="tag tag-auth">auth</span><span class="tag tag-critical">crítico</span></div>
+            <textarea class="note-area" placeholder="Notas..." oninput="saveNote('1-6',this.value)"></textarea>
+          </div>
+        </div>
+
+        <div class="test-item" id="item-1-7">
+          <div class="check-col">
+            <div class="ico" onclick="setStatus('1-7','ok')">✓</div>
+            <div class="ico" onclick="setStatus('1-7','fail')">!</div>
+            <div class="ico" onclick="setStatus('1-7','block')">✕</div>
+          </div>
+          <div class="item-content">
+            <div class="item-title">Logout e sessão expirada</div>
+            <div class="item-desc">Clicar em sair → voltar via botão do navegador → deve redirecionar para login sem exibir dados</div>
+            <div class="item-tags"><span class="tag tag-auth">auth</span></div>
+            <textarea class="note-area" placeholder="Notas..." oninput="saveNote('1-7',this.value)"></textarea>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- ── FASE 2 ─────────────────────────────────────────── -->
+    <div class="fase" id="fase-2">
+      <div class="fase-header" onclick="toggleFase('fase-2')">
+        <div class="fase-title">
+          <div class="fase-num" style="background:#6a1b9a;">2</div>
+          <div>
+            <div class="fase-name">Cadastros Básicos</div>
+            <div class="fase-sub">Alunos, professores, turmas, funcionários</div>
+          </div>
+        </div>
+        <div class="fase-prog">
+          <div class="mini-track"><div class="mini-fill" id="fase-2-fill" style="width:0%;background:#6a1b9a;"></div></div>
+          <span id="fase-2-pct" style="font-size:12px;font-weight:700;color:#6a1b9a;">0%</span>
+        </div>
+      </div>
+      <div class="fase-body" id="fase-2-body">
+
+        <div class="test-item" id="item-2-1">
+          <div class="check-col">
+            <div class="ico" onclick="setStatus('2-1','ok')">✓</div>
+            <div class="ico" onclick="setStatus('2-1','fail')">!</div>
+            <div class="ico" onclick="setStatus('2-1','block')">✕</div>
+          </div>
+          <div class="item-content">
+            <div class="item-title">Cadastrar novo aluno com todos os campos</div>
+            <div class="item-desc">Nome, CPF, data nascimento, responsável, e-mail, turma → salvar → aparecer na lista</div>
+            <div class="item-tags"><span class="tag tag-critical">crítico</span></div>
+            <textarea class="note-area" placeholder="Notas..." oninput="saveNote('2-1',this.value)"></textarea>
+          </div>
+        </div>
+
+        <div class="test-item" id="item-2-2">
+          <div class="check-col">
+            <div class="ico" onclick="setStatus('2-2','ok')">✓</div>
+            <div class="ico" onclick="setStatus('2-2','fail')">!</div>
+            <div class="ico" onclick="setStatus('2-2','block')">✕</div>
+          </div>
+          <div class="item-content">
+            <div class="item-title">Editar dados de aluno existente</div>
+            <div class="item-desc">Alterar nome, turma ou responsável → salvar → confirmar atualização na lista e no detalhe</div>
+            <div class="item-tags"><span class="tag tag-critical">crítico</span></div>
+            <textarea class="note-area" placeholder="Notas..." oninput="saveNote('2-2',this.value)"></textarea>
+          </div>
+        </div>
+
+        <div class="test-item" id="item-2-3">
+          <div class="check-col">
+            <div class="ico" onclick="setStatus('2-3','ok')">✓</div>
+            <div class="ico" onclick="setStatus('2-3','fail')">!</div>
+            <div class="ico" onclick="setStatus('2-3','block')">✕</div>
+          </div>
+          <div class="item-content">
+            <div class="item-title">Limite de alunos do plano</div>
+            <div class="item-desc">Tentar cadastrar mais alunos do que o plano permite → deve bloquear com mensagem clara</div>
+            <div class="item-tags"><span class="tag tag-critical">crítico</span></div>
+            <textarea class="note-area" placeholder="Notas..." oninput="saveNote('2-3',this.value)"></textarea>
+          </div>
+        </div>
+
+        <div class="test-item" id="item-2-4">
+          <div class="check-col">
+            <div class="ico" onclick="setStatus('2-4','ok')">✓</div>
+            <div class="ico" onclick="setStatus('2-4','fail')">!</div>
+            <div class="ico" onclick="setStatus('2-4','block')">✕</div>
+          </div>
+          <div class="item-content">
+            <div class="item-title">Criar turma e associar alunos</div>
+            <div class="item-desc">Criar turma com nome e nível → associar alunos → listar alunos da turma</div>
+            <textarea class="note-area" placeholder="Notas..." oninput="saveNote('2-4',this.value)"></textarea>
+          </div>
+        </div>
+
+        <div class="test-item" id="item-2-5">
+          <div class="check-col">
+            <div class="ico" onclick="setStatus('2-5','ok')">✓</div>
+            <div class="ico" onclick="setStatus('2-5','fail')">!</div>
+            <div class="ico" onclick="setStatus('2-5','block')">✕</div>
+          </div>
+          <div class="item-content">
+            <div class="item-title">Cadastrar professor e criar acesso</div>
+            <div class="item-desc">Novo professor → gerar login → professor consegue acessar portal com as credenciais geradas</div>
+            <textarea class="note-area" placeholder="Notas..." oninput="saveNote('2-5',this.value)"></textarea>
+          </div>
+        </div>
+
+        <div class="test-item" id="item-2-6">
+          <div class="check-col">
+            <div class="ico" onclick="setStatus('2-6','ok')">✓</div>
+            <div class="ico" onclick="setStatus('2-6','fail')">!</div>
+            <div class="ico" onclick="setStatus('2-6','block')">✕</div>
+          </div>
+          <div class="item-content">
+            <div class="item-title">Cadastrar funcionário administrativo</div>
+            <div class="item-desc">Criar usuário com role admin/secretaria → permissões corretas aplicadas</div>
+            <textarea class="note-area" placeholder="Notas..." oninput="saveNote('2-6',this.value)"></textarea>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- ── FASE 3 ─────────────────────────────────────────── -->
+    <div class="fase" id="fase-3">
+      <div class="fase-header" onclick="toggleFase('fase-3')">
+        <div class="fase-title">
+          <div class="fase-num" style="background:#2e7d32;">3</div>
+          <div>
+            <div class="fase-name">Financeiro — Cobranças PIX</div>
+            <div class="fase-sub">Geração de fatura, QR Code, confirmação de pagamento</div>
+          </div>
+        </div>
+        <div class="fase-prog">
+          <div class="mini-track"><div class="mini-fill" id="fase-3-fill" style="width:0%;background:#2e7d32;"></div></div>
+          <span id="fase-3-pct" style="font-size:12px;font-weight:700;color:#2e7d32;">0%</span>
+        </div>
+      </div>
+      <div class="fase-body" id="fase-3-body">
+
+        <div class="test-item" id="item-3-1">
+          <div class="check-col">
+            <div class="ico" onclick="setStatus('3-1','ok')">✓</div>
+            <div class="ico" onclick="setStatus('3-1','fail')">!</div>
+            <div class="ico" onclick="setStatus('3-1','block')">✕</div>
+          </div>
+          <div class="item-content">
+            <div class="item-title">Gerar fatura de mensalidade para aluno</div>
+            <div class="item-desc">Financeiro → Mensalidades → Gerar cobrança → selecionar aluno → definir valor e vencimento → salvar</div>
+            <div class="item-tags"><span class="tag tag-fin">financeiro</span><span class="tag tag-critical">crítico</span></div>
+            <textarea class="note-area" placeholder="Notas..." oninput="saveNote('3-1',this.value)"></textarea>
+          </div>
+        </div>
+
+        <div class="test-item" id="item-3-2">
+          <div class="check-col">
+            <div class="ico" onclick="setStatus('3-2','ok')">✓</div>
+            <div class="ico" onclick="setStatus('3-2','fail')">!</div>
+            <div class="ico" onclick="setStatus('3-2','block')">✕</div>
+          </div>
+          <div class="item-content">
+            <div class="item-title">Gerar QR Code PIX para fatura</div>
+            <div class="item-desc">Clicar em "PIX" na fatura → QR Code e copia-e-cola exibidos corretamente → copiar chave → pagar via banco</div>
+            <div class="item-tags"><span class="tag tag-fin">financeiro</span><span class="tag tag-pix">pix</span><span class="tag tag-critical">crítico</span></div>
+            <textarea class="note-area" placeholder="Notas..." oninput="saveNote('3-2',this.value)"></textarea>
+          </div>
+        </div>
+
+        <div class="test-item" id="item-3-3">
+          <div class="check-col">
+            <div class="ico" onclick="setStatus('3-3','ok')">✓</div>
+            <div class="ico" onclick="setStatus('3-3','fail')">!</div>
+            <div class="ico" onclick="setStatus('3-3','block')">✕</div>
+          </div>
+          <div class="item-content">
+            <div class="item-title">Confirmar pagamento PIX manualmente</div>
+            <div class="item-desc">Botão "Marcar como Pago" → status da fatura muda para Pago → aparece no relatório</div>
+            <div class="item-tags"><span class="tag tag-fin">financeiro</span><span class="tag tag-pix">pix</span></div>
+            <textarea class="note-area" placeholder="Notas..." oninput="saveNote('3-3',this.value)"></textarea>
+          </div>
+        </div>
+
+        <div class="test-item" id="item-3-4">
+          <div class="check-col">
+            <div class="ico" onclick="setStatus('3-4','ok')">✓</div>
+            <div class="ico" onclick="setStatus('3-4','fail')">!</div>
+            <div class="ico" onclick="setStatus('3-4','block')">✕</div>
+          </div>
+          <div class="item-content">
+            <div class="item-title">Dashboard financeiro — totais corretos</div>
+            <div class="item-desc">Receitas, despesas, saldo do mês exibidos corretamente no dashboard financeiro após lançamentos</div>
+            <div class="item-tags"><span class="tag tag-fin">financeiro</span></div>
+            <textarea class="note-area" placeholder="Notas..." oninput="saveNote('3-4',this.value)"></textarea>
+          </div>
+        </div>
+
+        <div class="test-item" id="item-3-5">
+          <div class="check-col">
+            <div class="ico" onclick="setStatus('3-5','ok')">✓</div>
+            <div class="ico" onclick="setStatus('3-5','fail')">!</div>
+            <div class="ico" onclick="setStatus('3-5','block')">✕</div>
+          </div>
+          <div class="item-content">
+            <div class="item-title">Lançar despesa e marcar como paga</div>
+            <div class="item-desc">Financeiro → Despesas → nova despesa → salvar → marcar paga → confirmar no relatório</div>
+            <div class="item-tags"><span class="tag tag-fin">financeiro</span></div>
+            <textarea class="note-area" placeholder="Notas..." oninput="saveNote('3-5',this.value)"></textarea>
+          </div>
+        </div>
+
+        <div class="test-item" id="item-3-6">
+          <div class="check-col">
+            <div class="ico" onclick="setStatus('3-6','ok')">✓</div>
+            <div class="ico" onclick="setStatus('3-6','fail')">!</div>
+            <div class="ico" onclick="setStatus('3-6','block')">✕</div>
+          </div>
+          <div class="item-content">
+            <div class="item-title">Saldo/Resgate Asaas da escola</div>
+            <div class="item-desc">Financeiro → Saldo → ver saldo disponível → solicitar resgate via PIX</div>
+            <div class="item-tags"><span class="tag tag-fin">financeiro</span><span class="tag tag-pix">pix</span></div>
+            <textarea class="note-area" placeholder="Notas..." oninput="saveNote('3-6',this.value)"></textarea>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- ── FASE 4 ─────────────────────────────────────────── -->
+    <div class="fase" id="fase-4">
+      <div class="fase-header" onclick="toggleFase('fase-4')">
+        <div class="fase-title">
+          <div class="fase-num" style="background:#c62828;">4</div>
+          <div>
+            <div class="fase-name">Planos & Pagamento SaaS</div>
+            <div class="fase-sub">Trial, upgrade, PIX, cartão, webhook, ativação de plano</div>
+          </div>
+        </div>
+        <div class="fase-prog">
+          <div class="mini-track"><div class="mini-fill" id="fase-4-fill" style="width:0%;background:#c62828;"></div></div>
+          <span id="fase-4-pct" style="font-size:12px;font-weight:700;color:#c62828;">0%</span>
+        </div>
+      </div>
+      <div class="fase-body" id="fase-4-body">
+
+        <div class="test-item" id="item-4-1">
+          <div class="check-col">
+            <div class="ico" onclick="setStatus('4-1','ok')">✓</div>
+            <div class="ico" onclick="setStatus('4-1','fail')">!</div>
+            <div class="ico" onclick="setStatus('4-1','block')">✕</div>
+          </div>
+          <div class="item-content">
+            <div class="item-title">Visualizar tela de planos disponíveis</div>
+            <div class="item-desc">Escola → Meu Plano → exibe planos (Mensal R$149,90 / Anual R$249,90) com comparativo de recursos</div>
+            <div class="item-tags"><span class="tag tag-critical">crítico</span></div>
+            <textarea class="note-area" placeholder="Notas..." oninput="saveNote('4-1',this.value)"></textarea>
+          </div>
+        </div>
+
+        <div class="test-item" id="item-4-2">
+          <div class="check-col">
+            <div class="ico" onclick="setStatus('4-2','ok')">✓</div>
+            <div class="ico" onclick="setStatus('4-2','fail')">!</div>
+            <div class="ico" onclick="setStatus('4-2','block')">✕</div>
+          </div>
+          <div class="item-content">
+            <div class="item-title">Pagamento PIX — gerar QR e aguardar confirmação</div>
+            <div class="item-desc">Selecionar plano → PIX → QR Code gerado → pagar → webhook confirma → plan_expires_at atualizado → plano ativo</div>
+            <div class="item-tags"><span class="tag tag-pix">pix</span><span class="tag tag-critical">crítico</span></div>
+            <textarea class="note-area" placeholder="Notas..." oninput="saveNote('4-2',this.value)"></textarea>
+          </div>
+        </div>
+
+        <div class="test-item" id="item-4-3">
+          <div class="check-col">
+            <div class="ico" onclick="setStatus('4-3','ok')">✓</div>
+            <div class="ico" onclick="setStatus('4-3','fail')">!</div>
+            <div class="ico" onclick="setStatus('4-3','block')">✕</div>
+          </div>
+          <div class="item-content">
+            <div class="item-title">Pagamento cartão com cupom DESCONTO99</div>
+            <div class="item-desc">Selecionar plano mensal → inserir cupom DESCONTO99 → valor cai para R$1,49 → pagar com cartão real → plano ativado</div>
+            <div class="item-tags"><span class="tag tag-card">cartão</span><span class="tag tag-critical">crítico</span></div>
+            <textarea class="note-area" placeholder="Notas..." oninput="saveNote('4-3',this.value)"></textarea>
+          </div>
+        </div>
+
+        <div class="test-item" id="item-4-4">
+          <div class="check-col">
+            <div class="ico" onclick="setStatus('4-4','ok')">✓</div>
+            <div class="ico" onclick="setStatus('4-4','fail')">!</div>
+            <div class="ico" onclick="setStatus('4-4','block')">✕</div>
+          </div>
+          <div class="item-content">
+            <div class="item-title">Email de confirmação de pagamento recebido</div>
+            <div class="item-desc">Após pagamento aprovado → gestor recebe email "Pagamento Confirmado" com dados do plano e botão de acesso</div>
+            <div class="item-tags"><span class="tag tag-email">email</span><span class="tag tag-critical">crítico</span></div>
+            <textarea class="note-area" placeholder="Notas..." oninput="saveNote('4-4',this.value)"></textarea>
+          </div>
+        </div>
+
+        <div class="test-item" id="item-4-5">
+          <div class="check-col">
+            <div class="ico" onclick="setStatus('4-5','ok')">✓</div>
+            <div class="ico" onclick="setStatus('4-5','fail')">!</div>
+            <div class="ico" onclick="setStatus('4-5','block')">✕</div>
+          </div>
+          <div class="item-content">
+            <div class="item-title">Renovação de plano — "Renovar Plano Atual"</div>
+            <div class="item-desc">Escola com plano ativo → clicar em renovar → PIX ou cartão → plan_expires_at estendido +30 dias</div>
+            <div class="item-tags"><span class="tag tag-critical">crítico</span></div>
+            <textarea class="note-area" placeholder="Notas..." oninput="saveNote('4-5',this.value)"></textarea>
+          </div>
+        </div>
+
+        <div class="test-item" id="item-4-6">
+          <div class="check-col">
+            <div class="ico" onclick="setStatus('4-6','ok')">✓</div>
+            <div class="ico" onclick="setStatus('4-6','fail')">!</div>
+            <div class="ico" onclick="setStatus('4-6','block')">✕</div>
+          </div>
+          <div class="item-content">
+            <div class="item-title">Banner de trial visível (7 dias)</div>
+            <div class="item-desc">Escola em trial → banner laranja 50% direito exibido → contagem de dias → link para planos</div>
+            <div class="item-tags"><span class="tag tag-critical">crítico</span></div>
+            <textarea class="note-area" placeholder="Notas..." oninput="saveNote('4-6',this.value)"></textarea>
+          </div>
+        </div>
+
+        <div class="test-item" id="item-4-7">
+          <div class="check-col">
+            <div class="ico" onclick="setStatus('4-7','ok')">✓</div>
+            <div class="ico" onclick="setStatus('4-7','fail')">!</div>
+            <div class="ico" onclick="setStatus('4-7','block')">✕</div>
+          </div>
+          <div class="item-content">
+            <div class="item-title">Banner de plano a vencer visível (≤7 dias)</div>
+            <div class="item-desc">Escola ativa com plan_expires_at em ≤7 dias → banner vermelho 50% direito com dias restantes</div>
+            <textarea class="note-area" placeholder="Notas..." oninput="saveNote('4-7',this.value)"></textarea>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- ── FASE 5 ─────────────────────────────────────────── -->
+    <div class="fase" id="fase-5">
+      <div class="fase-header" onclick="toggleFase('fase-5')">
+        <div class="fase-title">
+          <div class="fase-num" style="background:#e65100;">5</div>
+          <div>
+            <div class="fase-name">Portais de Acesso (Professor, Responsável)</div>
+            <div class="fase-sub">Notas, frequência, mensagens, faturas do responsável</div>
+          </div>
+        </div>
+        <div class="fase-prog">
+          <div class="mini-track"><div class="mini-fill" id="fase-5-fill" style="width:0%;background:#e65100;"></div></div>
+          <span id="fase-5-pct" style="font-size:12px;font-weight:700;color:#e65100;">0%</span>
+        </div>
+      </div>
+      <div class="fase-body" id="fase-5-body">
+
+        <div class="test-item" id="item-5-1">
+          <div class="check-col">
+            <div class="ico" onclick="setStatus('5-1','ok')">✓</div>
+            <div class="ico" onclick="setStatus('5-1','fail')">!</div>
+            <div class="ico" onclick="setStatus('5-1','block')">✕</div>
+          </div>
+          <div class="item-content">
+            <div class="item-title">Professor lança chamada (frequência)</div>
+            <div class="item-desc">Professor faz login → Portal do Professor → Chamada → seleciona turma/data → marca presença/falta → salva</div>
+            <div class="item-tags"><span class="tag tag-critical">crítico</span></div>
+            <textarea class="note-area" placeholder="Notas..." oninput="saveNote('5-1',this.value)"></textarea>
+          </div>
+        </div>
+
+        <div class="test-item" id="item-5-2">
+          <div class="check-col">
+            <div class="ico" onclick="setStatus('5-2','ok')">✓</div>
+            <div class="ico" onclick="setStatus('5-2','fail')">!</div>
+            <div class="ico" onclick="setStatus('5-2','block')">✕</div>
+          </div>
+          <div class="item-content">
+            <div class="item-title">Professor lança notas</div>
+            <div class="item-desc">Portal do Professor → Notas → preencher avaliação → salvar → responsável consegue visualizar</div>
+            <div class="item-tags"><span class="tag tag-critical">crítico</span></div>
+            <textarea class="note-area" placeholder="Notas..." oninput="saveNote('5-2',this.value)"></textarea>
+          </div>
+        </div>
+
+        <div class="test-item" id="item-5-3">
+          <div class="check-col">
+            <div class="ico" onclick="setStatus('5-3','ok')">✓</div>
+            <div class="ico" onclick="setStatus('5-3','fail')">!</div>
+            <div class="ico" onclick="setStatus('5-3','block')">✕</div>
+          </div>
+          <div class="item-content">
+            <div class="item-title">Responsável vê notas e frequência do filho</div>
+            <div class="item-desc">Responsável faz login → dashboard → notas e frequência do aluno vinculado exibidas corretamente</div>
+            <div class="item-tags"><span class="tag tag-critical">crítico</span></div>
+            <textarea class="note-area" placeholder="Notas..." oninput="saveNote('5-3',this.value)"></textarea>
+          </div>
+        </div>
+
+        <div class="test-item" id="item-5-4">
+          <div class="check-col">
+            <div class="ico" onclick="setStatus('5-4','ok')">✓</div>
+            <div class="ico" onclick="setStatus('5-4','fail')">!</div>
+            <div class="ico" onclick="setStatus('5-4','block')">✕</div>
+          </div>
+          <div class="item-content">
+            <div class="item-title">Responsável vê faturas em aberto e paga via PIX</div>
+            <div class="item-desc">Portal responsável → Financeiro → fatura pendente → gerar PIX → copiar código → pagar</div>
+            <div class="item-tags"><span class="tag tag-fin">financeiro</span><span class="tag tag-pix">pix</span></div>
+            <textarea class="note-area" placeholder="Notas..." oninput="saveNote('5-4',this.value)"></textarea>
+          </div>
+        </div>
+
+        <div class="test-item" id="item-5-5">
+          <div class="check-col">
+            <div class="ico" onclick="setStatus('5-5','ok')">✓</div>
+            <div class="ico" onclick="setStatus('5-5','fail')">!</div>
+            <div class="ico" onclick="setStatus('5-5','block')">✕</div>
+          </div>
+          <div class="item-content">
+            <div class="item-title">Mensagens internas (gestor → responsável)</div>
+            <div class="item-desc">Gestor envia mensagem → responsável visualiza no portal → leitura marcada</div>
+            <textarea class="note-area" placeholder="Notas..." oninput="saveNote('5-5',this.value)"></textarea>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- ── FASE 6 ─────────────────────────────────────────── -->
+    <div class="fase" id="fase-6">
+      <div class="fase-header" onclick="toggleFase('fase-6')">
+        <div class="fase-title">
+          <div class="fase-num" style="background:#f9a825;color:#333;">6</div>
+          <div>
+            <div class="fase-name">Superadmin — Gestão da Plataforma</div>
+            <div class="fase-sub">Escolas, KPIs, simulações, email config, cupons</div>
+          </div>
+        </div>
+        <div class="fase-prog">
+          <div class="mini-track"><div class="mini-fill" id="fase-6-fill" style="width:0%;background:#f9a825;"></div></div>
+          <span id="fase-6-pct" style="font-size:12px;font-weight:700;color:#f9a825;">0%</span>
+        </div>
+      </div>
+      <div class="fase-body" id="fase-6-body">
+
+        <div class="test-item" id="item-6-1">
+          <div class="check-col">
+            <div class="ico" onclick="setStatus('6-1','ok')">✓</div>
+            <div class="ico" onclick="setStatus('6-1','fail')">!</div>
+            <div class="ico" onclick="setStatus('6-1','block')">✕</div>
+          </div>
+          <div class="item-content">
+            <div class="item-title">Dashboard KPIs: Ativas, Trial, Bloqueadas, MRR</div>
+            <div class="item-desc">Cards exibem contagens corretas → clicar no card filtra a tabela → MRR estimado calculado</div>
+            <div class="item-tags"><span class="tag tag-admin">superadmin</span></div>
+            <textarea class="note-area" placeholder="Notas..." oninput="saveNote('6-1',this.value)"></textarea>
+          </div>
+        </div>
+
+        <div class="test-item" id="item-6-2">
+          <div class="check-col">
+            <div class="ico" onclick="setStatus('6-2','ok')">✓</div>
+            <div class="ico" onclick="setStatus('6-2','fail')">!</div>
+            <div class="ico" onclick="setStatus('6-2','block')">✕</div>
+          </div>
+          <div class="item-content">
+            <div class="item-title">Filtros e busca na lista de escolas</div>
+            <div class="item-desc">Filtrar por Ativos / Trial / Bloqueadas / Vencendo → buscar por nome → tabela atualiza sem reload</div>
+            <div class="item-tags"><span class="tag tag-admin">superadmin</span></div>
+            <textarea class="note-area" placeholder="Notas..." oninput="saveNote('6-2',this.value)"></textarea>
+          </div>
+        </div>
+
+        <div class="test-item" id="item-6-3">
+          <div class="check-col">
+            <div class="ico" onclick="setStatus('6-3','ok')">✓</div>
+            <div class="ico" onclick="setStatus('6-3','fail')">!</div>
+            <div class="ico" onclick="setStatus('6-3','block')">✕</div>
+          </div>
+          <div class="item-content">
+            <div class="item-title">Simular pagamento (botão envelope azul)</div>
+            <div class="item-desc">Botão de simulação → plan_expires_at +30 dias → school_status=active → email enviado → audit log registrado</div>
+            <div class="item-tags"><span class="tag tag-admin">superadmin</span><span class="tag tag-email">email</span></div>
+            <textarea class="note-area" placeholder="Notas..." oninput="saveNote('6-3',this.value)"></textarea>
+          </div>
+        </div>
+
+        <div class="test-item" id="item-6-4">
+          <div class="check-col">
+            <div class="ico" onclick="setStatus('6-4','ok')">✓</div>
+            <div class="ico" onclick="setStatus('6-4','fail')">!</div>
+            <div class="ico" onclick="setStatus('6-4','block')">✕</div>
+          </div>
+          <div class="item-content">
+            <div class="item-title">Painel de configuração de email + teste de envio</div>
+            <div class="item-desc">Superadmin → Config Email → alterar nome/cor/logo → salvar → enviar teste → email chega formatado corretamente</div>
+            <div class="item-tags"><span class="tag tag-admin">superadmin</span><span class="tag tag-email">email</span></div>
+            <textarea class="note-area" placeholder="Notas..." oninput="saveNote('6-4',this.value)"></textarea>
+          </div>
+        </div>
+
+        <div class="test-item" id="item-6-5">
+          <div class="check-col">
+            <div class="ico" onclick="setStatus('6-5','ok')">✓</div>
+            <div class="ico" onclick="setStatus('6-5','fail')">!</div>
+            <div class="ico" onclick="setStatus('6-5','block')">✕</div>
+          </div>
+          <div class="item-content">
+            <div class="item-title">Cupom DESCONTO99 — criar e aplicar</div>
+            <div class="item-desc">Superadmin → Cupons → criar DESCONTO99 (99% off) → gestor aplica no checkout → desconto aplicado</div>
+            <div class="item-tags"><span class="tag tag-admin">superadmin</span></div>
+            <textarea class="note-area" placeholder="Notas..." oninput="saveNote('6-5',this.value)"></textarea>
+          </div>
+        </div>
+
+        <div class="test-item" id="item-6-6">
+          <div class="check-col">
+            <div class="ico" onclick="setStatus('6-6','ok')">✓</div>
+            <div class="ico" onclick="setStatus('6-6','fail')">!</div>
+            <div class="ico" onclick="setStatus('6-6','block')">✕</div>
+          </div>
+          <div class="item-content">
+            <div class="item-title">Resetar senha do gestor da escola</div>
+            <div class="item-desc">Botão chave → email de redefinição chega para o gestor → gestor muda senha → consegue logar</div>
+            <div class="item-tags"><span class="tag tag-admin">superadmin</span></div>
+            <textarea class="note-area" placeholder="Notas..." oninput="saveNote('6-6',this.value)"></textarea>
+          </div>
+        </div>
+
+        <div class="test-item" id="item-6-7">
+          <div class="check-col">
+            <div class="ico" onclick="setStatus('6-7','ok')">✓</div>
+            <div class="ico" onclick="setStatus('6-7','fail')">!</div>
+            <div class="ico" onclick="setStatus('6-7','block')">✕</div>
+          </div>
+          <div class="item-content">
+            <div class="item-title">Excluir escola (com audit log)</div>
+            <div class="item-desc">Confirmar exclusão → escola removida → audit log registrado antes da exclusão</div>
+            <div class="item-tags"><span class="tag tag-admin">superadmin</span></div>
+            <textarea class="note-area" placeholder="Notas..." oninput="saveNote('6-7',this.value)"></textarea>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- ── FASE 7 ─────────────────────────────────────────── -->
+    <div class="fase" id="fase-7">
+      <div class="fase-header" onclick="toggleFase('fase-7')">
+        <div class="fase-title">
+          <div class="fase-num" style="background:#00695c;">7</div>
+          <div>
+            <div class="fase-name">Segurança & Limites</div>
+            <div class="fase-sub">RLS, rate limit, acesso entre escolas, permissões por role</div>
+          </div>
+        </div>
+        <div class="fase-prog">
+          <div class="mini-track"><div class="mini-fill" id="fase-7-fill" style="width:0%;background:#00695c;"></div></div>
+          <span id="fase-7-pct" style="font-size:12px;font-weight:700;color:#00695c;">0%</span>
+        </div>
+      </div>
+      <div class="fase-body" id="fase-7-body">
+
+        <div class="test-item" id="item-7-1">
+          <div class="check-col">
+            <div class="ico" onclick="setStatus('7-1','ok')">✓</div>
+            <div class="ico" onclick="setStatus('7-1','fail')">!</div>
+            <div class="ico" onclick="setStatus('7-1','block')">✕</div>
+          </div>
+          <div class="item-content">
+            <div class="item-title">Isolamento entre escolas (RLS)</div>
+            <div class="item-desc">Gestor da Escola A não deve ver dados da Escola B em nenhuma tela. Verificar alunos, financeiro e notas.</div>
+            <div class="item-tags"><span class="tag tag-critical">crítico</span></div>
+            <textarea class="note-area" placeholder="Notas..." oninput="saveNote('7-1',this.value)"></textarea>
+          </div>
+        </div>
+
+        <div class="test-item" id="item-7-2">
+          <div class="check-col">
+            <div class="ico" onclick="setStatus('7-2','ok')">✓</div>
+            <div class="ico" onclick="setStatus('7-2','fail')">!</div>
+            <div class="ico" onclick="setStatus('7-2','block')">✕</div>
+          </div>
+          <div class="item-content">
+            <div class="item-title">Professor não acessa menu de admin/financeiro</div>
+            <div class="item-desc">Usuário com role=professor deve ver apenas: chamada, notas, mensagens. Financeiro e Configurações não aparecem.</div>
+            <div class="item-tags"><span class="tag tag-critical">crítico</span></div>
+            <textarea class="note-area" placeholder="Notas..." oninput="saveNote('7-2',this.value)"></textarea>
+          </div>
+        </div>
+
+        <div class="test-item" id="item-7-3">
+          <div class="check-col">
+            <div class="ico" onclick="setStatus('7-3','ok')">✓</div>
+            <div class="ico" onclick="setStatus('7-3','fail')">!</div>
+            <div class="ico" onclick="setStatus('7-3','block')">✕</div>
+          </div>
+          <div class="item-content">
+            <div class="item-title">Responsável não acessa dados de outros alunos</div>
+            <div class="item-desc">Responsável vê apenas o(s) aluno(s) vinculado(s) ao seu login</div>
+            <div class="item-tags"><span class="tag tag-critical">crítico</span></div>
+            <textarea class="note-area" placeholder="Notas..." oninput="saveNote('7-3',this.value)"></textarea>
+          </div>
+        </div>
+
+        <div class="test-item" id="item-7-4">
+          <div class="check-col">
+            <div class="ico" onclick="setStatus('7-4','ok')">✓</div>
+            <div class="ico" onclick="setStatus('7-4','fail')">!</div>
+            <div class="ico" onclick="setStatus('7-4','block')">✕</div>
+          </div>
+          <div class="item-content">
+            <div class="item-title">API sem token retorna 401</div>
+            <div class="item-desc">Chamar /api/asaas ou /api/send-email sem Authorization header → deve retornar HTTP 401</div>
+            <div class="item-tags"><span class="tag tag-critical">crítico</span></div>
+            <textarea class="note-area" placeholder="Notas..." oninput="saveNote('7-4',this.value)"></textarea>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+  </div><!-- /tab-checklist -->
+
+  <!-- ═══════════════════════════════════════════════════════════ -->
+  <!-- TAB 2 — FUNCIONALIDADES                                     -->
+  <!-- ═══════════════════════════════════════════════════════════ -->
+  <div id="tab-features" class="tab-pane">
+    <h3 style="margin-bottom:16px;font-size:16px;">🗂 Funcionalidades disponíveis no MVP</h3>
+
+    <div class="feat-grid">
+
+      <div class="feat-card">
+        <h3>🔐 Autenticação & Acesso</h3>
+        <ul>
+          <li>Login com e-mail e senha</li>
+          <li>Recuperação de senha por email</li>
+          <li>Multi-role: superadmin, gestor, professor, responsável, secretaria</li>
+          <li>Sessão persistente com Supabase Auth</li>
+          <li>Bloqueio de acesso por status do plano</li>
+          <li>Trial de 7 dias automático no cadastro</li>
+          <li>Banner de trial e vencimento (50% direito)</li>
+          <li>Modal de bloqueio sem escape (plano vencido)</li>
+        </ul>
+      </div>
+
+      <div class="feat-card">
+        <h3>🏫 Gestão de Alunos</h3>
+        <ul>
+          <li>Cadastro completo com dados pessoais</li>
+          <li>Edição e exclusão de aluno</li>
+          <li>Listagem com busca e filtros</li>
+          <li>Vinculação de aluno a turma</li>
+          <li>Vinculação de responsável ao aluno</li>
+          <li>Limite de alunos por plano (com alerta)</li>
+          <li>Limite customizável por escola (superadmin)</li>
+          <li>Visualização global de alunos (superadmin)</li>
+        </ul>
+      </div>
+
+      <div class="feat-card">
+        <h3>📚 Turmas & Professores</h3>
+        <ul>
+          <li>Criar e editar turmas por nível</li>
+          <li>Associar professores a turmas</li>
+          <li>Listar alunos por turma</li>
+          <li>Cadastrar professor com acesso</li>
+          <li>Portal do professor com chamada</li>
+          <li>Lançamento de notas por avaliação</li>
+          <li>Histórico de chamadas por turma/data</li>
+        </ul>
+      </div>
+
+      <div class="feat-card">
+        <h3>💰 Financeiro — Mensalidades</h3>
+        <ul>
+          <li>Gerar fatura de mensalidade por aluno</li>
+          <li>Cobrança PIX via Asaas (QR + copia-e-cola)</li>
+          <li>Confirmação automática via webhook</li>
+          <li>Confirmação manual (marcar como pago)</li>
+          <li>Listagem de faturas com filtros (pago/pendente/vencido)</li>
+          <li>Dashboard financeiro mensal (receitas × despesas)</li>
+          <li>Gráfico de entradas por mês</li>
+          <li>Alertas de faturas a vencer</li>
+        </ul>
+      </div>
+
+      <div class="feat-card">
+        <h3>📊 Financeiro — Despesas</h3>
+        <ul>
+          <li>Lançar despesa (fixa ou variável)</li>
+          <li>Marcar despesa como paga</li>
+          <li>Editar e excluir despesa</li>
+          <li>Navegação por mês</li>
+          <li>Exportar PDF de despesas</li>
+          <li>Saldo disponível na subconta Asaas</li>
+          <li>Solicitação de resgate (saque via PIX)</li>
+          <li>Histórico de transferências</li>
+        </ul>
+      </div>
+
+      <div class="feat-card">
+        <h3>👨‍👩‍👧 Portal do Responsável</h3>
+        <ul>
+          <li>Dashboard com resumo do aluno</li>
+          <li>Visualizar notas e boletim</li>
+          <li>Visualizar frequência e faltas</li>
+          <li>Faturas em aberto e histórico</li>
+          <li>Pagar mensalidade via PIX</li>
+          <li>Receber mensagens da escola</li>
+          <li>Enviar mensagens para a escola</li>
+        </ul>
+      </div>
+
+      <div class="feat-card">
+        <h3>📩 Mensagens Internas</h3>
+        <ul>
+          <li>Envio de mensagens gestor → responsável</li>
+          <li>Envio de mensagens professor → responsável</li>
+          <li>Leitura e histórico por conversa</li>
+          <li>Contagem de não lidas no menu</li>
+        </ul>
+      </div>
+
+      <div class="feat-card">
+        <h3>💳 Planos & Pagamento SaaS</h3>
+        <ul>
+          <li>Plano Mensal — R$149,90</li>
+          <li>Plano Anual — R$249,90</li>
+          <li>Pagamento PIX (avulso)</li>
+          <li>Pagamento cartão de crédito</li>
+          <li>Assinatura recorrente mensal (cartão)</li>
+          <li>Cupons de desconto com % configurável</li>
+          <li>Webhook Asaas → ativa plano automaticamente</li>
+          <li>Email de confirmação pós-pagamento</li>
+          <li>Split automático 2% plataforma</li>
+        </ul>
+      </div>
+
+      <div class="feat-card">
+        <h3>👑 Superadmin — Plataforma</h3>
+        <ul>
+          <li>Dashboard KPIs (ativas, trial, bloqueadas, MRR)</li>
+          <li>Lista de escolas com filtros e busca</li>
+          <li>Criar, editar, excluir escolas</li>
+          <li>Resetar senha do gestor</li>
+          <li>Simular pagamento (teste sem Asaas)</li>
+          <li>Simular vencimento de plano</li>
+          <li>Criar subconta Asaas para escola</li>
+          <li>Configurar comissão por escola</li>
+          <li>Limite customizado de alunos por escola</li>
+          <li>Painel visual de configuração de email</li>
+          <li>Preview em tempo real dos templates</li>
+          <li>Gestão de cupons de desconto</li>
+          <li>Audit log de ações críticas</li>
+          <li>Visualização global de alunos/usuários</li>
+        </ul>
+      </div>
+
+      <div class="feat-card">
+        <h3>🔒 Segurança</h3>
+        <ul>
+          <li>Row Level Security (RLS) — 44 políticas ativas</li>
+          <li>Isolamento total entre escolas (multi-tenant)</li>
+          <li>Rate limiting por usuário+ação (in-memory)</li>
+          <li>Validação de inputs server-side</li>
+          <li>Autenticação obrigatória em todas as APIs</li>
+          <li>Auditoria de ações críticas no banco</li>
+          <li>Proteção IDOR em consultas de pagamento</li>
+          <li>API keys nunca expostas ao cliente</li>
+        </ul>
+      </div>
+
+      <div class="feat-card">
+        <h3>📧 Emails Transacionais (Resend)</h3>
+        <ul>
+          <li>Email de pagamento confirmado</li>
+          <li>Email de assinatura vencida</li>
+          <li>Email de aviso de renovação (7 dias)</li>
+          <li>Templates dinâmicos com logo, cores e rodapé</li>
+          <li>Configuração visual pelo superadmin</li>
+          <li>Domínio verificado: gestescolar.com.br</li>
+        </ul>
+      </div>
+
+      <div class="feat-card">
+        <h3>⚙️ Configurações da Escola</h3>
+        <ul>
+          <li>Nome, CNPJ, endereço, e-mail da escola</li>
+          <li>Logo e identidade visual</li>
+          <li>Dados bancários / PIX para saque</li>
+          <li>Configuração de conta Asaas (subconta)</li>
+          <li>Gestão de usuários internos e permissões</li>
+        </ul>
+      </div>
+
+    </div>
+  </div><!-- /tab-features -->
+
+  <!-- ═══════════════════════════════════════════════════════════ -->
+  <!-- TAB 3 — CRONOGRAMA DEVOPS                                   -->
+  <!-- ═══════════════════════════════════════════════════════════ -->
+  <div id="tab-devops" class="tab-pane">
+    <h3 style="margin-bottom:8px;font-size:16px;">🚀 Cronograma — Backup, Homologação e Deploy Controlado</h3>
+    <p style="font-size:13px;color:var(--muted);margin-bottom:24px;">Planejamento em 3 frentes independentes que evoluem em paralelo</p>
+
+    <!-- FRENTE 1: BACKUP -->
+    <h4 style="font-size:14px;font-weight:800;color:#1565c0;margin-bottom:12px;">🗄️ FRENTE 1 — Backup & Recuperação</h4>
+    <div class="timeline">
+
+      <div class="tl-item">
+        <div class="tl-dot" style="background:#2e7d32;box-shadow:0 0 0 2px #2e7d32;"></div>
+        <div class="tl-card">
+          <span class="tl-sprint" style="background:#e8f5e9;color:#2e7d32;">Semana 1 — Imediato (já disponível)</span>
+          <h4>Backup automático do Supabase</h4>
+          <p>O Supabase Pro já inclui backup diário automático. Ative e configure:</p>
+          <ul>
+            <li>Supabase Dashboard → Project Settings → Database → Backups → verificar retenção (7 dias no free, 30 dias no Pro)</li>
+            <li>Testar restore: baixar backup mais recente → restaurar em projeto de teste → confirmar integridade</li>
+            <li>Anotar o processo de restore em documento interno (runbook)</li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="tl-item">
+        <div class="tl-dot" style="background:#1565c0;box-shadow:0 0 0 2px #1565c0;"></div>
+        <div class="tl-card">
+          <span class="tl-sprint" style="background:#e3f2fd;color:#1565c0;">Semana 2 — Backup de código</span>
+          <h4>Repositório Git + exportação Supabase</h4>
+          <ul>
+            <li>Confirmar que o repositório está no GitHub (código já versionado) ✅</li>
+            <li>Adicionar script <code>npm run backup:db</code> que exporta schema + dados via <code>pg_dump</code> para arquivo local</li>
+            <li>Agendar exportação semanal via GitHub Actions (cron) → armazenar no repositório privado (branch <code>backups</code>)</li>
+            <li>Backup das variáveis de ambiente: manter cópia criptografada em 1Password/Bitwarden</li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="tl-item">
+        <div class="tl-dot" style="background:#e65100;box-shadow:0 0 0 2px #e65100;"></div>
+        <div class="tl-card">
+          <span class="tl-sprint" style="background:#fff3e0;color:#e65100;">Semana 3-4 — Monitoramento e alerta</span>
+          <h4>Alerta de falha + teste mensal de restore</h4>
+          <ul>
+            <li>Configurar uptime monitor gratuito (Better Uptime ou UptimeRobot) → alerta WhatsApp/email se o sistema cair</li>
+            <li>Criar checklist mensal: testar restore do backup em projeto Supabase temporário</li>
+            <li>Documentar RTO (Recovery Time Objective): meta &lt;2h para restaurar o sistema</li>
+          </ul>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- FRENTE 2: HOMOLOGAÇÃO -->
+    <h4 style="font-size:14px;font-weight:800;color:#6a1b9a;margin-bottom:12px;margin-top:32px;">🧪 FRENTE 2 — Ambiente de Homologação (Staging)</h4>
+    <div class="timeline">
+
+      <div class="tl-item">
+        <div class="tl-dot" style="background:#6a1b9a;box-shadow:0 0 0 2px #6a1b9a;"></div>
+        <div class="tl-card">
+          <span class="tl-sprint" style="background:#f3e5f5;color:#6a1b9a;">Semana 1-2 — Criar ambiente staging</span>
+          <h4>Estrutura: branch + projeto Supabase separado</h4>
+          <ul>
+            <li>Criar branch <strong><code>develop</code></strong> no Git → todo desenvolvimento novo vai para esta branch</li>
+            <li>Criar projeto Supabase separado chamado <strong>gestescolar-staging</strong> (plano free)</li>
+            <li>Criar projeto Vercel separado apontando para a branch <code>develop</code> → URL automática: <code>gestescolar-staging.vercel.app</code></li>
+            <li>Configurar variáveis de ambiente do staging: apontar para Supabase staging + Asaas sandbox</li>
+            <li>Resultado: cada push na <code>develop</code> faz deploy automático no staging</li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="tl-item">
+        <div class="tl-dot" style="background:#1565c0;box-shadow:0 0 0 2px #1565c0;"></div>
+        <div class="tl-card">
+          <span class="tl-sprint" style="background:#e3f2fd;color:#1565c0;">Semana 2-3 — Workflow de trabalho</span>
+          <h4>Fluxo: develop → staging → main (produção)</h4>
+          <ul>
+            <li><strong>Desenvolvimento:</strong> criar branch <code>feature/nome-da-funcionalidade</code> a partir de <code>develop</code></li>
+            <li><strong>Teste local:</strong> testar na máquina com <code>vercel dev</code></li>
+            <li><strong>Pull Request:</strong> abrir PR de <code>feature/X</code> para <code>develop</code> → Vercel cria preview URL automaticamente</li>
+            <li><strong>Homologação:</strong> testar na preview URL usando o checklist deste arquivo</li>
+            <li><strong>Merge para main:</strong> somente após testes aprovados → deploy automático em produção</li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="tl-item">
+        <div class="tl-dot" style="background:#2e7d32;box-shadow:0 0 0 2px #2e7d32;"></div>
+        <div class="tl-card">
+          <span class="tl-sprint" style="background:#e8f5e9;color:#2e7d32;">Semana 3-4 — Dados de teste</span>
+          <h4>Seed de dados para homologação</h4>
+          <ul>
+            <li>Criar script <code>supabase/seed.sql</code> com dados fictícios: 2 escolas, 10 alunos, 3 professores, faturas variadas</li>
+            <li>Script de reset: limpar staging e reseeder antes de cada ciclo de teste</li>
+            <li>Nunca usar dados reais no staging — criar dados sintéticos</li>
+          </ul>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- FRENTE 3: DEPLOY CONTROLADO -->
+    <h4 style="font-size:14px;font-weight:800;color:#c62828;margin-bottom:12px;margin-top:32px;">🚢 FRENTE 3 — Deploy Controlado para Produção</h4>
+    <div class="timeline">
+
+      <div class="tl-item">
+        <div class="tl-dot" style="background:#c62828;box-shadow:0 0 0 2px #c62828;"></div>
+        <div class="tl-card">
+          <span class="tl-sprint" style="background:#ffebee;color:#c62828;">Como subir SOMENTE o que foi testado</span>
+          <h4>Regra de ouro: nada vai para main sem PR + checklist</h4>
+          <ul>
+            <li>Proibir push direto na branch <code>main</code> → configurar "Branch Protection Rule" no GitHub: require pull request before merging</li>
+            <li>PR deve ter pelo menos 1 aprovação (mesmo que seja você mesmo — obriga a revisar)</li>
+            <li>Checklist no template do PR: <em>"Testei no staging? Funcionalidade X funciona? Não quebrei Y?"</em></li>
+            <li>Vercel mostra o diff do deploy → comparar antes de promover para produção</li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="tl-item">
+        <div class="tl-dot" style="background:#e65100;box-shadow:0 0 0 2px #e65100;"></div>
+        <div class="tl-card">
+          <span class="tl-sprint" style="background:#fff3e0;color:#e65100;">Deploy parcial — subir 1 funcionalidade por vez</span>
+          <h4>Feature flags simples (sem biblioteca externa)</h4>
+          <ul>
+            <li>Para features instáveis, adicionar flag na tabela <code>platform_settings</code>: <code>group=feature, key=nova_funcionalidade, value=false</code></li>
+            <li>No código verificar: <code>if (featureFlag === 'true') { ... }</code></li>
+            <li>Deploy vai para produção com feature OFF → ativar via superadmin quando pronto → sem novo deploy</li>
+            <li>Em caso de bug: desativar a flag em segundos sem rollback de código</li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="tl-item">
+        <div class="tl-dot" style="background:#1565c0;box-shadow:0 0 0 2px #1565c0;"></div>
+        <div class="tl-card">
+          <span class="tl-sprint" style="background:#e3f2fd;color:#1565c0;">Rollback de emergência</span>
+          <h4>Reverter deploy em &lt;1 minuto pelo Vercel</h4>
+          <ul>
+            <li>Vercel guarda histórico de todos os deploys → <strong>Vercel Dashboard → Deployments → clicar no deploy anterior → "Promote to Production"</strong></li>
+            <li>Para banco: se migration errada → reverter com script de rollback (manter sempre script <code>down</code> para cada migration)</li>
+            <li>Nunca fazer migration destrutiva (DROP, RENAME column) sem backup manual primeiro</li>
+          </ul>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- RESUMO VISUAL -->
+    <div style="background:linear-gradient(135deg,#1a73e8,#0d47a1);border-radius:12px;padding:20px 24px;margin-top:28px;color:#fff;">
+      <h4 style="font-size:15px;font-weight:800;margin-bottom:14px;">📋 Resumo: Estrutura Final de Branches</h4>
+      <div style="font-family:monospace;font-size:13px;line-height:2;background:rgba(0,0,0,.25);padding:14px;border-radius:8px;">
+        main (produção — gestescolar.com.br)<br>
+        &nbsp;&nbsp;↑ merge via PR aprovado após homologação<br>
+        develop (staging — gestescolar-staging.vercel.app)<br>
+        &nbsp;&nbsp;↑ merge via PR após teste local<br>
+        feature/nome-da-feature (desenvolvimento local)<br>
+        &nbsp;&nbsp;→ vercel dev (teste na máquina)
+      </div>
+      <div style="margin-top:14px;font-size:12px;opacity:.9;line-height:1.8;">
+        ✅ Cada funcionalidade vive em sua própria branch<br>
+        ✅ Staging usa Supabase e Asaas separados (nunca dados reais)<br>
+        ✅ Produção só recebe código testado e aprovado<br>
+        ✅ Rollback em 1 clique no painel Vercel
+      </div>
+    </div>
+
+  </div><!-- /tab-devops -->
+
+</div><!-- /container -->
+
+<script>
+// ── Storage ──────────────────────────────────────────────────────────────
+const KEY = 'gestescolar_checklist_v2';
+
+function load() {
+  try { return JSON.parse(localStorage.getItem(KEY)) || {}; } catch { return {}; }
+}
+function save(data) {
+  localStorage.setItem(KEY, JSON.stringify(data));
+  document.getElementById('last-save').textContent = 'Salvo em ' + new Date().toLocaleTimeString('pt-BR');
+}
+
+// ── Status de cada item ───────────────────────────────────────────────────
+function setStatus(id, status) {
+  const data = load();
+  const prev = data[id]?.status;
+  if (prev === status) {
+    delete data[id];
+  } else {
+    data[id] = { ...( data[id] || {}), status };
+  }
+  save(data);
+  renderItem(id, data[id]?.status || null);
+  updateAllCounters();
+}
+
+function saveNote(id, val) {
+  const data = load();
+  data[id] = { ...(data[id] || {}), note: val };
+  save(data);
+}
+
+function renderItem(id, status) {
+  const el = document.getElementById('item-' + id);
+  if (!el) return;
+  el.classList.remove('done','fail','block');
+  const icons = el.querySelectorAll('.ico');
+  icons.forEach(i => i.classList.remove('ico-ok','ico-fail','ico-block'));
+  if (status === 'ok')    { el.classList.add('done');  icons[0].classList.add('ico-ok');    }
+  if (status === 'fail')  { el.classList.add('fail');  icons[1].classList.add('ico-fail');  }
+  if (status === 'block') { el.classList.add('block'); icons[2].classList.add('ico-block'); }
+}
+
+// ── Contadores ────────────────────────────────────────────────────────────
+function getAllItems() {
+  const items = [];
+  document.querySelectorAll('.test-item').forEach(el => {
+    items.push(el.id.replace('item-',''));
+  });
+  return items;
+}
+
+function updateAllCounters() {
+  const data  = load();
+  const items = getAllItems();
+  const total   = items.length;
+  let ok=0, fail=0, block=0, pending=0;
+  items.forEach(id => {
+    const s = data[id]?.status;
+    if (s === 'ok')    ok++;
+    else if (s === 'fail')  fail++;
+    else if (s === 'block') block++;
+    else pending++;
+  });
+  const done  = ok + fail + block;
+  const pct   = total > 0 ? Math.round(done / total * 100) : 0;
+  document.getElementById('prog-fill').style.width = pct + '%';
+  document.getElementById('prog-pct').textContent  = pct + '%';
+  document.getElementById('cnt-ok').textContent    = '✅ ' + ok + ' OK';
+  document.getElementById('cnt-fail').textContent  = '⚠️ ' + fail + ' Falhou';
+  document.getElementById('cnt-block').textContent = '🚫 ' + block + ' N/A';
+  document.getElementById('cnt-pending').textContent = '⏳ ' + pending + ' Pendente';
+
+  // Por fase
+  for (let f = 1; f <= 7; f++) {
+    const faseItems = items.filter(id => id.startsWith(f + '-'));
+    const fTotal = faseItems.length;
+    const fDone  = faseItems.filter(id => data[id]?.status).length;
+    const fPct   = fTotal > 0 ? Math.round(fDone / fTotal * 100) : 0;
+    const fill   = document.getElementById('fase-' + f + '-fill');
+    const pctEl  = document.getElementById('fase-' + f + '-pct');
+    if (fill)  fill.style.width = fPct + '%';
+    if (pctEl) pctEl.textContent = fPct + '%';
+  }
+}
+
+// ── Inicialização ─────────────────────────────────────────────────────────
+function initFromStorage() {
+  const data = load();
+  getAllItems().forEach(id => {
+    const s = data[id]?.status;
+    if (s) renderItem(id, s);
+    const note = data[id]?.note;
+    if (note) {
+      const el = document.getElementById('item-' + id);
+      if (el) {
+        const ta = el.querySelector('.note-area');
+        if (ta) ta.value = note;
+      }
+    }
+  });
+  updateAllCounters();
+}
+
+// ── Fases (collapse) ──────────────────────────────────────────────────────
+function toggleFase(id) {
+  const body = document.getElementById(id + '-body');
+  body.classList.toggle('collapsed');
+}
+function expandAll()   { document.querySelectorAll('.fase-body').forEach(b => b.classList.remove('collapsed')); }
+function collapseAll() { document.querySelectorAll('.fase-body').forEach(b => b.classList.add('collapsed')); }
+
+// ── Tabs ──────────────────────────────────────────────────────────────────
+function switchTab(name) {
+  document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById('tab-' + name).classList.add('active');
+  event.currentTarget.classList.add('active');
+}
+
+// ── Reset ─────────────────────────────────────────────────────────────────
+function confirmReset() {
+  if (confirm('⚠️ Isso vai apagar TODOS os testes marcados. Tem certeza?')) {
+    localStorage.removeItem(KEY);
+    location.reload();
+  }
+}
+
+// ── Exportar relatório ────────────────────────────────────────────────────
+function exportReport() {
+  const data  = load();
+  const items = getAllItems();
+  const now   = new Date().toLocaleString('pt-BR');
+  let txt = `GESTESCOLAR — RELATÓRIO DE TESTES\nGerado em: ${now}\n${'='.repeat(50)}\n\n`;
+  let fase = '';
+  items.forEach(id => {
+    const [f] = id.split('-');
+    const faseNames = {1:'Autenticação & Acesso',2:'Cadastros Básicos',3:'Financeiro PIX',4:'Planos & Pagamento SaaS',5:'Portais Professor/Responsável',6:'Superadmin',7:'Segurança'};
+    if (f !== fase) { fase = f; txt += `\n── FASE ${f}: ${faseNames[f] || ''} ──\n`; }
+    const s   = data[id]?.status || 'pendente';
+    const ico = s === 'ok' ? '✅' : s === 'fail' ? '⚠️' : s === 'block' ? '🚫' : '⏳';
+    const el  = document.getElementById('item-' + id);
+    const title = el?.querySelector('.item-title')?.textContent?.trim() || id;
+    const note  = data[id]?.note || '';
+    txt += `${ico} [${s.toUpperCase()}] ${title}\n`;
+    if (note) txt += `   📝 ${note}\n`;
+  });
+  const blob = new Blob([txt], { type: 'text/plain;charset=utf-8' });
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  a.href     = url;
+  a.download = `gestescolar-testes-${new Date().toISOString().slice(0,10)}.txt`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+// ── Boot ──────────────────────────────────────────────────────────────────
+document.addEventListener('DOMContentLoaded', initFromStorage);
+</script>
+</body>
+</html>

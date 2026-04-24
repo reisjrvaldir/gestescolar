@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="72" height="72">
+  <!-- Fundo branco arredondado -->
+  <rect width="72" height="72" rx="96" ry="96" fill="#ffffff"/>
+  <!-- Chapéu de formatura centralizado -->
+  <g transform="translate(62,60) scale(0.76)">
+    <!-- Base cilíndrica do chapéu -->
+    <ellipse cx="248" cy="330" rx="118" ry="34" fill="#4a7fc1" stroke="#1a1a1a" stroke-width="13" stroke-linejoin="round"/>
+    <rect x="130" y="296" width="236" height="42" fill="#4a7fc1" stroke="#1a1a1a" stroke-width="13" stroke-linejoin="round"/>
+    <ellipse cx="248" cy="296" rx="118" ry="32" fill="#5b8fd4" stroke="#1a1a1a" stroke-width="13" stroke-linejoin="round"/>
+    <!-- Placa quadrada do topo - rotacionada levemente -->
+    <g transform="translate(248,220) rotate(-8)">
+      <!-- Camada inferior (profundidade) -->
+      <polygon points="-175,-30 175,-30 140,-110 -140,-110" fill="#3a6aaa" stroke="#1a1a1a" stroke-width="13" stroke-linejoin="round"/>
+      <!-- Face frontal da placa -->
+      <polygon points="-185,-18 185,-18 150,-98 -150,-98" fill="#4a7fc1" stroke="#1a1a1a" stroke-width="13" stroke-linejoin="round"/>
+      <!-- Borda inferior -->
+      <rect x="-185" y="-30" width="370" height="24" rx="4" fill="#5b8fd4" stroke="#1a1a1a" stroke-width="13" stroke-linejoin="round"/>
+    </g>
+    <!-- Cordão lateral -->
+    <line x1="398" y1="195" x2="416" y2="275" stroke="#1a1a1a" stroke-width="11" stroke-linecap="round"/>
+    <line x1="416" y1="275" x2="404" y2="340" stroke="#1a1a1a" stroke-width="11" stroke-linecap="round"/>
+    <!-- Bolinha do cordão -->
+    <circle cx="396" cy="192" r="13" fill="#ffffff" stroke="#1a1a1a" stroke-width="9"/>
+    <!-- Franja -->
+    <line x1="396" y1="338" x2="384" y2="378" stroke="#4a7fc1" stroke-width="9" stroke-linecap="round"/>
+    <line x1="404" y1="340" x2="404" y2="382" stroke="#4a7fc1" stroke-width="9" stroke-linecap="round"/>
+    <line x1="413" y1="338" x2="420" y2="378" stroke="#4a7fc1" stroke-width="9" stroke-linecap="round"/>
+  </g>
+</svg>

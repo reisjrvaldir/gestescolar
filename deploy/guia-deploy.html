@@ -1,0 +1,991 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>GestEscolar - Guia Completo de Deploy VPS</title>
+<style>
+  :root {
+    --primary: #1976d2;
+    --primary-dark: #0d47a1;
+    --success: #2e7d32;
+    --warning: #f57f17;
+    --danger: #c62828;
+    --bg: #f5f7fa;
+    --card: #fff;
+    --text: #263238;
+    --muted: #607d8b;
+    --border: #e0e4e8;
+    --code-bg: #1e1e2e;
+    --code-text: #cdd6f4;
+    --step-line: #bbdefb;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.7;
+  }
+
+  /* HEADER */
+  .hero {
+    background: linear-gradient(135deg, var(--primary-dark) 0%, var(--primary) 100%);
+    color: #fff;
+    padding: 60px 24px 50px;
+    text-align: center;
+    position: relative;
+    overflow: hidden;
+  }
+  .hero::after {
+    content: '';
+    position: absolute;
+    bottom: -2px;
+    left: 0;
+    right: 0;
+    height: 40px;
+    background: var(--bg);
+    border-radius: 50% 50% 0 0;
+  }
+  .hero h1 { font-size: 2.2rem; font-weight: 700; margin-bottom: 8px; }
+  .hero p { font-size: 1.1rem; opacity: .85; max-width: 600px; margin: 0 auto; }
+  .hero .badge {
+    display: inline-block;
+    background: rgba(255,255,255,.2);
+    padding: 4px 14px;
+    border-radius: 20px;
+    font-size: .85rem;
+    margin-bottom: 16px;
+  }
+
+  /* NAV */
+  .nav-bar {
+    background: var(--card);
+    border-bottom: 1px solid var(--border);
+    padding: 12px 24px;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    overflow-x: auto;
+    white-space: nowrap;
+    box-shadow: 0 2px 8px rgba(0,0,0,.06);
+  }
+  .nav-bar a {
+    display: inline-block;
+    padding: 6px 16px;
+    margin-right: 4px;
+    border-radius: 20px;
+    text-decoration: none;
+    color: var(--muted);
+    font-size: .85rem;
+    font-weight: 500;
+    transition: all .2s;
+  }
+  .nav-bar a:hover { background: #e3f2fd; color: var(--primary); }
+  .nav-bar a .nav-num {
+    display: inline-block;
+    width: 22px;
+    height: 22px;
+    line-height: 22px;
+    text-align: center;
+    border-radius: 50%;
+    background: var(--border);
+    color: var(--muted);
+    font-size: .75rem;
+    margin-right: 4px;
+    font-weight: 700;
+  }
+  .nav-bar a:hover .nav-num { background: var(--primary); color: #fff; }
+
+  /* CONTAINER */
+  .container {
+    max-width: 860px;
+    margin: 0 auto;
+    padding: 32px 20px 80px;
+  }
+
+  /* SECTIONS */
+  .section {
+    margin-bottom: 48px;
+  }
+  .section-header {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    margin-bottom: 24px;
+    padding-bottom: 12px;
+    border-bottom: 2px solid var(--primary);
+  }
+  .section-num {
+    width: 44px;
+    height: 44px;
+    line-height: 44px;
+    text-align: center;
+    border-radius: 50%;
+    background: var(--primary);
+    color: #fff;
+    font-size: 1.2rem;
+    font-weight: 700;
+    flex-shrink: 0;
+  }
+  .section-header h2 {
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: var(--primary-dark);
+  }
+
+  /* CARDS */
+  .card {
+    background: var(--card);
+    border-radius: 12px;
+    padding: 24px;
+    margin-bottom: 20px;
+    border: 1px solid var(--border);
+    box-shadow: 0 2px 8px rgba(0,0,0,.04);
+  }
+  .card h3 {
+    font-size: 1.1rem;
+    margin-bottom: 12px;
+    color: var(--text);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .card h3 .icon {
+    width: 28px;
+    height: 28px;
+    line-height: 28px;
+    text-align: center;
+    border-radius: 8px;
+    font-size: .9rem;
+    flex-shrink: 0;
+  }
+  .card h3 .icon.blue { background: #e3f2fd; color: var(--primary); }
+  .card h3 .icon.green { background: #e8f5e9; color: var(--success); }
+  .card h3 .icon.orange { background: #fff3e0; color: var(--warning); }
+  .card h3 .icon.red { background: #ffebee; color: var(--danger); }
+  .card p, .card li { color: #455a64; }
+  .card ol, .card ul { padding-left: 20px; }
+  .card li { margin-bottom: 8px; }
+
+  /* CODE BLOCKS */
+  pre {
+    background: var(--code-bg);
+    color: var(--code-text);
+    padding: 16px 20px;
+    border-radius: 10px;
+    overflow-x: auto;
+    font-family: 'Cascadia Code', 'Fira Code', 'Consolas', monospace;
+    font-size: .88rem;
+    line-height: 1.6;
+    margin: 12px 0;
+    position: relative;
+  }
+  pre .comment { color: #6c7086; }
+  pre .cmd { color: #89b4fa; }
+  pre .flag { color: #f9e2af; }
+  pre .string { color: #a6e3a1; }
+  code {
+    background: #eceff1;
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-family: 'Cascadia Code', 'Consolas', monospace;
+    font-size: .88em;
+    color: var(--danger);
+  }
+
+  /* COPY BUTTON */
+  .code-wrap { position: relative; }
+  .copy-btn {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    background: rgba(255,255,255,.1);
+    border: 1px solid rgba(255,255,255,.15);
+    color: #bac2de;
+    padding: 4px 12px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: .75rem;
+    transition: all .2s;
+  }
+  .copy-btn:hover { background: rgba(255,255,255,.2); color: #fff; }
+  .copy-btn.copied { background: var(--success); color: #fff; border-color: var(--success); }
+
+  /* TABLES */
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 12px 0;
+    font-size: .92rem;
+  }
+  th, td {
+    padding: 10px 14px;
+    text-align: left;
+    border-bottom: 1px solid var(--border);
+  }
+  th {
+    background: #f0f4f8;
+    font-weight: 600;
+    color: var(--muted);
+    font-size: .82rem;
+    text-transform: uppercase;
+    letter-spacing: .5px;
+  }
+  tr:hover td { background: #fafbfc; }
+
+  /* ALERTS */
+  .alert {
+    padding: 14px 18px;
+    border-radius: 10px;
+    margin: 16px 0;
+    font-size: .92rem;
+    display: flex;
+    gap: 10px;
+    align-items: flex-start;
+  }
+  .alert .alert-icon { font-size: 1.1rem; flex-shrink: 0; margin-top: 2px; }
+  .alert-info { background: #e3f2fd; color: #0d47a1; border-left: 4px solid var(--primary); }
+  .alert-warn { background: #fff3e0; color: #e65100; border-left: 4px solid var(--warning); }
+  .alert-ok { background: #e8f5e9; color: #1b5e20; border-left: 4px solid var(--success); }
+  .alert-danger { background: #ffebee; color: #b71c1c; border-left: 4px solid var(--danger); }
+
+  /* STEPS */
+  .steps { counter-reset: step; }
+  .step {
+    position: relative;
+    padding-left: 44px;
+    margin-bottom: 20px;
+  }
+  .step::before {
+    counter-increment: step;
+    content: counter(step);
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 30px;
+    height: 30px;
+    line-height: 30px;
+    text-align: center;
+    border-radius: 50%;
+    background: var(--primary);
+    color: #fff;
+    font-size: .85rem;
+    font-weight: 700;
+  }
+  .step::after {
+    content: '';
+    position: absolute;
+    left: 14px;
+    top: 34px;
+    bottom: -16px;
+    width: 2px;
+    background: var(--step-line);
+  }
+  .step:last-child::after { display: none; }
+  .step h4 { font-size: 1rem; margin-bottom: 6px; }
+  .step p { color: #546e7a; font-size: .92rem; }
+
+  /* CHECKLIST */
+  .checklist { list-style: none; padding: 0; }
+  .checklist li {
+    padding: 10px 14px;
+    border-radius: 8px;
+    margin-bottom: 6px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    cursor: pointer;
+    transition: background .15s;
+  }
+  .checklist li:hover { background: #f5f5f5; }
+  .checklist li .check-box {
+    width: 22px;
+    height: 22px;
+    border: 2px solid var(--border);
+    border-radius: 6px;
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all .2s;
+    font-size: .8rem;
+    color: transparent;
+  }
+  .checklist li.done .check-box {
+    background: var(--success);
+    border-color: var(--success);
+    color: #fff;
+  }
+  .checklist li.done span { text-decoration: line-through; color: var(--muted); }
+
+  /* TABS */
+  .tabs { display: flex; gap: 4px; margin-bottom: -1px; position: relative; z-index: 1; }
+  .tab-btn {
+    padding: 10px 20px;
+    border: 1px solid var(--border);
+    border-bottom: none;
+    border-radius: 10px 10px 0 0;
+    background: #f0f4f8;
+    cursor: pointer;
+    font-size: .88rem;
+    font-weight: 500;
+    color: var(--muted);
+    transition: all .2s;
+  }
+  .tab-btn.active { background: var(--card); color: var(--primary); font-weight: 600; border-bottom: 1px solid var(--card); }
+  .tab-content {
+    display: none;
+    border: 1px solid var(--border);
+    border-radius: 0 10px 10px 10px;
+    padding: 20px;
+    background: var(--card);
+  }
+  .tab-content.active { display: block; }
+
+  /* ARCHITECTURE */
+  .arch-diagram {
+    background: var(--code-bg);
+    color: var(--code-text);
+    padding: 24px;
+    border-radius: 12px;
+    text-align: center;
+    font-family: 'Cascadia Code', monospace;
+    font-size: .9rem;
+    line-height: 2;
+    overflow-x: auto;
+  }
+  .arch-diagram .highlight { color: #89b4fa; font-weight: 700; }
+  .arch-diagram .green { color: #a6e3a1; }
+  .arch-diagram .yellow { color: #f9e2af; }
+  .arch-diagram .arrow { color: #6c7086; }
+
+  /* FOOTER */
+  .footer {
+    text-align: center;
+    padding: 40px 20px;
+    color: var(--muted);
+    font-size: .85rem;
+    border-top: 1px solid var(--border);
+    margin-top: 40px;
+  }
+
+  /* RESPONSIVE */
+  @media (max-width: 640px) {
+    .hero h1 { font-size: 1.6rem; }
+    .section-header h2 { font-size: 1.2rem; }
+    .card { padding: 16px; }
+    pre { font-size: .8rem; padding: 12px; }
+  }
+</style>
+</head>
+<body>
+
+<!-- HERO -->
+<div class="hero">
+  <div class="badge">Guia Completo para Iniciantes</div>
+  <h1>Deploy GestEscolar em VPS</h1>
+  <p>Passo a passo detalhado para publicar o sistema em um servidor Hostinger com dominio proprio e HTTPS</p>
+</div>
+
+<!-- NAV -->
+<div class="nav-bar">
+  <a href="#arquitetura"><span class="nav-num">0</span>Arquitetura</a>
+  <a href="#s1"><span class="nav-num">1</span>Contratar VPS</a>
+  <a href="#s2"><span class="nav-num">2</span>Dominio</a>
+  <a href="#s3"><span class="nav-num">3</span>Acessar SSH</a>
+  <a href="#s4"><span class="nav-num">4</span>Instalar</a>
+  <a href="#s5"><span class="nav-num">5</span>Enviar Arquivos</a>
+  <a href="#s6"><span class="nav-num">6</span>Configurar Nginx</a>
+  <a href="#s7"><span class="nav-num">7</span>HTTPS / SSL</a>
+  <a href="#s8"><span class="nav-num">8</span>Supabase</a>
+  <a href="#s9"><span class="nav-num">9</span>Atualizar</a>
+  <a href="#checklist"><span class="nav-num">!</span>Checklist</a>
+  <a href="#problemas"><span class="nav-num">?</span>Problemas</a>
+</div>
+
+<div class="container">
+
+<!-- ARQUITETURA -->
+<div class="section" id="arquitetura">
+  <div class="section-header">
+    <div class="section-num">0</div>
+    <h2>Como Funciona</h2>
+  </div>
+  <div class="card">
+    <div class="arch-diagram">
+      <span class="yellow">Usuario digita</span> <span class="highlight">gestescolar.com.br</span><br>
+      <span class="arrow">|</span><br>
+      <span class="arrow">v</span><br>
+      <span class="yellow">DNS</span> <span class="arrow">resolve para</span> <span class="highlight">IP do VPS</span><br>
+      <span class="arrow">|</span><br>
+      <span class="arrow">v</span><br>
+      <span class="green">VPS Hostinger (Nginx)</span> <span class="arrow">serve</span> <span class="highlight">HTML, CSS, JS</span><br>
+      <span class="arrow">|</span><br>
+      <span class="arrow">v</span><br>
+      <span class="highlight">JS no navegador</span> <span class="arrow">conecta em</span> <span class="green">Supabase Cloud (banco de dados)</span>
+    </div>
+    <div class="alert alert-info" style="margin-top:16px;">
+      <span class="alert-icon">&#9432;</span>
+      <div>O VPS serve apenas os arquivos estaticos (HTML/CSS/JS). O banco de dados fica no Supabase Cloud &mdash; nao precisa instalar banco no VPS.</div>
+    </div>
+    <table>
+      <tr><th>Item</th><th>Custo Estimado</th></tr>
+      <tr><td>VPS Hostinger (KVM 1)</td><td>~R$25/mes</td></tr>
+      <tr><td>Dominio .com.br</td><td>~R$40/ano</td></tr>
+      <tr><td>Supabase (Free tier)</td><td>R$0</td></tr>
+      <tr><td>SSL / HTTPS (Let's Encrypt)</td><td>R$0</td></tr>
+    </table>
+  </div>
+</div>
+
+<!-- PARTE 1 -->
+<div class="section" id="s1">
+  <div class="section-header">
+    <div class="section-num">1</div>
+    <h2>Contratar o VPS na Hostinger</h2>
+  </div>
+  <div class="card">
+    <h3><span class="icon blue">&#128722;</span> Comprar o servidor</h3>
+    <div class="steps">
+      <div class="step">
+        <h4>Acesse o site da Hostinger</h4>
+        <p>Va em <code>hostinger.com.br/servidor-vps</code> e escolha o plano <strong>KVM 1</strong> (mais barato, suficiente para comecar).</p>
+      </div>
+      <div class="step">
+        <h4>Finalize o pagamento</h4>
+        <p>Escolha o periodo de cobranca (quanto maior, mais desconto) e finalize.</p>
+      </div>
+      <div class="step">
+        <h4>Escolha o Sistema Operacional</h4>
+        <p>No painel do VPS, selecione <strong>Ubuntu 22.04</strong>.</p>
+      </div>
+      <div class="step">
+        <h4>Defina a senha de root</h4>
+        <p>Crie uma senha forte. Exemplo: <code>MinhaSenh@VPS2026</code></p>
+      </div>
+      <div class="step">
+        <h4>Anote o IP do servidor</h4>
+        <p>Apos a instalacao, o painel mostra o IP. Exemplo: <code>185.200.100.50</code>. Anote!</p>
+      </div>
+    </div>
+    <div class="alert alert-warn">
+      <span class="alert-icon">&#9888;</span>
+      <div><strong>Anote em local seguro:</strong> o IP do VPS e a senha de root. Voce vai precisar deles em todas as etapas.</div>
+    </div>
+  </div>
+</div>
+
+<!-- PARTE 2 -->
+<div class="section" id="s2">
+  <div class="section-header">
+    <div class="section-num">2</div>
+    <h2>Registrar Dominio e Apontar DNS</h2>
+  </div>
+  <div class="card">
+    <h3><span class="icon blue">&#127760;</span> Comprar o dominio</h3>
+    <p>Registre seu dominio (ex: <code>gestescolar.com.br</code>) na Hostinger ou no <code>registro.br</code>.</p>
+  </div>
+  <div class="card">
+    <h3><span class="icon orange">&#128268;</span> Apontar DNS para o VPS</h3>
+    <p>Isso diz ao mundo: <em>"quando alguem digitar meu dominio, va para o IP do meu VPS"</em>.</p>
+    <p style="margin:10px 0;">No painel de DNS do seu dominio, adicione estes registros:</p>
+    <table>
+      <tr><th>Tipo</th><th>Nome (Host)</th><th>Valor</th><th>TTL</th></tr>
+      <tr><td><code>A</code></td><td><code>@</code></td><td><code>SEU_IP_DO_VPS</code></td><td>3600</td></tr>
+      <tr><td><code>A</code></td><td><code>www</code></td><td><code>SEU_IP_DO_VPS</code></td><td>3600</td></tr>
+    </table>
+    <div class="alert alert-info">
+      <span class="alert-icon">&#9203;</span>
+      <div>A propagacao do DNS pode levar de <strong>15 minutos a 24 horas</strong>. Seja paciente.</div>
+    </div>
+  </div>
+  <div class="card">
+    <h3><span class="icon green">&#9989;</span> Verificar se o DNS propagou</h3>
+    <p>No seu computador, abra o Terminal (ou Prompt) e digite:</p>
+    <div class="code-wrap">
+      <button class="copy-btn" onclick="copyCode(this)">Copiar</button>
+      <pre>nslookup gestescolar.com.br</pre>
+    </div>
+    <p>Se mostrar o IP do seu VPS, esta pronto! Ou verifique em <code>dnschecker.org</code>.</p>
+  </div>
+</div>
+
+<!-- PARTE 3 -->
+<div class="section" id="s3">
+  <div class="section-header">
+    <div class="section-num">3</div>
+    <h2>Acessar o VPS via SSH</h2>
+  </div>
+  <div class="card">
+    <h3><span class="icon blue">&#128187;</span> O que e SSH?</h3>
+    <p>SSH e como um "controle remoto" para o servidor. Voce digita comandos no seu computador, e eles sao executados no VPS.</p>
+  </div>
+  <div class="card">
+    <h3><span class="icon green">&#128268;</span> Conectar ao VPS</h3>
+    <p><strong>No Windows 10/11</strong>, abra o <strong>Terminal</strong> (ou PowerShell) e digite:</p>
+    <div class="code-wrap">
+      <button class="copy-btn" onclick="copyCode(this)">Copiar</button>
+      <pre><span class="cmd">ssh</span> root@<span class="string">SEU_IP_DO_VPS</span></pre>
+    </div>
+    <div class="steps" style="margin-top:16px;">
+      <div class="step">
+        <h4>Primeira vez: confirmar conexao</h4>
+        <p>Vai perguntar <em>"Are you sure...?"</em>. Digite <strong>yes</strong> e aperte Enter.</p>
+      </div>
+      <div class="step">
+        <h4>Digitar a senha</h4>
+        <p>Digite a senha de root (os caracteres nao aparecem na tela, e normal). Aperte Enter.</p>
+      </div>
+      <div class="step">
+        <h4>Pronto!</h4>
+        <p>Voce vera algo como <code>root@vps-123456:~#</code>. Agora voce controla o VPS!</p>
+      </div>
+    </div>
+    <div class="alert alert-info">
+      <span class="alert-icon">&#128161;</span>
+      <div><strong>Alternativa visual:</strong> No painel da Hostinger, clique em <em>VPS &gt; Terminal/Console</em> para acessar sem instalar nada.</div>
+    </div>
+  </div>
+</div>
+
+<!-- PARTE 4 -->
+<div class="section" id="s4">
+  <div class="section-header">
+    <div class="section-num">4</div>
+    <h2>Instalar Tudo no VPS</h2>
+  </div>
+  <div class="card">
+    <p>Execute os comandos abaixo <strong>um por um</strong> dentro do VPS (via SSH):</p>
+
+    <h3><span class="icon blue">&#128230;</span> Atualizar o sistema</h3>
+    <div class="code-wrap">
+      <button class="copy-btn" onclick="copyCode(this)">Copiar</button>
+      <pre>apt update && apt upgrade -y</pre>
+    </div>
+    <p style="color:var(--muted);font-size:.88rem;">Pode demorar 1-2 min. Se perguntar algo, aperte Enter.</p>
+
+    <h3 style="margin-top:20px;"><span class="icon green">&#127758;</span> Instalar Nginx (servidor web)</h3>
+    <div class="code-wrap">
+      <button class="copy-btn" onclick="copyCode(this)">Copiar</button>
+      <pre>apt install -y nginx</pre>
+    </div>
+
+    <h3 style="margin-top:20px;"><span class="icon blue">&#128193;</span> Instalar Git</h3>
+    <div class="code-wrap">
+      <button class="copy-btn" onclick="copyCode(this)">Copiar</button>
+      <pre>apt install -y git</pre>
+    </div>
+
+    <h3 style="margin-top:20px;"><span class="icon green">&#128274;</span> Instalar Certbot (HTTPS gratuito)</h3>
+    <div class="code-wrap">
+      <button class="copy-btn" onclick="copyCode(this)">Copiar</button>
+      <pre>apt install -y certbot python3-certbot-nginx</pre>
+    </div>
+
+    <h3 style="margin-top:20px;"><span class="icon orange">&#128737;</span> Configurar Firewall</h3>
+    <div class="code-wrap">
+      <button class="copy-btn" onclick="copyCode(this)">Copiar</button>
+      <pre>ufw allow 22/tcp
+ufw allow 80/tcp
+ufw allow 443/tcp
+ufw --force enable</pre>
+    </div>
+
+    <h3 style="margin-top:20px;"><span class="icon green">&#9989;</span> Verificar se Nginx esta rodando</h3>
+    <div class="code-wrap">
+      <button class="copy-btn" onclick="copyCode(this)">Copiar</button>
+      <pre>systemctl status nginx</pre>
+    </div>
+    <p>Deve mostrar <strong style="color:var(--success);">active (running)</strong> em verde.</p>
+  </div>
+</div>
+
+<!-- PARTE 5 -->
+<div class="section" id="s5">
+  <div class="section-header">
+    <div class="section-num">5</div>
+    <h2>Enviar os Arquivos do GestEscolar</h2>
+  </div>
+
+  <div class="card">
+    <h3><span class="icon blue">&#128193;</span> Criar a pasta do site no VPS</h3>
+    <p>No VPS (via SSH):</p>
+    <div class="code-wrap">
+      <button class="copy-btn" onclick="copyCode(this)">Copiar</button>
+      <pre>mkdir -p /var/www/gestescolar</pre>
+    </div>
+  </div>
+
+  <div class="card">
+    <h3><span class="icon green">&#128230;</span> Escolha como enviar os arquivos</h3>
+    <div class="tabs">
+      <button class="tab-btn active" onclick="switchTab(event, 'tab-git')">Git (Recomendado)</button>
+      <button class="tab-btn" onclick="switchTab(event, 'tab-scp')">SCP (Terminal)</button>
+      <button class="tab-btn" onclick="switchTab(event, 'tab-winscp')">WinSCP (Visual)</button>
+    </div>
+
+    <div class="tab-content active" id="tab-git">
+      <p>Se o projeto esta no GitHub, execute <strong>no VPS</strong>:</p>
+      <div class="code-wrap">
+        <button class="copy-btn" onclick="copyCode(this)">Copiar</button>
+        <pre>cd /var/www
+git clone <span class="string">https://github.com/SEU_USUARIO/gestescolar.git</span></pre>
+      </div>
+      <div class="alert alert-ok">
+        <span class="alert-icon">&#128077;</span>
+        <div>Para atualizar no futuro, basta: <code>cd /var/www/gestescolar && git pull</code></div>
+      </div>
+    </div>
+
+    <div class="tab-content" id="tab-scp">
+      <p>No seu computador (NAO no VPS), abra um terminal e execute:</p>
+      <div class="code-wrap">
+        <button class="copy-btn" onclick="copyCode(this)">Copiar</button>
+        <pre><span class="cmd">scp</span> -r index.html css js assets <span class="string">root@SEU_IP:/var/www/gestescolar/</span></pre>
+      </div>
+      <div class="alert alert-warn">
+        <span class="alert-icon">&#9888;</span>
+        <div>NAO envie as pastas <code>deploy/</code>, <code>supabase/</code>, <code>.claude/</code> ou <code>.git/</code>.</div>
+      </div>
+    </div>
+
+    <div class="tab-content" id="tab-winscp">
+      <div class="steps">
+        <div class="step">
+          <h4>Baixe o WinSCP</h4>
+          <p>Acesse <code>winscp.net</code> e instale o programa (gratuito).</p>
+        </div>
+        <div class="step">
+          <h4>Conecte ao VPS</h4>
+          <p>Protocolo: <strong>SFTP</strong> | Host: <strong>IP do VPS</strong> | Usuario: <strong>root</strong> | Senha: sua senha.</p>
+        </div>
+        <div class="step">
+          <h4>Navegue ate a pasta</h4>
+          <p>No lado direito (VPS), va ate <code>/var/www/gestescolar/</code>.</p>
+        </div>
+        <div class="step">
+          <h4>Arraste os arquivos</h4>
+          <p>Do lado esquerdo (seu PC), arraste: <code>index.html</code>, <code>css/</code>, <code>js/</code>, <code>assets/</code>.</p>
+        </div>
+      </div>
+      <div class="alert alert-warn">
+        <span class="alert-icon">&#9888;</span>
+        <div>NAO envie: <code>deploy/</code>, <code>supabase/</code>, <code>.claude/</code>, <code>.git/</code>, <code>bundle.html</code>.</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h3><span class="icon green">&#9989;</span> Verificar os arquivos no VPS</h3>
+    <div class="code-wrap">
+      <button class="copy-btn" onclick="copyCode(this)">Copiar</button>
+      <pre>ls -la /var/www/gestescolar/</pre>
+    </div>
+    <p>Deve mostrar: <code>index.html</code>, <code>css/</code>, <code>js/</code>, <code>assets/</code>.</p>
+  </div>
+</div>
+
+<!-- PARTE 6 -->
+<div class="section" id="s6">
+  <div class="section-header">
+    <div class="section-num">6</div>
+    <h2>Configurar o Nginx</h2>
+  </div>
+  <div class="card">
+    <h3><span class="icon blue">&#128221;</span> Criar arquivo de configuracao</h3>
+    <p>No VPS, execute:</p>
+    <div class="code-wrap">
+      <button class="copy-btn" onclick="copyCode(this)">Copiar</button>
+      <pre>nano /etc/nginx/sites-available/gestescolar</pre>
+    </div>
+    <p>Isso abre um editor de texto. <strong>Cole o conteudo abaixo</strong> (substitua o dominio pelo seu):</p>
+    <div class="code-wrap">
+      <button class="copy-btn" onclick="copyCode(this)">Copiar</button>
+      <pre>server {
+    listen 80;
+    server_name <span class="string">gestescolar.com.br</span> <span class="string">www.gestescolar.com.br</span>;
+
+    root /var/www/gestescolar;
+    index index.html;
+
+    <span class="comment"># Seguranca</span>
+    add_header X-Frame-Options "SAMEORIGIN" always;
+    add_header X-Content-Type-Options "nosniff" always;
+
+    <span class="comment"># SPA: qualquer rota cai no index.html</span>
+    location / {
+        try_files $uri $uri/ /index.html;
+    }
+
+    <span class="comment"># Cache para arquivos estaticos</span>
+    location ~* \.(js|css|png|jpg|jpeg|gif|ico|svg|woff|woff2)$ {
+        expires 7d;
+        add_header Cache-Control "public, immutable";
+    }
+
+    <span class="comment"># Bloquear pastas sensiveis</span>
+    location ~* /(supabase|deploy|\.claude|\.git) {
+        deny all;
+        return 404;
+    }
+
+    <span class="comment"># Compressao</span>
+    gzip on;
+    gzip_types text/plain text/css application/json application/javascript;
+    gzip_min_length 256;
+}</pre>
+    </div>
+    <div class="alert alert-info">
+      <span class="alert-icon">&#128221;</span>
+      <div>
+        <strong>Como salvar no nano:</strong><br>
+        1. Aperte <strong>Ctrl + O</strong> (salvar) &gt; Enter<br>
+        2. Aperte <strong>Ctrl + X</strong> (sair)
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h3><span class="icon green">&#128268;</span> Ativar o site e reiniciar</h3>
+    <div class="code-wrap">
+      <button class="copy-btn" onclick="copyCode(this)">Copiar</button>
+      <pre><span class="comment"># Ativar o site</span>
+ln -sf /etc/nginx/sites-available/gestescolar /etc/nginx/sites-enabled/
+rm -f /etc/nginx/sites-enabled/default
+
+<span class="comment"># Testar configuracao</span>
+nginx -t
+
+<span class="comment"># Reiniciar Nginx</span>
+systemctl restart nginx</pre>
+    </div>
+    <p>O <code>nginx -t</code> deve mostrar: <strong style="color:var(--success);">"syntax is ok"</strong> e <strong style="color:var(--success);">"test is successful"</strong>.</p>
+  </div>
+
+  <div class="card">
+    <h3><span class="icon green">&#9989;</span> Testar no navegador</h3>
+    <p>Abra o navegador e acesse:</p>
+    <pre>http://<span class="string">SEU_IP_DO_VPS</span></pre>
+    <p style="margin-top:8px;">Deve aparecer a tela de login do GestEscolar! Se o DNS ja propagou:</p>
+    <pre>http://<span class="string">gestescolar.com.br</span></pre>
+  </div>
+</div>
+
+<!-- PARTE 7 -->
+<div class="section" id="s7">
+  <div class="section-header">
+    <div class="section-num">7</div>
+    <h2>Ativar HTTPS / SSL (Cadeado Verde)</h2>
+  </div>
+  <div class="card">
+    <div class="alert alert-danger">
+      <span class="alert-icon">&#9888;</span>
+      <div><strong>IMPORTANTE:</strong> So faca isso APOS o DNS estar propagado (o dominio ja abre no navegador via HTTP).</div>
+    </div>
+    <p>No VPS, execute:</p>
+    <div class="code-wrap">
+      <button class="copy-btn" onclick="copyCode(this)">Copiar</button>
+      <pre>certbot --nginx -d <span class="string">gestescolar.com.br</span> -d <span class="string">www.gestescolar.com.br</span></pre>
+    </div>
+    <p style="margin-top:12px;">Vai fazer algumas perguntas:</p>
+    <table>
+      <tr><th>Pergunta</th><th>Responda</th></tr>
+      <tr><td>Enter email address</td><td>Seu email (para avisos de renovacao)</td></tr>
+      <tr><td>Agree to terms?</td><td><strong>Y</strong></td></tr>
+      <tr><td>Share email?</td><td><strong>N</strong></td></tr>
+      <tr><td>Redirect HTTP to HTTPS?</td><td><strong>2</strong> (redirecionar)</td></tr>
+    </table>
+    <div class="alert alert-ok" style="margin-top:16px;">
+      <span class="alert-icon">&#128274;</span>
+      <div>Pronto! Agora <code>https://gestescolar.com.br</code> funciona com cadeado verde. O certificado renova automaticamente a cada 90 dias.</div>
+    </div>
+  </div>
+</div>
+
+<!-- PARTE 8 -->
+<div class="section" id="s8">
+  <div class="section-header">
+    <div class="section-num">8</div>
+    <h2>Configurar Dominio no Supabase</h2>
+  </div>
+  <div class="card">
+    <p>Apos o site estar no ar, atualize o Supabase para reconhecer seu dominio:</p>
+    <div class="steps">
+      <div class="step">
+        <h4>Acessar o painel Supabase</h4>
+        <p>Va em <code>supabase.com/dashboard</code> e selecione seu projeto.</p>
+      </div>
+      <div class="step">
+        <h4>Ir em Authentication &gt; URL Configuration</h4>
+        <p>No menu lateral, clique em <strong>Authentication</strong>, depois <strong>URL Configuration</strong>.</p>
+      </div>
+      <div class="step">
+        <h4>Atualizar as URLs</h4>
+        <p>Preencha:</p>
+        <table>
+          <tr><th>Campo</th><th>Valor</th></tr>
+          <tr><td>Site URL</td><td><code>https://gestescolar.com.br</code></td></tr>
+          <tr><td>Redirect URLs</td><td><code>https://gestescolar.com.br/**</code></td></tr>
+        </table>
+      </div>
+      <div class="step">
+        <h4>Salvar</h4>
+        <p>Clique em <strong>Save</strong>.</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- PARTE 9 -->
+<div class="section" id="s9">
+  <div class="section-header">
+    <div class="section-num">9</div>
+    <h2>Como Atualizar o Site no Futuro</h2>
+  </div>
+  <div class="card">
+    <p>Sempre que fizer mudancas no codigo e quiser publicar:</p>
+    <div class="tabs">
+      <button class="tab-btn active" onclick="switchTab(event, 'upd-git')">Via Git</button>
+      <button class="tab-btn" onclick="switchTab(event, 'upd-scp')">Via SCP</button>
+      <button class="tab-btn" onclick="switchTab(event, 'upd-winscp')">Via WinSCP</button>
+    </div>
+    <div class="tab-content active" id="upd-git">
+      <p>Conecte no VPS e execute:</p>
+      <div class="code-wrap">
+        <button class="copy-btn" onclick="copyCode(this)">Copiar</button>
+        <pre><span class="cmd">ssh</span> root@<span class="string">SEU_IP</span>
+<span class="cmd">cd</span> /var/www/gestescolar
+<span class="cmd">git pull</span></pre>
+      </div>
+      <p>Pronto! As mudancas ja estao no ar.</p>
+    </div>
+    <div class="tab-content" id="upd-scp">
+      <p>No seu computador, execute:</p>
+      <div class="code-wrap">
+        <button class="copy-btn" onclick="copyCode(this)">Copiar</button>
+        <pre><span class="cmd">scp</span> -r index.html css js assets <span class="string">root@SEU_IP:/var/www/gestescolar/</span></pre>
+      </div>
+    </div>
+    <div class="tab-content" id="upd-winscp">
+      <p>Abra o WinSCP, conecte, e arraste os arquivos atualizados para <code>/var/www/gestescolar/</code>.</p>
+    </div>
+  </div>
+</div>
+
+<!-- CHECKLIST -->
+<div class="section" id="checklist">
+  <div class="section-header">
+    <div class="section-num" style="background:var(--success);">&#10003;</div>
+    <h2>Checklist Final</h2>
+  </div>
+  <div class="card">
+    <p>Clique em cada item conforme for completando:</p>
+    <ul class="checklist">
+      <li onclick="this.classList.toggle('done')"><span class="check-box">&#10003;</span><span>Contratei VPS na Hostinger (Ubuntu 22.04)</span></li>
+      <li onclick="this.classList.toggle('done')"><span class="check-box">&#10003;</span><span>Anotei o IP do VPS e a senha de root</span></li>
+      <li onclick="this.classList.toggle('done')"><span class="check-box">&#10003;</span><span>Registrei dominio e apontei DNS (A record) para o IP</span></li>
+      <li onclick="this.classList.toggle('done')"><span class="check-box">&#10003;</span><span>Acessei o VPS via SSH</span></li>
+      <li onclick="this.classList.toggle('done')"><span class="check-box">&#10003;</span><span>Atualizei o sistema (apt update && apt upgrade)</span></li>
+      <li onclick="this.classList.toggle('done')"><span class="check-box">&#10003;</span><span>Instalei Nginx, Git e Certbot</span></li>
+      <li onclick="this.classList.toggle('done')"><span class="check-box">&#10003;</span><span>Configurei o firewall (ufw)</span></li>
+      <li onclick="this.classList.toggle('done')"><span class="check-box">&#10003;</span><span>Enviei os arquivos para /var/www/gestescolar/</span></li>
+      <li onclick="this.classList.toggle('done')"><span class="check-box">&#10003;</span><span>Criei e ativei configuracao do Nginx</span></li>
+      <li onclick="this.classList.toggle('done')"><span class="check-box">&#10003;</span><span>Testei no navegador (http://IP funciona)</span></li>
+      <li onclick="this.classList.toggle('done')"><span class="check-box">&#10003;</span><span>DNS propagou (dominio abre no navegador)</span></li>
+      <li onclick="this.classList.toggle('done')"><span class="check-box">&#10003;</span><span>Ativei HTTPS com certbot</span></li>
+      <li onclick="this.classList.toggle('done')"><span class="check-box">&#10003;</span><span>Site abre em https://meudominio.com.br</span></li>
+      <li onclick="this.classList.toggle('done')"><span class="check-box">&#10003;</span><span>Atualizei URLs no painel Supabase</span></li>
+    </ul>
+  </div>
+</div>
+
+<!-- PROBLEMAS -->
+<div class="section" id="problemas">
+  <div class="section-header">
+    <div class="section-num" style="background:var(--warning);">?</div>
+    <h2>Problemas Comuns e Solucoes</h2>
+  </div>
+
+  <div class="card">
+    <h3><span class="icon red">&#10060;</span> "Connection refused" ao acessar pelo navegador</h3>
+    <div class="code-wrap">
+      <button class="copy-btn" onclick="copyCode(this)">Copiar</button>
+      <pre><span class="comment"># Verificar se Nginx esta rodando:</span>
+systemctl status nginx
+
+<span class="comment"># Verificar firewall:</span>
+ufw status</pre>
+    </div>
+  </div>
+
+  <div class="card">
+    <h3><span class="icon red">&#10060;</span> "502 Bad Gateway"</h3>
+    <div class="code-wrap">
+      <button class="copy-btn" onclick="copyCode(this)">Copiar</button>
+      <pre><span class="comment"># Verificar se os arquivos existem:</span>
+ls /var/www/gestescolar/
+
+<span class="comment"># Testar configuracao do Nginx:</span>
+nginx -t</pre>
+    </div>
+  </div>
+
+  <div class="card">
+    <h3><span class="icon red">&#10060;</span> Site carrega mas Supabase nao conecta</h3>
+    <p>Abra o console do navegador (<strong>F12 &gt; Console</strong>) e veja o erro. Certifique-se que o dominio esta liberado no Supabase (Parte 8).</p>
+  </div>
+
+  <div class="card">
+    <h3><span class="icon red">&#10060;</span> "DNS_PROBE_FINISHED_NXDOMAIN"</h3>
+    <p>O DNS ainda nao propagou. Aguarde ate 24h. Verifique em <code>dnschecker.org</code>.</p>
+  </div>
+
+  <div class="card">
+    <h3><span class="icon orange">&#128273;</span> Esqueci a senha do VPS</h3>
+    <p>No painel Hostinger &gt; VPS &gt; <strong>Reset Root Password</strong>.</p>
+  </div>
+
+  <div class="card">
+    <h3><span class="icon blue">&#128260;</span> Como reiniciar o Nginx / ver logs</h3>
+    <div class="code-wrap">
+      <button class="copy-btn" onclick="copyCode(this)">Copiar</button>
+      <pre><span class="comment"># Reiniciar Nginx:</span>
+systemctl restart nginx
+
+<span class="comment"># Ver logs de erro:</span>
+tail -50 /var/log/nginx/error.log
+
+<span class="comment"># Ver logs de acesso:</span>
+tail -50 /var/log/nginx/access.log</pre>
+    </div>
+  </div>
+</div>
+
+</div><!-- /container -->
+
+<div class="footer">
+  GestEscolar &mdash; Guia de Deploy VPS &mdash; 2026
+</div>
+
+<script>
+function copyCode(btn) {
+  const pre = btn.parentElement.querySelector('pre');
+  const text = pre.innerText;
+  navigator.clipboard.writeText(text).then(() => {
+    btn.textContent = 'Copiado!';
+    btn.classList.add('copied');
+    setTimeout(() => { btn.textContent = 'Copiar'; btn.classList.remove('copied'); }, 2000);
+  });
+}
+
+function switchTab(e, tabId) {
+  const card = e.target.closest('.card');
+  card.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  card.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+  e.target.classList.add('active');
+  card.querySelector('#' + tabId).classList.add('active');
+}
+</script>
+</body>
+</html>

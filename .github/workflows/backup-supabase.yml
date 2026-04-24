@@ -1,0 +1,61 @@
+name: Supabase Backup Daily
+
+on:
+  schedule:
+    # Roda todo dia às 3 AM (horário UTC)
+    # Para mudar o horário, ajuste HH:MM (ex: 0 9 = 9 AM UTC)
+    - cron: '0 3 * * *'
+
+  # Permite rodar manualmente via GitHub Actions
+  workflow_dispatch:
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Install PostgreSQL client tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y postgresql-client
+
+      - name: Create backup directory
+        run: mkdir -p ./backups
+
+      - name: Run pg_dump backup
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+        run: |
+          # Criar backup com timestamp
+          BACKUP_FILE="./backups/backup_$(date +%Y%m%d_%H%M%S).sql"
+          pg_dump "$SUPABASE_DB_URL" > "$BACKUP_FILE"
+
+          # Comprimir para economizar espaço
+          gzip "$BACKUP_FILE"
+
+          # Exibir tamanho do backup
+          ls -lh "${BACKUP_FILE}.gz"
+
+      - name: Upload backup to GitHub
+        uses: actions/upload-artifact@v3
+        with:
+          name: supabase-backup-${{ github.run_number }}
+          path: ./backups/
+          retention-days: 30
+
+      - name: Cleanup old local backups (opcional)
+        run: |
+          # Manter apenas os últimos 7 backups localmente
+          cd ./backups
+          ls -t backup_*.sql.gz | tail -n +8 | xargs -r rm
+
+      - name: Notify on success
+        if: success()
+        run: echo "✅ Backup realizado com sucesso em $(date)"
+
+      - name: Notify on failure
+        if: failure()
+        run: echo "❌ Falha no backup - verificar logs"

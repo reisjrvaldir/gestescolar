@@ -1,0 +1,12 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "GestEscolar",
+      "runtimeExecutable": "node",
+      "runtimeArgs": ["-e", "const http=require('http'),fs=require('fs'),path=require('path');const port=process.env.PORT||3000;const mime={'.html':'text/html','.js':'application/javascript','.css':'text/css','.png':'image/png','.jpg':'image/jpeg','.svg':'image/svg+xml','.ico':'image/x-icon','.json':'application/json'};http.createServer((req,res)=>{let f=req.url==='/'?'/index.html':req.url.split('?')[0];const fp=path.join('C:/Users/USER/Documents/Projetos/gestescolar',f);fs.readFile(fp,(err,data)=>{if(err){res.writeHead(404);res.end('Not found');return;}res.writeHead(200,{'Content-Type':mime[path.extname(fp)]||'text/plain'});res.end(data);});}).listen(port,()=>console.log('Server on port '+port));"],
+      "port": 3000,
+      "autoPort": true
+    }
+  ]
+}

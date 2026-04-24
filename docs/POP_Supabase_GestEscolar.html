@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>POP - Criação de Tabelas no Supabase | GestEscolar</title>
+<style>
+  @media print { body { -webkit-print-color-adjust: exact; print-color-adjust: exact; } .no-break { page-break-inside: avoid; } .page-break { page-break-before: always; } }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: 'Segoe UI', Arial, sans-serif; color: #0d1b2a; line-height: 1.6; padding: 40px; max-width: 900px; margin: 0 auto; }
+  h1 { color: #1a73e8; font-size: 22px; margin: 30px 0 10px; padding-bottom: 6px; border-bottom: 2px solid #1a73e8; }
+  h2 { color: #1a73e8; font-size: 15px; margin: 16px 0 8px; }
+  h3 { color: #0d1b2a; font-size: 13px; margin: 10px 0 6px; }
+  p, li { font-size: 12px; margin-bottom: 6px; }
+  ul { padding-left: 24px; }
+  .cover { text-align: center; padding: 80px 0 40px; }
+  .cover h1 { font-size: 28px; border: none; color: #1a73e8; }
+  .cover .sub { font-size: 16px; color: #666; margin-bottom: 30px; }
+  .cover .line { width: 200px; height: 3px; background: #1a73e8; margin: 20px auto; }
+  .info-box { background: #f8f9fa; border: 1px solid #ddd; border-radius: 8px; padding: 16px; margin: 20px auto; max-width: 500px; text-align: left; }
+  .info-box table { width: 100%; font-size: 11px; }
+  .info-box td { padding: 4px 8px; }
+  .info-box td:first-child { font-weight: 700; width: 120px; color: #333; }
+  .step { background: #1a73e8; color: #fff; padding: 8px 16px; border-radius: 6px; font-weight: 700; font-size: 13px; margin: 16px 0 8px; display: inline-block; }
+  .note { background: #fff8e1; border-left: 4px solid #ff6d00; padding: 10px 14px; border-radius: 4px; font-size: 11px; color: #7a5f00; margin: 12px 0; }
+  .note strong { color: #ff6d00; }
+  .success { background: #e8f5e9; border-left: 4px solid #2e7d32; padding: 10px 14px; border-radius: 4px; font-size: 11px; color: #1b5e20; margin: 12px 0; }
+  table.check { width: 100%; border-collapse: collapse; margin: 12px 0; font-size: 11px; }
+  table.check th { background: #1a73e8; color: #fff; padding: 8px 10px; text-align: left; }
+  table.check td { padding: 6px 10px; border-bottom: 1px solid #eee; }
+  table.check tr:nth-child(even) { background: #f8f9fa; }
+  table.check .center { text-align: center; }
+  code { background: #f1f3f4; padding: 2px 6px; border-radius: 3px; font-family: 'Consolas', monospace; font-size: 11px; }
+  pre { background: #f8f9fa; border: 1px solid #ddd; border-radius: 6px; padding: 12px; font-family: 'Consolas', monospace; font-size: 10px; overflow-x: auto; margin: 8px 0 12px; line-height: 1.4; white-space: pre-wrap; }
+  .footer { text-align: center; color: #999; font-size: 9px; margin-top: 40px; padding-top: 10px; border-top: 1px solid #eee; }
+  .sumario a { text-decoration: none; color: #0d1b2a; font-size: 13px; display: block; padding: 4px 0 4px 20px; }
+  .sumario a:hover { color: #1a73e8; }
+</style>
+</head>
+<body>
+
+<!-- CAPA -->
+<div class="cover">
+  <h1>POP - Processo Operacional Padrão</h1>
+  <div class="sub">Criação de Tabelas no Supabase</div>
+  <div class="line"></div>
+  <p style="font-size:16px; margin-top:20px;"><strong>Sistema GestEscolar SaaS</strong></p>
+  <p style="font-size:11px; color:#999;">Versão 1.0 — Março 2026</p>
+  <div class="info-box">
+    <table>
+      <tr><td>Documento:</td><td>POP-001 — Configuração Supabase</td></tr>
+      <tr><td>Responsável:</td><td>Equipe GestEscolar</td></tr>
+      <tr><td>Objetivo:</td><td>Criar todas as tabelas do banco de dados</td></tr>
+      <tr><td>Projeto URL:</td><td>https://exqkzqmpbfakrjqinvnf.supabase.co</td></tr>
+    </table>
+  </div>
+</div>
+
+<div class="page-break"></div>
+
+<!-- SUMÁRIO -->
+<h1>Sumário</h1>
+<div class="sumario">
+  <a href="#s1">1. Pré-requisitos</a>
+  <a href="#s2">2. Acessar o SQL Editor</a>
+  <a href="#s3">3. Criar as Tabelas (Schema)</a>
+  <a href="#s4">4. Verificar as Tabelas Criadas</a>
+  <a href="#s5">5. Estrutura das Tabelas</a>
+  <a href="#s6">6. Segurança (Row Level Security)</a>
+  <a href="#s7">7. Próximos Passos</a>
+</div>
+
+<!-- 1 -->
+<h1 id="s1">1. Pré-requisitos</h1>
+<p>Antes de começar, você precisa:</p>
+<ul>
+  <li>Conta criada no Supabase (<a href="https://supabase.com">https://supabase.com</a>)</li>
+  <li>Projeto "GestEscolar" criado na região South America (São Paulo)</li>
+  <li>Acesso ao Dashboard do projeto</li>
+  <li>Arquivo <code>supabase/schema.sql</code> (fornecido junto com este POP)</li>
+</ul>
+<div class="note"><strong>⚠️ IMPORTANTE:</strong> Anote e guarde a Database Password que você definiu ao criar o projeto. Ela será necessária para conexões diretas ao banco.</div>
+
+<!-- 2 -->
+<div class="page-break"></div>
+<h1 id="s2">2. Acessar o SQL Editor</h1>
+
+<div class="step">PASSO 1</div>
+<p>Acesse o dashboard do seu projeto:<br>
+<strong><a href="https://supabase.com/dashboard/project/exqkzqmpbfakrjqinvnf">https://supabase.com/dashboard/project/exqkzqmpbfakrjqinvnf</a></strong></p>
+
+<div class="step">PASSO 2</div>
+<p>No menu lateral esquerdo, clique em <strong>SQL Editor</strong> (ícone de parênteses <code>&lt;/&gt;</code>). Ele fica logo abaixo de "Table Editor".</p>
+
+<div class="step">PASSO 3</div>
+<p>Clique em <strong>+ New Query</strong> (botão verde no canto superior) para abrir um editor SQL em branco.</p>
+
+<div class="note">💡 Ou acesse diretamente: <a href="https://supabase.com/dashboard/project/exqkzqmpbfakrjqinvnf/sql/new">https://supabase.com/dashboard/project/exqkzqmpbfakrjqinvnf/sql/new</a></div>
+
+<!-- 3 -->
+<h1 id="s3">3. Criar as Tabelas (Schema)</h1>
+
+<div class="step">PASSO 4</div>
+<p>Abra o arquivo <strong>supabase/schema.sql</strong> que está na pasta do projeto GestEscolar. Você pode abrir com o Bloco de Notas, VS Code ou qualquer editor de texto.</p>
+<p>📂 Caminho: <code>C:\Users\USER\Documents\Projetos\gestescolar\supabase\schema.sql</code></p>
+
+<div class="step">PASSO 5</div>
+<p>Selecione <strong>TODO o conteúdo</strong> do arquivo (<code>Ctrl+A</code>) e copie (<code>Ctrl+C</code>).</p>
+
+<div class="step">PASSO 6</div>
+<p>Cole (<code>Ctrl+V</code>) todo o conteúdo no SQL Editor do Supabase (na área grande em branco).</p>
+
+<div class="step">PASSO 7</div>
+<p>Clique no botão <strong>Run</strong> (botão verde, ou pressione <code>Ctrl+Enter</code>). Aguarde a execução — pode levar alguns segundos.</p>
+
+<div class="step">PASSO 8</div>
+<p>Se tudo der certo, você verá a mensagem:</p>
+<div class="success">✅ <strong>Success. No rows returned</strong> — Isso é normal! O SQL cria tabelas, não retorna dados.</div>
+
+<div class="note"><strong>⚠️ Se aparecer erro em VERMELHO:</strong> Copie a mensagem de erro completa e me envie no chat. Eu resolvo para você.</div>
+
+<!-- 4 -->
+<div class="page-break"></div>
+<h1 id="s4">4. Verificar as Tabelas Criadas</h1>
+
+<div class="step">PASSO 9</div>
+<p>No menu lateral esquerdo, clique em <strong>Table Editor</strong> (ícone de tabela, primeiro item do menu).</p>
+
+<div class="step">PASSO 10</div>
+<p>Você deve ver as seguintes <strong>11 tabelas</strong> listadas:</p>
+
+<table class="check">
+  <tr><th>Tabela</th><th>Descrição</th><th>Verificado ✓</th></tr>
+  <tr><td><code>schools</code></td><td>Escolas cadastradas</td><td class="center">☐</td></tr>
+  <tr><td><code>users</code></td><td>Usuários do sistema</td><td class="center">☐</td></tr>
+  <tr><td><code>classes</code></td><td>Turmas</td><td class="center">☐</td></tr>
+  <tr><td><code>students</code></td><td>Alunos</td><td class="center">☐</td></tr>
+  <tr><td><code>invoices</code></td><td>Boletos / Mensalidades</td><td class="center">☐</td></tr>
+  <tr><td><code>expenses</code></td><td>Contas a pagar</td><td class="center">☐</td></tr>
+  <tr><td><code>transactions</code></td><td>Transações financeiras</td><td class="center">☐</td></tr>
+  <tr><td><code>messages</code></td><td>Mensagens</td><td class="center">☐</td></tr>
+  <tr><td><code>audit_log</code></td><td>Log de auditoria</td><td class="center">☐</td></tr>
+  <tr><td><code>grades</code></td><td>Notas / Avaliações</td><td class="center">☐</td></tr>
+  <tr><td><code>attendance</code></td><td>Chamada / Presença</td><td class="center">☐</td></tr>
+</table>
+
+<p>Marque cada tabela conforme for verificando. Se alguma estiver faltando, execute o SQL novamente ou me avise.</p>
+
+<!-- 5 -->
+<div class="page-break"></div>
+<h1 id="s5">5. Estrutura das Tabelas</h1>
+
+<div class="no-break">
+<h2>📋 schools — Escolas</h2>
+<ul>
+  <li><strong>id</strong> (UUID) — Identificador único</li>
+  <li><strong>name</strong> — Nome da escola</li>
+  <li><strong>cnpj</strong> — CNPJ</li>
+  <li><strong>email, phone, address</strong> — Contato</li>
+  <li><strong>plan_id</strong> — Plano contratado (free, gestao_100, etc)</li>
+  <li><strong>pix_key</strong> — Chave PIX para recebimentos</li>
+</ul>
+</div>
+
+<div class="no-break">
+<h2>👤 users — Usuários</h2>
+<ul>
+  <li><strong>auth_id</strong> — Vínculo com Supabase Auth (login real)</li>
+  <li><strong>school_id</strong> — Escola vinculada</li>
+  <li><strong>name, email, cpf, phone</strong> — Dados pessoais</li>
+  <li><strong>role</strong> — Função (gestor, professor, pai, financeiro, etc)</li>
+  <li><strong>active</strong> — Se o usuário está ativo</li>
+</ul>
+</div>
+
+<div class="no-break">
+<h2>🎓 students — Alunos</h2>
+<ul>
+  <li><strong>matricula</strong> — Matrícula gerada automaticamente</li>
+  <li><strong>class_id</strong> — Turma vinculada</li>
+  <li><strong>status</strong> — ativo/inativo</li>
+  <li><strong>monthly_fee</strong> — Valor da mensalidade</li>
+  <li><strong>responsaveis</strong> (JSON) — Lista de responsáveis</li>
+  <li><strong>parent_id</strong> — Vínculo com usuário pai</li>
+</ul>
+</div>
+
+<div class="no-break">
+<h2>💰 invoices — Mensalidades</h2>
+<ul>
+  <li><strong>student_id, student_name</strong> — Aluno</li>
+  <li><strong>description, amount, due_date</strong> — Detalhes</li>
+  <li><strong>status</strong> — pendente/pago/vencido/cancelado</li>
+  <li><strong>asaas_id</strong> — ID da cobrança no Asaas (futuro)</li>
+</ul>
+</div>
+
+<div class="no-break">
+<h2>📨 messages — Mensagens</h2>
+<ul>
+  <li><strong>from_user_id, to_user_id</strong> — Remetente e destinatário</li>
+  <li><strong>student_id</strong> — Aluno relacionado</li>
+  <li><strong>subject, text</strong> — Conteúdo</li>
+  <li><strong>read</strong> — Se a mensagem foi lida</li>
+</ul>
+</div>
+
+<!-- 6 -->
+<div class="page-break"></div>
+<h1 id="s6">6. Segurança — Row Level Security (RLS)</h1>
+
+<p>O schema já configura automaticamente o <strong>Row Level Security (RLS)</strong> em todas as tabelas. Isso significa que:</p>
+
+<ul>
+  <li>✅ Cada escola só vê seus <strong>próprios dados</strong></li>
+  <li>✅ Um usuário da Escola A <strong>NÃO consegue</strong> acessar dados da Escola B</li>
+  <li>✅ O superadmin consegue ver dados de <strong>todas as escolas</strong></li>
+  <li>✅ A segurança é aplicada no <strong>nível do banco de dados</strong> (não depende do frontend)</li>
+</ul>
+
+<div class="note"><strong>⚠️ NUNCA desabilite o RLS nas tabelas.</strong> Ele é essencial para a segurança do sistema multi-tenant. Se uma tabela aparecer com RLS desabilitado, me avise imediatamente.</div>
+
+<!-- 7 -->
+<h1 id="s7">7. Próximos Passos</h1>
+
+<table class="check">
+  <tr><th>Etapa</th><th>Descrição</th><th>Responsável</th></tr>
+  <tr><td>1 ✅</td><td>Criar tabelas no Supabase (este POP)</td><td>Você</td></tr>
+  <tr><td>2</td><td>Migrar código JS (data.js / auth.js)</td><td>Claude</td></tr>
+  <tr><td>3</td><td>Configurar autenticação (Supabase Auth)</td><td>Claude + Você</td></tr>
+  <tr><td>4</td><td>Integrar Asaas (pagamentos com split 2%)</td><td>Claude + Você</td></tr>
+  <tr><td>5</td><td>Testar sistema completo</td><td>Você + Claude</td></tr>
+  <tr><td>6</td><td>Deploy em produção (VPS)</td><td>Claude + Você</td></tr>
+</table>
+
+<div class="success">
+  <strong>🎉 Após concluir este POP</strong>, me envie uma mensagem confirmando que as 11 tabelas foram criadas com sucesso.
+  Eu começarei imediatamente a migrar o código JavaScript para usar o Supabase.
+</div>
+
+<div class="footer">
+  POP-001 — GestEscolar SaaS — Documento gerado em Março 2026<br>
+  Para imprimir como PDF: Ctrl+P → "Salvar como PDF"
+</div>
+
+</body>
+</html>

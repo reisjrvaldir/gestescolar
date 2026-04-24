@@ -1,0 +1,9 @@
+.git
+.claude
+deploy
+supabase
+docs
+bundle.html
+serve.*
+*.md
+.env*

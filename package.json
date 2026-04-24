@@ -1,0 +1,9 @@
+{
+  "name": "gestescolar",
+  "version": "1.0.0",
+  "private": true,
+  "dependencies": {
+    "@supabase/supabase-js": "^2.102.1",
+    "resend": "^3.0.0"
+  }
+}

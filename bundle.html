@@ -1,0 +1,3619 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate, max-age=0" />
+  <meta http-equiv="Pragma" content="no-cache" />
+  <meta http-equiv="Expires" content="0" />
+  <title>GestEscolar – Plataforma de Gestão Escolar</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" />
+  <style>
+/* =============================================
+   GESTESCOLAR – ESTILOS PRINCIPAIS
+   ============================================= */
+
+/* ---------- Reset e Base ---------- */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --primary:    #1a73e8;
+  --primary-dk: #1557b0;
+  --secondary:  #34a853;
+  --danger:     #ea4335;
+  --warning:    #fbbc04;
+  --info:       #4285f4;
+  --bg:         #f0f4f8;
+  --surface:    #ffffff;
+  --sidebar-bg: #0d1b2a;
+  --sidebar-tx: #b0bec5;
+  --sidebar-ac: #1a73e8;
+  --text:       #202124;
+  --text-muted: #5f6368;
+  --border:     #dadce0;
+  --radius:     8px;
+  --shadow:     0 2px 8px rgba(0,0,0,.12);
+  --shadow-lg:  0 8px 24px rgba(0,0,0,.16);
+  --font:       'Segoe UI', system-ui, sans-serif;
+}
+
+html, body { height: 100%; font-family: var(--font); background: var(--bg); color: var(--text); font-size: 14px; }
+#app { height: 100%; }
+a { color: var(--primary); text-decoration: none; }
+button { cursor: pointer; font-family: var(--font); }
+input, select, textarea { font-family: var(--font); }
+img { max-width: 100%; }
+
+/* ---------- Layout Principal ---------- */
+.layout {
+  display: flex;
+  height: 100vh;
+  overflow: hidden;
+}
+
+/* ---------- Sidebar ---------- */
+.sidebar {
+  width: 240px;
+  background: var(--sidebar-bg);
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+  overflow-y: auto;
+  transition: width .25s;
+}
+.sidebar-brand {
+  padding: 20px 16px;
+  border-bottom: 1px solid rgba(255,255,255,.08);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.sidebar-brand .brand-icon {
+  width: 36px; height: 36px;
+  background: var(--primary);
+  border-radius: 8px;
+  display: flex; align-items: center; justify-content: center;
+  color: #fff; font-size: 18px;
+}
+.sidebar-brand .brand-name {
+  color: #fff; font-weight: 700; font-size: 16px;
+}
+.sidebar-brand .brand-sub {
+  color: var(--sidebar-tx); font-size: 11px;
+}
+.sidebar-nav { flex: 1; padding: 12px 0; }
+.nav-section-title {
+  color: rgba(255,255,255,.35);
+  font-size: 10px; font-weight: 700;
+  letter-spacing: 1px;
+  padding: 12px 16px 4px;
+  text-transform: uppercase;
+}
+.nav-item {
+  display: flex; align-items: center; gap: 10px;
+  padding: 10px 16px;
+  color: var(--sidebar-tx);
+  cursor: pointer;
+  border-left: 3px solid transparent;
+  transition: all .2s;
+  font-size: 13.5px;
+}
+.nav-item:hover { background: rgba(255,255,255,.06); color: #fff; }
+.nav-item.active { background: rgba(26,115,232,.15); color: #fff; border-left-color: var(--primary); }
+.nav-item i { width: 18px; text-align: center; font-size: 14px; }
+.sidebar-footer {
+  padding: 16px;
+  border-top: 1px solid rgba(255,255,255,.08);
+}
+.sidebar-user {
+  display: flex; align-items: center; gap: 10px;
+  padding: 8px;
+  border-radius: var(--radius);
+  cursor: pointer;
+  transition: background .2s;
+}
+.sidebar-user:hover { background: rgba(255,255,255,.06); }
+.sidebar-user .avatar {
+  width: 32px; height: 32px;
+  border-radius: 50%;
+  background: var(--primary);
+  color: #fff;
+  display: flex; align-items: center; justify-content: center;
+  font-weight: 700; font-size: 13px;
+}
+.sidebar-user .user-info { flex: 1; min-width: 0; }
+.sidebar-user .user-name { color: #fff; font-size: 13px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sidebar-user .user-role { color: var(--sidebar-tx); font-size: 11px; }
+.btn-logout { background: none; border: none; color: var(--sidebar-tx); padding: 4px; font-size: 14px; }
+.btn-logout:hover { color: var(--danger); }
+
+/* ---------- Conteúdo Principal ---------- */
+.main-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.topbar {
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  padding: 0 24px;
+  height: 60px;
+  display: flex; align-items: center; justify-content: space-between;
+  flex-shrink: 0;
+}
+.topbar-title { font-size: 18px; font-weight: 700; }
+.topbar-actions { display: flex; align-items: center; gap: 12px; }
+.page-content { flex: 1; overflow-y: auto; padding: 24px; }
+
+/* ---------- Cartões ---------- */
+.card {
+  background: var(--surface);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  padding: 20px;
+  margin-bottom: 20px;
+}
+.card-header {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: 16px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--border);
+}
+.card-title { font-size: 15px; font-weight: 700; }
+
+/* ---------- Stats ---------- */
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 16px;
+  margin-bottom: 20px;
+}
+.stat-card {
+  background: var(--surface);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  padding: 20px;
+  display: flex; align-items: center; gap: 14px;
+}
+.stat-icon {
+  width: 48px; height: 48px;
+  border-radius: 12px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 22px;
+}
+.stat-icon.blue   { background: #e8f0fe; color: #1a73e8; }
+.stat-icon.green  { background: #e6f4ea; color: #34a853; }
+.stat-icon.red    { background: #fce8e6; color: #ea4335; }
+.stat-icon.yellow { background: #fef9e3; color: #f9ab00; }
+.stat-icon.purple { background: #f3e8fd; color: #8e24aa; }
+.stat-value { font-size: 24px; font-weight: 800; line-height: 1; }
+.stat-label { color: var(--text-muted); font-size: 12px; margin-top: 4px; }
+
+/* ---------- Botões ---------- */
+.btn {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 8px 16px;
+  border-radius: var(--radius);
+  border: none;
+  font-size: 13.5px; font-weight: 600;
+  transition: all .2s;
+  cursor: pointer;
+}
+.btn-primary   { background: var(--primary); color: #fff; }
+.btn-primary:hover { background: var(--primary-dk); }
+.btn-secondary { background: var(--secondary); color: #fff; }
+.btn-secondary:hover { background: #2d9148; }
+.btn-danger    { background: var(--danger); color: #fff; }
+.btn-danger:hover { background: #c62828; }
+.btn-outline   { background: transparent; border: 1.5px solid var(--border); color: var(--text); }
+.btn-outline:hover { border-color: var(--primary); color: var(--primary); background: #e8f0fe; }
+.btn-sm { padding: 5px 10px; font-size: 12px; }
+.btn-icon { width: 32px; height: 32px; padding: 0; justify-content: center; border-radius: 50%; }
+.btn-present { background: #e6f4ea; color: #2d9148; border: 1.5px solid #a8d5b5; }
+.btn-present:hover, .btn-present.active { background: #34a853; color: #fff; }
+.btn-absent  { background: #fce8e6; color: #c62828; border: 1.5px solid #f4aea8; }
+.btn-absent:hover, .btn-absent.active  { background: #ea4335; color: #fff; }
+
+/* ---------- Tabela ---------- */
+.table-wrap { overflow-x: auto; }
+table { width: 100%; border-collapse: collapse; }
+thead th {
+  background: #f8f9fa;
+  padding: 10px 14px;
+  text-align: left;
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  letter-spacing: .5px;
+  border-bottom: 2px solid var(--border);
+}
+tbody td {
+  padding: 12px 14px;
+  border-bottom: 1px solid #f0f0f0;
+  font-size: 13.5px;
+  vertical-align: middle;
+}
+tbody tr:hover { background: #fafbff; }
+tbody tr:last-child td { border-bottom: none; }
+
+/* ---------- Badge ---------- */
+.badge {
+  display: inline-block;
+  padding: 3px 8px;
+  border-radius: 20px;
+  font-size: 11px; font-weight: 700;
+  text-transform: uppercase; letter-spacing: .5px;
+}
+.badge-blue   { background: #e8f0fe; color: #1a73e8; }
+.badge-green  { background: #e6f4ea; color: #2d9148; }
+.badge-red    { background: #fce8e6; color: #c62828; }
+.badge-yellow { background: #fef9e3; color: #b06000; }
+.badge-purple { background: #f3e8fd; color: #7b1fa2; }
+.badge-gray   { background: #f1f3f4; color: #5f6368; }
+
+/* ---------- Formulários ---------- */
+.form-group { margin-bottom: 16px; }
+.form-label { display: block; font-size: 13px; font-weight: 600; margin-bottom: 6px; color: var(--text-muted); }
+.form-control {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1.5px solid var(--border);
+  border-radius: var(--radius);
+  font-size: 14px;
+  transition: border-color .2s;
+  background: var(--surface);
+}
+.form-control:focus { outline: none; border-color: var(--primary); box-shadow: 0 0 0 3px rgba(26,115,232,.12); }
+.form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.form-row-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px; }
+.form-section-title {
+  font-size: 13px; font-weight: 700;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: .5px;
+  margin: 20px 0 12px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--border);
+}
+
+/* ---------- Modal ---------- */
+.modal-overlay {
+  position: fixed; inset: 0;
+  background: rgba(0,0,0,.45);
+  display: flex; align-items: center; justify-content: center;
+  z-index: 1000;
+  animation: fadeIn .15s;
+}
+.modal {
+  background: var(--surface);
+  border-radius: 12px;
+  width: 90%;
+  max-width: 600px;
+  max-height: 90vh;
+  overflow-y: auto;
+  box-shadow: var(--shadow-lg);
+  animation: slideUp .2s;
+}
+.modal-lg { max-width: 800px; }
+.modal-header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 20px 24px 16px;
+  border-bottom: 1px solid var(--border);
+  position: sticky; top: 0;
+  background: var(--surface);
+  z-index: 1;
+}
+.modal-title { font-size: 17px; font-weight: 700; }
+.modal-close { background: none; border: none; font-size: 20px; color: var(--text-muted); padding: 4px; border-radius: 50%; }
+.modal-close:hover { background: #f1f3f4; color: var(--text); }
+.modal-body { padding: 24px; }
+.modal-footer {
+  padding: 16px 24px;
+  border-top: 1px solid var(--border);
+  display: flex; justify-content: flex-end; gap: 10px;
+  position: sticky; bottom: 0;
+  background: var(--surface);
+}
+
+/* ---------- Login ---------- */
+.login-wrap {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, #0d1b2a 0%, #1a3a5c 100%);
+  padding: 20px;
+}
+.login-card {
+  background: var(--surface);
+  border-radius: 16px;
+  padding: 40px;
+  width: 100%;
+  max-width: 420px;
+  box-shadow: var(--shadow-lg);
+}
+.login-logo {
+  text-align: center;
+  margin-bottom: 28px;
+}
+.login-logo .logo-icon {
+  width: 64px; height: 64px;
+  background: var(--primary);
+  border-radius: 16px;
+  display: inline-flex; align-items: center; justify-content: center;
+  font-size: 30px; color: #fff;
+  margin-bottom: 12px;
+}
+.login-logo h1 { font-size: 24px; font-weight: 800; color: var(--text); }
+.login-logo p  { color: var(--text-muted); font-size: 13px; }
+.login-divider {
+  text-align: center;
+  margin: 20px 0;
+  position: relative;
+}
+.login-divider::before {
+  content: '';
+  position: absolute; left: 0; right: 0; top: 50%;
+  height: 1px; background: var(--border);
+}
+.login-divider span {
+  background: var(--surface);
+  padding: 0 12px;
+  color: var(--text-muted);
+  font-size: 12px;
+  position: relative;
+}
+.demo-accounts { display: flex; flex-direction: column; gap: 8px; margin-top: 12px; }
+.demo-btn {
+  padding: 8px 12px;
+  border: 1.5px solid var(--border);
+  border-radius: var(--radius);
+  background: #fafbff;
+  display: flex; align-items: center; gap: 8px;
+  cursor: pointer;
+  transition: all .2s;
+  font-size: 12.5px;
+}
+.demo-btn:hover { border-color: var(--primary); background: #e8f0fe; }
+.demo-btn .demo-role { font-weight: 700; }
+.demo-btn .demo-cred { color: var(--text-muted); font-size: 11px; }
+
+/* ---------- Alertas ---------- */
+.alert {
+  padding: 12px 16px;
+  border-radius: var(--radius);
+  margin-bottom: 16px;
+  display: flex; align-items: center; gap: 10px;
+  font-size: 13.5px;
+}
+.alert-danger  { background: #fce8e6; color: #c62828; border-left: 4px solid var(--danger); }
+.alert-success { background: #e6f4ea; color: #2d9148; border-left: 4px solid var(--secondary); }
+.alert-info    { background: #e8f0fe; color: #1a73e8; border-left: 4px solid var(--primary); }
+.alert-warning { background: #fef9e3; color: #b06000; border-left: 4px solid var(--warning); }
+
+/* ---------- Tabs ---------- */
+.tabs { display: flex; border-bottom: 2px solid var(--border); margin-bottom: 20px; gap: 4px; }
+.tab-btn {
+  padding: 10px 20px;
+  background: none; border: none;
+  font-size: 13.5px; font-weight: 600;
+  color: var(--text-muted);
+  border-bottom: 2px solid transparent;
+  margin-bottom: -2px;
+  transition: all .2s;
+  cursor: pointer;
+}
+.tab-btn:hover { color: var(--primary); }
+.tab-btn.active { color: var(--primary); border-bottom-color: var(--primary); }
+.tab-panel { display: none; }
+.tab-panel.active { display: block; }
+
+/* ---------- Financial ---------- */
+.financial-summary {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 16px;
+  margin-bottom: 20px;
+}
+.fin-card {
+  background: var(--surface);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  padding: 20px;
+}
+.fin-card-label { color: var(--text-muted); font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: .5px; }
+.fin-card-value { font-size: 26px; font-weight: 800; margin: 6px 0 2px; }
+.fin-card-sub   { font-size: 12px; color: var(--text-muted); }
+.fin-card.saldo { border-top: 4px solid var(--secondary); }
+.fin-card.saldo .fin-card-value { color: var(--secondary); }
+.fin-card.pagar { border-top: 4px solid var(--danger); }
+.fin-card.pagar .fin-card-value { color: var(--danger); }
+.fin-card.receber { border-top: 4px solid var(--primary); }
+.fin-card.receber .fin-card-value { color: var(--primary); }
+.fin-card.taxa   { border-top: 4px solid var(--warning); }
+.fin-card.taxa   .fin-card-value { color: #b06000; }
+
+/* ---------- Presença ---------- */
+.attendance-row { display: flex; align-items: center; gap: 10px; }
+.attendance-btns { display: flex; gap: 6px; }
+
+/* ---------- Boletim ---------- */
+.grade-badge {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 36px; height: 36px;
+  border-radius: 8px;
+  font-weight: 800; font-size: 14px;
+}
+.grade-A { background: #e6f4ea; color: #2d9148; }
+.grade-B { background: #e8f0fe; color: #1557b0; }
+.grade-C { background: #fef9e3; color: #b06000; }
+.grade-D { background: #fce8e6; color: #c62828; }
+.grade-F { background: #f1f3f4; color: #5f6368; }
+
+/* ---------- PIX ---------- */
+.pix-code-box {
+  background: #f8f9fa;
+  border: 2px dashed var(--border);
+  border-radius: var(--radius);
+  padding: 16px;
+  text-align: center;
+  font-family: monospace;
+  font-size: 12px;
+  word-break: break-all;
+  margin: 12px 0;
+}
+
+/* ---------- Mensagens ---------- */
+.msg-list { display: flex; flex-direction: column; gap: 8px; }
+.msg-item {
+  background: #f8f9fa;
+  border-radius: var(--radius);
+  padding: 12px 14px;
+  border-left: 4px solid var(--primary);
+}
+.msg-header { display: flex; justify-content: space-between; margin-bottom: 4px; }
+.msg-from { font-weight: 700; font-size: 13px; }
+.msg-date { font-size: 11px; color: var(--text-muted); }
+.msg-text { font-size: 13.5px; }
+.msg-unread { background: #e8f0fe; border-left-color: var(--secondary); }
+
+/* ---------- Progress Bar ---------- */
+.progress-bar-wrap { background: #f0f0f0; border-radius: 20px; height: 8px; }
+.progress-bar { height: 8px; border-radius: 20px; background: var(--primary); transition: width .4s; }
+
+/* ---------- Empty State ---------- */
+.empty-state {
+  text-align: center;
+  padding: 48px 20px;
+  color: var(--text-muted);
+}
+.empty-state i { font-size: 48px; margin-bottom: 12px; opacity: .4; }
+.empty-state p { font-size: 14px; }
+
+/* ---------- Toast ---------- */
+.toast-container {
+  position: fixed; bottom: 24px; right: 24px;
+  display: flex; flex-direction: column; gap: 8px;
+  z-index: 9999;
+}
+.toast {
+  background: #323232;
+  color: #fff;
+  padding: 12px 18px;
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-lg);
+  font-size: 13.5px;
+  display: flex; align-items: center; gap: 10px;
+  animation: slideRight .25s;
+  max-width: 320px;
+}
+.toast.success { background: var(--secondary); }
+.toast.error   { background: var(--danger); }
+.toast.info    { background: var(--primary); }
+
+/* ---------- Register Page ---------- */
+.register-wrap {
+  min-height: 100vh;
+  background: linear-gradient(135deg, #0d1b2a 0%, #1a3a5c 100%);
+  display: flex; align-items: center; justify-content: center;
+  padding: 20px;
+}
+.register-card {
+  background: var(--surface);
+  border-radius: 16px;
+  width: 100%; max-width: 680px;
+  box-shadow: var(--shadow-lg);
+  overflow: hidden;
+}
+.register-header {
+  background: var(--primary);
+  color: #fff;
+  padding: 24px 32px;
+}
+.register-header h2 { font-size: 20px; font-weight: 800; }
+.register-header p  { opacity: .85; font-size: 13px; margin-top: 4px; }
+.register-body { padding: 32px; }
+.role-selector {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 12px;
+  margin-bottom: 20px;
+}
+.role-option {
+  border: 2px solid var(--border);
+  border-radius: var(--radius);
+  padding: 14px;
+  cursor: pointer;
+  transition: all .2s;
+  text-align: center;
+}
+.role-option:hover { border-color: var(--primary); background: #f0f4ff; }
+.role-option.selected { border-color: var(--primary); background: #e8f0fe; }
+.role-option .role-icon { font-size: 28px; margin-bottom: 6px; }
+.role-option .role-name { font-weight: 700; font-size: 14px; }
+.role-option .role-desc { color: var(--text-muted); font-size: 11.5px; margin-top: 2px; }
+
+/* ---------- Animações ---------- */
+@keyframes fadeIn  { from { opacity: 0; } to { opacity: 1; } }
+@keyframes slideUp { from { transform: translateY(30px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+@keyframes slideRight { from { transform: translateX(50px); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+
+/* ---------- Responsive ---------- */
+@media (max-width: 768px) {
+  .sidebar { width: 0; overflow: hidden; }
+  .layout.sidebar-open .sidebar { width: 240px; position: fixed; z-index: 200; height: 100vh; top: 0; left: 0; }
+  .form-row, .form-row-3 { grid-template-columns: 1fr; }
+  .stats-grid { grid-template-columns: 1fr 1fr; }
+  .role-selector { grid-template-columns: 1fr 1fr; }
+}
+
+/* ---------- Utilitários ---------- */
+.d-flex     { display: flex; }
+.align-center { align-items: center; }
+.justify-between { justify-content: space-between; }
+.gap-8  { gap: 8px; }
+.gap-12 { gap: 12px; }
+.mt-8   { margin-top: 8px; }
+.mt-12  { margin-top: 12px; }
+.mt-16  { margin-top: 16px; }
+.mb-16  { margin-bottom: 16px; }
+.text-center { text-align: center; }
+.text-right  { text-align: right; }
+.text-muted  { color: var(--text-muted); font-size: 12.5px; }
+.fw-700 { font-weight: 700; }
+.w-100  { width: 100%; }
+.hidden { display: none !important; }
+.green { color: var(--secondary); }
+.red   { color: var(--danger); }
+.blue  { color: var(--primary); }
+  </style>
+</head>
+<body>
+  <div id="app"></div>
+  <script>
+// =============================================
+//  GESTESCOLAR – GERENCIAMENTO DE DADOS (localStorage)
+// =============================================
+
+const DB = {
+  // ---- Chaves ----
+  KEYS: {
+    USERS:     'ges_users',
+    STUDENTS:  'ges_students',
+    CLASSES:   'ges_classes',
+    ATTENDANCE:'ges_attendance',
+    GRADES:    'ges_grades',
+    INVOICES:  'ges_invoices',
+    EXPENSES:  'ges_expenses',
+    MESSAGES:  'ges_messages',
+    BALANCE:   'ges_balance',
+  },
+
+  // ---- Helpers ----
+  get(key) {
+    try { return JSON.parse(localStorage.getItem(key)) || []; }
+    catch { return []; }
+  },
+  set(key, val) {
+    localStorage.setItem(key, JSON.stringify(val));
+  },
+  getObj(key, def = {}) {
+    try { return JSON.parse(localStorage.getItem(key)) || def; }
+    catch { return def; }
+  },
+
+  // ---- Usuários / Funcionários ----
+  getUsers()  { return this.get(this.KEYS.USERS); },
+  saveUsers(u){ this.set(this.KEYS.USERS, u); },
+  addUser(u)  {
+    const users = this.getUsers();
+    u.id = Date.now().toString();
+    u.createdAt = new Date().toISOString();
+    users.push(u);
+    this.saveUsers(users);
+    return u;
+  },
+  findUserByEmail(email) {
+    return this.getUsers().find(u => u.email === email);
+  },
+  updateUser(id, data) {
+    const users = this.getUsers().map(u => u.id === id ? { ...u, ...data } : u);
+    this.saveUsers(users);
+  },
+  deleteUser(id) {
+    this.saveUsers(this.getUsers().filter(u => u.id !== id));
+  },
+
+  // ---- Alunos ----
+  getStudents()  { return this.get(this.KEYS.STUDENTS); },
+  addStudent(s)  {
+    const list = this.getStudents();
+    s.id = Date.now().toString();
+    s.createdAt = new Date().toISOString();
+    list.push(s);
+    this.set(this.KEYS.STUDENTS, list);
+    return s;
+  },
+  updateStudent(id, data) {
+    const list = this.getStudents().map(s => s.id === id ? { ...s, ...data } : s);
+    this.set(this.KEYS.STUDENTS, list);
+  },
+  deleteStudent(id) {
+    this.set(this.KEYS.STUDENTS, this.getStudents().filter(s => s.id !== id));
+  },
+
+  // ---- Turmas ----
+  getClasses()  { return this.get(this.KEYS.CLASSES); },
+  addClass(c)   {
+    const list = this.getClasses();
+    c.id = Date.now().toString();
+    list.push(c);
+    this.set(this.KEYS.CLASSES, list);
+    return c;
+  },
+
+  // ---- Presenças ----
+  getAttendance() { return this.get(this.KEYS.ATTENDANCE); },
+  markAttendance(studentId, date, status, teacherId) {
+    const list = this.getAttendance();
+    const existing = list.findIndex(a => a.studentId === studentId && a.date === date);
+    const record = { studentId, date, status, teacherId, updatedAt: new Date().toISOString() };
+    if (existing >= 0) list[existing] = record;
+    else list.push(record);
+    this.set(this.KEYS.ATTENDANCE, list);
+  },
+  getStudentAttendance(studentId) {
+    return this.getAttendance().filter(a => a.studentId === studentId);
+  },
+
+  // ---- Notas ----
+  getGrades() { return this.get(this.KEYS.GRADES); },
+  setGrade(studentId, subject, period, grade, teacherId) {
+    const list = this.getGrades();
+    const idx = list.findIndex(g => g.studentId === studentId && g.subject === subject && g.period === period);
+    const record = { studentId, subject, period, grade, teacherId, updatedAt: new Date().toISOString() };
+    if (idx >= 0) list[idx] = record;
+    else list.push(record);
+    this.set(this.KEYS.GRADES, list);
+  },
+  getStudentGrades(studentId) {
+    return this.getGrades().filter(g => g.studentId === studentId);
+  },
+
+  // ---- Boletos / Faturas ----
+  getInvoices() { return this.get(this.KEYS.INVOICES); },
+  addInvoice(inv) {
+    const list = this.getInvoices();
+    inv.id = Date.now().toString();
+    inv.createdAt = new Date().toISOString();
+    inv.status = inv.status || 'pendente';
+    list.push(inv);
+    this.set(this.KEYS.INVOICES, list);
+    return inv;
+  },
+  updateInvoice(id, data) {
+    const list = this.getInvoices().map(i => i.id === id ? { ...i, ...data } : i);
+    this.set(this.KEYS.INVOICES, list);
+  },
+  async refreshInvoices() { /* no-op no bundle offline */ return true; },
+  getStudentInvoices(studentId) {
+    return this.getInvoices().filter(i => i.studentId === studentId);
+  },
+
+  // ---- Contas a Pagar ----
+  getExpenses() { return this.get(this.KEYS.EXPENSES); },
+  addExpense(e) {
+    const list = this.getExpenses();
+    e.id = Date.now().toString();
+    e.createdAt = new Date().toISOString();
+    e.status = e.status || 'pendente';
+    list.push(e);
+    this.set(this.KEYS.EXPENSES, list);
+    return e;
+  },
+  updateExpense(id, data) {
+    const list = this.getExpenses().map(e => e.id === id ? { ...e, ...data } : e);
+    this.set(this.KEYS.EXPENSES, list);
+  },
+  deleteExpense(id) {
+    this.set(this.KEYS.EXPENSES, this.getExpenses().filter(e => e.id !== id));
+  },
+
+  // ---- Mensagens ----
+  getMessages() { return this.get(this.KEYS.MESSAGES); },
+  addMessage(m) {
+    const list = this.getMessages();
+    m.id = Date.now().toString();
+    m.sentAt = new Date().toISOString();
+    m.read = false;
+    list.push(m);
+    this.set(this.KEYS.MESSAGES, list);
+    return m;
+  },
+  markMessageRead(id) {
+    const list = this.getMessages().map(m => m.id === id ? { ...m, read: true } : m);
+    this.set(this.KEYS.MESSAGES, list);
+  },
+  getMessagesForUser(userId) {
+    return this.getMessages().filter(m => m.toUserId === userId);
+  },
+
+  // ---- Saldo ----
+  getBalance() { return this.getObj(this.KEYS.BALANCE, { amount: 0, transactions: [] }); },
+  addTransaction(type, amount, description) {
+    const bal = this.getBalance();
+    const systemFee = type === 'credit' ? amount * 0.01 : 0;
+    const netAmount = type === 'credit' ? amount - systemFee : -amount;
+    bal.amount += netAmount;
+    bal.transactions.unshift({
+      id: Date.now().toString(),
+      type, amount, systemFee, netAmount, description,
+      date: new Date().toISOString()
+    });
+    this.set(this.KEYS.BALANCE, bal);
+    return bal;
+  },
+
+  // ---- Seed (dados iniciais demo) ----
+  seed() {
+    if (this.getUsers().length > 0) return; // já inicializado
+
+    // Usuários demo
+    const users = [
+      { id: '1', name: 'Ana Lima',       email: 'admin@escola.com',     password: '123456', role: 'administrativo', phone: '(11) 99001-0001', cpf: '000.001.001-01', active: true },
+      { id: '2', name: 'Bruno Costa',    email: 'financeiro@escola.com', password: '123456', role: 'financeiro',     phone: '(11) 99001-0002', cpf: '000.002.002-02', active: true },
+      { id: '3', name: 'Carla Mendes',   email: 'prof@escola.com',       password: '123456', role: 'professor',      phone: '(11) 99001-0003', cpf: '000.003.003-03', active: true, subject: 'Matemática', classId: 'c1' },
+      { id: '4', name: 'Daniel Ferreira',email: 'pai@escola.com',        password: '123456', role: 'pai',            phone: '(11) 99001-0004', cpf: '000.004.004-04', active: true, studentId: 's1' },
+    ];
+    this.saveUsers(users);
+
+    // Turmas
+    const classes = [
+      { id: 'c1', name: '5º Ano A', year: 2026, shift: 'Manhã', teacherId: '3' },
+      { id: 'c2', name: '6º Ano B', year: 2026, shift: 'Tarde',  teacherId: '3' },
+    ];
+    this.set(this.KEYS.CLASSES, classes);
+
+    // Alunos
+    const students = [
+      { id: 's1', name: 'Matheus Ferreira', dob: '2015-03-10', classId: 'c1', parentId: '4', parentName: 'Daniel Ferreira', parentEmail: 'pai@escola.com', phone: '(11) 99001-0004', enrolledAt: '2026-01-15', monthlyFee: 850, dueDay: 10, status: 'ativo' },
+      { id: 's2', name: 'Isabela Santos',   dob: '2015-07-22', classId: 'c1', parentId: null, parentName: 'Julia Santos',   parentEmail: 'julia@email.com', phone: '(11) 99002-0002', enrolledAt: '2026-01-15', monthlyFee: 850, dueDay: 10, status: 'ativo' },
+      { id: 's3', name: 'Pedro Oliveira',   dob: '2015-11-05', classId: 'c1', parentId: null, parentName: 'Lucas Oliveira', parentEmail: 'lucas@email.com', phone: '(11) 99003-0003', enrolledAt: '2026-01-15', monthlyFee: 850, dueDay: 15, status: 'ativo' },
+      { id: 's4', name: 'Sofia Rodrigues',  dob: '2016-02-18', classId: 'c2', parentId: null, parentName: 'Marcia R.',      parentEmail: 'marcia@email.com',phone: '(11) 99004-0004', enrolledAt: '2026-01-20', monthlyFee: 900, dueDay: 10, status: 'ativo' },
+    ];
+    this.set(this.KEYS.STUDENTS, students);
+
+    // Notas de exemplo
+    const grades = [
+      { studentId: 's1', subject: 'Matemática',  period: 'Bimestre 1', grade: 8.5, teacherId: '3', updatedAt: '2026-03-01T10:00:00Z' },
+      { studentId: 's1', subject: 'Português',   period: 'Bimestre 1', grade: 9.0, teacherId: '3', updatedAt: '2026-03-01T10:00:00Z' },
+      { studentId: 's1', subject: 'Ciências',    period: 'Bimestre 1', grade: 7.5, teacherId: '3', updatedAt: '2026-03-01T10:00:00Z' },
+      { studentId: 's1', subject: 'História',    period: 'Bimestre 1', grade: 8.0, teacherId: '3', updatedAt: '2026-03-01T10:00:00Z' },
+      { studentId: 's1', subject: 'Geografia',   period: 'Bimestre 1', grade: 6.5, teacherId: '3', updatedAt: '2026-03-01T10:00:00Z' },
+      { studentId: 's2', subject: 'Matemática',  period: 'Bimestre 1', grade: 7.0, teacherId: '3', updatedAt: '2026-03-01T10:00:00Z' },
+      { studentId: 's3', subject: 'Matemática',  period: 'Bimestre 1', grade: 9.5, teacherId: '3', updatedAt: '2026-03-01T10:00:00Z' },
+    ];
+    this.set(this.KEYS.GRADES, grades);
+
+    // Presenças de exemplo
+    const today = new Date();
+    const attendance = [];
+    for (let d = 1; d <= 20; d++) {
+      const date = `2026-03-${String(d).padStart(2,'0')}`;
+      ['s1','s2','s3'].forEach(sid => {
+        attendance.push({ studentId: sid, date, status: Math.random() > 0.15 ? 'presente' : 'falta', teacherId: '3', updatedAt: new Date().toISOString() });
+      });
+    }
+    this.set(this.KEYS.ATTENDANCE, attendance);
+
+    // Boletos de exemplo
+    const invoices = [
+      { id: 'inv1', studentId: 's1', studentName: 'Matheus Ferreira', description: 'Mensalidade Março/2026', amount: 850, dueDate: '2026-03-10', status: 'pago', paidAt: '2026-03-08', createdAt: '2026-02-25T10:00:00Z' },
+      { id: 'inv2', studentId: 's1', studentName: 'Matheus Ferreira', description: 'Mensalidade Abril/2026', amount: 850, dueDate: '2026-04-10', status: 'pendente', createdAt: '2026-03-25T10:00:00Z' },
+      { id: 'inv3', studentId: 's2', studentName: 'Isabela Santos',   description: 'Mensalidade Março/2026', amount: 850, dueDate: '2026-03-10', status: 'pago', paidAt: '2026-03-07', createdAt: '2026-02-25T10:00:00Z' },
+      { id: 'inv4', studentId: 's3', studentName: 'Pedro Oliveira',   description: 'Mensalidade Março/2026', amount: 850, dueDate: '2026-03-15', status: 'vencido', createdAt: '2026-02-25T10:00:00Z' },
+      { id: 'inv5', studentId: 's4', studentName: 'Sofia Rodrigues',  description: 'Mensalidade Março/2026', amount: 900, dueDate: '2026-03-10', status: 'pago', paidAt: '2026-03-09', createdAt: '2026-02-25T10:00:00Z' },
+    ];
+    this.set(this.KEYS.INVOICES, invoices);
+
+    // Contas a Pagar
+    const expenses = [
+      { id: 'exp1', category: 'agua',      description: 'Conta de Água – Março',        amount: 320,   dueDate: '2026-03-25', status: 'pendente', createdAt: '2026-03-01T10:00:00Z' },
+      { id: 'exp2', category: 'luz',       description: 'Conta de Energia – Março',      amount: 1850,  dueDate: '2026-03-22', status: 'pago', paidAt: '2026-03-20', createdAt: '2026-03-01T10:00:00Z' },
+      { id: 'exp3', category: 'salario',   description: 'Folha de Pagamento – Março',    amount: 28000, dueDate: '2026-03-31', status: 'pendente', createdAt: '2026-03-01T10:00:00Z' },
+      { id: 'exp4', category: 'imposto',   description: 'ISS – Março',                   amount: 1200,  dueDate: '2026-03-20', status: 'pago', paidAt: '2026-03-19', createdAt: '2026-03-01T10:00:00Z' },
+      { id: 'exp5', category: 'outros',    description: 'Material de Escritório',        amount: 450,   dueDate: '2026-03-28', status: 'pendente', createdAt: '2026-03-01T10:00:00Z' },
+    ];
+    this.set(this.KEYS.EXPENSES, expenses);
+
+    // Saldo inicial
+    const balance = {
+      amount: 12450.75,
+      transactions: [
+        { id: 't1', type: 'credit', amount: 3400, systemFee: 34, netAmount: 3366, description: 'Recebimento mensalidades Março', date: '2026-03-10T10:00:00Z' },
+        { id: 't2', type: 'debit',  amount: 1850, systemFee: 0,  netAmount: -1850, description: 'Pagamento energia elétrica', date: '2026-03-20T10:00:00Z' },
+        { id: 't3', type: 'debit',  amount: 1200, systemFee: 0,  netAmount: -1200, description: 'ISS Março', date: '2026-03-19T10:00:00Z' },
+      ]
+    };
+    this.set(this.KEYS.BALANCE, balance);
+
+    // Mensagens de exemplo
+    const messages = [
+      { id: 'm1', fromUserId: '3', fromName: 'Carla Mendes (Professora)', toUserId: '4', subject: 'Avaliação de Matemática', text: 'Olá! O Matheus foi muito bem na avaliação de Matemática desta semana! Continue incentivando os estudos em casa.', sentAt: '2026-03-20T10:00:00Z', read: false },
+      { id: 'm2', fromUserId: '3', fromName: 'Carla Mendes (Professora)', toUserId: '4', subject: 'Reunião de Pais', text: 'Gostaríamos de convidá-lo para a reunião de pais e mestres no dia 30/03 às 19h.', sentAt: '2026-03-15T14:30:00Z', read: true },
+    ];
+    this.set(this.KEYS.MESSAGES, messages);
+
+    console.log('[GestEscolar] Dados demo inicializados com sucesso!');
+  }
+};
+// =============================================
+//  GESTESCOLAR – UTILITÁRIOS
+// =============================================
+
+const Utils = {
+  // Formatar moeda BRL
+  currency(value) {
+    return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value || 0);
+  },
+
+  // Formatar data
+  date(iso) {
+    if (!iso) return '–';
+    const d = new Date(iso);
+    return d.toLocaleDateString('pt-BR');
+  },
+
+  // Formatar data + hora
+  datetime(iso) {
+    if (!iso) return '–';
+    const d = new Date(iso);
+    return d.toLocaleString('pt-BR');
+  },
+
+  // Iniciais do nome
+  initials(name) {
+    if (!name) return '?';
+    return name.split(' ').slice(0, 2).map(n => n[0]).join('').toUpperCase();
+  },
+
+  // Status badge HTML
+  statusBadge(status) {
+    const map = {
+      pago:     ['green',  'Pago'],
+      pendente: ['yellow', 'Pendente'],
+      vencido:  ['red',    'Vencido'],
+      cancelado:['gray',   'Cancelado'],
+      ativo:    ['green',  'Ativo'],
+      inativo:  ['gray',   'Inativo'],
+      presente: ['green',  'Presente'],
+      falta:    ['red',    'Falta'],
+    };
+    const [color, label] = map[status] || ['gray', status];
+    return `<span class="badge badge-${color}">${label}</span>`;
+  },
+
+  // Categoria de despesa
+  expenseCategory(cat) {
+    const map = {
+      agua:    { icon: 'fa-droplet',      label: 'Água',        color: 'blue'   },
+      luz:     { icon: 'fa-bolt',         label: 'Energia',     color: 'yellow' },
+      salario: { icon: 'fa-users',        label: 'Salário',     color: 'purple' },
+      imposto: { icon: 'fa-file-invoice', label: 'Imposto',     color: 'red'    },
+      outros:  { icon: 'fa-ellipsis',     label: 'Outros',      color: 'gray'   },
+    };
+    return map[cat] || { icon: 'fa-circle', label: cat, color: 'gray' };
+  },
+
+  // Letra de nota
+  gradeLabel(grade) {
+    if (grade >= 9) return 'A';
+    if (grade >= 7) return 'B';
+    if (grade >= 5) return 'C';
+    if (grade >= 3) return 'D';
+    return 'F';
+  },
+
+  // Calcular % de presença
+  attendancePercent(studentId) {
+    const records = DB.getStudentAttendance(studentId);
+    if (!records.length) return 0;
+    const present = records.filter(r => r.status === 'presente').length;
+    return Math.round((present / records.length) * 100);
+  },
+
+  // Gerar código PIX fake
+  generatePix(amount, name) {
+    const rand = Math.random().toString(36).substring(2, 10).toUpperCase();
+    return `00020126330014BR.GOV.BCB.PIX0111escola@pix52040000530398654${String(amount.toFixed(2)).replace('.','').padStart(7,'0')}5802BR5913${name.replace(/\s/g,'').substring(0,13).padEnd(13,'X')}6009SAO PAULO62070503${rand}6304${Math.floor(Math.random()*9999).toString().padStart(4,'0')}`;
+  },
+
+  // Verificar se boleto vence em ≤5 dias
+  isDueSoon(dueDateStr) {
+    const due = new Date(dueDateStr);
+    const now = new Date();
+    const diff = (due - now) / (1000 * 60 * 60 * 24);
+    return diff >= 0 && diff <= 5;
+  },
+
+  // Verificar se está vencido
+  isOverdue(dueDateStr) {
+    return new Date(dueDateStr) < new Date();
+  },
+
+  // Toast notification
+  toast(msg, type = 'default') {
+    let container = document.getElementById('toast-container');
+    if (!container) {
+      container = document.createElement('div');
+      container.id = 'toast-container';
+      container.className = 'toast-container';
+      document.body.appendChild(container);
+    }
+    const toast = document.createElement('div');
+    toast.className = `toast ${type}`;
+    const icons = { success: 'fa-check-circle', error: 'fa-times-circle', info: 'fa-info-circle', default: 'fa-bell' };
+    toast.innerHTML = `<i class="fa-solid ${icons[type] || icons.default}"></i> ${msg}`;
+    container.appendChild(toast);
+    setTimeout(() => toast.remove(), 3500);
+  },
+
+  // Modal genérico
+  modal(title, bodyHTML, footerHTML = '') {
+    const overlay = document.createElement('div');
+    overlay.className = 'modal-overlay';
+    overlay.innerHTML = `
+      <div class="modal">
+        <div class="modal-header">
+          <span class="modal-title">${title}</span>
+          <button class="modal-close" onclick="this.closest('.modal-overlay').remove()">
+            <i class="fa-solid fa-xmark"></i>
+          </button>
+        </div>
+        <div class="modal-body">${bodyHTML}</div>
+        ${footerHTML ? `<div class="modal-footer">${footerHTML}</div>` : ''}
+      </div>`;
+    document.body.appendChild(overlay);
+    overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
+    return overlay;
+  },
+
+  // Confirmar ação
+  confirm(msg, onConfirm) {
+    const overlay = Utils.modal(
+      'Confirmar ação',
+      `<p>${msg}</p>`,
+      `<button class="btn btn-outline" onclick="this.closest('.modal-overlay').remove()">Cancelar</button>
+       <button class="btn btn-danger" id="confirmBtn">Confirmar</button>`
+    );
+    overlay.querySelector('#confirmBtn').onclick = () => { onConfirm(); overlay.remove(); };
+  },
+
+  // Escapar HTML
+  escape(str) {
+    return String(str || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+};
+// =============================================
+//  GESTESCOLAR – ROTEADOR SPA
+// =============================================
+
+const Router = {
+  routes: {},
+
+  register(name, fn) {
+    this.routes[name] = fn;
+  },
+
+  go(name, params = {}) {
+    const fn = this.routes[name];
+    if (!fn) { console.error('Rota não encontrada:', name); return; }
+    fn(params);
+  },
+
+  // Renderizar layout com sidebar
+  renderLayout(user, activeNav, contentHTML) {
+    const navItems = Router._navForRole(user.role);
+    const app = document.getElementById('app');
+    app.innerHTML = `
+      <div class="layout" id="layout">
+        <aside class="sidebar" id="sidebar">
+          <div class="sidebar-brand">
+            <div class="brand-icon"><i class="fa-solid fa-graduation-cap"></i></div>
+            <div>
+              <div class="brand-name">GestEscolar</div>
+              <div class="brand-sub">Gestão Educacional</div>
+            </div>
+          </div>
+          <nav class="sidebar-nav">
+            ${navItems.map(item => item.section
+              ? `<div class="nav-section-title">${item.section}</div>`
+              : `<div class="nav-item ${item.id === activeNav ? 'active' : ''}"
+                      onclick="Router.go('${item.route || item.id}')">
+                   <i class="fa-solid ${item.icon}"></i>
+                   <span>${item.label}</span>
+                 </div>`
+            ).join('')}
+          </nav>
+          <div class="sidebar-footer">
+            <div class="sidebar-user">
+              <div class="avatar">${Utils.initials(user.name)}</div>
+              <div class="user-info">
+                <div class="user-name">${Utils.escape(user.name)}</div>
+                <div class="user-role">${Auth.roleLabel(user.role)}</div>
+              </div>
+              <button class="btn-logout" onclick="Auth.logout()" title="Sair">
+                <i class="fa-solid fa-right-from-bracket"></i>
+              </button>
+            </div>
+          </div>
+        </aside>
+        <div class="main-content">
+          <div class="page-content" id="page-content">
+            ${contentHTML}
+          </div>
+        </div>
+      </div>
+    `;
+  },
+
+  _navForRole(role) {
+    const common = [{ section: 'Navegação' }];
+    const byRole = {
+      administrativo: [
+        { id: 'admin-dashboard', route: 'admin-dashboard', icon: 'fa-chart-line',       label: 'Dashboard' },
+        { id: 'admin-students',  route: 'admin-students',  icon: 'fa-user-graduate',    label: 'Alunos' },
+        { id: 'admin-staff',     route: 'admin-staff',     icon: 'fa-users',            label: 'Funcionários' },
+        { id: 'admin-classes',   route: 'admin-classes',   icon: 'fa-chalkboard',       label: 'Turmas' },
+        { section: 'Sistema' },
+        { id: 'register',        route: 'register',        icon: 'fa-user-plus',        label: 'Novo Cadastro' },
+      ],
+      financeiro: [
+        { id: 'fin-dashboard',   route: 'fin-dashboard',   icon: 'fa-chart-line',       label: 'Dashboard' },
+        { id: 'fin-invoices',    route: 'fin-invoices',    icon: 'fa-file-invoice',     label: 'Boletos' },
+        { id: 'fin-expenses',    route: 'fin-expenses',    icon: 'fa-credit-card',      label: 'Contas a Pagar' },
+        { id: 'fin-balance',     route: 'fin-balance',     icon: 'fa-piggy-bank',       label: 'Saldo da Escola' },
+      ],
+      professor: [
+        { id: 'teacher-dashboard',route: 'teacher-dashboard',icon: 'fa-chart-line',    label: 'Dashboard' },
+        { id: 'teacher-attendance',route:'teacher-attendance',icon: 'fa-clipboard-check',label: 'Chamada' },
+        { id: 'teacher-grades',  route: 'teacher-grades',  icon: 'fa-star',             label: 'Avaliações' },
+        { id: 'teacher-messages',route: 'teacher-messages',icon: 'fa-envelope',         label: 'Mensagens' },
+      ],
+      pai: [
+        { id: 'parent-dashboard',route: 'parent-dashboard',icon: 'fa-chart-line',       label: 'Início' },
+        { id: 'parent-attendance',route:'parent-attendance',icon: 'fa-clipboard-check', label: 'Presenças' },
+        { id: 'parent-grades',   route: 'parent-grades',   icon: 'fa-star',             label: 'Boletim' },
+        { id: 'parent-invoices', route: 'parent-invoices', icon: 'fa-file-invoice',     label: 'Boletos' },
+        { id: 'parent-messages', route: 'parent-messages', icon: 'fa-envelope',         label: 'Mensagens' },
+      ],
+    };
+    return [...common, ...(byRole[role] || [])];
+  }
+};
+// =============================================
+//  GESTESCOLAR – AUTENTICAÇÃO
+// =============================================
+
+const Auth = {
+  SESSION_KEY: 'ges_session',
+
+  // Usuário logado
+  current() {
+    try { return JSON.parse(sessionStorage.getItem(this.SESSION_KEY)); }
+    catch { return null; }
+  },
+
+  // Login
+  login(email, password) {
+    const user = DB.findUserByEmail(email.trim().toLowerCase());
+    if (!user) return { ok: false, msg: 'E-mail não encontrado.' };
+    if (user.password !== password) return { ok: false, msg: 'Senha incorreta.' };
+    if (!user.active) return { ok: false, msg: 'Conta inativa. Contate o administrador.' };
+    const { password: _, ...safeUser } = user;
+    sessionStorage.setItem(this.SESSION_KEY, JSON.stringify(safeUser));
+    return { ok: true, user: safeUser };
+  },
+
+  // Logout
+  logout() {
+    sessionStorage.removeItem(this.SESSION_KEY);
+    Router.go('login');
+  },
+
+  // Verificar autenticação (redireciona se não logado)
+  require() {
+    const user = this.current();
+    if (!user) { Router.go('login'); return null; }
+    return user;
+  },
+
+  // Labels de perfil
+  roleLabel(role) {
+    const map = {
+      administrativo: 'Administrativo',
+      financeiro:     'Financeiro',
+      professor:      'Professor(a)',
+      pai:            'Responsável',
+    };
+    return map[role] || role;
+  },
+
+  roleIcon(role) {
+    const map = {
+      administrativo: 'fa-building',
+      financeiro:     'fa-dollar-sign',
+      professor:      'fa-chalkboard-teacher',
+      pai:            'fa-user-group',
+    };
+    return map[role] || 'fa-user';
+  },
+
+  roleBadgeColor(role) {
+    const map = {
+      administrativo: 'blue',
+      financeiro:     'green',
+      professor:      'purple',
+      pai:            'yellow',
+    };
+    return map[role] || 'gray';
+  }
+};
+// =============================================
+//  GESTESCOLAR – PÁGINA DE LOGIN
+// =============================================
+
+Router.register('login', () => {
+  const app = document.getElementById('app');
+  app.innerHTML = `
+    <div class="login-wrap">
+      <div class="login-card">
+        <div class="login-logo">
+          <div class="logo-icon"><i class="fa-solid fa-graduation-cap"></i></div>
+          <h1>GestEscolar</h1>
+          <p>Plataforma de Gestão Educacional</p>
+        </div>
+
+        <div id="login-alert"></div>
+
+        <form id="loginForm" onsubmit="LoginPage.submit(event)">
+          <div class="form-group">
+            <label class="form-label">E-mail</label>
+            <input type="email" class="form-control" id="loginEmail"
+                   placeholder="seu@email.com" required autocomplete="email" />
+          </div>
+          <div class="form-group">
+            <label class="form-label">Senha</label>
+            <input type="password" class="form-control" id="loginPassword"
+                   placeholder="••••••" required autocomplete="current-password" />
+          </div>
+          <button type="submit" class="btn btn-primary w-100" style="margin-top:8px;">
+            <i class="fa-solid fa-right-to-bracket"></i> Entrar
+          </button>
+        </form>
+
+        <div class="login-divider"><span>Acesso rápido (demo)</span></div>
+
+        <div class="demo-accounts">
+          <button class="demo-btn" onclick="LoginPage.demo('admin@escola.com','123456')">
+            <i class="fa-solid fa-building" style="color:#1a73e8"></i>
+            <div>
+              <div class="demo-role">Administrativo</div>
+              <div class="demo-cred">admin@escola.com / 123456</div>
+            </div>
+          </button>
+          <button class="demo-btn" onclick="LoginPage.demo('financeiro@escola.com','123456')">
+            <i class="fa-solid fa-dollar-sign" style="color:#34a853"></i>
+            <div>
+              <div class="demo-role">Financeiro</div>
+              <div class="demo-cred">financeiro@escola.com / 123456</div>
+            </div>
+          </button>
+          <button class="demo-btn" onclick="LoginPage.demo('prof@escola.com','123456')">
+            <i class="fa-solid fa-chalkboard-teacher" style="color:#8e24aa"></i>
+            <div>
+              <div class="demo-role">Professor(a)</div>
+              <div class="demo-cred">prof@escola.com / 123456</div>
+            </div>
+          </button>
+          <button class="demo-btn" onclick="LoginPage.demo('pai@escola.com','123456')">
+            <i class="fa-solid fa-user-group" style="color:#f9ab00"></i>
+            <div>
+              <div class="demo-role">Responsável (Pai/Mãe)</div>
+              <div class="demo-cred">pai@escola.com / 123456</div>
+            </div>
+          </button>
+        </div>
+
+        <p class="text-center text-muted mt-16">
+          <a href="#" onclick="Router.go('register')">Cadastrar novo funcionário</a>
+        </p>
+      </div>
+    </div>
+  `;
+});
+
+const LoginPage = {
+  submit(e) {
+    e.preventDefault();
+    const email = document.getElementById('loginEmail').value;
+    const password = document.getElementById('loginPassword').value;
+    const result = Auth.login(email, password);
+    if (!result.ok) {
+      document.getElementById('login-alert').innerHTML =
+        `<div class="alert alert-danger"><i class="fa-solid fa-circle-exclamation"></i>${result.msg}</div>`;
+      return;
+    }
+    LoginPage.redirect(result.user.role);
+  },
+
+  demo(email, password) {
+    document.getElementById('loginEmail').value = email;
+    document.getElementById('loginPassword').value = password;
+    const result = Auth.login(email, password);
+    if (result.ok) LoginPage.redirect(result.user.role);
+  },
+
+  redirect(role) {
+    const map = {
+      administrativo: 'admin-dashboard',
+      financeiro:     'fin-dashboard',
+      professor:      'teacher-dashboard',
+      pai:            'parent-dashboard',
+    };
+    Router.go(map[role] || 'login');
+  }
+};
+// =============================================
+//  GESTESCOLAR – CADASTRO DE FUNCIONÁRIOS
+// =============================================
+
+Router.register('register', () => {
+  const user = Auth.current();
+  // Apenas admin pode acessar pelo painel; acesso público para primeiro acesso
+  const fromPanel = user && user.role === 'administrativo';
+
+  const app = document.getElementById('app');
+
+  const formHTML = `
+    <div class="${fromPanel ? '' : 'register-wrap'}">
+      <div class="${fromPanel ? 'card' : 'register-card'}">
+        <div class="${fromPanel ? 'card-header' : 'register-header'}">
+          ${fromPanel ? `
+            <span class="card-title"><i class="fa-solid fa-user-plus"></i> Cadastro de Funcionário</span>
+            <button class="btn btn-outline btn-sm" onclick="Router.go('admin-staff')">
+              <i class="fa-solid fa-arrow-left"></i> Voltar
+            </button>
+          ` : `
+            <h2><i class="fa-solid fa-graduation-cap"></i> GestEscolar</h2>
+            <p>Cadastro de Funcionário / Acesso</p>
+          `}
+        </div>
+        <div class="${fromPanel ? '' : 'register-body'}">
+          <div id="reg-alert"></div>
+
+          <!-- Seletor de Função -->
+          <div class="form-section-title">Selecione a função</div>
+          <div class="role-selector" id="roleSelector">
+            <div class="role-option" data-role="administrativo" onclick="RegisterPage.selectRole(this)">
+              <div class="role-icon">🏫</div>
+              <div class="role-name">Administrativo</div>
+              <div class="role-desc">Gestão de alunos, turmas e pessoal</div>
+            </div>
+            <div class="role-option" data-role="financeiro" onclick="RegisterPage.selectRole(this)">
+              <div class="role-icon">💰</div>
+              <div class="role-name">Financeiro</div>
+              <div class="role-desc">CRM, boletos e contas a pagar</div>
+            </div>
+            <div class="role-option" data-role="professor" onclick="RegisterPage.selectRole(this)">
+              <div class="role-icon">📚</div>
+              <div class="role-name">Professor(a)</div>
+              <div class="role-desc">Chamadas, notas e mensagens</div>
+            </div>
+            <div class="role-option" data-role="pai" onclick="RegisterPage.selectRole(this)">
+              <div class="role-icon">👨‍👩‍👧</div>
+              <div class="role-name">Responsável</div>
+              <div class="role-desc">Acompanhamento do aluno</div>
+            </div>
+          </div>
+
+          <form id="registerForm" onsubmit="RegisterPage.submit(event)">
+            <!-- Dados Pessoais -->
+            <div class="form-section-title">Dados pessoais</div>
+            <div class="form-row">
+              <div class="form-group">
+                <label class="form-label">Nome completo *</label>
+                <input type="text" class="form-control" id="regName" placeholder="Ex: Maria Silva" required />
+              </div>
+              <div class="form-group">
+                <label class="form-label">E-mail *</label>
+                <input type="email" class="form-control" id="regEmail" placeholder="Ex: maria@escola.com" required />
+              </div>
+            </div>
+            <div class="form-row">
+              <div class="form-group">
+                <label class="form-label">CPF *</label>
+                <input type="text" class="form-control" id="regCpf" placeholder="000.000.000-00" maxlength="14" required />
+              </div>
+              <div class="form-group">
+                <label class="form-label">Telefone *</label>
+                <input type="text" class="form-control" id="regPhone" placeholder="(00) 00000-0000" maxlength="15" required />
+              </div>
+            </div>
+            <div class="form-row">
+              <div class="form-group">
+                <label class="form-label">Data de nascimento</label>
+                <input type="date" class="form-control" id="regDob" />
+              </div>
+              <div class="form-group">
+                <label class="form-label">Gênero</label>
+                <select class="form-control" id="regGender">
+                  <option value="">Selecione</option>
+                  <option value="masculino">Masculino</option>
+                  <option value="feminino">Feminino</option>
+                  <option value="outro">Outro / Prefiro não informar</option>
+                </select>
+              </div>
+            </div>
+
+            <!-- Dados de Acesso -->
+            <div class="form-section-title">Dados de acesso</div>
+            <div class="form-row">
+              <div class="form-group">
+                <label class="form-label">Senha *</label>
+                <input type="password" class="form-control" id="regPassword" placeholder="Mínimo 6 caracteres" minlength="6" required />
+              </div>
+              <div class="form-group">
+                <label class="form-label">Confirmar senha *</label>
+                <input type="password" class="form-control" id="regPasswordConfirm" placeholder="Repita a senha" required />
+              </div>
+            </div>
+
+            <!-- Campos por função -->
+            <div id="roleSpecificFields"></div>
+
+            <input type="hidden" id="regRole" value="" />
+
+            <div style="display:flex;gap:12px;margin-top:8px;">
+              ${fromPanel ? `<button type="button" class="btn btn-outline" onclick="Router.go('admin-staff')">Cancelar</button>` : `<button type="button" class="btn btn-outline" onclick="Router.go('login')">Voltar ao login</button>`}
+              <button type="submit" class="btn btn-primary" style="flex:1;">
+                <i class="fa-solid fa-floppy-disk"></i> Salvar Cadastro
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+  `;
+
+  if (fromPanel) {
+    Router.renderLayout(user, 'register', formHTML);
+  } else {
+    app.innerHTML = formHTML;
+  }
+
+  // Máscara simples CPF/Telefone
+  document.getElementById('regCpf').addEventListener('input', e => {
+    let v = e.target.value.replace(/\D/g, '').substring(0, 11);
+    v = v.replace(/(\d{3})(\d)/, '$1.$2')
+         .replace(/(\d{3})(\d)/, '$1.$2')
+         .replace(/(\d{3})(\d{1,2})$/, '$1-$2');
+    e.target.value = v;
+  });
+  document.getElementById('regPhone').addEventListener('input', e => {
+    let v = e.target.value.replace(/\D/g, '').substring(0, 11);
+    v = v.replace(/(\d{2})(\d)/, '($1) $2')
+         .replace(/(\d{5})(\d)/, '$1-$2');
+    e.target.value = v;
+  });
+});
+
+const RegisterPage = {
+  _role: '',
+
+  selectRole(el) {
+    document.querySelectorAll('.role-option').forEach(e => e.classList.remove('selected'));
+    el.classList.add('selected');
+    this._role = el.dataset.role;
+    document.getElementById('regRole').value = this._role;
+    this.renderRoleFields(this._role);
+  },
+
+  renderRoleFields(role) {
+    const container = document.getElementById('roleSpecificFields');
+    if (role === 'professor') {
+      const classes = DB.getClasses();
+      container.innerHTML = `
+        <div class="form-section-title">Dados do Professor</div>
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label">Disciplina principal *</label>
+            <input type="text" class="form-control" id="regSubject" placeholder="Ex: Matemática" />
+          </div>
+          <div class="form-group">
+            <label class="form-label">Turma responsável</label>
+            <select class="form-control" id="regClassId">
+              <option value="">Nenhuma</option>
+              ${classes.map(c => `<option value="${c.id}">${Utils.escape(c.name)}</option>`).join('')}
+            </select>
+          </div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Formação acadêmica</label>
+          <input type="text" class="form-control" id="regEducation" placeholder="Ex: Licenciatura em Matemática – USP" />
+        </div>
+      `;
+    } else if (role === 'pai') {
+      const students = DB.getStudents();
+      container.innerHTML = `
+        <div class="form-section-title">Dados do Responsável</div>
+        <div class="form-group">
+          <label class="form-label">Aluno vinculado</label>
+          <select class="form-control" id="regStudentId">
+            <option value="">Selecionar aluno</option>
+            ${students.map(s => `<option value="${s.id}">${Utils.escape(s.name)}</option>`).join('')}
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Grau de parentesco</label>
+          <select class="form-control" id="regRelationship">
+            <option value="pai">Pai</option>
+            <option value="mae">Mãe</option>
+            <option value="avo">Avô/Avó</option>
+            <option value="responsavel">Responsável legal</option>
+          </select>
+        </div>
+      `;
+    } else {
+      container.innerHTML = '';
+    }
+  },
+
+  submit(e) {
+    e.preventDefault();
+    const alertEl = document.getElementById('reg-alert');
+
+    const role = document.getElementById('regRole').value;
+    if (!role) {
+      alertEl.innerHTML = `<div class="alert alert-danger"><i class="fa-solid fa-circle-exclamation"></i> Selecione uma função antes de prosseguir.</div>`;
+      return;
+    }
+
+    const password = document.getElementById('regPassword').value;
+    const confirm  = document.getElementById('regPasswordConfirm').value;
+    if (password !== confirm) {
+      alertEl.innerHTML = `<div class="alert alert-danger"><i class="fa-solid fa-circle-exclamation"></i> As senhas não coincidem.</div>`;
+      return;
+    }
+
+    const email = document.getElementById('regEmail').value.trim().toLowerCase();
+    if (DB.findUserByEmail(email)) {
+      alertEl.innerHTML = `<div class="alert alert-danger"><i class="fa-solid fa-circle-exclamation"></i> Este e-mail já está cadastrado.</div>`;
+      return;
+    }
+
+    const userData = {
+      name:     document.getElementById('regName').value.trim(),
+      email,
+      password,
+      cpf:      document.getElementById('regCpf').value,
+      phone:    document.getElementById('regPhone').value,
+      dob:      document.getElementById('regDob').value,
+      gender:   document.getElementById('regGender').value,
+      role,
+      active:   true,
+    };
+
+    // Campos específicos
+    if (role === 'professor') {
+      userData.subject   = document.getElementById('regSubject')?.value || '';
+      userData.classId   = document.getElementById('regClassId')?.value || '';
+      userData.education = document.getElementById('regEducation')?.value || '';
+    } else if (role === 'pai') {
+      userData.studentId    = document.getElementById('regStudentId')?.value || '';
+      userData.relationship = document.getElementById('regRelationship')?.value || '';
+      // Atualizar aluno com parentId
+      if (userData.studentId) {
+        DB.updateStudent(userData.studentId, { parentId: 'PENDING' }); // será atualizado com ID real
+      }
+    }
+
+    const created = DB.addUser(userData);
+
+    // Se pai, vincular ID correto ao aluno
+    if (role === 'pai' && userData.studentId) {
+      DB.updateStudent(userData.studentId, { parentId: created.id, parentEmail: email, parentName: userData.name });
+    }
+
+    alertEl.innerHTML = `<div class="alert alert-success"><i class="fa-solid fa-check-circle"></i> Funcionário cadastrado com sucesso!</div>`;
+    Utils.toast(`${userData.name} cadastrado(a) com sucesso!`, 'success');
+    document.getElementById('registerForm').reset();
+    document.querySelectorAll('.role-option').forEach(e => e.classList.remove('selected'));
+    document.getElementById('roleSpecificFields').innerHTML = '';
+    this._role = '';
+    document.getElementById('regRole').value = '';
+
+    setTimeout(() => {
+      const cur = Auth.current();
+      if (cur && cur.role === 'administrativo') Router.go('admin-staff');
+    }, 1500);
+  }
+};
+// =============================================
+//  GESTESCOLAR – PAINEL ADMINISTRATIVO
+// =============================================
+
+// --- Dashboard ---
+Router.register('admin-dashboard', () => {
+  const user = Auth.require(); if (!user) return;
+  const students = DB.getStudents();
+  const users    = DB.getUsers();
+  const classes  = DB.getClasses();
+  const invoices = DB.getInvoices();
+  const paid     = invoices.filter(i => i.status === 'pago');
+  const pending  = invoices.filter(i => i.status === 'pendente');
+
+  const content = `
+    <h2 style="margin-bottom:20px;">Bem-vindo(a), ${Utils.escape(user.name.split(' ')[0])}! 👋</h2>
+    <div class="stats-grid">
+      <div class="stat-card">
+        <div class="stat-icon blue"><i class="fa-solid fa-user-graduate"></i></div>
+        <div>
+          <div class="stat-value">${students.length}</div>
+          <div class="stat-label">Alunos matriculados</div>
+        </div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-icon purple"><i class="fa-solid fa-chalkboard-teacher"></i></div>
+        <div>
+          <div class="stat-value">${users.filter(u => u.role === 'professor').length}</div>
+          <div class="stat-label">Professores</div>
+        </div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-icon green"><i class="fa-solid fa-chalkboard"></i></div>
+        <div>
+          <div class="stat-value">${classes.length}</div>
+          <div class="stat-label">Turmas ativas</div>
+        </div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-icon yellow"><i class="fa-solid fa-file-invoice"></i></div>
+        <div>
+          <div class="stat-value">${pending.length}</div>
+          <div class="stat-label">Boletos pendentes</div>
+        </div>
+      </div>
+    </div>
+
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;">
+      <div class="card">
+        <div class="card-header">
+          <span class="card-title">Últimas matrículas</span>
+          <button class="btn btn-primary btn-sm" onclick="Router.go('admin-students')">Ver todos</button>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Aluno</th><th>Turma</th><th>Status</th></tr></thead>
+            <tbody>
+              ${students.slice(0, 5).map(s => {
+                const cls = DB.getClasses().find(c => c.id === s.classId);
+                return `<tr>
+                  <td><strong>${Utils.escape(s.name)}</strong></td>
+                  <td>${cls ? Utils.escape(cls.name) : '–'}</td>
+                  <td>${Utils.statusBadge(s.status)}</td>
+                </tr>`;
+              }).join('')}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <span class="card-title">Equipe</span>
+          <button class="btn btn-primary btn-sm" onclick="Router.go('admin-staff')">Ver todos</button>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Nome</th><th>Função</th><th>Status</th></tr></thead>
+            <tbody>
+              ${users.slice(0, 5).map(u => `
+                <tr>
+                  <td><strong>${Utils.escape(u.name)}</strong></td>
+                  <td><span class="badge badge-${Auth.roleBadgeColor(u.role)}">${Auth.roleLabel(u.role)}</span></td>
+                  <td>${Utils.statusBadge(u.active ? 'ativo' : 'inativo')}</td>
+                </tr>`).join('')}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  `;
+  Router.renderLayout(user, 'admin-dashboard', content);
+});
+
+// --- Alunos ---
+Router.register('admin-students', () => {
+  const user = Auth.require(); if (!user) return;
+  const renderStudents = () => {
+    const students = DB.getStudents();
+    const classes  = DB.getClasses();
+    return `
+      <div class="card">
+        <div class="card-header">
+          <span class="card-title"><i class="fa-solid fa-user-graduate"></i> Alunos (${students.length})</span>
+          <button class="btn btn-primary btn-sm" onclick="AdminStudents.openNew()">
+            <i class="fa-solid fa-plus"></i> Novo Aluno
+          </button>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Nome</th><th>Turma</th><th>Responsável</th>
+                <th>Mensalidade</th><th>Vencimento</th><th>Status</th><th>Ações</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${students.length === 0 ? `<tr><td colspan="7"><div class="empty-state"><i class="fa-solid fa-user-graduate"></i><p>Nenhum aluno cadastrado</p></div></td></tr>` :
+                students.map(s => {
+                  const cls = classes.find(c => c.id === s.classId);
+                  return `<tr>
+                    <td><strong>${Utils.escape(s.name)}</strong><br><small class="text-muted">${Utils.escape(s.parentName || '–')}</small></td>
+                    <td>${cls ? Utils.escape(cls.name) : '–'}</td>
+                    <td>${Utils.escape(s.parentName || '–')}</td>
+                    <td>${Utils.currency(s.monthlyFee)}</td>
+                    <td>Dia ${s.dueDay}</td>
+                    <td>${Utils.statusBadge(s.status)}</td>
+                    <td>
+                      <button class="btn btn-outline btn-sm" onclick="AdminStudents.edit('${s.id}')"><i class="fa-solid fa-pen"></i></button>
+                      <button class="btn btn-danger btn-sm" onclick="AdminStudents.remove('${s.id}')"><i class="fa-solid fa-trash"></i></button>
+                    </td>
+                  </tr>`;
+                }).join('')
+              }
+            </tbody>
+          </table>
+        </div>
+      </div>
+    `;
+  };
+  Router.renderLayout(user, 'admin-students', renderStudents());
+  window._reloadStudents = () => {
+    document.getElementById('page-content').innerHTML = renderStudents();
+  };
+});
+
+const AdminStudents = {
+  openNew() {
+    this._showForm(null);
+  },
+  edit(id) {
+    const s = DB.getStudents().find(s => s.id === id);
+    this._showForm(s);
+  },
+  _showForm(s) {
+    const classes = DB.getClasses();
+    const overlay = Utils.modal(
+      s ? 'Editar Aluno' : 'Novo Aluno',
+      `<form id="studentForm">
+        <div class="form-row">
+          <div class="form-group"><label class="form-label">Nome completo *</label>
+            <input class="form-control" id="stName" value="${Utils.escape(s?.name||'')}" required /></div>
+          <div class="form-group"><label class="form-label">Data de nascimento</label>
+            <input type="date" class="form-control" id="stDob" value="${s?.dob||''}" /></div>
+        </div>
+        <div class="form-row">
+          <div class="form-group"><label class="form-label">Turma</label>
+            <select class="form-control" id="stClass">
+              <option value="">Selecione</option>
+              ${classes.map(c => `<option value="${c.id}" ${s?.classId===c.id?'selected':''}>${Utils.escape(c.name)}</option>`).join('')}
+            </select></div>
+          <div class="form-group"><label class="form-label">Status</label>
+            <select class="form-control" id="stStatus">
+              <option value="ativo"   ${s?.status==='ativo'?'selected':''}>Ativo</option>
+              <option value="inativo" ${s?.status==='inativo'?'selected':''}>Inativo</option>
+            </select></div>
+        </div>
+        <div class="form-section-title">Responsável</div>
+        <div class="form-row">
+          <div class="form-group"><label class="form-label">Nome do responsável *</label>
+            <input class="form-control" id="stParent" value="${Utils.escape(s?.parentName||'')}" required /></div>
+          <div class="form-group"><label class="form-label">E-mail do responsável</label>
+            <input type="email" class="form-control" id="stParentEmail" value="${Utils.escape(s?.parentEmail||'')}" /></div>
+        </div>
+        <div class="form-group"><label class="form-label">Telefone de contato</label>
+          <input class="form-control" id="stPhone" value="${Utils.escape(s?.phone||'')}" /></div>
+        <div class="form-section-title">Financeiro</div>
+        <div class="form-row">
+          <div class="form-group"><label class="form-label">Mensalidade (R$) *</label>
+            <input type="number" class="form-control" id="stFee" value="${s?.monthlyFee||850}" min="0" step="0.01" required /></div>
+          <div class="form-group"><label class="form-label">Dia de vencimento *</label>
+            <input type="number" class="form-control" id="stDueDay" value="${s?.dueDay||10}" min="1" max="28" required /></div>
+        </div>
+      </form>`,
+      `<button class="btn btn-outline" onclick="this.closest('.modal-overlay').remove()">Cancelar</button>
+       <button class="btn btn-primary" onclick="AdminStudents.save('${s?.id||''}')">
+         <i class="fa-solid fa-floppy-disk"></i> Salvar
+       </button>`
+    );
+  },
+  save(id) {
+    const data = {
+      name:        document.getElementById('stName').value.trim(),
+      dob:         document.getElementById('stDob').value,
+      classId:     document.getElementById('stClass').value,
+      status:      document.getElementById('stStatus').value,
+      parentName:  document.getElementById('stParent').value.trim(),
+      parentEmail: document.getElementById('stParentEmail').value.trim(),
+      phone:       document.getElementById('stPhone').value.trim(),
+      monthlyFee:  parseFloat(document.getElementById('stFee').value),
+      dueDay:      parseInt(document.getElementById('stDueDay').value),
+    };
+    if (!data.name) { Utils.toast('Nome é obrigatório.','error'); return; }
+    if (id) {
+      DB.updateStudent(id, data);
+      Utils.toast('Aluno atualizado!','success');
+    } else {
+      DB.addStudent(data);
+      Utils.toast('Aluno cadastrado com sucesso!','success');
+    }
+    document.querySelector('.modal-overlay')?.remove();
+    window._reloadStudents?.();
+  },
+  remove(id) {
+    Utils.confirm('Tem certeza que deseja excluir este aluno?', () => {
+      DB.deleteStudent(id);
+      Utils.toast('Aluno removido.','success');
+      window._reloadStudents?.();
+    });
+  }
+};
+
+// --- Funcionários ---
+Router.register('admin-staff', () => {
+  const user = Auth.require(); if (!user) return;
+  const renderStaff = () => {
+    const users = DB.getUsers();
+    return `
+      <div class="card">
+        <div class="card-header">
+          <span class="card-title"><i class="fa-solid fa-users"></i> Funcionários (${users.length})</span>
+          <button class="btn btn-primary btn-sm" onclick="Router.go('register')">
+            <i class="fa-solid fa-user-plus"></i> Novo Funcionário
+          </button>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr><th>Nome</th><th>E-mail</th><th>CPF</th><th>Telefone</th><th>Função</th><th>Status</th><th>Ações</th></tr>
+            </thead>
+            <tbody>
+              ${users.map(u => `
+                <tr>
+                  <td>
+                    <div style="display:flex;align-items:center;gap:8px;">
+                      <div class="avatar" style="width:30px;height:30px;font-size:11px;background:var(--primary);color:#fff;border-radius:50%;display:flex;align-items:center;justify-content:center;">${Utils.initials(u.name)}</div>
+                      <strong>${Utils.escape(u.name)}</strong>
+                    </div>
+                  </td>
+                  <td>${Utils.escape(u.email)}</td>
+                  <td>${Utils.escape(u.cpf||'–')}</td>
+                  <td>${Utils.escape(u.phone||'–')}</td>
+                  <td><span class="badge badge-${Auth.roleBadgeColor(u.role)}">${Auth.roleLabel(u.role)}</span></td>
+                  <td>${Utils.statusBadge(u.active?'ativo':'inativo')}</td>
+                  <td>
+                    <button class="btn btn-outline btn-sm" onclick="AdminStaff.toggle('${u.id}','${u.active}')">
+                      <i class="fa-solid fa-${u.active?'ban':'check'}"></i>
+                    </button>
+                    <button class="btn btn-danger btn-sm" onclick="AdminStaff.remove('${u.id}')">
+                      <i class="fa-solid fa-trash"></i>
+                    </button>
+                  </td>
+                </tr>`).join('')}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    `;
+  };
+  Router.renderLayout(user, 'admin-staff', renderStaff());
+  window._reloadStaff = () => {
+    document.getElementById('page-content').innerHTML = renderStaff();
+  };
+});
+
+const AdminStaff = {
+  toggle(id, active) {
+    DB.updateUser(id, { active: active !== 'true' });
+    Utils.toast('Status atualizado.','success');
+    window._reloadStaff?.();
+  },
+  remove(id) {
+    const cur = Auth.current();
+    if (id === cur?.id) { Utils.toast('Você não pode remover seu próprio usuário!','error'); return; }
+    Utils.confirm('Deseja realmente excluir este funcionário?', () => {
+      DB.deleteUser(id);
+      Utils.toast('Funcionário removido.','success');
+      window._reloadStaff?.();
+    });
+  }
+};
+
+// --- Turmas ---
+Router.register('admin-classes', () => {
+  const user = Auth.require(); if (!user) return;
+  const renderClasses = () => {
+    const classes  = DB.getClasses();
+    const students = DB.getStudents();
+    const teachers = DB.getUsers().filter(u => u.role === 'professor');
+    return `
+      <div class="card">
+        <div class="card-header">
+          <span class="card-title"><i class="fa-solid fa-chalkboard"></i> Turmas</span>
+          <button class="btn btn-primary btn-sm" onclick="AdminClasses.openNew()">
+            <i class="fa-solid fa-plus"></i> Nova Turma
+          </button>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Turma</th><th>Ano</th><th>Turno</th><th>Professor(a)</th><th>Alunos</th></tr></thead>
+            <tbody>
+              ${classes.length === 0 ? `<tr><td colspan="5"><div class="empty-state"><i class="fa-solid fa-chalkboard"></i><p>Nenhuma turma cadastrada</p></div></td></tr>` :
+                classes.map(c => {
+                  const teacher = teachers.find(t => t.id === c.teacherId);
+                  const count   = students.filter(s => s.classId === c.id).length;
+                  return `<tr>
+                    <td><strong>${Utils.escape(c.name)}</strong></td>
+                    <td>${c.year}</td>
+                    <td>${Utils.escape(c.shift||'–')}</td>
+                    <td>${teacher ? Utils.escape(teacher.name) : '<span class="text-muted">Sem professor</span>'}</td>
+                    <td><span class="badge badge-blue">${count} alunos</span></td>
+                  </tr>`;
+                }).join('')}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    `;
+  };
+  Router.renderLayout(user, 'admin-classes', renderClasses());
+  window._reloadClasses = () => {
+    document.getElementById('page-content').innerHTML = renderClasses();
+  };
+});
+
+const AdminClasses = {
+  openNew() {
+    const teachers = DB.getUsers().filter(u => u.role === 'professor');
+    Utils.modal(
+      'Nova Turma',
+      `<form id="classForm">
+        <div class="form-group"><label class="form-label">Nome da turma *</label>
+          <input class="form-control" id="clName" placeholder="Ex: 5º Ano A" required /></div>
+        <div class="form-row">
+          <div class="form-group"><label class="form-label">Ano letivo</label>
+            <input type="number" class="form-control" id="clYear" value="2026" /></div>
+          <div class="form-group"><label class="form-label">Turno</label>
+            <select class="form-control" id="clShift">
+              <option>Manhã</option><option>Tarde</option><option>Integral</option>
+            </select></div>
+        </div>
+        <div class="form-group"><label class="form-label">Professor responsável</label>
+          <select class="form-control" id="clTeacher">
+            <option value="">Sem professor</option>
+            ${teachers.map(t => `<option value="${t.id}">${Utils.escape(t.name)}</option>`).join('')}
+          </select></div>
+      </form>`,
+      `<button class="btn btn-outline" onclick="this.closest('.modal-overlay').remove()">Cancelar</button>
+       <button class="btn btn-primary" onclick="AdminClasses.save()"><i class="fa-solid fa-floppy-disk"></i> Salvar</button>`
+    );
+  },
+  save() {
+    const data = {
+      name:      document.getElementById('clName').value.trim(),
+      year:      document.getElementById('clYear').value,
+      shift:     document.getElementById('clShift').value,
+      teacherId: document.getElementById('clTeacher').value,
+    };
+    if (!data.name) { Utils.toast('Nome é obrigatório.','error'); return; }
+    DB.addClass(data);
+    Utils.toast('Turma criada!','success');
+    document.querySelector('.modal-overlay')?.remove();
+    window._reloadClasses?.();
+  }
+};
+// =============================================
+//  CONFIGURAÇÕES DA ESCOLA
+// =============================================
+Router.register('admin-settings', () => {
+  const user = Auth.require(); if (!user) return;
+  const cfg    = DB.getObj('ges_school_config') || {};
+  const school = { ...(DB.getObj('ges_school_data') || {}), ...cfg };
+  const temSubconta = !!(school?.asaasWalletId);
+
+  Router.renderLayout(user, 'admin-settings', `
+    <h2 style="margin-bottom:20px;"><i class="fa-solid fa-gear"></i> Configurações da Escola</h2>
+    <div style="display:flex;flex-direction:column;gap:20px;max-width:640px;">
+
+      <div class="card">
+        <div class="card-header"><span class="card-title">Dados da Instituição</span></div>
+        <div style="padding:20px;display:flex;flex-direction:column;gap:16px;">
+
+          <div>
+            <label class="form-label">Nome da Escola *</label>
+            <input id="cfg-name" class="form-control" value="${Utils.escape(cfg.name||'')}" placeholder="Ex: Escola Municipal João da Silva" />
+          </div>
+
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+            <div>
+              <label class="form-label">CNPJ *</label>
+              <input id="cfg-cnpj" class="form-control" value="${Utils.escape(school?.cnpj||cfg.cnpj||'')}" placeholder="00.000.000/0000-00" />
+            </div>
+            <div>
+              <label class="form-label">Telefone</label>
+              <input id="cfg-phone" class="form-control" value="${Utils.escape(school?.phone||cfg.phone||'')}" placeholder="(00) 00000-0000" />
+            </div>
+          </div>
+
+          <div>
+            <label class="form-label">E-mail *</label>
+            <input id="cfg-email" type="email" class="form-control" value="${Utils.escape(school?.email||cfg.email||'')}" placeholder="contato@escola.com.br" />
+          </div>
+
+          <div style="display:grid;grid-template-columns:140px 1fr;gap:12px;">
+            <div>
+              <label class="form-label">CEP</label>
+              <input id="cfg-postal-code" class="form-control" value="${Utils.escape(school?.postalCode||'')}" placeholder="00000-000"
+                oninput="AdminSettings.buscarCep(this.value)" />
+            </div>
+            <div>
+              <label class="form-label">Endereço</label>
+              <input id="cfg-address" class="form-control" value="${Utils.escape(school?.address||cfg.address||'')}" placeholder="Rua, Avenida..." />
+            </div>
+          </div>
+
+          <div style="display:grid;grid-template-columns:80px 1fr 1fr;gap:12px;">
+            <div>
+              <label class="form-label">Número</label>
+              <input id="cfg-address-number" class="form-control" value="${Utils.escape(school?.addressNumber||'')}" placeholder="Nº" />
+            </div>
+            <div>
+              <label class="form-label">Bairro</label>
+              <input id="cfg-province" class="form-control" value="${Utils.escape(school?.province||'')}" placeholder="Bairro" />
+            </div>
+            <div>
+              <label class="form-label">Complemento</label>
+              <input id="cfg-complement" class="form-control" value="${Utils.escape(school?.complement||'')}" placeholder="Sala, Bloco..." />
+            </div>
+          </div>
+
+          <div style="display:grid;grid-template-columns:1fr 80px;gap:12px;">
+            <div>
+              <label class="form-label">Cidade</label>
+              <input id="cfg-city" class="form-control" value="${Utils.escape(school?.city||'')}" placeholder="Cidade" />
+            </div>
+            <div>
+              <label class="form-label">UF</label>
+              <input id="cfg-state" class="form-control" maxlength="2" value="${Utils.escape(school?.state||'')}" placeholder="SP" />
+            </div>
+          </div>
+
+          <div>
+            <label class="form-label">Chave PIX (para resgates)</label>
+            <input id="cfg-pix" class="form-control" value="${Utils.escape(school?.pixKey||cfg.pixKey||'')}" placeholder="CPF, CNPJ, e-mail, telefone ou chave aleatória" />
+            <div style="font-size:11px;color:var(--text-muted);margin-top:4px;">
+              <i class="fa-solid fa-circle-info"></i> Usada para receber pagamentos PIX e solicitar resgates.
+            </div>
+          </div>
+
+          <div>
+            <label class="form-label">Logo da Escola</label>
+            ${cfg.logo ? `<div style="margin-bottom:10px;padding:8px;border:1.5px solid var(--border);border-radius:var(--radius);display:inline-block;">
+              <img src="${cfg.logo}" style="max-height:70px;max-width:200px;object-fit:contain;display:block;" /></div><br>` : ''}
+            <div id="logo-preview"></div>
+            <label style="display:inline-flex;align-items:center;gap:8px;cursor:pointer;padding:8px 16px;border:1.5px dashed var(--border);border-radius:var(--radius);font-size:13px;color:var(--text-muted);">
+              <i class="fa-solid fa-image"></i> Clique para selecionar a logo (PNG, JPG)
+              <input type="file" id="cfg-logo" accept="image/*" style="display:none;" onchange="AdminSettings.previewLogo(this)" />
+            </label>
+            ${cfg.logo ? `<button class="btn btn-sm" style="margin-left:8px;color:var(--danger);border:1px solid var(--danger);background:transparent;"
+              onclick="AdminSettings.removeLogo()"><i class="fa-solid fa-trash"></i> Remover logo</button>` : ''}
+          </div>
+
+          <div style="padding-top:8px;border-top:1px solid var(--border);">
+            <button class="btn btn-primary" onclick="AdminSettings.save()">
+              <i class="fa-solid fa-floppy-disk"></i> Salvar Configurações
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header"><span class="card-title"><i class="fa-solid fa-credit-card"></i> Gateway de Pagamentos (PIX)</span></div>
+        <div style="padding:20px;">
+          ${temSubconta ? `
+            <div style="display:flex;align-items:center;gap:12px;padding:14px;background:#e8f5e9;border-radius:8px;margin-bottom:16px;">
+              <i class="fa-solid fa-circle-check" style="color:#2e7d32;font-size:24px;"></i>
+              <div>
+                <div style="font-weight:700;color:#2e7d32;">Gateway de Pagamentos Ativo</div>
+                <div style="font-size:12px;color:#388e3c;">Sua escola está integrada ao Asaas. Cobranças PIX estão disponíveis.</div>
+              </div>
+            </div>
+            <div style="font-size:12px;color:var(--text-muted);">
+              <i class="fa-solid fa-info-circle"></i>
+              Os pagamentos ficam disponíveis no saldo e podem ser resgatados em <strong>Financeiro → Saldo</strong>.
+            </div>` : `
+            <div style="display:flex;align-items:center;gap:12px;padding:14px;background:#fff8e1;border-radius:8px;margin-bottom:16px;">
+              <i class="fa-solid fa-triangle-exclamation" style="color:#f57f17;font-size:24px;"></i>
+              <div>
+                <div style="font-weight:700;color:#f57f17;">Gateway não ativado</div>
+                <div style="font-size:12px;color:#f57f17;">Ative para receber pagamentos via PIX automaticamente.</div>
+              </div>
+            </div>
+            <p style="font-size:13px;color:var(--text-muted);margin-bottom:16px;">
+              Preencha e salve os dados da escola (CNPJ, e-mail, endereço completo) e clique em Ativar.
+            </p>
+            <button class="btn btn-primary" onclick="AdminSettings.ativarGateway()">
+              <i class="fa-solid fa-bolt"></i> Ativar Gateway de Pagamentos
+            </button>`}
+        </div>
+      </div>
+    </div>
+  `);
+});
+
+const AdminSettings = {
+  previewLogo(input) {
+    if (!input.files[0]) return;
+    const reader = new FileReader();
+    reader.onload = e => {
+      document.getElementById('logo-preview').innerHTML =
+        `<div style="margin-bottom:8px;padding:8px;border:1.5px solid var(--secondary);border-radius:var(--radius);display:inline-block;">
+           <img src="${e.target.result}" style="max-height:70px;max-width:200px;object-fit:contain;display:block;" />
+         </div><br>`;
+    };
+    reader.readAsDataURL(input.files[0]);
+  },
+
+  save() {
+    const name    = (document.getElementById('cfg-name')?.value         || '').trim();
+    const address = (document.getElementById('cfg-address')?.value      || '').trim();
+    const phone   = (document.getElementById('cfg-phone')?.value        || '').trim();
+    const cnpj    = (document.getElementById('cfg-cnpj')?.value         || '').trim();
+    const email   = (document.getElementById('cfg-email')?.value        || '').trim();
+    const pixKey  = (document.getElementById('cfg-pix')?.value          || '').trim();
+    const postalCode    = (document.getElementById('cfg-postal-code')?.value    || '').trim();
+    const addressNumber = (document.getElementById('cfg-address-number')?.value || '').trim();
+    const province      = (document.getElementById('cfg-province')?.value       || '').trim();
+    const complement    = (document.getElementById('cfg-complement')?.value     || '').trim();
+    const city          = (document.getElementById('cfg-city')?.value           || '').trim();
+    const state         = (document.getElementById('cfg-state')?.value          || '').trim().toUpperCase();
+    const file    = document.getElementById('cfg-logo')?.files[0];
+    const current = DB.getObj('ges_school_config') || {};
+
+    const persist = (logo) => {
+      DB.set('ges_school_config', JSON.stringify({ ...current, name, address, phone, cnpj, email, pixKey, logo: logo ?? current.logo ?? '' }));
+      DB.set('ges_school_data',   JSON.stringify({ ...(DB.getObj('ges_school_data')||{}), cnpj, email, phone, address, postalCode, addressNumber, province, complement, city, state, pixKey }));
+      Utils.toast('Configurações salvas com sucesso!', 'success');
+      Router.go('admin-settings');
+    };
+
+    if (file) {
+      const reader = new FileReader();
+      reader.onload = e => persist(e.target.result);
+      reader.readAsDataURL(file);
+    } else {
+      persist(null);
+    }
+  },
+
+  async buscarCep(cep) {
+    const digits = cep.replace(/\D/g, '');
+    if (digits.length !== 8) return;
+    try {
+      const res = await fetch(`https://viacep.com.br/ws/${digits}/json/`);
+      const d = await res.json();
+      if (d.erro) return;
+      if (document.getElementById('cfg-address'))  document.getElementById('cfg-address').value  = d.logradouro || '';
+      if (document.getElementById('cfg-province')) document.getElementById('cfg-province').value = d.bairro     || '';
+      if (document.getElementById('cfg-city'))     document.getElementById('cfg-city').value     = d.localidade || '';
+      if (document.getElementById('cfg-state'))    document.getElementById('cfg-state').value    = d.uf         || '';
+    } catch (_) {}
+  },
+
+  async ativarGateway() {
+    const user   = Auth.current();
+    const school = DB.getSchool(user?.schoolId);
+    if (!school) return;
+    if (school.asaasWalletId) { Utils.toast('Gateway já está ativo.', 'info'); return; }
+
+    const missing = [];
+    if (!school.cnpj)          missing.push('CNPJ');
+    if (!school.email)         missing.push('E-mail');
+    if (!school.postalCode)    missing.push('CEP');
+    if (!school.address)       missing.push('Endereço');
+    if (!school.addressNumber) missing.push('Número');
+    if (!school.province)      missing.push('Bairro');
+    if (missing.length) { Utils.toast(`Preencha e salve os campos: ${missing.join(', ')}`, 'error'); return; }
+
+    Utils.toast('Criando subconta Asaas...', 'info');
+    const result = await AsaasClient.createSubaccount({
+      name: school.name, cpfCnpj: school.cnpj, email: school.email,
+      phone: school.phone || '', postalCode: school.postalCode,
+      address: school.address, addressNumber: school.addressNumber,
+      complement: school.complement || '', province: school.province,
+      city: school.city || '', state: school.state || '',
+    });
+    if (!result) return;
+
+    DB.updateSchool(user.schoolId, {
+      asaasAccountId: result.id       || '',
+      asaasWalletId:  result.walletId || '',
+      asaasSubApiKey: result.apiKey   || '',
+    });
+
+    Utils.toast('Gateway de Pagamentos ativado com sucesso!', 'success');
+    Router.go('admin-settings');
+  },
+
+  removeLogo() {
+    const cfg = DB.getSchoolConfig();
+    DB.saveSchoolConfig({ ...cfg, logo: '' });
+    Utils.toast('Logo removida!', 'success');
+    Router.go('admin-settings');
+  }
+};
+
+// =============================================
+//  GESTESCOLAR – PAINEL FINANCEIRO
+// =============================================
+
+Router.register('fin-dashboard', () => {
+  const user = Auth.require(); if (!user) return;
+  const invoices = DB.getInvoices();
+  const expenses = DB.getExpenses();
+  const balance  = DB.getBalance();
+
+  const totalReceivable = invoices.filter(i => i.status === 'pendente').reduce((s, i) => s + i.amount, 0);
+  const totalPaid       = invoices.filter(i => i.status === 'pago').reduce((s, i) => s + i.amount, 0);
+  const totalPending    = expenses.filter(e => e.status === 'pendente').reduce((s, e) => s + e.amount, 0);
+  const dueSoon         = invoices.filter(i => i.status === 'pendente' && Utils.isDueSoon(i.dueDate));
+  const overdue         = invoices.filter(i => i.status === 'pendente' && Utils.isOverdue(i.dueDate));
+
+  const content = `
+    <h2 style="margin-bottom:20px;">Painel Financeiro</h2>
+    ${dueSoon.length > 0 ? `
+      <div class="alert alert-warning">
+        <i class="fa-solid fa-bell"></i>
+        <strong>${dueSoon.length} boleto(s)</strong> com vencimento nos próximos 5 dias.
+        O sistema enviará notificações automáticas para os responsáveis.
+      </div>` : ''}
+    ${overdue.length > 0 ? `
+      <div class="alert alert-danger">
+        <i class="fa-solid fa-triangle-exclamation"></i>
+        <strong>${overdue.length} boleto(s) vencido(s)</strong> aguardando regularização.
+      </div>` : ''}
+
+    <div class="financial-summary">
+      <div class="fin-card saldo">
+        <div class="fin-card-label">Saldo em Conta</div>
+        <div class="fin-card-value">${Utils.currency(balance.amount)}</div>
+        <div class="fin-card-sub">Disponível para resgate</div>
+      </div>
+      <div class="fin-card receber">
+        <div class="fin-card-label">A Receber</div>
+        <div class="fin-card-value">${Utils.currency(totalReceivable)}</div>
+        <div class="fin-card-sub">${invoices.filter(i=>i.status==='pendente').length} boleto(s) pendente(s)</div>
+      </div>
+      <div class="fin-card pagar">
+        <div class="fin-card-label">A Pagar</div>
+        <div class="fin-card-value">${Utils.currency(totalPending)}</div>
+        <div class="fin-card-sub">${expenses.filter(e=>e.status==='pendente').length} conta(s) pendente(s)</div>
+      </div>
+      <div class="fin-card taxa">
+        <div class="fin-card-label">Recebido no Mês</div>
+        <div class="fin-card-value">${Utils.currency(totalPaid)}</div>
+        <div class="fin-card-sub">${invoices.filter(i=>i.status==='pago').length} pagamento(s)</div>
+      </div>
+    </div>
+
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;">
+      <div class="card">
+        <div class="card-header">
+          <span class="card-title">Últimas Transações</span>
+          <button class="btn btn-outline btn-sm" onclick="Router.go('fin-balance')">Ver saldo</button>
+        </div>
+        ${balance.transactions.slice(0,5).map(t => `
+          <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid #f0f0f0;">
+            <div>
+              <div style="font-size:13.5px;font-weight:600;">${Utils.escape(t.description)}</div>
+              <div class="text-muted">${Utils.datetime(t.date)}</div>
+            </div>
+            <div style="font-weight:700;color:${t.type==='credit'?'var(--secondary)':'var(--danger)'};">
+              ${t.type==='credit'?'+':''}${Utils.currency(t.netAmount)}
+            </div>
+          </div>`).join('')}
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <span class="card-title">Próximos Vencimentos</span>
+          <button class="btn btn-outline btn-sm" onclick="Router.go('fin-expenses')">Ver contas</button>
+        </div>
+        ${expenses.filter(e=>e.status==='pendente').slice(0,5).map(e => {
+          const cat = Utils.expenseCategory(e.category);
+          const soon = Utils.isDueSoon(e.dueDate);
+          return `
+            <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid #f0f0f0;">
+              <div style="display:flex;align-items:center;gap:10px;">
+                <span class="badge badge-${cat.color}"><i class="fa-solid ${cat.icon}"></i></span>
+                <div>
+                  <div style="font-size:13.5px;font-weight:600;">${Utils.escape(e.description)}</div>
+                  <div class="text-muted">Vence: ${Utils.date(e.dueDate)} ${soon?'<span class="badge badge-red">Urgente</span>':''}</div>
+                </div>
+              </div>
+              <strong>${Utils.currency(e.amount)}</strong>
+            </div>`;
+        }).join('')}
+      </div>
+    </div>
+  `;
+  Router.renderLayout(user, 'fin-dashboard', content);
+});
+
+// --- Boletos ---
+Router.register('fin-invoices', () => {
+  const user = Auth.require(); if (!user) return;
+
+  const renderInvoices = (filter = 'todos') => {
+    let invoices = DB.getInvoices();
+    if (filter !== 'todos') invoices = invoices.filter(i => i.status === filter);
+
+    return `
+      <div class="card">
+        <div class="card-header">
+          <span class="card-title"><i class="fa-solid fa-file-invoice"></i> Boletos</span>
+          <div style="display:flex;gap:8px;">
+            <button class="btn btn-outline btn-sm" onclick="FinInvoices.generate()">
+              <i class="fa-solid fa-plus"></i> Gerar Boleto
+            </button>
+          </div>
+        </div>
+        <div class="tabs">
+          <button class="tab-btn ${filter==='todos'?'active':''}"    onclick="window._renderInv('todos')">Todos</button>
+          <button class="tab-btn ${filter==='pendente'?'active':''}" onclick="window._renderInv('pendente')">Pendentes</button>
+          <button class="tab-btn ${filter==='pago'?'active':''}"     onclick="window._renderInv('pago')">Pagos</button>
+          <button class="tab-btn ${filter==='vencido'?'active':''}"  onclick="window._renderInv('vencido')">Vencidos</button>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr><th>Aluno</th><th>Descrição</th><th>Valor</th><th>Vencimento</th><th>Status</th><th>Ações</th></tr>
+            </thead>
+            <tbody>
+              ${invoices.length === 0 ? `<tr><td colspan="6"><div class="empty-state"><i class="fa-solid fa-file-invoice"></i><p>Nenhum boleto encontrado</p></div></td></tr>` :
+                invoices.map(inv => {
+                  const soon    = inv.status === 'pendente' && Utils.isDueSoon(inv.dueDate);
+                  const overdue = inv.status === 'pendente' && Utils.isOverdue(inv.dueDate);
+                  const status  = overdue ? 'vencido' : inv.status;
+                  return `<tr ${soon?'style="background:#fffde7"':''}>
+                    <td><strong>${Utils.escape(inv.studentName)}</strong></td>
+                    <td>${Utils.escape(inv.description)} ${soon?'<span class="badge badge-yellow">Vence em breve</span>':''}</td>
+                    <td><strong>${Utils.currency(inv.amount)}</strong></td>
+                    <td>${Utils.date(inv.dueDate)}</td>
+                    <td>${Utils.statusBadge(status)}</td>
+                    <td>
+                      ${inv.status==='pendente'?`
+                        <button class="btn btn-secondary btn-sm" onclick="FinInvoices.markPaid('${inv.id}')">
+                          <i class="fa-solid fa-check"></i> Pago
+                        </button>
+                        <button class="btn btn-outline btn-sm" onclick="FinInvoices.sendReminder('${inv.id}')">
+                          <i class="fa-solid fa-paper-plane"></i>
+                        </button>`:
+                        `<span class="text-muted">–</span>`}
+                    </td>
+                  </tr>`;
+                }).join('')}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    `;
+  };
+
+  window._renderInv = (filter) => {
+    document.getElementById('page-content').innerHTML = renderInvoices(filter);
+  };
+
+  Router.renderLayout(user, 'fin-invoices', renderInvoices());
+});
+
+const FinInvoices = {
+  generate() {
+    const students = DB.getStudents();
+    Utils.modal(
+      'Gerar Boleto',
+      `<form id="invForm">
+        <div class="form-group"><label class="form-label">Aluno *</label>
+          <select class="form-control" id="invStudent" required>
+            <option value="">Selecione</option>
+            ${students.map(s => `<option value="${s.id}" data-fee="${s.monthlyFee}" data-due="${s.dueDay}">${Utils.escape(s.name)}</option>`).join('')}
+          </select></div>
+        <div class="form-group"><label class="form-label">Descrição *</label>
+          <input class="form-control" id="invDesc" placeholder="Ex: Mensalidade Abril/2026" required /></div>
+        <div class="form-row">
+          <div class="form-group"><label class="form-label">Valor (R$) *</label>
+            <input type="number" class="form-control" id="invAmount" min="0" step="0.01" required /></div>
+          <div class="form-group"><label class="form-label">Vencimento *</label>
+            <input type="date" class="form-control" id="invDue" required /></div>
+        </div>
+      </form>`,
+      `<button class="btn btn-outline" onclick="this.closest('.modal-overlay').remove()">Cancelar</button>
+       <button class="btn btn-primary" onclick="FinInvoices.save()"><i class="fa-solid fa-floppy-disk"></i> Gerar</button>`
+    );
+    document.getElementById('invStudent').addEventListener('change', function() {
+      const opt = this.options[this.selectedIndex];
+      document.getElementById('invAmount').value = opt.dataset.fee || '';
+      const day = opt.dataset.due;
+      if (day) {
+        const d = new Date();
+        d.setDate(parseInt(day));
+        document.getElementById('invDue').value = d.toISOString().split('T')[0];
+      }
+    });
+  },
+  save() {
+    const sEl = document.getElementById('invStudent');
+    const student = DB.getStudents().find(s => s.id === sEl.value);
+    if (!student) { Utils.toast('Selecione um aluno.','error'); return; }
+    DB.addInvoice({
+      studentId:   student.id,
+      studentName: student.name,
+      description: document.getElementById('invDesc').value,
+      amount:      parseFloat(document.getElementById('invAmount').value),
+      dueDate:     document.getElementById('invDue').value,
+    });
+    Utils.toast('Boleto gerado com sucesso!','success');
+    document.querySelector('.modal-overlay')?.remove();
+    window._renderInv?.('todos');
+  },
+  markPaid(id) {
+    const inv = DB.getInvoices().find(i => i.id === id);
+    if (!inv) return;
+    DB.updateInvoice(id, { status: 'pago', paidAt: new Date().toISOString() });
+    DB.addTransaction('credit', inv.amount, `Recebimento – ${inv.studentName} – ${inv.description}`);
+    Utils.toast('Boleto marcado como pago! Saldo atualizado.','success');
+    window._renderInv?.('todos');
+  },
+  sendReminder(id) {
+    const inv = DB.getInvoices().find(i => i.id === id);
+    Utils.toast(`Lembrete enviado para ${inv.studentName}!`,'info');
+  }
+};
+
+// --- Contas a Pagar ---
+Router.register('fin-expenses', () => {
+  const user = Auth.require(); if (!user) return;
+
+  const renderExpenses = () => {
+    const expenses = DB.getExpenses();
+    const pending  = expenses.filter(e => e.status === 'pendente');
+    const paid     = expenses.filter(e => e.status === 'pago');
+
+    return `
+      <div class="card">
+        <div class="card-header">
+          <span class="card-title"><i class="fa-solid fa-credit-card"></i> Contas a Pagar</span>
+          <button class="btn btn-primary btn-sm" onclick="FinExpenses.openNew()">
+            <i class="fa-solid fa-plus"></i> Nova Despesa
+          </button>
+        </div>
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-bottom:20px;">
+          ${['agua','luz','salario','imposto','outros'].map(cat => {
+            const info    = Utils.expenseCategory(cat);
+            const catExps = expenses.filter(e => e.category === cat && e.status === 'pendente');
+            const total   = catExps.reduce((s,e) => s+e.amount, 0);
+            return `<div class="fin-card" style="border-top-color:var(--primary);">
+              <div class="fin-card-label"><i class="fa-solid ${info.icon}"></i> ${info.label}</div>
+              <div class="fin-card-value" style="font-size:18px;">${Utils.currency(total)}</div>
+              <div class="fin-card-sub">${catExps.length} pendente(s)</div>
+            </div>`;
+          }).join('')}
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr><th>Categoria</th><th>Descrição</th><th>Valor</th><th>Vencimento</th><th>Status</th><th>Ações</th></tr>
+            </thead>
+            <tbody>
+              ${expenses.length === 0 ? `<tr><td colspan="6"><div class="empty-state"><i class="fa-solid fa-credit-card"></i><p>Nenhuma despesa cadastrada</p></div></td></tr>` :
+                expenses.map(e => {
+                  const cat  = Utils.expenseCategory(e.category);
+                  const soon = e.status === 'pendente' && Utils.isDueSoon(e.dueDate);
+                  return `<tr ${soon?'style="background:#fffde7"':''}>
+                    <td><span class="badge badge-${cat.color}"><i class="fa-solid ${cat.icon}"></i> ${cat.label}</span></td>
+                    <td>${Utils.escape(e.description)} ${soon?'<span class="badge badge-red">Urgente</span>':''}</td>
+                    <td><strong>${Utils.currency(e.amount)}</strong></td>
+                    <td>${Utils.date(e.dueDate)}</td>
+                    <td>${Utils.statusBadge(e.status)}</td>
+                    <td>
+                      ${e.status==='pendente'?`
+                        <button class="btn btn-secondary btn-sm" onclick="FinExpenses.markPaid('${e.id}')">
+                          <i class="fa-solid fa-check"></i> Pago
+                        </button>
+                        <button class="btn btn-danger btn-sm" onclick="FinExpenses.remove('${e.id}')">
+                          <i class="fa-solid fa-trash"></i>
+                        </button>` : `<span class="text-muted">Pago em ${Utils.date(e.paidAt)}</span>`}
+                    </td>
+                  </tr>`;
+                }).join('')}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    `;
+  };
+
+  Router.renderLayout(user, 'fin-expenses', renderExpenses());
+  window._reloadExpenses = () => {
+    document.getElementById('page-content').innerHTML = renderExpenses();
+  };
+});
+
+const FinExpenses = {
+  openNew() {
+    Utils.modal(
+      'Nova Despesa',
+      `<form id="expForm">
+        <div class="form-group"><label class="form-label">Categoria *</label>
+          <select class="form-control" id="expCat" required>
+            <option value="agua">Água</option>
+            <option value="luz">Energia Elétrica</option>
+            <option value="salario">Salários</option>
+            <option value="imposto">Impostos</option>
+            <option value="outros">Outros</option>
+          </select></div>
+        <div class="form-group"><label class="form-label">Descrição *</label>
+          <input class="form-control" id="expDesc" placeholder="Ex: Conta de água – Março/2026" required /></div>
+        <div class="form-row">
+          <div class="form-group"><label class="form-label">Valor (R$) *</label>
+            <input type="number" class="form-control" id="expAmount" min="0" step="0.01" required /></div>
+          <div class="form-group"><label class="form-label">Vencimento *</label>
+            <input type="date" class="form-control" id="expDue" required /></div>
+        </div>
+      </form>`,
+      `<button class="btn btn-outline" onclick="this.closest('.modal-overlay').remove()">Cancelar</button>
+       <button class="btn btn-primary" onclick="FinExpenses.save()"><i class="fa-solid fa-floppy-disk"></i> Salvar</button>`
+    );
+  },
+  save() {
+    const data = {
+      category:    document.getElementById('expCat').value,
+      description: document.getElementById('expDesc').value.trim(),
+      amount:      parseFloat(document.getElementById('expAmount').value),
+      dueDate:     document.getElementById('expDue').value,
+    };
+    if (!data.description || !data.amount || !data.dueDate) {
+      Utils.toast('Preencha todos os campos.','error'); return;
+    }
+    DB.addExpense(data);
+    Utils.toast('Despesa cadastrada!','success');
+    document.querySelector('.modal-overlay')?.remove();
+    window._reloadExpenses?.();
+  },
+  markPaid(id) {
+    const exp = DB.getExpenses().find(e => e.id === id);
+    DB.updateExpense(id, { status: 'pago', paidAt: new Date().toISOString() });
+    DB.addTransaction('debit', exp.amount, exp.description);
+    Utils.toast('Despesa marcada como paga. Saldo debitado.','success');
+    window._reloadExpenses?.();
+  },
+  remove(id) {
+    Utils.confirm('Excluir esta despesa?', () => {
+      DB.deleteExpense(id);
+      Utils.toast('Despesa removida.','success');
+      window._reloadExpenses?.();
+    });
+  }
+};
+
+// --- Saldo ---
+Router.register('fin-balance', () => {
+  const user = Auth.require(); if (!user) return;
+  const balance = DB.getBalance();
+  const content = `
+    <div class="card">
+      <div class="card-header">
+        <span class="card-title"><i class="fa-solid fa-piggy-bank"></i> Saldo da Escola</span>
+      </div>
+      <div style="text-align:center;padding:24px 0;border-bottom:1px solid var(--border);margin-bottom:20px;">
+        <div style="font-size:13px;color:var(--text-muted);font-weight:600;text-transform:uppercase;letter-spacing:.5px;">Saldo Disponível</div>
+        <div style="font-size:48px;font-weight:900;color:${balance.amount>=0?'var(--secondary)':'var(--danger)'};">${Utils.currency(balance.amount)}</div>
+        <div class="text-muted">* A taxa da plataforma (3-10%) já é descontada automaticamente via split de pagamento.</div>
+      </div>
+      <div class="card-title" style="margin-bottom:12px;">Extrato de Transações</div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Data</th><th>Descrição</th><th>Tipo</th><th>Valor</th><th>Líquido</th></tr></thead>
+          <tbody>
+            ${balance.transactions.map(t => `
+              <tr>
+                <td>${Utils.datetime(t.date)}</td>
+                <td>${Utils.escape(t.description)}</td>
+                <td>${t.type==='credit'?'<span class="badge badge-green">Crédito</span>':'<span class="badge badge-red">Débito</span>'}</td>
+                <td>${Utils.currency(t.amount)}</td>
+                <td style="font-weight:700;color:${t.netAmount>=0?'var(--secondary)':'var(--danger)'};">${Utils.currency(t.netAmount)}</td>
+              </tr>`).join('')}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  `;
+  Router.renderLayout(user, 'fin-balance', content);
+});
+// =============================================
+//  GESTESCOLAR – PAINEL DO PROFESSOR
+// =============================================
+
+Router.register('teacher-dashboard', () => {
+  const user = Auth.require(); if (!user) return;
+  const myClass = DB.getClasses().find(c => c.id === user.classId);
+  const students = myClass ? DB.getStudents().filter(s => s.classId === myClass.id) : [];
+  const today = new Date().toISOString().split('T')[0];
+  const todayAtt = DB.getAttendance().filter(a => a.date === today && students.some(s => s.id === a.studentId));
+  const messages = DB.getMessages().filter(m => m.fromUserId === user.id);
+
+  const content = `
+    <h2 style="margin-bottom:4px;">Olá, ${Utils.escape(user.name.split(' ')[0])}!</h2>
+    <p class="text-muted" style="margin-bottom:20px;">${myClass ? `Turma: ${Utils.escape(myClass.name)}` : 'Sem turma atribuída'}</p>
+    <div class="stats-grid">
+      <div class="stat-card">
+        <div class="stat-icon blue"><i class="fa-solid fa-users"></i></div>
+        <div>
+          <div class="stat-value">${students.length}</div>
+          <div class="stat-label">Alunos na turma</div>
+        </div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-icon green"><i class="fa-solid fa-clipboard-check"></i></div>
+        <div>
+          <div class="stat-value">${todayAtt.filter(a => a.status === 'presente').length}</div>
+          <div class="stat-label">Presentes hoje</div>
+        </div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-icon red"><i class="fa-solid fa-user-xmark"></i></div>
+        <div>
+          <div class="stat-value">${todayAtt.filter(a => a.status === 'falta').length}</div>
+          <div class="stat-label">Faltas hoje</div>
+        </div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-icon yellow"><i class="fa-solid fa-envelope"></i></div>
+        <div>
+          <div class="stat-value">${messages.length}</div>
+          <div class="stat-label">Mensagens enviadas</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-header">
+        <span class="card-title">Ações Rápidas</span>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;">
+        <button class="btn btn-primary" onclick="Router.go('teacher-attendance')">
+          <i class="fa-solid fa-clipboard-check"></i> Fazer Chamada
+        </button>
+        <button class="btn btn-secondary" onclick="Router.go('teacher-grades')">
+          <i class="fa-solid fa-star"></i> Lançar Notas
+        </button>
+        <button class="btn btn-outline" onclick="Router.go('teacher-messages')">
+          <i class="fa-solid fa-envelope"></i> Enviar Mensagem
+        </button>
+      </div>
+    </div>
+
+    ${students.length > 0 ? `
+    <div class="card">
+      <div class="card-header">
+        <span class="card-title">Lista de Alunos – ${myClass ? Utils.escape(myClass.name) : ''}</span>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Aluno</th><th>Presença Geral</th><th>Última Nota</th></tr></thead>
+          <tbody>
+            ${students.map(s => {
+              const pct    = Utils.attendancePercent(s.id);
+              const grades = DB.getStudentGrades(s.id);
+              const last   = grades.sort((a,b) => new Date(b.updatedAt)-new Date(a.updatedAt))[0];
+              return `<tr>
+                <td><strong>${Utils.escape(s.name)}</strong></td>
+                <td>
+                  <div style="display:flex;align-items:center;gap:8px;">
+                    <div class="progress-bar-wrap" style="flex:1;">
+                      <div class="progress-bar" style="width:${pct}%;background:${pct>=75?'var(--secondary)':pct>=50?'var(--warning)':'var(--danger)'};"></div>
+                    </div>
+                    <span style="font-weight:700;color:${pct>=75?'var(--secondary)':pct>=50?'#b06000':'var(--danger)'};">${pct}%</span>
+                  </div>
+                </td>
+                <td>${last ? `${last.subject}: <strong>${last.grade}</strong>` : '<span class="text-muted">–</span>'}</td>
+              </tr>`;
+            }).join('')}
+          </tbody>
+        </table>
+      </div>
+    </div>` : `<div class="card"><div class="empty-state"><i class="fa-solid fa-chalkboard"></i><p>Nenhuma turma atribuída. Contate o administrador.</p></div></div>`}
+  `;
+  Router.renderLayout(user, 'teacher-dashboard', content);
+});
+
+// --- Chamada ---
+Router.register('teacher-attendance', () => {
+  const user = Auth.require(); if (!user) return;
+  const myClass = DB.getClasses().find(c => c.id === user.classId);
+  const students = myClass ? DB.getStudents().filter(s => s.classId === myClass.id) : [];
+
+  const renderAttendance = (selectedDate) => {
+    const records = DB.getAttendance();
+    return `
+      <div class="card">
+        <div class="card-header">
+          <span class="card-title"><i class="fa-solid fa-clipboard-check"></i> Chamada – ${myClass ? Utils.escape(myClass.name) : 'Sem turma'}</span>
+          <div style="display:flex;gap:8px;align-items:center;">
+            <input type="date" class="form-control" id="attDate" value="${selectedDate}"
+                   style="width:auto;" onchange="window._renderAtt(this.value)" />
+            <button class="btn btn-primary btn-sm" onclick="TeacherAttendance.markAll('presente','${selectedDate}')">
+              Todos Presentes
+            </button>
+          </div>
+        </div>
+        ${students.length === 0 ? `<div class="empty-state"><i class="fa-solid fa-users"></i><p>Nenhum aluno na turma.</p></div>` : `
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr><th>#</th><th>Aluno</th><th>Presença Geral</th><th style="text-align:center">Marcar</th></tr>
+            </thead>
+            <tbody id="attTable">
+              ${students.map((s, i) => {
+                const rec = records.find(r => r.studentId === s.id && r.date === selectedDate);
+                const pct = Utils.attendancePercent(s.id);
+                return `<tr id="att-row-${s.id}">
+                  <td style="color:var(--text-muted);font-size:12px;">${i+1}</td>
+                  <td><strong>${Utils.escape(s.name)}</strong></td>
+                  <td>
+                    <div style="display:flex;align-items:center;gap:6px;">
+                      <div class="progress-bar-wrap" style="width:80px;">
+                        <div class="progress-bar" style="width:${pct}%;background:${pct>=75?'var(--secondary)':pct>=50?'var(--warning)':'var(--danger)'};"></div>
+                      </div>
+                      <span style="font-size:12px;font-weight:700;">${pct}%</span>
+                    </div>
+                  </td>
+                  <td style="text-align:center;">
+                    <div class="attendance-btns" style="justify-content:center;">
+                      <button class="btn btn-present btn-sm ${rec?.status==='presente'?'active':''}"
+                              id="btn-present-${s.id}"
+                              onclick="TeacherAttendance.mark('${s.id}','presente','${selectedDate}')">
+                        <i class="fa-solid fa-check"></i> Presente
+                      </button>
+                      <button class="btn btn-absent btn-sm ${rec?.status==='falta'?'active':''}"
+                              id="btn-absent-${s.id}"
+                              onclick="TeacherAttendance.mark('${s.id}','falta','${selectedDate}')">
+                        <i class="fa-solid fa-xmark"></i> Faltou
+                      </button>
+                    </div>
+                  </td>
+                </tr>`;
+              }).join('')}
+            </tbody>
+          </table>
+        </div>`}
+      </div>
+    `;
+  };
+
+  const today = new Date().toISOString().split('T')[0];
+  window._renderAtt = (date) => {
+    document.getElementById('page-content').innerHTML = renderAttendance(date);
+  };
+  Router.renderLayout(user, 'teacher-attendance', renderAttendance(today));
+});
+
+const TeacherAttendance = {
+  mark(studentId, status, date) {
+    const user = Auth.current();
+    DB.markAttendance(studentId, date, status, user.id);
+    // Atualizar botões
+    const btnP = document.getElementById(`btn-present-${studentId}`);
+    const btnA = document.getElementById(`btn-absent-${studentId}`);
+    if (btnP) btnP.classList.toggle('active', status === 'presente');
+    if (btnA) btnA.classList.toggle('active', status === 'falta');
+  },
+  markAll(status, date) {
+    const user     = Auth.current();
+    const myClass  = DB.getClasses().find(c => c.id === user.classId);
+    const students = myClass ? DB.getStudents().filter(s => s.classId === myClass.id) : [];
+    students.forEach(s => {
+      DB.markAttendance(s.id, date, status, user.id);
+      const btnP = document.getElementById(`btn-present-${s.id}`);
+      const btnA = document.getElementById(`btn-absent-${s.id}`);
+      if (btnP) btnP.classList.toggle('active', status === 'presente');
+      if (btnA) btnA.classList.toggle('active', status === 'falta');
+    });
+    Utils.toast(`Todos marcados como ${status}!`, 'success');
+  }
+};
+
+// --- Notas ---
+Router.register('teacher-grades', () => {
+  const user = Auth.require(); if (!user) return;
+  const myClass = DB.getClasses().find(c => c.id === user.classId);
+  const students = myClass ? DB.getStudents().filter(s => s.classId === myClass.id) : [];
+  const subjects = ['Matemática','Português','Ciências','História','Geografia','Artes','Educação Física'];
+  const periods  = ['Bimestre 1','Bimestre 2','Bimestre 3','Bimestre 4'];
+
+  const renderGrades = (period = 'Bimestre 1') => {
+    const grades = DB.getGrades();
+    return `
+      <div class="card">
+        <div class="card-header">
+          <span class="card-title"><i class="fa-solid fa-star"></i> Avaliações – ${myClass ? Utils.escape(myClass.name) : '–'}</span>
+          <select class="form-control" style="width:auto;" onchange="window._renderGrades(this.value)">
+            ${periods.map(p => `<option ${p===period?'selected':''}>${p}</option>`).join('')}
+          </select>
+        </div>
+        ${students.length === 0 ? `<div class="empty-state"><i class="fa-solid fa-star"></i><p>Nenhum aluno na turma.</p></div>` : `
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Aluno</th>
+                ${subjects.map(s => `<th style="text-align:center;">${s}</th>`).join('')}
+                <th style="text-align:center;">Média</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${students.map(s => {
+                const studentGrades = subjects.map(sub => {
+                  const g = grades.find(g => g.studentId === s.id && g.subject === sub && g.period === period);
+                  return g ? g.grade : null;
+                });
+                const validGrades = studentGrades.filter(g => g !== null);
+                const avg = validGrades.length ? (validGrades.reduce((a,b)=>a+b,0)/validGrades.length).toFixed(1) : null;
+                return `<tr>
+                  <td><strong>${Utils.escape(s.name)}</strong></td>
+                  ${subjects.map((sub, idx) => {
+                    const g = studentGrades[idx];
+                    const letter = g !== null ? Utils.gradeLabel(g) : '';
+                    return `<td style="text-align:center;">
+                      <div class="grade-badge grade-${letter || 'F'}" style="${g===null?'opacity:.3':''}"
+                           onclick="TeacherGrades.editGrade('${s.id}','${sub}','${period}','${g||''}')"
+                           title="Clique para editar"
+                           style="cursor:pointer;${g===null?'opacity:.3':''}">
+                        ${g !== null ? g : '–'}
+                      </div>
+                    </td>`;
+                  }).join('')}
+                  <td style="text-align:center;">
+                    ${avg !== null ? `<div class="grade-badge grade-${Utils.gradeLabel(parseFloat(avg))}">${avg}</div>` : '<span class="text-muted">–</span>'}
+                  </td>
+                </tr>`;
+              }).join('')}
+            </tbody>
+          </table>
+        </div>
+        <p class="text-muted mt-8">Clique em qualquer nota para editar.</p>`}
+      </div>
+    `;
+  };
+
+  window._renderGrades = (period) => {
+    document.getElementById('page-content').innerHTML = renderGrades(period);
+  };
+  Router.renderLayout(user, 'teacher-grades', renderGrades());
+});
+
+const TeacherGrades = {
+  editGrade(studentId, subject, period, current) {
+    const s = DB.getStudents().find(s => s.id === studentId);
+    const overlay = Utils.modal(
+      `Nota – ${s?.name || ''} – ${subject}`,
+      `<div class="form-group">
+        <label class="form-label">Período: ${period}</label>
+        <label class="form-label" style="margin-top:12px;">Nota (0 a 10) *</label>
+        <input type="number" class="form-control" id="gradeValue"
+               value="${current}" min="0" max="10" step="0.1" />
+      </div>`,
+      `<button class="btn btn-outline" onclick="this.closest('.modal-overlay').remove()">Cancelar</button>
+       <button class="btn btn-primary" onclick="TeacherGrades.save('${studentId}','${subject}','${period}')">
+         <i class="fa-solid fa-floppy-disk"></i> Salvar
+       </button>`
+    );
+  },
+  save(studentId, subject, period) {
+    const user  = Auth.current();
+    const value = parseFloat(document.getElementById('gradeValue').value);
+    if (isNaN(value) || value < 0 || value > 10) {
+      Utils.toast('Nota deve ser entre 0 e 10.','error'); return;
+    }
+    DB.setGrade(studentId, subject, period, value, user.id);
+    const s = DB.getStudents().find(s => s.id === studentId);
+    // Notificar pai
+    if (s?.parentId) {
+      DB.addMessage({
+        fromUserId: user.id,
+        fromName:   user.name + ' (Professor)',
+        toUserId:   s.parentId,
+        subject:    `Nota lançada – ${subject} – ${period}`,
+        text:       `Olá! A nota de ${s.name} em ${subject} (${period}) foi lançada: ${value}. ${value >= 7 ? 'Parabéns pelo desempenho!' : 'Encorajamos mais dedicação nos estudos.'}`
+      });
+    }
+    Utils.toast('Nota salva e responsável notificado!','success');
+    document.querySelector('.modal-overlay')?.remove();
+    const sel = document.querySelector('.page-content select');
+    window._renderGrades?.(sel?.value || 'Bimestre 1');
+  }
+};
+
+// --- Mensagens ---
+Router.register('teacher-messages', () => {
+  const user = Auth.require(); if (!user) return;
+  const myClass = DB.getClasses().find(c => c.id === user.classId);
+  const students = myClass ? DB.getStudents().filter(s => s.classId === myClass.id) : [];
+  const sent    = DB.getMessages().filter(m => m.fromUserId === user.id);
+
+  const content = `
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;">
+      <div class="card">
+        <div class="card-header">
+          <span class="card-title"><i class="fa-solid fa-paper-plane"></i> Enviar Mensagem</span>
+        </div>
+        <form id="msgForm" onsubmit="TeacherMessages.send(event)">
+          <div class="form-group">
+            <label class="form-label">Para (responsável do aluno)</label>
+            <select class="form-control" id="msgTo" required>
+              <option value="">Selecione o aluno</option>
+              ${students.map(s => `<option value="${s.id}">${Utils.escape(s.name)} (resp: ${Utils.escape(s.parentName||'–')})</option>`).join('')}
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Assunto *</label>
+            <input class="form-control" id="msgSubject" placeholder="Ex: Avaliação de Matemática" required />
+          </div>
+          <div class="form-group">
+            <label class="form-label">Mensagem *</label>
+            <textarea class="form-control" id="msgText" rows="5"
+                      placeholder="Escreva sua mensagem aqui..." required style="resize:vertical;"></textarea>
+          </div>
+          <button type="submit" class="btn btn-primary w-100">
+            <i class="fa-solid fa-paper-plane"></i> Enviar para o App do Responsável
+          </button>
+        </form>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <span class="card-title"><i class="fa-solid fa-history"></i> Histórico de Mensagens</span>
+        </div>
+        ${sent.length === 0 ? `<div class="empty-state"><i class="fa-solid fa-envelope"></i><p>Nenhuma mensagem enviada ainda.</p></div>` :
+          `<div class="msg-list">
+            ${sent.sort((a,b)=>new Date(b.sentAt)-new Date(a.sentAt)).map(m => {
+              const s = DB.getStudents().find(st => {
+                const parentUser = DB.getUsers().find(u => u.id === m.toUserId);
+                return st.parentId === m.toUserId;
+              });
+              return `<div class="msg-item">
+                <div class="msg-header">
+                  <span class="msg-from">${Utils.escape(m.subject)}</span>
+                  <span class="msg-date">${Utils.datetime(m.sentAt)}</span>
+                </div>
+                <div class="msg-text">${Utils.escape(m.text)}</div>
+              </div>`;
+            }).join('')}
+          </div>`}
+      </div>
+    </div>
+  `;
+  Router.renderLayout(user, 'teacher-messages', content);
+});
+
+const TeacherMessages = {
+  send(e) {
+    e.preventDefault();
+    const user      = Auth.current();
+    const studentId = document.getElementById('msgTo').value;
+    const student   = DB.getStudents().find(s => s.id === studentId);
+    if (!student) { Utils.toast('Selecione um aluno.','error'); return; }
+    if (!student.parentId) { Utils.toast('Este aluno não possui responsável vinculado.','error'); return; }
+    DB.addMessage({
+      fromUserId: user.id,
+      fromName:   user.name + ' (Professor)',
+      toUserId:   student.parentId,
+      subject:    document.getElementById('msgSubject').value,
+      text:       document.getElementById('msgText').value,
+    });
+    Utils.toast(`Mensagem enviada para ${student.parentName}!`,'success');
+    document.getElementById('msgForm').reset();
+    Router.go('teacher-messages');
+  }
+};
+// =============================================
+//  GESTESCOLAR – PAINEL DO RESPONSÁVEL (PAI/MÃE)
+// =============================================
+
+Router.register('parent-dashboard', () => {
+  const user = Auth.require(); if (!user) return;
+  const student = DB.getStudents().find(s => s.id === user.studentId);
+  const messages = DB.getMessagesForUser(user.id);
+  const unread   = messages.filter(m => !m.read);
+
+  if (!student) {
+    Router.renderLayout(user, 'parent-dashboard', `
+      <div class="card"><div class="empty-state">
+        <i class="fa-solid fa-user-graduate"></i>
+        <p>Nenhum aluno vinculado à sua conta. Contate o administrador.</p>
+      </div></div>`);
+    return;
+  }
+
+  const cls     = DB.getClasses().find(c => c.id === student.classId);
+  const pct     = Utils.attendancePercent(student.id);
+  const grades  = DB.getStudentGrades(student.id);
+  const invoices= DB.getStudentInvoices(student.id);
+  const pending = invoices.filter(i => i.status === 'pendente');
+
+  const content = `
+    <div style="display:flex;align-items:center;gap:16px;margin-bottom:24px;">
+      <div class="stat-icon blue" style="width:60px;height:60px;font-size:28px;">
+        <i class="fa-solid fa-user-graduate"></i>
+      </div>
+      <div>
+        <h2 style="margin:0;">${Utils.escape(student.name)}</h2>
+        <div class="text-muted">${cls ? Utils.escape(cls.name) : '–'} · Matrícula desde ${Utils.date(student.enrolledAt)}</div>
+      </div>
+    </div>
+
+    ${unread.length > 0 ? `
+      <div class="alert alert-info">
+        <i class="fa-solid fa-bell"></i>
+        Você tem <strong>${unread.length} mensagem(ns) nova(s)</strong> do professor.
+        <a href="#" onclick="Router.go('parent-messages')">Ver agora</a>
+      </div>` : ''}
+
+    <div class="stats-grid">
+      <div class="stat-card">
+        <div class="stat-icon ${pct>=75?'green':pct>=50?'yellow':'red'}">
+          <i class="fa-solid fa-clipboard-check"></i>
+        </div>
+        <div>
+          <div class="stat-value">${pct}%</div>
+          <div class="stat-label">Frequência</div>
+        </div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-icon blue">
+          <i class="fa-solid fa-star"></i>
+        </div>
+        <div>
+          <div class="stat-value">${grades.length}</div>
+          <div class="stat-label">Avaliações lançadas</div>
+        </div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-icon ${pending.length>0?'red':'green'}">
+          <i class="fa-solid fa-file-invoice"></i>
+        </div>
+        <div>
+          <div class="stat-value">${pending.length}</div>
+          <div class="stat-label">Boleto(s) pendente(s)</div>
+        </div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-icon yellow">
+          <i class="fa-solid fa-envelope"></i>
+        </div>
+        <div>
+          <div class="stat-value">${unread.length}</div>
+          <div class="stat-label">Mensagens não lidas</div>
+        </div>
+      </div>
+    </div>
+
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;">
+      <div class="card">
+        <div class="card-header">
+          <span class="card-title">Últimas Notas</span>
+          <button class="btn btn-outline btn-sm" onclick="Router.go('parent-grades')">Ver boletim</button>
+        </div>
+        ${grades.length === 0 ? `<div class="empty-state"><i class="fa-solid fa-star"></i><p>Nenhuma nota lançada ainda.</p></div>` :
+          grades.slice(0,5).map(g => {
+            const letter = Utils.gradeLabel(g.grade);
+            return `<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid #f0f0f0;">
+              <div>
+                <div style="font-weight:600;">${Utils.escape(g.subject)}</div>
+                <div class="text-muted">${g.period}</div>
+              </div>
+              <div class="grade-badge grade-${letter}">${g.grade}</div>
+            </div>`;
+          }).join('')}
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <span class="card-title">Boletos</span>
+          <button class="btn btn-outline btn-sm" onclick="Router.go('parent-invoices')">Ver todos</button>
+        </div>
+        ${pending.length === 0 ? `
+          <div class="alert alert-success"><i class="fa-solid fa-check-circle"></i> Sem boletos pendentes!</div>` :
+          pending.map(inv => `
+            <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid #f0f0f0;">
+              <div>
+                <div style="font-weight:600;">${Utils.escape(inv.description)}</div>
+                <div class="text-muted">Vence: ${Utils.date(inv.dueDate)}</div>
+              </div>
+              <div>
+                <strong>${Utils.currency(inv.amount)}</strong>
+                <button class="btn btn-primary btn-sm" style="margin-left:8px;" onclick="ParentInvoices.payPix('${inv.id}')">
+                  PIX
+                </button>
+              </div>
+            </div>`).join('')}
+      </div>
+    </div>
+  `;
+  Router.renderLayout(user, 'parent-dashboard', content);
+});
+
+// --- Presenças ---
+Router.register('parent-attendance', () => {
+  const user = Auth.require(); if (!user) return;
+  const student   = DB.getStudents().find(s => s.id === user.studentId);
+  if (!student) { Router.renderLayout(user, 'parent-attendance', `<div class="card"><div class="empty-state"><i class="fa-solid fa-user-graduate"></i><p>Nenhum aluno vinculado.</p></div></div>`); return; }
+
+  const records = DB.getStudentAttendance(student.id).sort((a,b) => b.date.localeCompare(a.date));
+  const total   = records.length;
+  const present = records.filter(r => r.status === 'presente').length;
+  const absent  = total - present;
+  const pct     = total ? Math.round((present/total)*100) : 0;
+
+  const content = `
+    <div class="card">
+      <div class="card-header">
+        <span class="card-title"><i class="fa-solid fa-clipboard-check"></i> Presenças – ${Utils.escape(student.name)}</span>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-bottom:20px;">
+        <div class="fin-card" style="border-top:4px solid var(--secondary);">
+          <div class="fin-card-label">Total de Aulas</div>
+          <div class="fin-card-value" style="font-size:28px;">${total}</div>
+        </div>
+        <div class="fin-card" style="border-top:4px solid var(--secondary);">
+          <div class="fin-card-label">Presenças</div>
+          <div class="fin-card-value" style="font-size:28px;color:var(--secondary);">${present}</div>
+        </div>
+        <div class="fin-card" style="border-top:4px solid var(--danger);">
+          <div class="fin-card-label">Faltas</div>
+          <div class="fin-card-value" style="font-size:28px;color:var(--danger);">${absent}</div>
+        </div>
+      </div>
+
+      <div style="margin-bottom:20px;">
+        <div style="display:flex;justify-content:space-between;margin-bottom:6px;">
+          <span style="font-weight:600;">Frequência</span>
+          <span style="font-weight:800;color:${pct>=75?'var(--secondary)':pct>=50?'#b06000':'var(--danger)'};">${pct}%</span>
+        </div>
+        <div class="progress-bar-wrap" style="height:12px;border-radius:20px;">
+          <div class="progress-bar" style="width:${pct}%;height:12px;background:${pct>=75?'var(--secondary)':pct>=50?'var(--warning)':'var(--danger)'};"></div>
+        </div>
+        ${pct < 75 ? `<div class="alert alert-warning mt-8"><i class="fa-solid fa-triangle-exclamation"></i> Frequência abaixo de 75%. Atenção: o mínimo exigido é 75%.</div>` : ''}
+      </div>
+
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Data</th><th>Status</th></tr></thead>
+          <tbody>
+            ${records.length === 0 ? `<tr><td colspan="2"><div class="empty-state"><i class="fa-solid fa-clipboard"></i><p>Nenhum registro de presença.</p></div></td></tr>` :
+              records.map(r => `<tr>
+                <td>${Utils.date(r.date)}</td>
+                <td>${Utils.statusBadge(r.status)}</td>
+              </tr>`).join('')}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  `;
+  Router.renderLayout(user, 'parent-attendance', content);
+});
+
+// --- Boletim ---
+Router.register('parent-grades', () => {
+  const user = Auth.require(); if (!user) return;
+  const student = DB.getStudents().find(s => s.id === user.studentId);
+  if (!student) { Router.renderLayout(user, 'parent-grades', `<div class="card"><div class="empty-state"><i class="fa-solid fa-user-graduate"></i><p>Nenhum aluno vinculado.</p></div></div>`); return; }
+
+  const grades   = DB.getStudentGrades(student.id);
+  const subjects = [...new Set(grades.map(g => g.subject))];
+  const periods  = ['Bimestre 1','Bimestre 2','Bimestre 3','Bimestre 4'];
+
+  const content = `
+    <div class="card">
+      <div class="card-header">
+        <span class="card-title"><i class="fa-solid fa-star"></i> Boletim Escolar – ${Utils.escape(student.name)}</span>
+      </div>
+      ${subjects.length === 0 ? `<div class="empty-state"><i class="fa-solid fa-star"></i><p>Nenhuma nota lançada ainda.</p></div>` : `
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Disciplina</th>
+              ${periods.map(p => `<th style="text-align:center;">${p}</th>`).join('')}
+              <th style="text-align:center;">Média Final</th>
+              <th style="text-align:center;">Situação</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${subjects.map(sub => {
+              const periodGrades = periods.map(p => {
+                const g = grades.find(g => g.subject === sub && g.period === p);
+                return g ? g.grade : null;
+              });
+              const valid = periodGrades.filter(g => g !== null);
+              const avg   = valid.length ? (valid.reduce((a,b)=>a+b,0)/valid.length) : null;
+              const letter= avg !== null ? Utils.gradeLabel(avg) : '';
+              return `<tr>
+                <td><strong>${Utils.escape(sub)}</strong></td>
+                ${periodGrades.map(g => `<td style="text-align:center;">
+                  ${g !== null ? `<div class="grade-badge grade-${Utils.gradeLabel(g)}">${g}</div>` : '<span class="text-muted">–</span>'}
+                </td>`).join('')}
+                <td style="text-align:center;">
+                  ${avg !== null ? `<div class="grade-badge grade-${letter}">${avg.toFixed(1)}</div>` : '<span class="text-muted">–</span>'}
+                </td>
+                <td style="text-align:center;">
+                  ${avg !== null ? (avg >= 7 ? `<span class="badge badge-green">Aprovado</span>` : avg >= 5 ? `<span class="badge badge-yellow">Recuperação</span>` : `<span class="badge badge-red">Reprovado</span>`) : '<span class="text-muted">–</span>'}
+                </td>
+              </tr>`;
+            }).join('')}
+          </tbody>
+        </table>
+      </div>`}
+    </div>
+  `;
+  Router.renderLayout(user, 'parent-grades', content);
+});
+
+// --- Pagamentos (próximo + pendentes + pagos) ---
+Router.register('parent-invoices', async () => {
+  const user = Auth.require(); if (!user) return;
+  const student  = DB.getStudents().find(s => s.id === user.studentId);
+  if (!student) { Router.renderLayout(user, 'parent-invoices', `<div class="card"><div class="empty-state"><i class="fa-solid fa-user-graduate"></i><p>Nenhum aluno vinculado.</p></div></div>`); return; }
+
+  // Sincroniza com o Supabase para pegar pagamentos confirmados pelo webhook
+  await DB.refreshInvoices?.();
+
+  const invoices = DB.getStudentInvoices(student.id);
+  const today      = new Date();
+  const year       = today.getFullYear();
+  const monthIdx   = today.getMonth();
+  const monthKey   = `${year}-${String(monthIdx + 1).padStart(2, '0')}`;
+  const MONTHS     = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
+
+  const proximoPagamento = invoices.find(i => i.dueDate && i.dueDate.startsWith(monthKey) && i.status !== 'pago');
+
+  const pendentes = invoices
+    .filter(i => i.status !== 'pago' && i.dueDate && !i.dueDate.startsWith(monthKey))
+    .sort((a, b) => new Date(a.dueDate) - new Date(b.dueDate));
+
+  const pagos = invoices
+    .filter(i => i.status === 'pago')
+    .sort((a, b) => new Date(b.paidAt || b.dueDate) - new Date(a.paidAt || a.dueDate));
+
+  function monthLabel(dateStr) {
+    if (!dateStr) return '–';
+    const [y, m] = dateStr.split('-');
+    return `${MONTHS[parseInt(m, 10) - 1]} / ${y}`;
+  }
+
+  function pendingRow(inv) {
+    const overdue = Utils.isOverdue(inv.dueDate);
+    const color = overdue ? 'var(--danger)' : '#f9a825';
+    const bg    = overdue ? '#fdecea' : '#fff8e1';
+    const icon  = overdue ? 'fa-triangle-exclamation' : 'fa-clock';
+    const label = overdue ? 'Vencido' : 'Pendente';
+    return `<div style="display:flex;align-items:center;gap:12px;padding:14px 16px;
+        border:1px solid ${color};border-radius:var(--radius);background:${bg};margin-bottom:8px;">
+      <div style="flex:0 0 140px;">
+        <div style="font-size:11px;color:var(--text-muted);margin-bottom:2px;">Mês de referência</div>
+        <div style="font-weight:700;font-size:15px;">${monthLabel(inv.dueDate)}</div>
+      </div>
+      <div style="flex:1;">
+        <div style="font-size:11px;color:var(--text-muted);margin-bottom:2px;">Descrição</div>
+        <div style="font-weight:600;">${Utils.escape(inv.description || '–')}</div>
+        <div style="font-size:12px;color:var(--text-muted);">Vencimento: ${Utils.date(inv.dueDate)}</div>
+      </div>
+      <div style="flex:0 0 110px;text-align:right;">
+        <div style="font-size:11px;color:var(--text-muted);margin-bottom:2px;">Valor</div>
+        <div style="font-weight:800;font-size:18px;color:var(--primary);">${Utils.currency(inv.amount)}</div>
+      </div>
+      <div style="flex:0 0 120px;text-align:center;">
+        <span style="display:inline-flex;align-items:center;gap:5px;font-size:13px;font-weight:700;color:${color};">
+          <i class="fa-solid ${icon}"></i> ${label}
+        </span>
+      </div>
+      <div style="flex:0 0 180px;text-align:right;">
+        <button class="btn btn-primary btn-sm" onclick="ParentInvoices.payPix('${inv.id}')">
+          <i class="fa-solid fa-qrcode"></i> Gerar PIX
+        </button>
+      </div>
+    </div>`;
+  }
+
+  function paidRow(inv) {
+    return `<div style="display:flex;align-items:center;gap:12px;padding:14px 16px;
+        border:1px solid var(--secondary);border-radius:var(--radius);background:#e6f4ea;margin-bottom:8px;">
+      <div style="flex:0 0 140px;">
+        <div style="font-size:11px;color:var(--text-muted);margin-bottom:2px;">Mês de referência</div>
+        <div style="font-weight:700;font-size:15px;">${monthLabel(inv.dueDate)}</div>
+      </div>
+      <div style="flex:1;">
+        <div style="font-size:11px;color:var(--text-muted);margin-bottom:2px;">Descrição</div>
+        <div style="font-weight:600;">${Utils.escape(inv.description || '–')}</div>
+        <div style="font-size:12px;color:var(--text-muted);">Pago em ${Utils.date(inv.paidAt || inv.dueDate)}</div>
+      </div>
+      <div style="flex:0 0 110px;text-align:right;">
+        <div style="font-size:11px;color:var(--text-muted);margin-bottom:2px;">Valor</div>
+        <div style="font-weight:800;font-size:18px;color:var(--secondary);">${Utils.currency(inv.amount)}</div>
+      </div>
+      <div style="flex:0 0 120px;text-align:center;">
+        <span style="display:inline-flex;align-items:center;gap:5px;font-size:13px;font-weight:700;color:var(--secondary);">
+          <i class="fa-solid fa-circle-check"></i> Pago
+        </span>
+      </div>
+      <div style="flex:0 0 180px;text-align:right;">
+        <button class="btn btn-outline btn-sm" onclick="ParentInvoices.emitirRecibo('${inv.id}')">
+          <i class="fa-solid fa-receipt"></i> Emitir Nota
+        </button>
+      </div>
+    </div>`;
+  }
+
+  const proximoBox = proximoPagamento ? `
+    <div style="background:linear-gradient(135deg,#1a73e8 0%,#34a853 100%);border-radius:var(--radius);
+                padding:20px 24px;margin-bottom:20px;color:#fff;box-shadow:var(--shadow);">
+      <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:16px;">
+        <div>
+          <div style="font-size:12px;opacity:.9;text-transform:uppercase;letter-spacing:.5px;font-weight:700;margin-bottom:4px;">
+            <i class="fa-solid fa-bolt"></i> Próximo Pagamento
+          </div>
+          <div style="font-size:20px;font-weight:800;">${monthLabel(proximoPagamento.dueDate)}</div>
+          <div style="font-size:13px;opacity:.9;margin-top:2px;">${Utils.escape(proximoPagamento.description || '')}</div>
+          <div style="font-size:12px;opacity:.85;margin-top:4px;">
+            <i class="fa-solid fa-calendar"></i> Vencimento: ${Utils.date(proximoPagamento.dueDate)}
+          </div>
+        </div>
+        <div style="text-align:right;">
+          <div style="font-size:32px;font-weight:900;line-height:1;">${Utils.currency(proximoPagamento.amount)}</div>
+          <button class="btn btn-sm" style="background:#fff;color:#1a73e8;border:none;font-weight:700;margin-top:10px;"
+                  onclick="ParentInvoices.payPix('${proximoPagamento.id}')">
+            <i class="fa-solid fa-qrcode"></i> Pagar via PIX agora
+          </button>
+        </div>
+      </div>
+    </div>
+  ` : `
+    <div style="background:#e6f4ea;border:1px solid var(--secondary);border-radius:var(--radius);
+                padding:16px 20px;margin-bottom:20px;color:var(--secondary);">
+      <div style="font-size:12px;text-transform:uppercase;letter-spacing:.5px;font-weight:700;margin-bottom:4px;">
+        <i class="fa-solid fa-bolt"></i> Próximo Pagamento
+      </div>
+      <div style="font-size:14px;font-weight:600;">
+        <i class="fa-solid fa-circle-check"></i> Sem pagamento pendente para ${MONTHS[monthIdx]} / ${year}
+      </div>
+    </div>
+  `;
+
+  Router.renderLayout(user, 'parent-invoices', `
+    <div style="display:flex;flex-direction:column;gap:16px;">
+      ${proximoBox}
+      ${pendentes.length > 0 ? `
+        <div class="card">
+          <div class="card-header">
+            <span class="card-title"><i class="fa-solid fa-clock"></i> Pagamentos pendentes (${pendentes.length})</span>
+          </div>
+          <div style="padding:8px 0;">${pendentes.map(pendingRow).join('')}</div>
+        </div>
+      ` : ''}
+      ${pagos.length > 0 ? `
+        <div class="card">
+          <div class="card-header">
+            <span class="card-title"><i class="fa-solid fa-circle-check"></i> Pagamentos realizados (${pagos.length})</span>
+          </div>
+          <div style="padding:8px 0;">${pagos.map(paidRow).join('')}</div>
+        </div>
+      ` : ''}
+      ${pendentes.length === 0 && pagos.length === 0 && !proximoPagamento ? `
+        <div class="card">
+          <div class="empty-state">
+            <i class="fa-solid fa-file-invoice"></i>
+            <p>Nenhuma cobrança encontrada para ${Utils.escape(student.name)}.</p>
+          </div>
+        </div>
+      ` : ''}
+    </div>
+  `);
+});
+
+const ParentInvoices = {
+  _pollTimer: null,
+
+  async payPix(invId) {
+    const inv = DB.getInvoices().find(i => i.id === invId);
+    if (!inv) return;
+
+    // Se já tem cobrança Asaas, tentar buscar QR existente
+    if (inv.asaasId) {
+      Utils.toast('Buscando QR Code...', 'info');
+      const qr = await AsaasClient.getPixQrCode(inv.asaasId);
+      if (qr && qr.payload) {
+        this._showPixModal(inv, qr.payload, qr.encodedImage);
+        this._startPaymentPolling(inv);
+        return;
+      }
+      // QR existente inválido — limpa e regenera
+      DB.updateInvoice(invId, { asaasId: null });
+    }
+
+    // Gerar nova cobrança Asaas
+    const student = DB.getStudents().find(s => s.id === inv.studentId);
+    const school = DB.getSchool(DB._schoolId);
+    if (!student) { Utils.toast('Aluno não encontrado.', 'error'); return; }
+    if (!school) { Utils.toast('Escola não encontrada.', 'error'); return; }
+
+    Utils.toast('Gerando cobrança PIX...', 'info');
+    const result = await AsaasClient.chargeInvoice(inv, student, school);
+    if (!result) return; // erro já foi exibido pelo chargeInvoice
+
+    const updated = DB.getInvoices().find(i => i.id === invId);
+    this._showPixModal(updated, result.pixCopiaECola, result.pixQrCodeBase64);
+    this._startPaymentPolling(updated);
+  },
+
+  // Polling: a cada 5s verifica se o pagamento foi confirmado no Asaas.
+  _startPaymentPolling(inv) {
+    if (this._pollTimer) clearInterval(this._pollTimer);
+    if (!inv.asaasId) return;
+    let tries = 0;
+    const maxTries = 60; // 5 minutos
+    this._pollTimer = setInterval(async () => {
+      tries++;
+      if (tries > maxTries || !document.querySelector('.modal-overlay')) {
+        clearInterval(this._pollTimer);
+        this._pollTimer = null;
+        return;
+      }
+      try {
+        const payment = await AsaasClient.getPayment(inv.asaasId);
+        if (payment && (payment.status === 'RECEIVED' || payment.status === 'CONFIRMED')) {
+          clearInterval(this._pollTimer);
+          this._pollTimer = null;
+          DB.updateInvoice(inv.id, {
+            status: 'pago',
+            paidAt: payment.confirmedDate || payment.paymentDate || new Date().toISOString(),
+          });
+          await DB.refreshInvoices?.();
+          document.querySelector('.modal-overlay')?.remove();
+          Utils.toast('Pagamento confirmado! Obrigado.', 'success');
+          Router.go('parent-invoices');
+        }
+      } catch (e) { /* silencioso */ }
+    }, 5000);
+  },
+
+  // Gera recibo PDF do pagamento
+  emitirRecibo(invId) {
+    const inv = DB.getInvoices().find(i => i.id === invId);
+    if (!inv) { Utils.toast('Cobrança não encontrada.', 'error'); return; }
+    if (inv.status !== 'pago') { Utils.toast('Apenas pagamentos confirmados.', 'error'); return; }
+
+    const student = DB.getStudents().find(s => s.id === inv.studentId);
+    const school  = DB.getSchool(inv.schoolId || DB._schoolId);
+
+    if (!window.jspdf) { Utils.toast('Biblioteca PDF não carregada.', 'error'); return; }
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF('p', 'mm', 'a4');
+    const W = 210;
+
+    doc.setFillColor(26, 115, 232);
+    doc.rect(0, 0, W, 28, 'F');
+    doc.setTextColor(255);
+    doc.setFontSize(18); doc.setFont(undefined, 'bold');
+    doc.text('RECIBO DE PAGAMENTO', W / 2, 12, { align: 'center' });
+    doc.setFontSize(10); doc.setFont(undefined, 'normal');
+    doc.text(school?.name || 'Escola', W / 2, 20, { align: 'center' });
+
+    doc.setTextColor(0);
+    let y = 44;
+    doc.setFontSize(10);
+    const linha = (label, valor) => {
+      doc.setFont(undefined, 'bold'); doc.text(label, 18, y);
+      doc.setFont(undefined, 'normal'); doc.text(String(valor || '–'), 70, y);
+      y += 7;
+    };
+
+    linha('Recibo nº:', inv.id.substring(0, 8).toUpperCase());
+    linha('Data do pagamento:', Utils.date(inv.paidAt || inv.dueDate));
+    linha('Aluno:', student?.name || inv.studentName);
+    linha('Matrícula:', student?.matricula || '–');
+    linha('Descrição:', inv.description || '–');
+    linha('Vencimento:', Utils.date(inv.dueDate));
+    linha('Forma de pagamento:', inv.paymentMethod === 'pix_asaas' ? 'PIX (Asaas)' : 'PIX');
+
+    y += 4;
+    doc.setDrawColor(220);
+    doc.line(18, y, W - 18, y);
+    y += 10;
+
+    doc.setFontSize(12); doc.setFont(undefined, 'bold');
+    doc.text('VALOR PAGO:', 18, y);
+    doc.setFontSize(16); doc.setTextColor(26, 115, 232);
+    doc.text(Utils.currency(inv.amount), W - 18, y, { align: 'right' });
+
+    y += 18;
+    doc.setTextColor(80); doc.setFontSize(9); doc.setFont(undefined, 'normal');
+    const txtRecibo = `Recebemos de ${student?.parentName || student?.name || ''} a importância de ${Utils.currency(inv.amount)} referente a ${inv.description || 'serviços educacionais'}, dando plena, geral e irrevogável quitação.`;
+    const lines = doc.splitTextToSize(txtRecibo, W - 36);
+    doc.text(lines, 18, y);
+    y += lines.length * 5 + 18;
+
+    doc.line(W / 2 - 40, y, W / 2 + 40, y);
+    y += 5;
+    doc.setFontSize(9); doc.text(school?.name || 'Escola', W / 2, y, { align: 'center' });
+
+    doc.setTextColor(160); doc.setFontSize(7);
+    doc.text(`Documento gerado em ${new Date().toLocaleString('pt-BR')} · GestEscolar`, W / 2, 285, { align: 'center' });
+
+    doc.save(`recibo_${(student?.name || 'aluno').replace(/\s+/g, '_')}_${(inv.paidAt || inv.dueDate).slice(0, 10)}.pdf`);
+    Utils.toast('Recibo gerado!', 'success');
+  },
+
+  _showPixModal(inv, copiaECola, qrBase64) {
+    Utils.modal(
+      `Pagar via PIX – ${Utils.escape(inv.description)}`,
+      `<div style="text-align:center;">
+        <div style="font-size:32px;font-weight:900;color:var(--secondary);margin-bottom:4px;">${Utils.currency(inv.amount)}</div>
+        <div class="text-muted">Vencimento: ${Utils.date(inv.dueDate)}</div>
+        <div style="margin:20px 0;">
+          <div style="font-size:13px;font-weight:700;color:var(--text-muted);margin-bottom:8px;">QR CODE PIX</div>
+          ${qrBase64
+            ? `<img src="data:image/png;base64,${qrBase64}" style="width:160px;height:160px;margin:0 auto;display:block;border-radius:12px;" />`
+            : `<div style="width:160px;height:160px;background:linear-gradient(135deg,#1a73e8,#34a853);border-radius:12px;margin:0 auto;display:flex;align-items:center;justify-content:center;">
+                <i class="fa-solid fa-qrcode" style="font-size:80px;color:#fff;opacity:.9;"></i>
+              </div>`}
+        </div>
+        <div style="font-size:13px;font-weight:700;color:var(--text-muted);margin-bottom:4px;">Código PIX Copia e Cola</div>
+        <div style="display:flex;gap:6px;align-items:stretch;">
+          <input id="parentPixCode" class="form-control" value="${Utils.escape(copiaECola || '')}" readonly style="font-size:11px;font-family:monospace;flex:1;" />
+          <button type="button" class="btn btn-outline btn-sm" onclick="navigator.clipboard.writeText(document.getElementById('parentPixCode').value);Utils.toast('PIX copiado!','success');" title="Copiar">
+            <i class="fa-solid fa-copy"></i>
+          </button>
+        </div>
+        <div class="alert alert-info" style="text-align:left;font-size:12px;margin-top:12px;">
+          <i class="fa-solid fa-info-circle"></i>
+          O saldo será creditado diretamente na conta individual da escola e ficará disponível automaticamente.
+        </div>
+      </div>`,
+      `<button class="btn btn-outline" onclick="this.closest('.modal-overlay').remove()">Fechar</button>
+       <button class="btn btn-primary" onclick="navigator.clipboard.writeText(document.getElementById('parentPixCode').value);Utils.toast('PIX copiado!','success');">
+         <i class="fa-solid fa-copy"></i> Copiar PIX
+       </button>`
+    );
+  },
+  confirmPix(invId) {
+    const inv = DB.getInvoices().find(i => i.id === invId);
+    DB.updateInvoice(invId, { status: 'pago', paidAt: new Date().toISOString() });
+    DB.addTransaction('credit', inv.amount, `PIX – ${inv.studentName} – ${inv.description}`);
+    Utils.toast('Pagamento PIX confirmado! Obrigado.','success');
+    document.querySelector('.modal-overlay')?.remove();
+    Router.go('parent-invoices');
+  },
+  copy(invId) {
+    const inv     = DB.getInvoices().find(i => i.id === invId);
+    const pixCode = Utils.generatePix(inv.amount, inv.studentName);
+    Utils.modal(
+      `2ª Via – ${Utils.escape(inv.description)}`,
+      `<p style="margin-bottom:12px;">Segunda via do boleto gerada com sucesso.</p>
+       <div class="pix-code-box">${pixCode}</div>
+       <div class="text-muted">Use o código acima para pagamento via PIX ou internet banking.</div>`,
+      `<button class="btn btn-primary" onclick="this.closest('.modal-overlay').remove()">Fechar</button>`
+    );
+  }
+};
+
+// --- Mensagens do pai ---
+Router.register('parent-messages', () => {
+  const user = Auth.require(); if (!user) return;
+  const messages = DB.getMessagesForUser(user.id).sort((a,b) => new Date(b.sentAt)-new Date(a.sentAt));
+  messages.forEach(m => DB.markMessageRead(m.id));
+
+  const content = `
+    <div class="card">
+      <div class="card-header">
+        <span class="card-title"><i class="fa-solid fa-envelope"></i> Mensagens do Professor</span>
+        <span class="badge badge-blue">${messages.length} mensagem(ns)</span>
+      </div>
+      ${messages.length === 0 ? `<div class="empty-state"><i class="fa-solid fa-envelope"></i><p>Nenhuma mensagem recebida.</p></div>` :
+        `<div class="msg-list">
+          ${messages.map(m => `
+            <div class="msg-item ${m.read?'':'msg-unread'}">
+              <div class="msg-header">
+                <span class="msg-from"><i class="fa-solid fa-chalkboard-teacher"></i> ${Utils.escape(m.fromName)}</span>
+                <span class="msg-date">${Utils.datetime(m.sentAt)}</span>
+              </div>
+              <div style="font-weight:700;margin-bottom:4px;">${Utils.escape(m.subject)}</div>
+              <div class="msg-text">${Utils.escape(m.text)}</div>
+            </div>`).join('')}
+        </div>`}
+    </div>
+  `;
+  Router.renderLayout(user, 'parent-messages', content);
+});
+// =============================================
+//  GESTESCOLAR – INICIALIZAÇÃO DA APLICAÇÃO
+// =============================================
+
+(function () {
+  // 1. Inicializar dados demo
+  DB.seed();
+
+  // 2. Verificar sessão existente e redirecionar
+  const user = Auth.current();
+  if (user) {
+    const map = {
+      administrativo: 'admin-dashboard',
+      financeiro:     'fin-dashboard',
+      professor:      'teacher-dashboard',
+      pai:            'parent-dashboard',
+    };
+    Router.go(map[user.role] || 'login');
+  } else {
+    Router.go('login');
+  }
+
+  // 3. Verificar boletos vencendo em 5 dias e simular envio automático
+  _checkDueSoon();
+})();
+
+function _checkDueSoon() {
+  const invoices = DB.getInvoices();
+  const dueSoon  = invoices.filter(i => i.status === 'pendente' && Utils.isDueSoon(i.dueDate));
+  if (dueSoon.length > 0) {
+    console.log(`[GestEscolar] ${dueSoon.length} boleto(s) com vencimento próximo – notificações automáticas enviadas!`);
+    dueSoon.forEach(inv => {
+      console.log(`  → ${inv.studentName}: ${inv.description} (vence ${inv.dueDate})`);
+    });
+  }
+}
+  </script>
+</body>
+</html>

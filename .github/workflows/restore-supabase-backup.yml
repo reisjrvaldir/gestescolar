@@ -1,0 +1,106 @@
+name: Restore Supabase Backup
+
+on:
+  # Permite rodar manualmente
+  workflow_dispatch:
+    inputs:
+      backup_date:
+        description: 'Data do backup a restaurar (YYYYMMDD_HHMMSS, ex: 20260424_030000)'
+        required: true
+        type: string
+
+jobs:
+  restore:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Install PostgreSQL client tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y postgresql-client
+
+      - name: Download backup artifact
+        uses: actions/download-artifact@v3
+        with:
+          name: supabase-backup-latest
+          path: ./backup-restore/
+
+      - name: List available backups
+        run: |
+          echo "=== Backups disponíveis ==="
+          if [ -d ./backup-restore ]; then
+            ls -lh ./backup-restore/backup_*.sql.gz 2>/dev/null || echo "Nenhum backup encontrado"
+          else
+            echo "Diretório de backup não encontrado"
+          fi
+
+      - name: Decompress backup
+        run: |
+          BACKUP_FILE="./backup-restore/backup_${{ github.event.inputs.backup_date }}.sql.gz"
+          if [ -f "$BACKUP_FILE" ]; then
+            echo "✅ Descompactando: $BACKUP_FILE"
+            gunzip "$BACKUP_FILE"
+            echo "✅ Backup descompactado com sucesso"
+          else
+            echo "❌ Arquivo não encontrado: $BACKUP_FILE"
+            echo "Arquivos disponíveis:"
+            ls -lh ./backup-restore/ || true
+            exit 1
+          fi
+
+      - name: Restore database
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+        run: |
+          BACKUP_FILE="./backup-restore/backup_${{ github.event.inputs.backup_date }}.sql"
+
+          if [ ! -f "$BACKUP_FILE" ]; then
+            echo "❌ Arquivo de backup não encontrado!"
+            exit 1
+          fi
+
+          echo "🔄 Iniciando restauração do banco de dados..."
+          echo "⚠️  AVISO: Todos os dados atuais serão SOBRESCRITOS!"
+          echo "📅 Backup a ser restaurado: ${{ github.event.inputs.backup_date }}"
+          echo ""
+
+          # Restaurar banco (isso vai sobrescrever os dados)
+          psql "$SUPABASE_DB_URL" < "$BACKUP_FILE" 2>&1 | head -20
+
+          echo ""
+          echo "✅ Restauração concluída com sucesso!"
+          echo "⚠️  IMPORTANTE: Verifique se os dados foram restaurados corretamente!"
+
+      - name: Verify restore
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+        run: |
+          echo "=== Verificação Pós-Restore ==="
+
+          # Contar registros em cada tabela
+          psql "$SUPABASE_DB_URL" -c "SELECT
+            (SELECT COUNT(*) FROM public.schools) as escolas,
+            (SELECT COUNT(*) FROM public.users) as usuarios,
+            (SELECT COUNT(*) FROM public.students) as alunos,
+            (SELECT COUNT(*) FROM public.invoices) as faturas;"
+
+          echo ""
+          echo "✅ Verificação concluída"
+
+      - name: Send notification
+        if: success()
+        run: |
+          echo "✅ RESTORE COMPLETADO COM SUCESSO"
+          echo "Data: $(date)"
+          echo "Backup restaurado: ${{ github.event.inputs.backup_date }}"
+
+      - name: Send error notification
+        if: failure()
+        run: |
+          echo "❌ ERRO NA RESTAURAÇÃO"
+          echo "Data: $(date)"
+          echo "Verifique os logs acima para detalhes"
+          exit 1

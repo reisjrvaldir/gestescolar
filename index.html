@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate, max-age=0" />
+  <meta http-equiv="Pragma" content="no-cache" />
+  <meta http-equiv="Expires" content="0" />
+  <title>GestEscolar – Plataforma SaaS de Gestão Escolar</title>
+
+  <!-- PWA -->
+  <link rel="manifest" href="/manifest.json" />
+  <meta name="theme-color" content="#1a73e8" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="GestEscolar" />
+  <link rel="apple-touch-icon" href="assets/icon-152.svg" />
+  <link rel="apple-touch-icon" sizes="152x152" href="assets/icon-152.svg" />
+  <link rel="apple-touch-icon" sizes="192x192" href="assets/icon-192.svg" />
+  <link rel="apple-touch-icon" sizes="512x512" href="assets/icon-512.svg" />
+  <meta name="msapplication-TileColor" content="#1a73e8" />
+  <meta name="msapplication-TileImage" content="assets/icon-144.svg" />
+
+  <!-- Favicon -->
+  <link rel="icon" type="image/svg+xml" href="assets/favicon.svg" />
+  <link rel="shortcut icon" href="assets/favicon.svg" />
+  <link rel="stylesheet" href="css/landing.css" />
+  <link rel="stylesheet" href="css/checkout.css" />
+  <link rel="stylesheet" href="css/main.css" />
+  <link rel="stylesheet" href="css/mobile.css" media="(max-width: 640px)" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" />
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <!-- Supabase JS Client (Fase 2) -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+</head>
+<body>
+  <div id="app">
+    <div style="display:flex;align-items:center;justify-content:center;height:100vh;flex-direction:column;gap:12px;">
+      <i class="fa-solid fa-graduation-cap" style="font-size:48px;color:#1976d2;"></i>
+      <div style="font-size:18px;font-weight:600;color:#333;">Carregando GestEscolar...</div>
+      <div style="font-size:13px;color:#888;">Conectando ao banco de dados</div>
+    </div>
+  </div>
+
+  <!--
+    Carregamento dinâmico: cada página gera um timestamp único em tempo de carregamento.
+    Isso faz o browser baixar TODOS os scripts toda vez — zero cache, 100% realtime.
+  -->
+  <script>
+    (function () {
+      var v = Date.now(); // timestamp único por carregamento
+      var scripts = [
+        'js/supabase-config.js',
+        'js/data.js',
+        'js/utils.js',
+        'js/router.js',
+        'js/plans.js',
+        'js/auth.js',
+        'js/asaas-client.js',
+        'js/pages/landing.js',
+        'js/pages/login.js',
+        'js/pages/checkout.js',
+        'js/pages/register.js',
+        'js/pages/superadmin.js',
+        'js/pages/admin.js',
+        'js/pages/financial.js',
+        'js/pages/teacher.js',
+        'js/pages/parent.js',
+        'js/realtime.js',
+        'js/onboarding.js',
+        'js/app.js',
+      ];
+      // Injeta scripts com async=false (mantém ordem de execução) e cache-busting
+      scripts.forEach(function (src) {
+        var s = document.createElement('script');
+        s.src = src + '?v=' + v;
+        s.async = false;
+        document.head.appendChild(s);
+      });
+    })();
+  </script>
+
+  <!-- Service Worker desativado — tudo realtime, sem cache -->
+  <script>
+    // Remove qualquer Service Worker previamente instalado e limpa TODOS os caches
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.getRegistrations().then(regs => {
+        regs.forEach(reg => reg.unregister());
+      });
+    }
+    if ('caches' in window) {
+      caches.keys().then(keys => keys.forEach(k => caches.delete(k)));
+    }
+  </script>
+</body>
+</html>

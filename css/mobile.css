@@ -1,0 +1,472 @@
+/* =============================================
+   GESTESCOLAR – CSS EXCLUSIVO MOBILE (≤ 640px)
+   Consumido apenas via media query no index.html
+   ============================================= */
+
+@media (max-width: 640px) {
+
+  /* =============================================
+     ALUNOS – Mostrar: Nome(1), Matrícula(2), Turma(3), Ações(8)
+     Esconder: Responsável(4), Mensalidade(5), Venc.(6), Status(7)
+     ============================================= */
+  [data-route="admin-students"] table th:nth-child(4),
+  [data-route="admin-students"] table td:nth-child(4),
+  [data-route="admin-students"] table th:nth-child(5),
+  [data-route="admin-students"] table td:nth-child(5),
+  [data-route="admin-students"] table th:nth-child(6),
+  [data-route="admin-students"] table td:nth-child(6),
+  [data-route="admin-students"] table th:nth-child(7),
+  [data-route="admin-students"] table td:nth-child(7) {
+    display: none !important;
+  }
+  [data-route="admin-students"] table {
+    width: 100%;
+  }
+  [data-route="admin-students"] th,
+  [data-route="admin-students"] td {
+    font-size: 12px !important;
+    padding: 6px 8px !important;
+  }
+  [data-route="admin-students"] .table-wrap {
+    overflow-x: hidden !important;
+  }
+
+  /* Botão "Novo Aluno" alinhado com busca */
+  [data-route="admin-students"] .card-header {
+    flex-direction: row !important;
+    flex-wrap: wrap;
+    align-items: center !important;
+    gap: 8px !important;
+  }
+  [data-route="admin-students"] .card-header .card-title {
+    width: 100%;
+    margin-bottom: 4px;
+  }
+  [data-route="admin-students"] .card-header > div {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    width: 100%;
+    align-items: center;
+  }
+  [data-route="admin-students"] #studentSearch {
+    flex: 1;
+    min-width: 120px;
+  }
+
+  /* =============================================
+     FUNCIONÁRIOS – Mostrar: Nome(1), Função(5), Ações(7)
+     Esconder: E-mail(2), CPF(3), Telefone(4), Status(6)
+     ============================================= */
+  [data-route="admin-staff"] table th:nth-child(2),
+  [data-route="admin-staff"] table td:nth-child(2),
+  [data-route="admin-staff"] table th:nth-child(3),
+  [data-route="admin-staff"] table td:nth-child(3),
+  [data-route="admin-staff"] table th:nth-child(4),
+  [data-route="admin-staff"] table td:nth-child(4),
+  [data-route="admin-staff"] table th:nth-child(6),
+  [data-route="admin-staff"] table td:nth-child(6) {
+    display: none !important;
+  }
+  [data-route="admin-staff"] table {
+    width: 100%;
+  }
+  [data-route="admin-staff"] th,
+  [data-route="admin-staff"] td {
+    font-size: 12px !important;
+    padding: 6px 8px !important;
+  }
+  [data-route="admin-staff"] .table-wrap {
+    overflow-x: hidden !important;
+  }
+
+  /* =============================================
+     TURMAS – Mostrar: Turma, Professor, Alunos, Ações
+     Esconder: Ano(2), Turno(3)
+     ============================================= */
+  [data-route="admin-classes"] table th:nth-child(2),
+  [data-route="admin-classes"] table td:nth-child(2),
+  [data-route="admin-classes"] table th:nth-child(3),
+  [data-route="admin-classes"] table td:nth-child(3) {
+    display: none !important;
+  }
+  [data-route="admin-classes"] table {
+    width: 100%;
+  }
+  [data-route="admin-classes"] th,
+  [data-route="admin-classes"] td {
+    font-size: 12px !important;
+    padding: 6px 8px !important;
+  }
+  [data-route="admin-classes"] .table-wrap {
+    overflow-x: hidden !important;
+  }
+
+  /* =============================================
+     FINANCEIRO DASHBOARD – Cards 2x2
+     ============================================= */
+  [data-route="fin-dashboard"] .financial-summary {
+    grid-template-columns: 1fr 1fr !important;
+    gap: 8px !important;
+  }
+  [data-route="fin-dashboard"] .fin-card {
+    padding: 10px !important;
+  }
+  [data-route="fin-dashboard"] .fin-card-label {
+    font-size: 10px !important;
+  }
+  [data-route="fin-dashboard"] .fin-card-value {
+    font-size: 16px !important;
+  }
+
+  /* Últimas Transações – Mostrar: Data, Tipo, Valor
+     Esconder: Descrição(2) */
+  [data-route="fin-dashboard"] #fin-transactions table th:nth-child(2),
+  [data-route="fin-dashboard"] #fin-transactions table td:nth-child(2) {
+    display: none !important;
+  }
+  [data-route="fin-dashboard"] #fin-transactions table {
+    table-layout: fixed;
+    width: 100%;
+  }
+  [data-route="fin-dashboard"] #fin-transactions th,
+  [data-route="fin-dashboard"] #fin-transactions td {
+    font-size: 12px !important;
+    padding: 6px 8px !important;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  /* Gráfico evolução: scroll horizontal controlado */
+  [data-route="fin-dashboard"] #chart-area {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  /* =============================================
+     ENTRADAS – Mostrar: Aluno, Valor, Vencimento, Ações
+     Pendentes: Esconder Responsável(2), Turma(3), Professor(4)
+     ============================================= */
+  [data-route="fin-entradas"] #due-table-wrap table th:nth-child(2),
+  [data-route="fin-entradas"] #due-table-wrap table td:nth-child(2),
+  [data-route="fin-entradas"] #due-table-wrap table th:nth-child(3),
+  [data-route="fin-entradas"] #due-table-wrap table td:nth-child(3),
+  [data-route="fin-entradas"] #due-table-wrap table th:nth-child(4),
+  [data-route="fin-entradas"] #due-table-wrap table td:nth-child(4) {
+    display: none !important;
+  }
+
+  /* Histórico: Esconder Descrição(2), Status(5) */
+  [data-route="fin-entradas"] #hist-table-wrap table th:nth-child(2),
+  [data-route="fin-entradas"] #hist-table-wrap table td:nth-child(2),
+  [data-route="fin-entradas"] #hist-table-wrap table th:nth-child(5),
+  [data-route="fin-entradas"] #hist-table-wrap table td:nth-child(5) {
+    display: none !important;
+  }
+
+  /* Entradas cards 2x1 */
+  [data-route="fin-entradas"] #ent-cards {
+    grid-template-columns: 1fr 1fr !important;
+    gap: 8px !important;
+  }
+
+  /* Table layout fixed para evitar scroll lateral */
+  [data-route="fin-entradas"] table {
+    table-layout: fixed;
+    width: 100%;
+  }
+  [data-route="fin-entradas"] th,
+  [data-route="fin-entradas"] td {
+    font-size: 12px !important;
+    padding: 6px 8px !important;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  /* =============================================
+     CONTAS A PAGAR – Mostrar: Descrição, Valor, Vencimento, Ações
+     Esconder: Parcela(4), Status(5)
+     ============================================= */
+  [data-route="fin-expenses"] table th:nth-child(4),
+  [data-route="fin-expenses"] table td:nth-child(4),
+  [data-route="fin-expenses"] table th:nth-child(5),
+  [data-route="fin-expenses"] table td:nth-child(5) {
+    display: none !important;
+  }
+  [data-route="fin-expenses"] table {
+    table-layout: fixed;
+    width: 100%;
+  }
+  [data-route="fin-expenses"] th,
+  [data-route="fin-expenses"] td {
+    font-size: 12px !important;
+    padding: 6px 8px !important;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  /* Contas cards */
+  [data-route="fin-expenses"] #exp-cards {
+    grid-template-columns: 1fr 1fr !important;
+    gap: 8px !important;
+  }
+
+  /* =============================================
+     MENSAGENS – Layout estilo WhatsApp/Telegram
+     ============================================= */
+
+  /* Card de mensagens: full height */
+  [data-route="teacher-messages"] .card {
+    height: calc(100vh - var(--topbar-h) - 30px) !important;
+  }
+
+  /* Corpo: empilhar em vez de lado a lado */
+  [data-route="teacher-messages"] .card > div:nth-child(2) {
+    flex-direction: column !important;
+  }
+
+  /* Lista de conversas: ocupa 100% e scroll vertical */
+  [data-route="teacher-messages"] #tmConvList {
+    width: 100% !important;
+    border-right: none !important;
+    border-bottom: 1px solid var(--border);
+    max-height: 45% !important;
+    flex-shrink: 0 !important;
+  }
+
+  /* Chat: ocupa o restante */
+  [data-route="teacher-messages"] .card > div:nth-child(2) > div:nth-child(2) {
+    flex: 1 !important;
+    min-height: 0;
+  }
+
+  /* Barra superior: compacta */
+  [data-route="teacher-messages"] .card > div:first-child {
+    padding: 8px 10px !important;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+  [data-route="teacher-messages"] .card > div:first-child span {
+    font-size: 14px !important;
+  }
+  [data-route="teacher-messages"] .card > div:first-child .btn-sm {
+    font-size: 11px !important;
+    padding: 4px 8px !important;
+  }
+
+  /* Input de resposta: compacto */
+  [data-route="teacher-messages"] textarea {
+    font-size: 13px !important;
+    rows: 1 !important;
+  }
+
+  /* Bolhas menores */
+  [data-route="teacher-messages"] #tmChatMessages > div {
+    font-size: 13px !important;
+  }
+
+  /* Chat container mobile */
+  .msg-mobile-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+  }
+  .msg-mobile-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 12px 14px;
+    border-bottom: 1px solid var(--border);
+    cursor: pointer;
+    background: var(--surface);
+    transition: background .15s;
+  }
+  .msg-mobile-item:active {
+    background: #f0f4f8;
+  }
+  .msg-mobile-avatar {
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    background: var(--primary);
+    color: #fff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 700;
+    font-size: 14px;
+    flex-shrink: 0;
+  }
+  .msg-mobile-info {
+    flex: 1;
+    min-width: 0;
+  }
+  .msg-mobile-name {
+    font-weight: 600;
+    font-size: 14px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .msg-mobile-preview {
+    font-size: 12px;
+    color: var(--text-muted);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    margin-top: 2px;
+  }
+  .msg-mobile-meta {
+    text-align: right;
+    flex-shrink: 0;
+  }
+  .msg-mobile-time {
+    font-size: 11px;
+    color: var(--text-muted);
+  }
+  .msg-mobile-badge {
+    min-width: 18px;
+    height: 18px;
+    border-radius: 9px;
+    background: var(--primary);
+    color: #fff;
+    font-size: 10px;
+    font-weight: 700;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0 5px;
+    margin-top: 4px;
+  }
+
+  /* Chat view mobile (aberto) */
+  .msg-chat-mobile {
+    display: flex;
+    flex-direction: column;
+    height: calc(100vh - var(--topbar-h) - 20px);
+    background: #e5ddd5;
+    border-radius: var(--radius);
+    overflow: hidden;
+  }
+  .msg-chat-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 14px;
+    background: var(--primary);
+    color: #fff;
+    flex-shrink: 0;
+  }
+  .msg-chat-header .back-btn {
+    background: none;
+    border: none;
+    color: #fff;
+    font-size: 18px;
+    padding: 4px;
+    cursor: pointer;
+  }
+  .msg-chat-body {
+    flex: 1;
+    overflow-y: auto;
+    padding: 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+  .msg-bubble {
+    max-width: 80%;
+    padding: 8px 12px;
+    border-radius: 12px;
+    font-size: 13px;
+    line-height: 1.4;
+    position: relative;
+    word-wrap: break-word;
+  }
+  .msg-bubble.sent {
+    align-self: flex-end;
+    background: #dcf8c6;
+    border-bottom-right-radius: 4px;
+  }
+  .msg-bubble.received {
+    align-self: flex-start;
+    background: #fff;
+    border-bottom-left-radius: 4px;
+  }
+  .msg-bubble-time {
+    font-size: 10px;
+    color: #999;
+    text-align: right;
+    margin-top: 2px;
+  }
+  .msg-chat-input {
+    display: flex;
+    gap: 8px;
+    padding: 8px 12px;
+    background: #f0f0f0;
+    flex-shrink: 0;
+  }
+  .msg-chat-input input {
+    flex: 1;
+    padding: 10px 14px;
+    border: none;
+    border-radius: 20px;
+    font-size: 14px;
+    background: #fff;
+    outline: none;
+  }
+  .msg-chat-input button {
+    width: 42px;
+    height: 42px;
+    border-radius: 50%;
+    border: none;
+    background: var(--primary);
+    color: #fff;
+    font-size: 16px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    flex-shrink: 0;
+  }
+
+  /* Remover scroll lateral geral e reduzir padding */
+  .table-wrap {
+    overflow-x: hidden !important;
+  }
+  .card {
+    margin: 0 -4px;
+  }
+  .page-content {
+    padding: 10px !important;
+  }
+
+  /* Filtros financeiros mobile */
+  [data-route="fin-dashboard"] .card-header,
+  [data-route="fin-entradas"] .card-header,
+  [data-route="fin-expenses"] .card-header {
+    flex-direction: column !important;
+    align-items: stretch !important;
+  }
+
+  /* Planos: cards empilhados */
+  #plans-cards-container {
+    flex-direction: column !important;
+  }
+  #plans-cards-container .card {
+    min-width: 100% !important;
+    width: 100% !important;
+  }
+
+  /* Botões ações na tabela: sem texto, só ícone */
+  [data-route="admin-students"] .btn-sm,
+  [data-route="admin-staff"] .btn-sm,
+  [data-route="admin-classes"] .btn-sm,
+  [data-route="fin-entradas"] .btn-sm,
+  [data-route="fin-expenses"] .btn-sm {
+    padding: 6px 8px !important;
+    font-size: 12px !important;
+  }
+}
