@@ -607,7 +607,7 @@ const LoginPage = {
             // Conta j\u00e1 existe no Auth — autenticar diretamente
             const { data: signinData, error: signinErr } = await supabaseClient.auth.signInWithPassword({ email, password: pass });
             if (signinErr) {
-              alertEl.innerHTML = '<div class="alert alert-danger">Este e-mail j\u00e1 possui uma conta. <a href="#" onclick="Router.go(\'login\')">Fa\u00e7a login</a>.</div>';
+              alertEl.innerHTML = '<div class="alert alert-danger">Este e-mail j\u00e1 possui uma conta. <a href="#" onclick="Router.go(\'login\'); return false;">Fa\u00e7a login</a>.</div>';
               return;
             }
             authId = signinData?.user?.id || null;
