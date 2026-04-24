@@ -323,44 +323,64 @@ const LoginPage = {
   _cepTimeout: null,
 
   debouncedBuscarCep(cep) {
+    console.log('[CEP] debouncedBuscarCep chamado com:', cep);
     const input = document.getElementById('regPostalCode');
-    const digits = cep.replace(/\D/g, '');
-    clearTimeout(this._cepTimeout);
+    if (!input) { console.error('[CEP] Campo regPostalCode não encontrado'); return; }
+    const digits = (cep || '').replace(/\D/g, '');
+    console.log('[CEP] Dígitos:', digits, 'Length:', digits.length);
+    clearTimeout(LoginPage._cepTimeout);
     if (digits.length === 8) {
       input.style.borderColor = '#2196F3';
-      this._cepTimeout = setTimeout(() => this._buscarCep(digits), 500);
+      console.log('[CEP] Agendando busca em 500ms...');
+      LoginPage._cepTimeout = setTimeout(function () {
+        LoginPage._buscarCep(digits);
+      }, 500);
     } else {
       input.style.borderColor = '';
     }
   },
 
-  async _buscarCep(digits) {
+  _buscarCep(digits) {
+    console.log('[CEP] _buscarCep iniciando busca:', digits);
     const input = document.getElementById('regPostalCode');
-    try {
-      input.style.opacity = '0.6';
-      const res = await fetch(`https://viacep.com.br/ws/${digits}/json/`);
-      const d = await res.json();
-      if (d.erro) {
+    if (!input) return;
+    input.style.opacity = '0.6';
+
+    fetch('https://viacep.com.br/ws/' + digits + '/json/')
+      .then(function (res) {
+        console.log('[CEP] Resposta HTTP:', res.status);
+        return res.json();
+      })
+      .then(function (d) {
+        console.log('[CEP] Dados recebidos:', d);
+        if (d.erro) {
+          input.style.borderColor = '#f44336';
+          input.style.opacity = '1';
+          alert('CEP não encontrado');
+          return;
+        }
+        const set = function (id, val) {
+          const el = document.getElementById(id);
+          if (el) { el.value = val || ''; console.log('[CEP] Preenchido ' + id + ':', val); }
+          else { console.warn('[CEP] Elemento não encontrado:', id); }
+        };
+        set('regAddress', d.logradouro);
+        set('regProvince', d.bairro);
+        set('regCity', d.localidade);
+        const stateEl = document.getElementById('regState');
+        if (stateEl && d.uf) {
+          stateEl.value = d.uf;
+          console.log('[CEP] Estado selecionado:', d.uf);
+        }
+        input.style.borderColor = '#4caf50';
+        input.style.opacity = '1';
+      })
+      .catch(function (err) {
+        console.error('[CEP] Erro ao buscar:', err);
         input.style.borderColor = '#f44336';
         input.style.opacity = '1';
-        Utils.toast('CEP não encontrado', 'error');
-        return;
-      }
-      const set = (id, val) => { const el = document.getElementById(id); if (el) el.value = val || ''; };
-      set('regAddress', d.logradouro);
-      set('regProvince', d.bairro);
-      set('regCity', d.localidade);
-      // Estado: select — seleciona pelo value (UF)
-      const stateEl = document.getElementById('regState');
-      if (stateEl && d.uf) stateEl.value = d.uf;
-      input.style.borderColor = '#4caf50';
-      input.style.opacity = '1';
-      Utils.toast('Endereço preenchido com sucesso', 'success');
-    } catch (e) {
-      input.style.borderColor = '#f44336';
-      input.style.opacity = '1';
-      Utils.toast('Erro ao buscar CEP. Tente novamente.', 'error');
-    }
+        alert('Erro ao buscar CEP: ' + err.message);
+      });
   },
 
   _injectModals() {
