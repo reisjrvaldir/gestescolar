@@ -553,6 +553,16 @@ const DB = {
     return c;
   },
 
+  updateClass(id, d) {
+    const idx = this._cache.classes.findIndex(c => c.id === id);
+    if (idx >= 0) {
+      const c = this._cache.classes[idx];
+      const updated = { ...c, ...d };
+      this._cache.classes[idx] = updated;
+      this._update('classes', id, d);
+    }
+  },
+
   removeClass(id) {
     this._cache.classes = this._cache.classes.filter(c => c.id !== id);
     this._remove('classes', id);

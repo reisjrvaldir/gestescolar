@@ -1534,6 +1534,9 @@ Router.register('admin-classes', () => {
                         <i class="fa-solid fa-eye"></i> Ver Turma
                       </button>
                       ${(user.role === 'gestor' || user.role === 'administrativo' || (user.roles && (user.roles.includes('gestor') || user.roles.includes('administrativo')))) ? `
+                      <button class="btn btn-outline btn-sm" onclick="AdminClasses.editTurma('${c.id}')">
+                        <i class="fa-solid fa-pencil"></i> Editar
+                      </button>
                       <button class="btn btn-outline btn-sm" onclick="AdminClasses.manageStudents('${c.id}','${Utils.escape(c.name)}')">
                         <i class="fa-solid fa-user-plus"></i> Adicionar Alunos
                       </button>` : ''}
@@ -1665,6 +1668,104 @@ const AdminClasses = {
       subjects
     });
     Utils.toast('Turma criada!', 'success');
+    document.querySelector('.modal-overlay')?.remove();
+    window._reloadClasses?.();
+  },
+
+  editTurma(classId) {
+    const cls = DB.getClasses().find(c => c.id === classId);
+    if (!cls) {
+      Utils.toast('Turma não encontrada.', 'error');
+      return;
+    }
+
+    const teachers = DB.getUsers().filter(u => u.role === 'professor');
+    const currentSubjects = new Set(cls.subjects || []);
+
+    Utils.modal('Editar Turma', `
+      <form id="classForm">
+        <div class="form-group">
+          <label class="form-label">Nome da turma *</label>
+          <input class="form-control" id="clName" placeholder="Ex: 5º Ano A" value="${Utils.escape(cls.name)}" required>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label">Ano letivo *</label>
+            <input type="number" class="form-control" id="clYear" value="${cls.year}" required>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Turno *</label>
+            <select class="form-control" id="clShift" required>
+              <option value="">Selecione</option>
+              <option value="Manhã" ${cls.shift === 'Manhã' ? 'selected' : ''}>Manhã</option>
+              <option value="Tarde" ${cls.shift === 'Tarde' ? 'selected' : ''}>Tarde</option>
+              <option value="Integral" ${cls.shift === 'Integral' ? 'selected' : ''}>Integral</option>
+            </select>
+          </div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Professor responsável *</label>
+          <select class="form-control" id="clTeacher" required>
+            <option value="">Selecione um professor</option>
+            ${teachers.map(t => `<option value="${t.id}" ${cls.teacherId === t.id ? 'selected' : ''}>${Utils.escape(t.name)}</option>`).join('')}
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Selecione as Matérias da turma *</label>
+          <div id="materias-wrap" style="border:1.5px solid var(--border);border-radius:var(--radius);padding:12px;max-height:260px;overflow-y:auto;background:#fafafa;">
+            ${Object.entries(MATERIAS_MEC).map(([nivel, materias]) => `
+              <div style="margin-bottom:12px;">
+                <div style="font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px;border-bottom:1px solid var(--border);padding-bottom:4px;">${nivel}</div>
+                <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:4px;">
+                  ${materias.map(m => `
+                    <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer;padding:3px 2px;">
+                      <input type="checkbox" name="materia" value="${Utils.escape(m)}" ${currentSubjects.has(m) ? 'checked' : ''}
+                        style="width:15px;height:15px;accent-color:var(--primary);cursor:pointer;">
+                      ${Utils.escape(m)}
+                    </label>`).join('')}
+                </div>
+              </div>`).join('')}
+          </div>
+          <div style="font-size:12px;color:var(--text-muted);margin-top:6px;">
+            <span id="materias-count">${currentSubjects.size}</span> matéria(s) selecionada(s)
+          </div>
+        </div>
+      </form>`,
+      `<button class="btn btn-outline" onclick="this.closest('.modal-overlay').remove()">Cancelar</button>
+       <button class="btn btn-primary" onclick="AdminClasses.saveEdit('${classId}')">Salvar Turma</button>`
+    );
+
+    // Contador dinâmico de seleção
+    document.getElementById('materias-wrap').addEventListener('change', () => {
+      const count = document.querySelectorAll('input[name="materia"]:checked').length;
+      document.getElementById('materias-count').textContent = count;
+    });
+  },
+
+  saveEdit(classId) {
+    const name    = document.getElementById('clName').value.trim();
+    const year    = document.getElementById('clYear').value.trim();
+    const shift   = document.getElementById('clShift').value;
+    const teacher = document.getElementById('clTeacher').value;
+
+    if (!name)    { Utils.toast('Informe o nome da turma.', 'error'); return; }
+    if (!year)    { Utils.toast('Informe o ano letivo.', 'error'); return; }
+    if (!shift)   { Utils.toast('Selecione o turno.', 'error'); return; }
+    if (!teacher) { Utils.toast('Selecione um professor responsável.', 'error'); return; }
+
+    const subjects = Array.from(document.querySelectorAll('input[name="materia"]:checked'))
+      .map(cb => cb.value);
+
+    if (subjects.length === 0) { Utils.toast('Selecione ao menos uma matéria.', 'error'); return; }
+
+    DB.updateClass(classId, {
+      name,
+      year:      Number(year),
+      shift,
+      teacherId: teacher,
+      subjects
+    });
+    Utils.toast('Turma atualizada com sucesso!', 'success');
     document.querySelector('.modal-overlay')?.remove();
     window._reloadClasses?.();
   },

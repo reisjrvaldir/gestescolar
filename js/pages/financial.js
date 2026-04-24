@@ -1283,11 +1283,11 @@ const FinEntradas = {
                   <td>
                     <div style="display:flex;gap:4px;flex-wrap:wrap;">
                       <button class="btn btn-sm" onclick="FinEntradas.sendPix('${s.id}','${inv.id}')"
-                        style="background:#1a73e8;color:#fff;border:none;padding:5px 10px;border-radius:6px;font-size:11px;cursor:pointer;">
+                        style="background:#1a73e8;color:#fff;border:none;padding:5px 10px;border-radius:6px;font-size:11px;cursor:pointer;min-width:70px;text-align:center;">
                         <i class="fa-solid fa-paper-plane"></i> PIX
                       </button>
                       <button class="btn btn-sm" onclick="FinEntradas.markPaidHist('${inv.id}')"
-                        style="background:var(--secondary);color:#fff;border:none;padding:5px 10px;border-radius:6px;font-size:11px;cursor:pointer;">
+                        style="background:var(--secondary);color:#fff;border:none;padding:5px 10px;border-radius:6px;font-size:11px;cursor:pointer;min-width:70px;text-align:center;">
                         <i class="fa-solid fa-money-bill-wave"></i> Espécie
                       </button>
                     </div>
@@ -1341,11 +1341,11 @@ const FinEntradas = {
                   <td>
                     <div style="display:flex;gap:4px;flex-wrap:wrap;">
                       <button class="btn btn-sm" onclick="FinEntradas.sendPix('${inv.studentId}','${inv.id}')"
-                        style="background:#1a73e8;color:#fff;border:none;padding:5px 10px;border-radius:6px;font-size:11px;cursor:pointer;">
+                        style="background:#1a73e8;color:#fff;border:none;padding:5px 10px;border-radius:6px;font-size:11px;cursor:pointer;min-width:70px;text-align:center;">
                         <i class="fa-solid fa-paper-plane"></i> PIX
                       </button>
                       <button class="btn btn-sm" onclick="FinEntradas.markPaidHist('${inv.id}')"
-                        style="background:var(--secondary);color:#fff;border:none;padding:5px 10px;border-radius:6px;font-size:11px;cursor:pointer;">
+                        style="background:var(--secondary);color:#fff;border:none;padding:5px 10px;border-radius:6px;font-size:11px;cursor:pointer;min-width:70px;text-align:center;">
                         <i class="fa-solid fa-money-bill-wave"></i> Espécie
                       </button>
                     </div>
@@ -1565,25 +1565,46 @@ const FinEntradas = {
     this.applyMonth();
   },
 
-  sendMassPix() {
+  async sendMassPix() {
     if (this._all.length === 0) { Utils.toast('Nenhuma mensalidade pendente.', 'info'); return; }
-    const user = Auth.current();
-    let sent = 0;
-    this._all.forEach(({s, inv, resp}) => {
-      if (s.parentId) {
-        DB.addMessage({
-          fromUserId: user.id,
-          fromName:   user.name,
-          toUserId:   s.parentId,
-          subject:    `Chave PIX — Mensalidade ${s.name}`,
-          text:       this._buildMsg(s, inv, resp)
-        });
-        sent++;
+    const user   = Auth.current();
+    const school = DB.getSchool(DB._schoolId);
+    const cfg    = DB.getSchoolConfig();
+    let sent = 0, semConta = 0;
+    Utils.toast(`Gerando PIX para ${this._all.length} aluno(s)...`, 'info');
+
+    for (const {s, inv, resp} of this._all) {
+      if (!s.parentId) { semConta++; continue; }
+
+      // Gerar PIX Asaas individual para cada mensalidade
+      let pixCode = null;
+      let valorCobrado = inv.amount;
+      if (school?.asaasWalletId) {
+        try {
+          const result = await AsaasClient.chargeInvoice(inv, s, school);
+          if (result) {
+            pixCode = result.pixCopiaECola;
+            valorCobrado = Number(result.value) || inv.amount;
+          }
+        } catch(e) {
+          console.error('[sendMassPix] Erro ao gerar PIX:', e);
+        }
       }
-    });
-    const semConta = this._all.length - sent;
+      if (!pixCode) pixCode = cfg.pixKey || null;
+
+      const msg = pixCode
+        ? `Olá, ${resp?.nome || 'responsável'}! Segue a chave PIX para a mensalidade de ${s.name}.\n\n💰 Valor: ${Utils.currency(valorCobrado)}\n📅 Vencimento: ${Utils.date(inv.dueDate)}\n\n📱 PIX Copia e Cola:\n${pixCode}`
+        : `Olá, ${resp?.nome || 'responsável'}! A mensalidade de ${s.name} no valor de ${Utils.currency(inv.amount)} vence em ${Utils.date(inv.dueDate)}. Entre em contato com a escola para realizar o pagamento.`;
+
+      DB.addMessage?.({
+        fromUserId: user.id, fromName: user.name,
+        toUserId: s.parentId, studentId: s.id,
+        studentName: s.name, subject: `Mensalidade: ${s.name}`, text: msg,
+      });
+      sent++;
+    }
     Utils.toast(
-      `${sent} mensagem(ns) enviada(s) via chat interno.${semConta > 0 ? ` ${semConta} responsável(is) sem conta no sistema.` : ''}`,
+      `${sent} PIX(s) gerado(s) e mensagem(ns) enviada(s).${semConta > 0 ? ` ${semConta} responsável(is) sem conta no sistema.` : ''}`,
       sent > 0 ? 'success' : 'info'
     );
   },

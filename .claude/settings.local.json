@@ -105,7 +105,8 @@
       "Bash(node -c js/app.js)",
       "Bash(node -c api/email.js)",
       "Bash(find C:\\\\\\\\Users\\\\\\\\USER\\\\\\\\Documents\\\\\\\\Projetos\\\\\\\\gestescolar\\\\\\\\api -name \"*.js\" -type f)",
-      "Bash(node -c \"C:/Users/USER/Documents/Projetos/gestescolar/api/asaas.js\")"
+      "Bash(node -c \"C:/Users/USER/Documents/Projetos/gestescolar/api/asaas.js\")",
+      "Bash(node -c \"C:\\\\Users\\\\valdir.reis\\\\Documents\\\\Projetos\\\\gestescolar-main\\\\js\\\\data.js\")"
     ]
   }
 }
