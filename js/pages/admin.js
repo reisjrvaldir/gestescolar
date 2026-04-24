@@ -569,7 +569,7 @@ Router.register('admin-settings', () => {
               <label class="form-label">CEP</label>
               <input id="cfg-postal-code" type="text" class="form-control"
                 value="${Utils.escape(school?.postalCode || '')}" placeholder="00000-000"
-                oninput="AdminSettings.buscarCep(this.value)" />
+                oninput="AdminSettings.debouncedBuscarCep(this.value)" />
             </div>
             <div>
               <label class="form-label">Endereço (Rua/Avenida)</label>
@@ -775,18 +775,54 @@ const AdminSettings = {
     }
   },
 
+  _cepTimeout: null,
+
+  debouncedBuscarCep(cep) {
+    clearTimeout(this._cepTimeout);
+    const input = document.getElementById('cfg-postal-code');
+    input.style.borderColor = '';
+
+    const digits = cep.replace(/\D/g, '');
+    if (digits.length === 8) {
+      input.style.borderColor = '#2196F3';
+      this._cepTimeout = setTimeout(() => this.buscarCep(cep), 500);
+    }
+  },
+
   async buscarCep(cep) {
     const digits = cep.replace(/\D/g, '');
     if (digits.length !== 8) return;
+
+    const input = document.getElementById('cfg-postal-code');
+    const addressInput = document.getElementById('cfg-address');
+
     try {
+      input.style.opacity = '0.6';
       const res = await fetch(`https://viacep.com.br/ws/${digits}/json/`);
       const d = await res.json();
-      if (d.erro) return;
-      if (document.getElementById('cfg-address')) document.getElementById('cfg-address').value = d.logradouro || '';
-      if (document.getElementById('cfg-province')) document.getElementById('cfg-province').value = d.bairro || '';
-      if (document.getElementById('cfg-city')) document.getElementById('cfg-city').value = d.localidade || '';
-      if (document.getElementById('cfg-state')) document.getElementById('cfg-state').value = d.uf || '';
-    } catch (_) {}
+
+      if (d.erro) {
+        input.style.borderColor = '#f44336';
+        Utils.toast('CEP não encontrado', 'error');
+        return;
+      }
+
+      if (addressInput) addressInput.value = d.logradouro || '';
+      const provInput = document.getElementById('cfg-province');
+      if (provInput) provInput.value = d.bairro || '';
+      const cityInput = document.getElementById('cfg-city');
+      if (cityInput) cityInput.value = d.localidade || '';
+      const stateInput = document.getElementById('cfg-state');
+      if (stateInput) stateInput.value = d.uf || '';
+
+      input.style.borderColor = '#4caf50';
+      input.style.opacity = '1';
+      Utils.toast('Endereço preenchido com sucesso', 'success');
+    } catch (e) {
+      input.style.borderColor = '#f44336';
+      input.style.opacity = '1';
+      Utils.toast('Erro ao buscar CEP. Tente novamente.', 'error');
+    }
   },
 
   async ativarGateway() {
