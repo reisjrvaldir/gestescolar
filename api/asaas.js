@@ -714,11 +714,13 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;color:#3
       const refSchoolId = extRef.split('|')[0];
       let ownershipOk = userSchoolId && refSchoolId === String(userSchoolId);
 
-      // Fallback: durante checkout, o registro users pode ainda não estar propagado.
+      // Fallback: aceita QUALQUER role (gestor, pai, professor) desde que o
+      // usuário esteja vinculado à escola do pagamento. Responsáveis precisam
+      // pagar PIX dos filhos, professores podem consultar cobranças da turma, etc.
       if (!ownershipOk && refSchoolId && authUserId && SUPABASE_SERVICE_KEY) {
         try {
           const ownRes = await fetch(
-            `${SUPABASE_URL}/rest/v1/users?school_id=eq.${refSchoolId}&auth_id=eq.${authUserId}&role=eq.gestor&select=id&limit=1`,
+            `${SUPABASE_URL}/rest/v1/users?school_id=eq.${refSchoolId}&auth_id=eq.${authUserId}&select=id,role&limit=1`,
             { headers: { apikey: SUPABASE_SERVICE_KEY, Authorization: `Bearer ${SUPABASE_SERVICE_KEY}` } }
           );
           if (ownRes.ok) {

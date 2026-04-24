@@ -563,9 +563,22 @@ Router.register('parent-invoices', async () => {
   const mensalidades = invoices.filter(isMensalidade);
   const proximoPagamento = mensalidades.find(i => i.dueDate && i.dueDate.startsWith(monthKey) && i.status !== 'pago');
 
+  // Ordenação: vencidas primeiro (mais antigas no topo) + futuras crescente
+  // Ex: Abril (vencida) → Maio → Junho → ... → Dezembro
+  const hojeRef = new Date(); hojeRef.setHours(0,0,0,0);
   const pendentes = mensalidades
     .filter(i => i.status !== 'pago' && i.dueDate && !i.dueDate.startsWith(monthKey))
-    .sort((a, b) => new Date(b.dueDate) - new Date(a.dueDate));
+    .sort((a, b) => {
+      const da = new Date(a.dueDate + 'T00:00:00');
+      const db = new Date(b.dueDate + 'T00:00:00');
+      const aVencida = da < hojeRef;
+      const bVencida = db < hojeRef;
+      // Vencidas vêm antes de não vencidas
+      if (aVencida && !bVencida) return -1;
+      if (!aVencida && bVencida) return 1;
+      // Dentro do mesmo grupo: ordem crescente (mais antigo/próximo primeiro)
+      return da - db;
+    });
 
   const pagos = mensalidades
     .filter(i => i.status === 'pago')
