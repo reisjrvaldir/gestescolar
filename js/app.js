@@ -15,26 +15,43 @@
     });
   }
 
-  // 2. Verificar se URL contém query params de reset de senha (?reset_token=...&email=...)
+  // 2. Verificar se URL contém query params de reset de senha (?reset_token=...&email=...) [LEGADO]
   const params = new URLSearchParams(window.location.search);
-  const resetToken = params.get('reset_token');
-  const resetEmail = params.get('email');
+  const resetTokenQuery = params.get('reset_token');
+  const resetEmailQuery = params.get('email');
 
-  if (resetToken && resetEmail) {
-    console.log('[App] Reset token detectado na URL - armazenando em sessionStorage');
-    // Armazenar em sessionStorage para que LoginPage recupere depois
-    sessionStorage.setItem('resetToken', resetToken);
-    sessionStorage.setItem('resetEmail', resetEmail);
-    // Limpar URL
-    window.history.replaceState({}, '', '/login');
-    // Ir para login - LoginPage vai detectar e mostrar formulário
-    Router.go('login');
+  if (resetTokenQuery && resetEmailQuery) {
+    console.log('[App] Reset token detectado em query params - redirecionando para login com fragment');
+    // Redirecionar para usar fragment em vez de query params (mais seguro)
+    window.location.hash = `reset_token=${resetTokenQuery}&reset_email=${encodeURIComponent(resetEmailQuery)}`;
     return;
   }
 
-  // 2.5. Verificar se URL contém hash de reset de senha (Supabase recovery links)
+  // 2.5. Verificar se URL contém hash de reset de senha (nosso padrão: #reset_token=...&reset_email=...)
   const hash = window.location.hash;
+  if (hash && hash.includes('reset_token=')) {
+    console.log('[App] Reset token detectado no fragment - processando reset de senha');
+    // Extrair parâmetros do fragment
+    const hashParams = new URLSearchParams(hash.substring(1)); // Remove o # inicial
+    const resetToken = hashParams.get('reset_token');
+    const resetEmail = hashParams.get('reset_email');
+
+    if (resetToken && resetEmail) {
+      console.log('[App] Parâmetros de reset validados - indo para login');
+      // Armazenar em sessionStorage para que LoginPage recupere depois
+      sessionStorage.setItem('resetToken', resetToken);
+      sessionStorage.setItem('resetEmail', resetEmail);
+      // Limpar URL mas manter o hash para o LoginPage detectar
+      window.history.replaceState({}, '', '/login#reset_token=' + encodeURIComponent(resetToken) + '&reset_email=' + encodeURIComponent(resetEmail));
+      // Ir para login - LoginPage vai detectar e mostrar formulário
+      Router.go('login');
+      return;
+    }
+  }
+
+  // 2.75. Verificar se URL contém hash de reset de senha do Supabase (type=recovery ou access_token)
   if (hash && (hash.includes('type=recovery') || hash.includes('access_token'))) {
+    console.log('[App] Detctando Supabase recovery link');
     if (typeof LoginPage !== 'undefined') {
       const handled = await LoginPage.checkPasswordResetToken();
       if (handled) return;
