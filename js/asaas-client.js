@@ -164,7 +164,9 @@ const AsaasClient = {
       value: grossValue,
       dueDate: invoice.dueDate,
       description: invoice.description || `Mensalidade - ${student.name}`,
-      externalReference: invoice.id,
+      // Formato schoolId|invoiceId — necessário para a verificação de
+      // propriedade (IDOR) no proxy /api/asaas ao buscar o QR Code.
+      externalReference: `${school.id}|${invoice.id}`,
       split: splitConfig,
       fine:     { value: finePercent },
       interest: { value: interestDayPercent },
