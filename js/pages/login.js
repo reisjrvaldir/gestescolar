@@ -9,14 +9,46 @@ function getHashParams() {
   return { resetToken: params.get('reset_token'), resetEmail: params.get('reset_email') };
 }
 
+// Extrair parâmetros de reset - tenta hash, sessionStorage e query params
+function getResetParams() {
+  // 1. Tentar URL fragment (#reset_token=...&reset_email=...)
+  const hashResult = getHashParams();
+  if (hashResult.resetToken && hashResult.resetEmail) {
+    console.log('[Login] Reset params encontrados em URL fragment');
+    return hashResult;
+  }
+
+  // 2. Tentar sessionStorage (app.js pode ter armazenado antes do Router remover hash)
+  const sessionToken = sessionStorage.getItem('resetToken');
+  const sessionEmail = sessionStorage.getItem('resetEmail');
+  if (sessionToken && sessionEmail) {
+    console.log('[Login] Reset params encontrados em sessionStorage');
+    return { resetToken: sessionToken, resetEmail: sessionEmail };
+  }
+
+  // 3. Tentar query params (fallback legado)
+  const params = new URLSearchParams(window.location.search);
+  const queryToken = params.get('reset_token');
+  const queryEmail = params.get('reset_email') || params.get('email');
+  if (queryToken && queryEmail) {
+    console.log('[Login] Reset params encontrados em query string (legado)');
+    return { resetToken: queryToken, resetEmail: queryEmail };
+  }
+
+  return { resetToken: null, resetEmail: null };
+}
+
 Router.register('login', () => {
   const app = document.getElementById('app');
 
-  // Verificar se há parâmetros de reset no URL fragment
-  const { resetToken, resetEmail } = getHashParams();
+  // Verificar se há parâmetros de reset (hash, sessionStorage, ou query params)
+  const { resetToken, resetEmail } = getResetParams();
 
   if (resetToken && resetEmail) {
-    console.log('[Login] Parâmetros de reset detectados em URL fragment - mostrando formulário de reset');
+    console.log('[Login] Parâmetros de reset detectados - mostrando formulário de reset');
+    // Limpar sessionStorage após uso para evitar reuso
+    sessionStorage.removeItem('resetToken');
+    sessionStorage.removeItem('resetEmail');
     LoginPage._showResetPasswordForm(resetToken, resetEmail);
     return;
   }
