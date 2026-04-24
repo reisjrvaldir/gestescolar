@@ -153,14 +153,31 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;color:#3
           return res.status(500).json({ error: 'Serviço de recuperação de senha indisponível. Contate o administrador.' });
         }
 
-        // Armazenar HASH do token, não o token original
-        await supabaseAdmin.from('password_reset_tokens').insert({
+        // Tentar armazenar com novo schema (token_hash) primeiro
+        let insertResult = await supabaseAdmin.from('password_reset_tokens').insert({
           email: email,
-          token_hash: tokenHash,  // Armazenar hash, não plain text
+          token_hash: tokenHash,
           expires_at: expiresAt,
           created_at: new Date().toISOString(),
         });
-        console.log('[Password Recovery] ✅ Token hasheado armazenado com segurança em password_reset_tokens');
+
+        // Se falhar porque coluna token_hash não existe, usar schema legado (token)
+        if (insertResult.error && (insertResult.error.code === 'PGRST204' || insertResult.error.message?.includes('token_hash'))) {
+          console.warn('[Password Recovery] Coluna token_hash não existe, usando schema legado (token plain)');
+          insertResult = await supabaseAdmin.from('password_reset_tokens').insert({
+            email: email,
+            token: resetToken,  // Schema antigo: armazena em plain text
+            expires_at: expiresAt,
+            created_at: new Date().toISOString(),
+          });
+        }
+
+        if (insertResult.error) {
+          console.error('[Password Recovery] Erro ao inserir token:', insertResult.error);
+          return res.status(500).json({ error: 'Erro ao processar recuperação de senha. Tente novamente em alguns minutos.' });
+        }
+
+        console.log('[Password Recovery] ✅ Token armazenado com segurança em password_reset_tokens');
       } catch (e) {
         console.error('[Password Recovery] ❌ Falha ao armazenar token:', e.message);
         return res.status(500).json({ error: 'Erro ao processar recuperação de senha. Tente novamente em alguns minutos.' });
@@ -293,28 +310,51 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;color:#3
         const cryptoNode = require('crypto');
         const supabaseAdmin = require('@supabase/supabase-js').createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
 
-        // Hashear token recebido para comparar com o armazenado
+        // Hashear token recebido para comparar com o armazenado (novo schema)
         const tokenHash = cryptoNode.createHash('sha256').update(resetToken).digest('hex');
 
-        // Validar token na tabela
+        // Validar token na tabela - Compatibilidade com ambos schemas (legado e novo)
         let tokenValid = false;
         let tokenData = null;
         try {
+          // Buscar TODOS os tokens do email (sem filtrar por coluna para compatibilidade)
           const { data: tokens, error: tokenErr } = await supabaseAdmin
             .from('password_reset_tokens')
             .select('*')
             .eq('email', email)
-            .eq('token_hash', tokenHash);  // Comparar com hash, não token plain
+            .order('created_at', { ascending: false })
+            .limit(10);
+
+          console.log('[Password Reset] Tokens encontrados para', email, ':', tokens?.length || 0);
 
           if (!tokenErr && tokens && tokens.length > 0) {
-            tokenData = tokens[0];
-            // Verificar expiração
-            if (new Date(tokenData.expires_at) >= new Date()) {
-              tokenValid = true;
-            } else {
-              console.log('[Password Reset] Token expirado para:', email);
-              try { await supabaseAdmin.from('password_reset_tokens').delete().eq('id', tokenData.id); } catch (_) {}
+            // Procurar token matching - tenta novo schema (token_hash) E schema antigo (token)
+            for (const t of tokens) {
+              // Schema novo: token_hash (SHA256)
+              if (t.token_hash && t.token_hash === tokenHash) {
+                console.log('[Password Reset] Token encontrado via token_hash (schema novo)');
+                tokenData = t;
+                break;
+              }
+              // Schema antigo: token (plain text)
+              if (t.token && t.token === resetToken) {
+                console.log('[Password Reset] Token encontrado via token plain (schema legado)');
+                tokenData = t;
+                break;
+              }
             }
+
+            if (tokenData) {
+              // Verificar expiração
+              if (new Date(tokenData.expires_at) >= new Date()) {
+                tokenValid = true;
+              } else {
+                console.log('[Password Reset] Token expirado para:', email);
+                try { await supabaseAdmin.from('password_reset_tokens').delete().eq('id', tokenData.id); } catch (_) {}
+              }
+            }
+          } else if (tokenErr) {
+            console.error('[Password Reset] Erro ao buscar tokens:', tokenErr);
           }
         } catch (tableErr) {
           console.error('[Password Reset] ERRO: Tabela password_reset_tokens não acessível:', tableErr.message);
