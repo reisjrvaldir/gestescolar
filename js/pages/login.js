@@ -187,8 +187,7 @@ Router.register('school-register', () => {
           <div style="display:flex;gap:8px;">
             <div class="form-group" style="flex:1;">
               <label class="form-label">CEP *</label>
-              <input class="form-control" id="regPostalCode" placeholder="00000-000" data-mask="cep" maxlength="9" required
-                oninput="LoginPage.debouncedBuscarCep(this.value)" />
+              <input class="form-control" id="regPostalCode" placeholder="00000-000" maxlength="9" required />
             </div>
             <div class="form-group" style="flex:2;">
               <label class="form-label">Endereço *</label>
@@ -294,6 +293,14 @@ Router.register('school-register', () => {
       </div>
     </div>
   `;
+
+  // Adiciona listener de CEP após renderizar o HTML
+  const cepInput = document.getElementById('regPostalCode');
+  if (cepInput) {
+    cepInput.addEventListener('input', (e) => {
+      LoginPage.debouncedBuscarCep(e.target.value);
+    });
+  }
 });
 
 // ── Tela de Planos ───────────────────────────────────────────────────────
