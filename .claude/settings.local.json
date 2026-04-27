@@ -113,7 +113,11 @@
       "Bash(pandoc --version)",
       "Bash(git reset *)",
       "WebFetch(domain:www.asaas.com)",
-      "WebFetch(domain:central.ajuda.asaas.com)"
+      "WebFetch(domain:central.ajuda.asaas.com)",
+      "mcp__Claude_in_Chrome__tabs_context_mcp",
+      "mcp__Claude_in_Chrome__navigate",
+      "mcp__Claude_in_Chrome__computer",
+      "Bash(curl -s http://localhost:3000/app)"
     ]
   }
 }

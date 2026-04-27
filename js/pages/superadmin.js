@@ -990,11 +990,20 @@ const SuperAdmin = {
 
     Utils.toast('Criando nova subconta Asaas...', 'info');
     try {
+      // Se já tem accountId, usar email temporário para evitar duplicata
+      // Caso contrário, usar o email principal da escola
+      let emailParaSubconta = school.email;
+      if (school.asaasAccountId) {
+        // Gerar email temporário: nome@timestamp@gestescolar.app
+        const basename = school.email.split('@')[0];
+        emailParaSubconta = `${basename}-${Date.now()}@gestescolar.app`;
+      }
+
       // Chamar createSubaccount via AsaasClient
       const result = await AsaasClient.createSubaccount({
         name: school.name,
         cpfCnpj: school.cnpj,
-        email: school.email,
+        email: emailParaSubconta,
         phone: school.phone,
         postalCode: school.postalCode,
         address: school.address,
