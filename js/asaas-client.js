@@ -188,8 +188,11 @@ const AsaasClient = {
 
     if (!charge || !charge.id) return null;
 
-    // 4. Salvar asaas_id na invoice
-    DB.updateInvoice(invoice.id, { asaasId: charge.id, paymentMethod: 'pix_asaas' });
+    // 4. Salvar asaas_id na invoice (NÃO define paymentMethod aqui — só quando pago)
+    // paymentMethod é definido somente no momento do pagamento:
+    //   'pix_asaas' → webhook do Asaas confirma pagamento via PIX
+    //   'especie'   → usuário marca manualmente como recebido em espécie
+    DB.updateInvoice(invoice.id, { asaasId: charge.id });
 
     // 5. Buscar QR Code
     const qr = await this.getPixQrCode(charge.id);

@@ -46,10 +46,10 @@ module.exports = async function handler(req, res) {
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
     const VERCEL_URL = process.env.VERCEL_URL || 'https://gestescolar.app';
 
-    // Buscar invoice pelo asaas_id
+    // Buscar invoice pelo asaas_id (incluindo payment_method para não sobrescrever espécie)
     const { data: invoices, error: findErr } = await supabase
       .from('invoices')
-      .select('id, school_id, student_id, amount, status')
+      .select('id, school_id, student_id, amount, status, payment_method')
       .eq('asaas_id', payment.id)
       .limit(1);
 
@@ -88,7 +88,13 @@ module.exports = async function handler(req, res) {
     const updateData = { status: newStatus };
     if (paidAt) {
       updateData.paid_at = paidAt;
-      updateData.payment_method = 'pix_asaas';
+      // Só define payment_method como pix_asaas se ainda NÃO foi registrado como espécie
+      // (evita sobrescrever pagamento em espécie com PIX do Asaas)
+      if (invoice.payment_method !== 'especie') {
+        updateData.payment_method = 'pix_asaas';
+      } else {
+        console.log(`[Webhook] Invoice ${invoice.id} já registrada como espécie — mantendo classificação.`);
+      }
     }
 
     const { error: updateErr } = await supabase

@@ -1878,8 +1878,10 @@ Router.register('fin-balance', async () => {
           <div style="font-size: 24px; font-weight: 800; color: var(--primary);" id="saldo-total-valor">R$ 0,00</div>
         </div>
         <div style="text-align: center;">
-          <div style="font-size: 11px; color: var(--text-muted); text-transform: uppercase; font-weight: 700; margin-bottom: 4px;">Para Resgate (PIX + Espécie)</div>
-          <div style="font-size: 24px; font-weight: 800; color: var(--secondary);" id="saldo-resgate-valor">R$ 0,00</div>
+          <div style="font-size: 11px; color: var(--text-muted); text-transform: uppercase; font-weight: 700; margin-bottom: 4px;">Resgate PIX (saldo na plataforma)</div>
+          <div id="saldo-resgate-valor">
+            <div style="font-size:24px;font-weight:800;color:var(--text-muted);">R$ 0,00</div>
+          </div>
         </div>
       </div>
     </div>
@@ -2007,10 +2009,10 @@ const FinBalance = {
     // Tabela PIX
     const tbl = document.getElementById('fin-balance-pix-table');
     if (tbl) tbl.innerHTML = `<div class="table-wrap"><table>
-      <thead><tr><th>Data</th><th>Aluno</th><th>Descrição</th><th>Valor</th><th>Taxa (R$1,99 + ${commissionRate}%)</th><th>Líquido</th></tr></thead>
+      <thead><tr><th>Data</th><th>Aluno</th><th>Descrição</th><th>Valor</th><th>Taxa (R$1,99 + ${commissionRate}%)</th><th>Líquido</th><th>Ação</th></tr></thead>
       <tbody>
         ${pixPagos.length === 0
-          ? `<tr><td colspan="6" style="text-align:center;color:var(--text-muted);padding:20px;">Nenhum pagamento PIX em ${this._nomes[month]}/${year}.</td></tr>`
+          ? `<tr><td colspan="7" style="text-align:center;color:var(--text-muted);padding:20px;">Nenhum pagamento PIX em ${this._nomes[month]}/${year}.</td></tr>`
           : pixPagos.sort((a,b) => new Date(b.paidAt||b.createdAt) - new Date(a.paidAt||a.createdAt)).map(i => {
               const taxa = calcTaxa(i.amount);
               const liq  = i.amount - taxa;
@@ -2021,6 +2023,13 @@ const FinBalance = {
                 <td style="font-weight:700;color:var(--secondary);">${Utils.currency(i.amount)}</td>
                 <td style="color:var(--danger);">-${Utils.currency(taxa)}</td>
                 <td style="font-weight:700;">${Utils.currency(liq)}</td>
+                <td>
+                  <button title="Reclassificar como recebido em espécie (sem taxa)"
+                    onclick="FinBalance.reclassificarEspecie('${i.id}')"
+                    style="background:#7b1fa2;color:#fff;border:none;padding:4px 8px;border-radius:5px;font-size:11px;cursor:pointer;white-space:nowrap;">
+                    <i class="fa-solid fa-money-bill-wave"></i> Era Espécie
+                  </button>
+                </td>
               </tr>`;
             }).join('')}
       </tbody>
@@ -2111,15 +2120,56 @@ const FinBalance = {
       infoPixEl.textContent = `${pixPagos.length} pagamento(s) no Asaas${infoTaxa}`;
     }
 
-    if (saldoTotalEl) {
-      const totalSaldoDisponivel = totalEspecie + totalPixLiquido;
-      saldoTotalEl.textContent = Utils.currency(totalSaldoDisponivel);
-    }
+    const totalSaldoDisponivel = totalEspecie + totalPixLiquido;
 
+    if (saldoTotalEl) saldoTotalEl.textContent = Utils.currency(totalSaldoDisponivel);
+
+    // Área de resgate: botão aparece quando há saldo PIX líquido > 0
     if (saldoResgateEl) {
-      const totalSaldoDisponivel = totalEspecie + totalPixLiquido;
-      saldoResgateEl.textContent = Utils.currency(totalSaldoDisponivel);
+      const school = DB.getSchool(DB._schoolId);
+      const pixKey = school?.pixKey || '';
+      if (totalPixLiquido > 0) {
+        saldoResgateEl.innerHTML = `
+          <div style="font-size:24px;font-weight:800;color:var(--secondary);margin-bottom:8px;">${Utils.currency(totalPixLiquido)}</div>
+          <button class="btn btn-primary btn-sm" onclick="FinWithdraw.open(${totalPixLiquido})" style="margin-top:4px;">
+            <i class="fa-solid fa-money-bill-transfer"></i> Resgatar via PIX
+          </button>
+          <div style="font-size:11px;color:var(--text-muted);margin-top:6px;">
+            ${pixKey ? `Chave: <strong>${Utils.escape(pixKey)}</strong>` : '<span style="color:var(--danger);">⚠️ Configure a chave PIX em Configurações</span>'}
+          </div>`;
+      } else {
+        saldoResgateEl.innerHTML = `<div style="font-size:24px;font-weight:800;color:var(--text-muted);">R$ 0,00</div>
+          <div style="font-size:11px;color:var(--text-muted);margin-top:4px;">Sem saldo PIX disponível para resgate</div>`;
+      }
     }
+  },
+
+  reclassificarEspecie(invoiceId) {
+    const inv = DB.getInvoices().find(i => i.id === invoiceId);
+    if (!inv) return;
+    Utils.modal('Reclassificar como Espécie',
+      `<div style="text-align:center;padding:8px 0;">
+        <div style="font-size:36px;margin-bottom:8px;">💵</div>
+        <p>Confirma que <strong>${Utils.escape(inv.studentName)}</strong> pagou</p>
+        <p><strong>${Utils.escape(inv.description)}</strong> — <strong>${Utils.currency(inv.amount)}</strong></p>
+        <p style="margin-top:12px;color:var(--text-muted);font-size:13px;">
+          O pagamento será reclassificado para <strong>Espécie</strong>.<br>
+          Sem taxa do Asaas. O valor integral fica com a escola.
+        </p>
+      </div>`,
+      `<button class="btn btn-outline" onclick="this.closest('.modal-overlay').remove()">Cancelar</button>
+       <button class="btn btn-primary" onclick="FinBalance._confirmarReclassificacao('${invoiceId}')">
+         <i class="fa-solid fa-money-bill-wave"></i> Confirmar — Era Espécie
+       </button>`
+    );
+  },
+
+  async _confirmarReclassificacao(invoiceId) {
+    document.querySelector('.modal-overlay')?.remove();
+    await DB.updateInvoice(invoiceId, { paymentMethod: 'especie' });
+    await DB.refreshInvoices?.();
+    Utils.toast('Pagamento reclassificado como espécie!', 'success');
+    this.renderMes();
   },
 };
 
