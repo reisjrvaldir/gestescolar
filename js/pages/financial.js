@@ -2194,11 +2194,14 @@ const FinBalance = {
       await DB.updateSchool(DB._schoolId, { asaasSubApiKey: apiKey });
       Utils.toast('API Key salva! Consultando saldo...', 'success');
 
-      // Consultar saldo IMEDIATAMENTE com a chave que acabamos de salvar
-      // Não precisa re-ler do banco, usa a chave localmente
+      // Aguardar propagação da chave no Supabase (até 2 segundos)
+      // O proxy precisa ler a chave que foi salva
       const area = document.getElementById('asaas-balance-area');
       if (area) {
-        area.innerHTML = `<div style="color:var(--text-muted);"><i class="fa-solid fa-spinner fa-spin"></i> Consultando saldo com a chave fornecida...</div>`;
+        area.innerHTML = `<div style="color:var(--text-muted);"><i class="fa-solid fa-spinner fa-spin"></i> Consultando saldo...</div>`;
+
+        // Dar tempo para o Supabase replicar a chave salva
+        await new Promise(r => setTimeout(r, 1500));
 
         try {
           const result = await AsaasClient.getBalance();
