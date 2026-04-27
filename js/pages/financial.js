@@ -2052,31 +2052,15 @@ const FinBalance = {
       return;
     }
 
+    // Se a escola tem subconta mas não tem API key salva, mostrar UI de configuração
+    if (!school.asaasSubApiKey) {
+      this._renderConfigApiKeyUI(area, school);
+      return;
+    }
+
     area.innerHTML = `<div style="color:var(--text-muted);"><i class="fa-solid fa-spinner fa-spin"></i> Consultando saldo REAL do Asaas...</div>`;
 
     try {
-      // Se escola não tem asaasSubApiKey, tentar recuperar automaticamente via accountId
-      if (!school.asaasSubApiKey && school.asaasAccountId) {
-        console.log('[recarregarSaldo] Sem asaasSubApiKey — recuperando via accountId...');
-        area.innerHTML = `<div style="color:var(--text-muted);"><i class="fa-solid fa-spinner fa-spin"></i> Recuperando credenciais da subconta...</div>`;
-        const keyResult = await AsaasClient.refreshSubaccountApiKey(school.asaasAccountId);
-        if (keyResult?.apiKey) {
-          // Salvar API key recuperada na escola
-          await DB.updateSchool(DB._schoolId, { asaasSubApiKey: keyResult.apiKey });
-          school = DB.getSchool(DB._schoolId); // Recarregar dados da escola
-          console.log('[recarregarSaldo] API key da subconta recuperada e salva com sucesso!');
-          area.innerHTML = `<div style="color:var(--text-muted);"><i class="fa-solid fa-spinner fa-spin"></i> Consultando saldo REAL do Asaas...</div>`;
-        } else {
-          console.warn('[recarregarSaldo] Não foi possível recuperar a API key da subconta.', keyResult);
-          area.innerHTML = `<div style="color:var(--warning);font-size:13px;padding:8px;">
-            <i class="fa-solid fa-triangle-exclamation"></i>
-            <strong>Credenciais da subconta não encontradas.</strong><br>
-            <span style="font-size:12px;">A escola pode ter sido criada sem API key. Recrie a subconta no painel superadmin.</span>
-          </div>`;
-          return;
-        }
-      }
-
       // Buscar saldo REAL da subconta (usa asaasSubApiKey do servidor)
       const result = await AsaasClient.getBalance();
 
@@ -2087,11 +2071,9 @@ const FinBalance = {
         return;
       }
 
-      // Se o proxy retornou warning (sem API key configurada), mostrar aviso
+      // Se o proxy retornou warning (sem API key configurada), mostrar UI de configuração
       if (result.warning) {
-        area.innerHTML = `<div style="color:var(--warning);font-size:13px;padding:8px;">
-          <i class="fa-solid fa-circle-info"></i> ${result.warning}
-        </div>`;
+        this._renderConfigApiKeyUI(area, school, result.warning);
         return;
       }
 
@@ -2131,6 +2113,72 @@ const FinBalance = {
       area.innerHTML = `<div style="color:var(--danger);font-size:13px;">
         <i class="fa-solid fa-triangle-exclamation"></i> Erro ao consultar Asaas: ${err.message || 'tente novamente'}
       </div>`;
+    }
+  },
+
+  // UI para configurar a API key da subconta manualmente quando ela está faltando
+  // (escolas criadas antes do fix automático que salva apiKey)
+  _renderConfigApiKeyUI(area, school, customWarning = null) {
+    const message = customWarning || 'Subconta Asaas existe, mas a API key não está configurada no sistema.';
+    area.innerHTML = `
+      <div style="text-align:left;max-width:600px;margin:0 auto;">
+        <div style="background:#fff8e1;border:1px solid #ffd54f;border-radius:8px;padding:16px;margin-bottom:16px;">
+          <div style="font-size:14px;color:#8b6914;margin-bottom:8px;">
+            <i class="fa-solid fa-triangle-exclamation"></i> <strong>Configuração necessária</strong>
+          </div>
+          <div style="font-size:13px;color:#8b6914;line-height:1.5;">
+            ${Utils.escape(message)}<br>
+            Sem ela, não é possível consultar o saldo real da subconta nem solicitar resgates.
+          </div>
+        </div>
+        <div style="background:var(--bg-secondary);border-radius:8px;padding:16px;margin-bottom:16px;">
+          <div style="font-weight:600;font-size:13px;margin-bottom:8px;">Como obter sua API Key:</div>
+          <ol style="font-size:12px;color:var(--text-muted);line-height:1.7;padding-left:20px;margin:0;">
+            <li>Acesse <a href="https://www.asaas.com/" target="_blank" style="color:var(--secondary);">www.asaas.com</a> e faça login na conta da escola</li>
+            <li>Vá em <strong>Integrações &rarr; Chave de API (Access Token)</strong></li>
+            <li>Copie a chave (formato: <code style="background:#fff;padding:2px 6px;border-radius:3px;">$aact_...</code>)</li>
+            <li>Cole no campo abaixo e clique em <strong>Salvar e Consultar Saldo</strong></li>
+          </ol>
+        </div>
+        <div style="display:flex;gap:8px;align-items:stretch;">
+          <input type="text" id="asaas-sub-api-key-input" class="form-control"
+            placeholder="$aact_..." style="flex:1;font-family:monospace;font-size:12px;" />
+          <button class="btn btn-primary" onclick="FinBalance._salvarApiKeySubconta()" style="white-space:nowrap;">
+            <i class="fa-solid fa-floppy-disk"></i> Salvar e Consultar Saldo
+          </button>
+        </div>
+        <div style="font-size:11px;color:var(--text-muted);margin-top:8px;">
+          <i class="fa-solid fa-shield-halved"></i> A chave é armazenada com segurança e usada apenas para consultar o saldo desta escola.
+        </div>
+      </div>
+    `;
+  },
+
+  async _salvarApiKeySubconta() {
+    const input = document.getElementById('asaas-sub-api-key-input');
+    if (!input) return;
+    const apiKey = (input.value || '').trim();
+    if (!apiKey) {
+      Utils.toast('Cole a API Key antes de salvar.', 'error');
+      input.focus();
+      return;
+    }
+    if (!apiKey.startsWith('$aact_')) {
+      Utils.toast('API Key inválida. Deve começar com $aact_', 'error');
+      input.focus();
+      return;
+    }
+    Utils.toast('Salvando e validando API Key...', 'info');
+    try {
+      await DB.updateSchool(DB._schoolId, { asaasSubApiKey: apiKey });
+      Utils.toast('API Key salva! Consultando saldo...', 'success');
+      // Pequeno delay para garantir que o Supabase propagou a mudança
+      await new Promise(r => setTimeout(r, 500));
+      this.recarregarSaldo();
+      this.atualizarConsolidacao();
+    } catch (err) {
+      console.error('[salvarApiKeySubconta] Erro:', err);
+      Utils.toast('Erro ao salvar API Key: ' + (err.message || 'tente novamente'), 'error');
     }
   },
 
