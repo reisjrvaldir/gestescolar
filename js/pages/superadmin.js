@@ -698,16 +698,19 @@ const SuperAdmin = {
         <div class="form-group"><label class="form-label">CNPJ *</label><input class="form-control" id="saSchoolCnpj" required data-mask="cnpj" maxlength="18" placeholder="00.000.000/0000-00" /></div>
         <div class="form-group"><label class="form-label">E-mail *</label><input class="form-control" id="saSchoolEmail" type="email" required /></div>
         <div class="form-group"><label class="form-label">Telefone *</label><input class="form-control" id="saSchoolPhone" data-mask="phone" maxlength="15" inputmode="numeric" placeholder="(00) 00000-0000" required /></div>
-        <div class="form-group"><label class="form-label">CEP</label><input class="form-control" id="saSchoolPostalCode" placeholder="00000-000" /></div>
-        <div class="form-group"><label class="form-label">Endereço</label><input class="form-control" id="saSchoolAddress" placeholder="Rua, Avenida..." /></div>
+        <div style="background:#f0f7ff;border-left:4px solid #2196F3;padding:12px;border-radius:4px;margin-bottom:16px;font-size:13px;color:#0D47A1;">
+          <i class="fa-solid fa-info-circle"></i> <strong>Endereço completo necessário para criar subconta Asaas automaticamente:</strong>
+        </div>
+        <div class="form-group"><label class="form-label">CEP *</label><input class="form-control" id="saSchoolPostalCode" placeholder="00000-000" required /></div>
+        <div class="form-group"><label class="form-label">Endereço *</label><input class="form-control" id="saSchoolAddress" placeholder="Rua, Avenida..." required /></div>
         <div style="display:flex;gap:8px;">
-          <div class="form-group" style="flex:1;"><label class="form-label">Número</label><input class="form-control" id="saSchoolAddressNumber" placeholder="Nº" /></div>
+          <div class="form-group" style="flex:1;"><label class="form-label">Número *</label><input class="form-control" id="saSchoolAddressNumber" placeholder="Nº" required /></div>
           <div class="form-group" style="flex:2;"><label class="form-label">Complemento</label><input class="form-control" id="saSchoolComplement" placeholder="Sala, Bloco..." /></div>
         </div>
         <div style="display:flex;gap:8px;">
-          <div class="form-group" style="flex:2;"><label class="form-label">Bairro</label><input class="form-control" id="saSchoolProvince" /></div>
-          <div class="form-group" style="flex:2;"><label class="form-label">Cidade</label><input class="form-control" id="saSchoolCity" /></div>
-          <div class="form-group" style="flex:1;"><label class="form-label">UF</label><input class="form-control" id="saSchoolState" maxlength="2" placeholder="SP" /></div>
+          <div class="form-group" style="flex:2;"><label class="form-label">Bairro</label><input class="form-control" id="saSchoolProvince" placeholder="(opcional)" /></div>
+          <div class="form-group" style="flex:2;"><label class="form-label">Cidade *</label><input class="form-control" id="saSchoolCity" required /></div>
+          <div class="form-group" style="flex:1;"><label class="form-label">UF *</label><input class="form-control" id="saSchoolState" maxlength="2" placeholder="SP" required /></div>
         </div>
         <div class="form-group"><label class="form-label">Plano</label>
           <select class="form-control" id="saSchoolPlan">
@@ -743,28 +746,36 @@ const SuperAdmin = {
     document.querySelector('.modal-overlay')?.remove();
     Utils.toast('Escola criada! Criando subconta Asaas...', 'info');
 
-    // Criar subconta Asaas automaticamente se dados suficientes
-    if (cnpj && email && postalCode && address && addressNumber && province) {
-      const result = await AsaasClient.createSubaccount({
-        name, cpfCnpj: cnpj, email, phone,
-        postalCode, address, addressNumber, complement, province, city, state,
-      });
-      if (result && (result.id || result.walletId)) {
-        DB.updateSchool(school.id, {
-          asaasAccountId: result.id     || '',
-          asaasWalletId:  result.walletId || '',
-          asaasSubApiKey: result.apiKey  || '', // CRÍTICO: sem isso, saldo puxa da conta master
+    // Criar subconta Asaas automaticamente com dados obrigatórios
+    // Bairro (province) é opcional para o Asaas
+    if (cnpj && email && postalCode && address && addressNumber && city && state) {
+      Utils.toast('Criando subconta Asaas...', 'info');
+      try {
+        const result = await AsaasClient.createSubaccount({
+          name, cpfCnpj: cnpj, email, phone,
+          postalCode, address, addressNumber, complement, province, city, state,
         });
-        if (!result.apiKey) {
-          Utils.toast(`Escola "${name}" criada, mas a subconta não retornou API key. Saldo não funcionará — configure manualmente.`, 'warning');
+        if (result && (result.id || result.walletId)) {
+          await DB.updateSchool(school.id, {
+            asaasAccountId: result.id     || '',
+            asaasWalletId:  result.walletId || '',
+            asaasSubApiKey: result.apiKey  || '', // CRÍTICO: sem isso, saldo puxa da conta master
+          });
+          if (!result.apiKey) {
+            Utils.toast(`Escola criada! Subconta sem API key. Saldo não funcionará.`, 'warning');
+          } else {
+            Utils.toast(`Escola "${name}" criada com Asaas totalmente configurado!`, 'success');
+          }
         } else {
-          Utils.toast(`Escola "${name}" criada com subconta Asaas ativa!`, 'success');
+          Utils.toast(`Escola criada, mas subconta Asaas retornou dados inválidos. Tente novamente.`, 'error');
+          console.warn('[createSchool] Asaas result:', result);
         }
-      } else {
-        Utils.toast(`Escola criada, mas subconta Asaas falhou. Configure manualmente.`, 'warning');
+      } catch (err) {
+        Utils.toast(`Escola criada, mas erro ao criar subconta: ${err.message}`, 'warning');
+        console.error('[createSchool] Asaas error:', err);
       }
     } else {
-      Utils.toast('Escola criada! Preencha o endereço completo para ativar o Asaas.', 'success');
+      Utils.toast('Escola criada! Endereço completo foi preenchido, mas Asaas não foi criado.', 'info');
     }
 
     Router.go('superadmin-dashboard');
