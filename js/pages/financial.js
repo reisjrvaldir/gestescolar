@@ -2054,26 +2054,44 @@ const FinBalance = {
 
     area.innerHTML = `<div style="color:var(--text-muted);"><i class="fa-solid fa-spinner fa-spin"></i> Consultando saldo...</div>`;
 
-    const result = await AsaasClient.getBalance();
-    if (!result) {
-      area.innerHTML = `<div style="color:var(--danger);">Não foi possível consultar o saldo. Verifique as configurações do Asaas.</div>`;
+    // Calcular saldo esperado baseado em invoices pagos via PIX (não usar saldo bruto do Asaas)
+    const invoices = DB.getInvoices();
+    const pixPagos = invoices.filter(i => i.status === 'pago' && i.paymentMethod === 'pix_asaas');
+
+    const commissionRate = Number(school?.commissionRate) || 3;
+    const ASAAS_PIX_FEE = 1.99;
+    const calcTaxa = (amount) => ASAAS_PIX_FEE + (amount - ASAAS_PIX_FEE) * commissionRate / 100;
+
+    const totalPixNominal = pixPagos.reduce((t, i) => t + (i.amount || 0), 0);
+    const totalTaxaPix = pixPagos.reduce((t, i) => t + calcTaxa(i.amount || 0), 0);
+    const saldoEsperado = totalPixNominal - totalTaxaPix;
+
+    // Se não há PIX pagos, não mostrar saldo (evita confusão com saldo negativo do Asaas)
+    if (pixPagos.length === 0) {
+      area.innerHTML = `<div style="color:var(--text-muted);font-size:13px;">
+        <i class="fa-solid fa-info-circle"></i> Nenhum pagamento via PIX. O saldo será exibido quando houver transações.
+      </div>`;
       return;
     }
 
-    const saldo = result.balance || result.totalBalance || 0;
+    // Mostrar saldo calculado (confiável)
     const pixKey = school?.pixKey || '';
-
     area.innerHTML = `
-      <div style="font-size:36px;font-weight:900;color:var(--secondary);margin-bottom:4px;">${Utils.currency(saldo)}</div>
-      <div style="font-size:13px;color:var(--text-muted);margin-bottom:20px;">Disponível para resgate na conta Asaas da escola</div>
-      ${saldo > 0 ? `
-        <button class="btn btn-primary" onclick="FinWithdraw.open(${saldo})" style="font-size:15px;padding:12px 32px;">
+      <div style="font-size:36px;font-weight:900;color:var(--secondary);margin-bottom:4px;">${Utils.currency(saldoEsperado)}</div>
+      <div style="font-size:13px;color:var(--text-muted);margin-bottom:8px;">
+        Saldo esperado em Asaas (${pixPagos.length} pagamento${pixPagos.length !== 1 ? 's' : ''} via PIX)
+      </div>
+      <div style="font-size:12px;color:var(--text-muted);margin-bottom:20px;">
+        ${Utils.currency(totalPixNominal)} (bruto) − ${Utils.currency(totalTaxaPix)} (taxa Asaas + comissão)
+      </div>
+      ${saldoEsperado > 0 ? `
+        <button class="btn btn-primary" onclick="FinWithdraw.open(${saldoEsperado})" style="font-size:15px;padding:12px 32px;">
           <i class="fa-solid fa-money-bill-transfer"></i> Fazer Resgate via PIX
         </button>
         <div style="font-size:12px;color:var(--text-muted);margin-top:8px;">
           ${pixKey ? `Chave PIX cadastrada: <strong>${Utils.escape(pixKey)}</strong>` : '<span style="color:var(--danger);">⚠️ Chave PIX não cadastrada. Configure em Configurações.</span>'}
         </div>
-      ` : `<div style="color:var(--text-muted);font-size:13px;">Nenhum saldo disponível para resgate no momento.</div>`}
+      ` : `<div style="color:var(--text-muted);font-size:13px;"><i class="fa-solid fa-info-circle"></i> Sem saldo PIX disponível para resgate no momento.</div>`}
     `;
   },
 
