@@ -67,8 +67,9 @@ const AsaasClient = {
   },
 
   // ── SALDO ────────────────────────────────────
-  async getBalance() {
-    return this._call('getBalance', {});
+  // walletId opcional: se fornecido, busca saldo da subconta; senão, saldo da conta principal
+  async getBalance(walletId = null) {
+    return this._call('getBalance', { walletId });
   },
 
   // ── SOLICITAR SAQUE ──────────────────────────

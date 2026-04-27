@@ -2055,8 +2055,8 @@ const FinBalance = {
     area.innerHTML = `<div style="color:var(--text-muted);"><i class="fa-solid fa-spinner fa-spin"></i> Consultando saldo REAL do Asaas...</div>`;
 
     try {
-      // Buscar saldo REAL do Asaas (não calcular)
-      const result = await AsaasClient.getBalance();
+      // Buscar saldo REAL da subconta da escola no Asaas
+      const result = await AsaasClient.getBalance(school.asaasWalletId);
 
       if (!result) {
         area.innerHTML = `<div style="color:var(--danger);font-size:13px;">
