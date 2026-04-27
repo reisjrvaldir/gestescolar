@@ -852,8 +852,18 @@ const SuperAdmin = {
         </div>
         <div class="form-group">
           <label class="form-label">Asaas API Key da Subconta</label>
-          <input class="form-control" id="esSubApiKey" value="${Utils.escape(school.asaasSubApiKey||'')}" placeholder="$aact_... (obtida ao criar subconta)" />
-          <small style="color:var(--text-muted);font-size:11px;">Chave da subconta usada para consultar saldo e solicitar resgates. Obtida automaticamente ao criar subconta.</small>
+          <div style="display:flex;gap:6px;align-items:stretch;">
+            <input class="form-control" id="esSubApiKey" value="${Utils.escape(school.asaasSubApiKey||'')}" placeholder="$aact_... (obtida ao criar subconta)" style="flex:1;" />
+            ${school.asaasAccountId ? `
+              <button type="button" class="btn btn-outline btn-sm" onclick="SuperAdmin.sincronizarApiKey('${schoolId}','${school.asaasAccountId}')" title="Recupera a API key automaticamente do Asaas usando o accountId" style="white-space:nowrap;">
+                <i class="fa-solid fa-rotate"></i> Sincronizar
+              </button>
+            ` : ''}
+          </div>
+          <small style="color:var(--text-muted);font-size:11px;">
+            Chave da subconta usada para consultar saldo e solicitar resgates.
+            ${school.asaasAccountId ? 'Use <strong>Sincronizar</strong> para recuperar automaticamente do Asaas.' : 'Crie a subconta primeiro para habilitar a sincronização automática.'}
+          </small>
         </div>
         <div class="form-group"><label class="form-label">Status</label>
           <select class="form-control" id="esStatus">
@@ -893,6 +903,38 @@ const SuperAdmin = {
     document.querySelector('.modal-overlay')?.remove();
     Utils.toast('Escola atualizada!', 'success');
     Router.go('superadmin-dashboard');
+  },
+
+  // Sincroniza a API Key da subconta Asaas automaticamente.
+  // Chama POST /accounts/api_key/{accountId} via proxy (master key).
+  // ATENÇÃO: o Asaas REGENERA a chave — invalidando a anterior se já existia.
+  async sincronizarApiKey(schoolId, accountId) {
+    if (!accountId) {
+      Utils.toast('Escola sem asaasAccountId. Crie a subconta primeiro.', 'error');
+      return;
+    }
+    if (!confirm('Sincronizar API Key irá REGENERAR a chave da subconta no Asaas. Qualquer integração externa usando a chave antiga será invalidada. Continuar?')) {
+      return;
+    }
+    Utils.toast('Solicitando nova API Key ao Asaas...', 'info');
+    try {
+      const result = await AsaasClient.refreshSubaccountApiKey(accountId, schoolId);
+      if (result?.apiKey) {
+        // Atualizar campo no formulário aberto, se existir
+        const input = document.getElementById('esSubApiKey');
+        if (input) input.value = result.apiKey;
+        Utils.toast('API Key sincronizada com sucesso! Saldo agora pode ser consultado.', 'success');
+      } else if (result?.warning) {
+        console.warn('[sincronizarApiKey] Asaas response sem apiKey:', result);
+        Utils.toast(`Asaas respondeu sem API Key: ${result.warning}. Veja o console para detalhes.`, 'warning');
+      } else {
+        Utils.toast('Falha ao sincronizar. Veja o console para detalhes.', 'error');
+        console.error('[sincronizarApiKey] Resposta inesperada:', result);
+      }
+    } catch (err) {
+      console.error('[sincronizarApiKey] Erro:', err);
+      Utils.toast('Erro ao sincronizar: ' + (err.message || 'tente novamente'), 'error');
+    }
   },
 
   deleteSchool(schoolId) {

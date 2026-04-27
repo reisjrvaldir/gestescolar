@@ -92,10 +92,14 @@ const AsaasClient = {
   },
 
   // ── RECUPERAR/GERAR API KEY DA SUBCONTA ──────
-  // Usado quando escola foi criada sem salvar asaasSubApiKey
-  // Usa a chave master do proxy — operação administrativa segura
-  async refreshSubaccountApiKey(accountId) {
-    return this._call('refreshSubaccountApiKey', { accountId });
+  // Usado quando escola foi criada sem salvar asaasSubApiKey.
+  // Usa a chave master do proxy — operação administrativa segura.
+  // O proxy AUTOMATICAMENTE salva a apiKey recuperada na schools.asaas_sub_api_key.
+  // schoolId é opcional (usado pelo superadmin para sincronizar key de outra escola).
+  async refreshSubaccountApiKey(accountId, schoolId = null) {
+    const payload = { accountId };
+    if (schoolId) payload.schoolId = schoolId;
+    return this._call('refreshSubaccountApiKey', payload);
   },
 
   // ── HELPER: Gerar cobrança PIX para invoice ──

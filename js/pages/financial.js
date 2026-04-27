@@ -2052,7 +2052,28 @@ const FinBalance = {
       return;
     }
 
-    // Se a escola tem subconta mas não tem API key salva, mostrar UI de configuração
+    // Se a escola tem subconta mas não tem API key salva, tentar auto-recuperar primeiro
+    if (!school.asaasSubApiKey && school.asaasAccountId) {
+      area.innerHTML = `<div style="color:var(--text-muted);"><i class="fa-solid fa-spinner fa-spin"></i> Recuperando credenciais da subconta automaticamente...</div>`;
+      try {
+        const keyResult = await AsaasClient.refreshSubaccountApiKey(school.asaasAccountId);
+        if (keyResult?.apiKey) {
+          // Proxy já salvou no Supabase via SERVICE_KEY — só precisamos atualizar local
+          await DB.updateSchool(DB._schoolId, { asaasSubApiKey: keyResult.apiKey });
+          school = DB.getSchool(DB._schoolId);
+          console.log('[recarregarSaldo] API key recuperada automaticamente!');
+        } else {
+          console.warn('[recarregarSaldo] Auto-recuperação falhou:', keyResult);
+          this._renderConfigApiKeyUI(area, school, keyResult?.warning);
+          return;
+        }
+      } catch (autoErr) {
+        console.error('[recarregarSaldo] Erro na auto-recuperação:', autoErr);
+        this._renderConfigApiKeyUI(area, school);
+        return;
+      }
+    }
+
     if (!school.asaasSubApiKey) {
       this._renderConfigApiKeyUI(area, school);
       return;

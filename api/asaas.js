@@ -664,11 +664,13 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;color:#3
         break;
 
       // ── GERAR/RECUPERAR API KEY DA SUBCONTA (usa chave master) ──
-      // Necessário quando escola foi criada sem salvar asaasSubApiKey
+      // Endpoint Asaas: POST /accounts/api_key/{accountId}
+      // Regenera (ou recupera) a API key da subconta. Operação administrativa
+      // do master account. ATENÇÃO: regenera invalida a chave anterior se houver.
       case 'refreshSubaccountApiKey':
         asaasPath = `/accounts/api_key/${data.accountId}`;
         method = 'POST';
-        body = {}; // POST sem body gera/regenera a API key
+        body = {};
         break;
 
       // ── PLANOS SAAS: CRIAR CUSTOMER NA CONTA MASTER ───
@@ -792,11 +794,66 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;color:#3
     const asaasRes = await fetch(`${ASAAS_BASE}${asaasPath}`, fetchOpts);
     const asaasData = await asaasRes.json();
 
+    // Log detalhado para diagnóstico de refreshSubaccountApiKey
+    if (action === 'refreshSubaccountApiKey') {
+      console.log(`[refreshSubaccountApiKey] Status: ${asaasRes.status}`);
+      console.log(`[refreshSubaccountApiKey] URL: ${ASAAS_BASE}${asaasPath}`);
+      console.log(`[refreshSubaccountApiKey] Response: ${JSON.stringify(asaasData).slice(0, 500)}`);
+    }
+
     if (!asaasRes.ok) {
-      console.error('[Asaas Error]', asaasRes.status, JSON.stringify(asaasData));
+      console.error('[Asaas Error]', action, asaasRes.status, JSON.stringify(asaasData));
       return res.status(asaasRes.status).json({
         error: asaasData.errors?.[0]?.description || asaasData.message || 'Erro na API Asaas.',
+        asaasStatus: asaasRes.status,
+        asaasRaw: asaasData, // expor detalhes para debug no client
       });
+    }
+
+    // Normalizar resposta de refreshSubaccountApiKey: Asaas pode usar
+    // diferentes nomes de campo dependendo da versão (apiKey, accessToken, etc.)
+    if (action === 'refreshSubaccountApiKey') {
+      const possibleKey = asaasData.apiKey
+        || asaasData.api_key
+        || asaasData.accessToken
+        || asaasData.access_token
+        || asaasData.token
+        || (asaasData.data && (asaasData.data.apiKey || asaasData.data.access_token))
+        || null;
+      if (possibleKey) {
+        // Determinar qual escola atualizar:
+        // - Superadmin: pode passar data.schoolId explicitamente
+        // - Gestor: usa sua própria userSchoolId
+        const targetSchoolId = (userRole === 'superadmin' && data.schoolId)
+          ? data.schoolId
+          : userSchoolId;
+
+        if (targetSchoolId && SUPABASE_SERVICE_KEY) {
+          try {
+            await fetch(`${SUPABASE_URL}/rest/v1/schools?id=eq.${targetSchoolId}`, {
+              method: 'PATCH',
+              headers: {
+                apikey: SUPABASE_SERVICE_KEY,
+                Authorization: `Bearer ${SUPABASE_SERVICE_KEY}`,
+                'Content-Type': 'application/json',
+                Prefer: 'return=minimal',
+              },
+              body: JSON.stringify({ asaas_sub_api_key: possibleKey }),
+            });
+            console.log(`[refreshSubaccountApiKey] API key salva em schools.asaas_sub_api_key (school=${targetSchoolId}, requestedBy=${userRole})`);
+          } catch (saveErr) {
+            console.error('[refreshSubaccountApiKey] Erro ao salvar no Supabase:', saveErr.message);
+          }
+        }
+        return res.status(200).json({ apiKey: possibleKey, schoolId: targetSchoolId, raw: asaasData });
+      } else {
+        console.warn('[refreshSubaccountApiKey] Resposta OK mas sem campo apiKey reconhecível:', asaasData);
+        return res.status(200).json({
+          apiKey: null,
+          raw: asaasData,
+          warning: 'Asaas retornou OK mas sem apiKey. Verifique logs.',
+        });
+      }
     }
 
     // ── IDOR: verificar propriedade do pagamento ───
