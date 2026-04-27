@@ -67,14 +67,32 @@ Router.register('checkout', (params = {}) => {
               </h4>
 
               <div class="form-group">
-                <label class="form-label">Nome da escola *</label>
+                <label class="form-label">Tipo de pessoa *</label>
+                <div style="display:flex;gap:8px;margin-top:6px;flex-wrap:wrap;">
+                  <label style="display:flex;align-items:flex-start;gap:6px;cursor:pointer;padding:10px 12px;border:1px solid var(--border);border-radius:6px;flex:1;min-width:120px;">
+                    <input type="radio" name="coPersonType" value="PJ" checked onchange="CheckoutPage._togglePersonType()" />
+                    <span><strong>PJ</strong><br><small style="color:var(--text-muted);">Pessoa Jurídica</small></span>
+                  </label>
+                  <label style="display:flex;align-items:flex-start;gap:6px;cursor:pointer;padding:10px 12px;border:1px solid var(--border);border-radius:6px;flex:1;min-width:120px;">
+                    <input type="radio" name="coPersonType" value="MEI" onchange="CheckoutPage._togglePersonType()" />
+                    <span><strong>MEI</strong><br><small style="color:var(--text-muted);">Microempreendedor</small></span>
+                  </label>
+                  <label style="display:flex;align-items:flex-start;gap:6px;cursor:pointer;padding:10px 12px;border:1px solid var(--border);border-radius:6px;flex:1;min-width:120px;">
+                    <input type="radio" name="coPersonType" value="CPF" onchange="CheckoutPage._togglePersonType()" />
+                    <span><strong>CPF</strong><br><small style="color:var(--text-muted);">Pessoa Física</small></span>
+                  </label>
+                </div>
+              </div>
+
+              <div class="form-group">
+                <label class="form-label">Nome da escola / Responsável *</label>
                 <input type="text" class="form-control" id="coSchoolName"
                   placeholder="Ex: Escola Exemplo LTDA" maxlength="100" required />
               </div>
 
               <div class="checkout-row">
                 <div class="form-group">
-                  <label class="form-label">CNPJ *</label>
+                  <label class="form-label" id="coCnpjLabel">CNPJ *</label>
                   <input type="text" class="form-control" id="coCnpj"
                     placeholder="00.000.000/0000-00" maxlength="18" required
                     data-mask="cnpj" />
@@ -542,9 +560,30 @@ const CheckoutPage = {
     return document.querySelector('.checkout-tab.active')?.dataset.tab || 'card';
   },
 
+  // ── Alterna máscara/label CNPJ ↔ CPF ─────────────────────────
+  _togglePersonType() {
+    const t = document.querySelector('input[name="coPersonType"]:checked')?.value || 'PJ';
+    const lbl = document.getElementById('coCnpjLabel');
+    const inp = document.getElementById('coCnpj');
+    if (!lbl || !inp) return;
+    if (t === 'CPF') {
+      lbl.textContent = 'CPF *';
+      inp.setAttribute('data-mask', 'cpf');
+      inp.setAttribute('maxlength', '14');
+      inp.setAttribute('placeholder', '000.000.000-00');
+    } else {
+      lbl.textContent = 'CNPJ *';
+      inp.setAttribute('data-mask', 'cnpj');
+      inp.setAttribute('maxlength', '18');
+      inp.setAttribute('placeholder', '00.000.000/0000-00');
+    }
+    inp.value = '';
+  },
+
   // ── Coleta dados do formulário ──────────────────────────────
   _formData() {
     return {
+      personType:  document.querySelector('input[name="coPersonType"]:checked')?.value || 'PJ',
       schoolName:  document.getElementById('coSchoolName')?.value.trim(),
       cnpj:        document.getElementById('coCnpj')?.value.replace(/\D/g,''),
       phone:       document.getElementById('coPhone')?.value.replace(/\D/g,''),
@@ -577,6 +616,8 @@ const CheckoutPage = {
             name: d.schoolName, cnpj: d.cnpj, phone: d.phone, email: d.schoolEmail,
             planId: planId || 'free', postalCode: d.postalCode, address: d.address,
             addressNumber: d.addressNum, complement: d.complement, city: d.city, state: d.state,
+            asaasPersonType: d.personType || 'PJ',
+            asaasDocumentsStatus: 'pending', // Aguardando upload de docs pelo gestor
           },
           gestor: { name: d.name, email: d.email, phone: d.phone || '' },
         },
@@ -610,6 +651,8 @@ const CheckoutPage = {
       postalCode: d.postalCode, address: d.address, addressNumber: d.addressNum,
       complement: d.complement, city: d.city, state: d.state,
       status: 'trial', createdAt: new Date().toISOString(),
+      asaasPersonType: d.personType || 'PJ',
+      asaasDocumentsStatus: 'pending', // Gestor envia docs depois do login
     };
     if (Array.isArray(DB._cache?.schools)) DB._cache.schools.push(school);
     DB.initSchool(school.id);
@@ -625,21 +668,9 @@ const CheckoutPage = {
     DB.saveSchoolConfig({ name: d.schoolName, cnpj: d.cnpj, phone: d.phone, logo: '', address: d.address });
     DB.addAuditLog('school_created', `Escola ${d.schoolName} criada via checkout`);
 
-    // Subconta Asaas
-    try {
-      const res = await AsaasClient.createSubaccount({
-        name: d.schoolName, cpfCnpj: d.cnpj, email: d.schoolEmail, phone: d.phone,
-        postalCode: d.postalCode, address: d.address, addressNumber: d.addressNum,
-        complement: d.complement, city: d.city, state: d.state,
-      });
-      if (res?.id || res?.walletId) {
-        DB.updateSchool(school.id, {
-          asaasAccountId: res.id     || '',
-          asaasWalletId:  res.walletId || '',
-          asaasSubApiKey: res.apiKey  || '', // CRÍTICO: necessário para consultar saldo da subconta
-        });
-      }
-    } catch(e) { console.warn('[Asaas subaccount]', e.message); }
+    // Subconta Asaas será criada quando o gestor enviar os documentos KYC
+    // (rota admin-asaas-documents). Não criamos aqui para evitar contas pendentes
+    // sem documentos no Asaas.
 
     const session = { id: gestorId, name: d.name, email: d.email, role: 'gestor', schoolId: school.id, schoolName: d.schoolName, planId: planId || 'free' };
     Auth._save(session);

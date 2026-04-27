@@ -256,6 +256,7 @@ const Router = {
         { id: 'admin-classes',   route: 'admin-classes',   icon: 'fa-chalkboard',       label: 'Turmas' },
         { section: 'Sistema' },
         { id: 'register',        route: 'register',        icon: 'fa-user-plus',        label: 'Novo Cadastro' },
+        { id: 'admin-asaas-documents', route: 'admin-asaas-documents', icon: 'fa-id-card', label: 'Documentos Asaas' },
         { id: 'admin-settings',  route: 'admin-settings',  icon: 'fa-gear',             label: 'Configurações' },
       ],
       financeiro: [
@@ -294,6 +295,7 @@ const Router = {
         { section: 'Sistema' },
         { id: 'register',         route: 'register',         icon: 'fa-user-plus',        label: 'Novo Cadastro' },
         { id: 'school-plans',     route: 'school-plans',     icon: 'fa-rocket',           label: 'Planos' },
+        { id: 'admin-asaas-documents', route: 'admin-asaas-documents', icon: 'fa-id-card', label: 'Documentos Asaas' },
         { id: 'admin-settings',   route: 'admin-settings',   icon: 'fa-gear',             label: 'Configurações' },
       ],
     };

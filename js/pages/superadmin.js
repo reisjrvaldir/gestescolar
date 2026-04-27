@@ -694,8 +694,28 @@ const SuperAdmin = {
   newSchool() {
     Utils.modal('Nova Escola',
       `<form onsubmit="SuperAdmin.createSchool(event)">
-        <div class="form-group"><label class="form-label">Nome da Escola *</label><input class="form-control" id="saSchoolName" required maxlength="100" /></div>
-        <div class="form-group"><label class="form-label">CNPJ *</label><input class="form-control" id="saSchoolCnpj" required data-mask="cnpj" maxlength="18" placeholder="00.000.000/0000-00" /></div>
+        <div class="form-group">
+          <label class="form-label">Tipo de Pessoa *</label>
+          <div style="display:flex;gap:8px;margin-top:6px;">
+            <label style="display:flex;align-items:flex-start;gap:6px;cursor:pointer;padding:10px 12px;border:1px solid var(--border);border-radius:6px;flex:1;">
+              <input type="radio" name="saPersonType" value="PJ" checked onchange="SuperAdmin._togglePersonType()" />
+              <span><strong>PJ</strong><br><small style="color:var(--text-muted);">Pessoa Jurídica (CNPJ)</small></span>
+            </label>
+            <label style="display:flex;align-items:flex-start;gap:6px;cursor:pointer;padding:10px 12px;border:1px solid var(--border);border-radius:6px;flex:1;">
+              <input type="radio" name="saPersonType" value="MEI" onchange="SuperAdmin._togglePersonType()" />
+              <span><strong>MEI</strong><br><small style="color:var(--text-muted);">Microempreendedor (CNPJ)</small></span>
+            </label>
+            <label style="display:flex;align-items:flex-start;gap:6px;cursor:pointer;padding:10px 12px;border:1px solid var(--border);border-radius:6px;flex:1;">
+              <input type="radio" name="saPersonType" value="CPF" onchange="SuperAdmin._togglePersonType()" />
+              <span><strong>CPF</strong><br><small style="color:var(--text-muted);">Pessoa Física</small></span>
+            </label>
+          </div>
+        </div>
+        <div class="form-group"><label class="form-label">Nome da Escola / Responsável *</label><input class="form-control" id="saSchoolName" required maxlength="100" /></div>
+        <div class="form-group">
+          <label class="form-label" id="saCnpjLabel">CNPJ *</label>
+          <input class="form-control" id="saSchoolCnpj" required data-mask="cnpj" maxlength="18" placeholder="00.000.000/0000-00" />
+        </div>
         <div class="form-group"><label class="form-label">E-mail *</label><input class="form-control" id="saSchoolEmail" type="email" required /></div>
         <div class="form-group"><label class="form-label">Telefone *</label><input class="form-control" id="saSchoolPhone" data-mask="phone" maxlength="15" inputmode="numeric" placeholder="(00) 00000-0000" required /></div>
         <div style="background:#f0f7ff;border-left:4px solid #2196F3;padding:12px;border-radius:4px;margin-bottom:16px;font-size:13px;color:#0D47A1;">
@@ -717,12 +737,37 @@ const SuperAdmin = {
             ${Plans.getAll().map(p => `<option value="${p.id}">${p.name} \u2013 ${p.price===0?'Gr\u00e1tis':Utils.currency(p.price)+'/m\u00eas'}</option>`).join('')}
           </select>
         </div>
+        <div style="background:#FFF3E0;border-left:4px solid #FF9800;padding:12px;border-radius:4px;margin-bottom:16px;font-size:13px;color:#E65100;">
+          <i class="fa-solid fa-triangle-exclamation"></i>
+          <strong>Pr\u00f3ximo passo:</strong> Ap\u00f3s criar a escola, o gestor deve fazer login e enviar os documentos (RG, CPF/CNPJ e comprovante de endere\u00e7o) na se\u00e7\u00e3o "Documentos Asaas" para que a subconta seja criada e ativada.
+        </div>
         <button type="submit" class="btn btn-primary w-100">Criar Escola</button>
       </form>`, '');
   },
 
+  // Alterna a m\u00e1scara/label do campo CNPJ/CPF conforme o tipo de pessoa selecionado
+  _togglePersonType() {
+    const t = document.querySelector('input[name="saPersonType"]:checked')?.value || 'PJ';
+    const lbl = document.getElementById('saCnpjLabel');
+    const inp = document.getElementById('saSchoolCnpj');
+    if (!lbl || !inp) return;
+    if (t === 'CPF') {
+      lbl.textContent = 'CPF *';
+      inp.setAttribute('data-mask', 'cpf');
+      inp.setAttribute('maxlength', '14');
+      inp.setAttribute('placeholder', '000.000.000-00');
+    } else {
+      lbl.textContent = 'CNPJ *';
+      inp.setAttribute('data-mask', 'cnpj');
+      inp.setAttribute('maxlength', '18');
+      inp.setAttribute('placeholder', '00.000.000/0000-00');
+    }
+    inp.value = '';
+  },
+
   async createSchool(e) {
     e.preventDefault();
+    const personType  = document.querySelector('input[name="saPersonType"]:checked')?.value || 'PJ';
     const name        = document.getElementById('saSchoolName').value.trim();
     const cnpj        = document.getElementById('saSchoolCnpj').value.trim();
     const email       = document.getElementById('saSchoolEmail').value.trim();
@@ -737,46 +782,28 @@ const SuperAdmin = {
     const plan        = document.getElementById('saSchoolPlan').value;
     if (!name) { Utils.toast('Informe o nome da escola.', 'error'); return; }
 
-    // Criar escola no banco
-    const school = DB.addSchool({ name, cnpj, email, phone, planId: plan, ownerId: null, postalCode, address, addressNumber, complement, province, city, state });
+    // Validação de documento por tipo de pessoa
+    const docDigits = (cnpj || '').replace(/\D/g, '');
+    if (personType === 'CPF' && docDigits.length !== 11) {
+      Utils.toast('CPF inválido. Informe os 11 dígitos.', 'error'); return;
+    }
+    if ((personType === 'PJ' || personType === 'MEI') && docDigits.length !== 14) {
+      Utils.toast('CNPJ inválido. Informe os 14 dígitos.', 'error'); return;
+    }
+
+    // Criar escola no banco — Asaas (subconta + KYC) será feito posteriormente pelo gestor
+    const school = DB.addSchool({
+      name, cnpj, email, phone, planId: plan, ownerId: null,
+      postalCode, address, addressNumber, complement, province, city, state,
+      asaasPersonType: personType,
+      asaasDocumentsStatus: 'pending', // Aguardando upload pelo gestor
+    });
     DB.initSchool(school.id);
     DB.setTenant(school.id);
     DB.saveSchoolConfig({ name, cnpj, phone, logo: '', address });
     DB.setTenant(null);
     document.querySelector('.modal-overlay')?.remove();
-    Utils.toast('Escola criada! Criando subconta Asaas...', 'info');
-
-    // Criar subconta Asaas automaticamente com dados obrigatórios
-    // Bairro (province) é opcional para o Asaas
-    if (cnpj && email && postalCode && address && addressNumber && city && state) {
-      Utils.toast('Criando subconta Asaas...', 'info');
-      try {
-        const result = await AsaasClient.createSubaccount({
-          name, cpfCnpj: cnpj, email, phone,
-          postalCode, address, addressNumber, complement, province, city, state,
-        });
-        if (result && (result.id || result.walletId)) {
-          await DB.updateSchool(school.id, {
-            asaasAccountId: result.id     || '',
-            asaasWalletId:  result.walletId || '',
-            asaasSubApiKey: result.apiKey  || '', // CRÍTICO: sem isso, saldo puxa da conta master
-          });
-          if (!result.apiKey) {
-            Utils.toast(`Escola criada! Subconta sem API key. Saldo não funcionará.`, 'warning');
-          } else {
-            Utils.toast(`Escola "${name}" criada com Asaas totalmente configurado!`, 'success');
-          }
-        } else {
-          Utils.toast(`Escola criada, mas subconta Asaas retornou dados inválidos. Tente novamente.`, 'error');
-          console.warn('[createSchool] Asaas result:', result);
-        }
-      } catch (err) {
-        Utils.toast(`Escola criada, mas erro ao criar subconta: ${err.message}`, 'warning');
-        console.error('[createSchool] Asaas error:', err);
-      }
-    } else {
-      Utils.toast('Escola criada! Endereço completo foi preenchido, mas Asaas não foi criado.', 'info');
-    }
+    Utils.toast(`Escola "${name}" criada! O gestor deve enviar os documentos para ativar a subconta Asaas.`, 'success');
 
     Router.go('superadmin-dashboard');
   },
@@ -792,9 +819,21 @@ const SuperAdmin = {
     DB.setTenant(null);
     const plan = Plans.get(school.planId || 'free');
 
+    // Mapear status Asaas para badge colorido
+    const docStatusMap = {
+      'not_required':         { color: '#9E9E9E', text: 'Não solicitado' },
+      'pending':              { color: '#FF9800', text: 'Aguardando docs' },
+      'pending_verification': { color: '#2196F3', text: 'Em análise' },
+      'verified':             { color: '#4CAF50', text: 'Verificada' },
+      'rejected':             { color: '#F44336', text: 'Reprovada' },
+    };
+    const dStatus = school.asaasDocumentsStatus || 'pending';
+    const dInfo = docStatusMap[dStatus] || docStatusMap.pending;
+
     Utils.modal(`Detalhes – ${Utils.escape(school.name)}`,
       `<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
-        <div><strong>CNPJ:</strong> ${Utils.escape(school.cnpj||'--')}</div>
+        <div><strong>${(school.asaasPersonType||'PJ')==='CPF' ? 'CPF' : 'CNPJ'}:</strong> ${Utils.escape(school.cnpj||'--')}</div>
+        <div><strong>Tipo Pessoa:</strong> <span class="badge badge-blue">${Utils.escape(school.asaasPersonType||'PJ')}</span></div>
         <div><strong>E-mail:</strong> ${Utils.escape(school.email||'--')}</div>
         <div><strong>Telefone:</strong> ${Utils.escape(school.phone||'--')}</div>
         <div><strong>Plano:</strong> <span class="badge badge-blue">${Utils.escape(plan.name)}</span></div>
@@ -804,6 +843,11 @@ const SuperAdmin = {
         <div><strong>Saldo:</strong> ${Utils.currency(bal.amount)}</div>
         <div><strong>Criada em:</strong> ${Utils.date(school.createdAt)}</div>
         <div><strong>Status:</strong> ${Utils.statusBadge(school.status||'active')}</div>
+        <div style="grid-column:1/-1;padding:10px;border-radius:6px;background:#f7f7f7;border-left:4px solid ${dInfo.color};">
+          <strong>Documentos Asaas:</strong>
+          <span style="background:${dInfo.color};color:white;padding:3px 10px;border-radius:10px;font-size:11px;font-weight:700;margin-left:6px;">${dInfo.text}</span>
+          ${school.asaasVerificationMessage ? `<div style="font-size:11px;color:#666;margin-top:4px;">${Utils.escape(school.asaasVerificationMessage)}</div>` : ''}
+        </div>
       </div>`,
       `<button class="btn btn-outline" onclick="this.closest('.modal-overlay').remove()">Fechar</button>`
     );

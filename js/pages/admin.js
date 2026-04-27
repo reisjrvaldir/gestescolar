@@ -63,8 +63,47 @@ Router.register('admin-dashboard', () => {
     }
   }
 
+  // Aviso de documentos Asaas pendentes
+  let asaasDocsAlert = '';
+  const _schoolForDocs = DB.getSchool(user.schoolId);
+  const _docStatus = _schoolForDocs?.asaasDocumentsStatus || 'pending';
+  if (_docStatus === 'pending') {
+    asaasDocsAlert = `
+      <div style="background:#FFF3E0;border-left:4px solid #FF9800;border-radius:8px;padding:14px 18px;margin-bottom:16px;display:flex;align-items:center;gap:14px;">
+        <i class="fa-solid fa-id-card" style="color:#FF9800;font-size:24px;"></i>
+        <div style="flex:1;">
+          <div style="font-weight:700;color:#E65100;">Envie seus documentos para receber pagamentos</div>
+          <div style="font-size:13px;color:#795548;margin-top:3px;">Sua subconta de pagamentos ainda não foi ativada. Envie os documentos KYC para começar a receber via PIX.</div>
+        </div>
+        <button class="btn btn-sm" style="background:#FF9800;color:white;" onclick="Router.go('admin-asaas-documents')">
+          <i class="fa-solid fa-upload"></i> Enviar Documentos
+        </button>
+      </div>`;
+  } else if (_docStatus === 'pending_verification') {
+    asaasDocsAlert = `
+      <div style="background:#E3F2FD;border-left:4px solid #2196F3;border-radius:8px;padding:14px 18px;margin-bottom:16px;display:flex;align-items:center;gap:14px;">
+        <i class="fa-solid fa-rotate fa-spin" style="color:#2196F3;font-size:22px;"></i>
+        <div style="flex:1;">
+          <div style="font-weight:700;color:#0D47A1;">Documentos em análise pelo Asaas</div>
+          <div style="font-size:13px;color:#1565C0;margin-top:3px;">A análise costuma levar até 48h úteis. Você será notificado(a) quando concluir.</div>
+        </div>
+        <button class="btn btn-sm btn-outline" onclick="Router.go('admin-asaas-documents')">Ver detalhes</button>
+      </div>`;
+  } else if (_docStatus === 'rejected') {
+    asaasDocsAlert = `
+      <div style="background:#FFEBEE;border-left:4px solid #F44336;border-radius:8px;padding:14px 18px;margin-bottom:16px;display:flex;align-items:center;gap:14px;">
+        <i class="fa-solid fa-circle-exclamation" style="color:#F44336;font-size:22px;"></i>
+        <div style="flex:1;">
+          <div style="font-weight:700;color:#B71C1C;">Documentos reprovados — reenvie por favor</div>
+          <div style="font-size:13px;color:#C62828;margin-top:3px;">${Utils.escape(_schoolForDocs?.asaasVerificationMessage || 'Reenvie os documentos para nova análise.')}</div>
+        </div>
+        <button class="btn btn-sm" style="background:#F44336;color:white;" onclick="Router.go('admin-asaas-documents')">Reenviar</button>
+      </div>`;
+  }
+
   Router.renderLayout(user, 'admin-dashboard', `
     <h2 style="margin-bottom:20px;">Bem-vindo(a), ${Utils.escape(user.name.split(' ')[0])}! 👋</h2>
+    ${asaasDocsAlert}
     ${planAlert}
     <div class="stats-grid">
       <div class="stat-card">
@@ -697,10 +736,10 @@ Router.register('admin-settings', () => {
               </div>
             </div>
             <p style="font-size:13px;color:var(--text-muted);margin-bottom:16px;">
-              Para ativar, preencha e salve os dados da escola (CNPJ, e-mail, endereço completo) e clique em Ativar abaixo.
+              Para ativar, é necessário enviar os documentos KYC (RG, CPF/CNPJ e comprovante de endereço) na seção "Documentos Asaas".
             </p>
-            <button class="btn btn-primary" onclick="AdminSettings.ativarGateway()">
-              <i class="fa-solid fa-bolt"></i> Ativar Gateway de Pagamentos
+            <button class="btn btn-primary" onclick="Router.go('admin-asaas-documents')">
+              <i class="fa-solid fa-id-card"></i> Enviar Documentos para Ativação
             </button>
           `}
         </div>

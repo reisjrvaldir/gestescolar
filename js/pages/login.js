@@ -198,12 +198,29 @@ Router.register('school-register', () => {
             <i class="fa-solid fa-school"></i> Dados da Institui\u00e7\u00e3o
           </div>
           <div class="form-group">
-            <label class="form-label">Nome da Institui\u00e7\u00e3o *</label>
+            <label class="form-label">Tipo de Pessoa *</label>
+            <div style="display:flex;gap:6px;margin-top:6px;flex-wrap:wrap;">
+              <label style="display:flex;align-items:flex-start;gap:6px;cursor:pointer;padding:8px 10px;border:1px solid var(--border);border-radius:6px;flex:1;min-width:100px;">
+                <input type="radio" name="regPersonType" value="PJ" checked onchange="LoginPage._togglePersonType()" />
+                <span><strong>PJ</strong><br><small style="color:var(--text-muted);">CNPJ</small></span>
+              </label>
+              <label style="display:flex;align-items:flex-start;gap:6px;cursor:pointer;padding:8px 10px;border:1px solid var(--border);border-radius:6px;flex:1;min-width:100px;">
+                <input type="radio" name="regPersonType" value="MEI" onchange="LoginPage._togglePersonType()" />
+                <span><strong>MEI</strong><br><small style="color:var(--text-muted);">CNPJ</small></span>
+              </label>
+              <label style="display:flex;align-items:flex-start;gap:6px;cursor:pointer;padding:8px 10px;border:1px solid var(--border);border-radius:6px;flex:1;min-width:100px;">
+                <input type="radio" name="regPersonType" value="CPF" onchange="LoginPage._togglePersonType()" />
+                <span><strong>CPF</strong><br><small style="color:var(--text-muted);">Pessoa F\u00edsica</small></span>
+              </label>
+            </div>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Nome da Institui\u00e7\u00e3o / Respons\u00e1vel *</label>
             <input class="form-control" id="regSchoolName" required placeholder="Ex: Col\u00e9gio Nova Era" maxlength="100" />
           </div>
           <div style="display:flex;gap:8px;">
             <div class="form-group" style="flex:1;">
-              <label class="form-label">CNPJ *</label>
+              <label class="form-label" id="regCnpjLabel">CNPJ *</label>
               <input class="form-control" id="regCnpj" placeholder="00.000.000/0000-00" data-mask="cnpj" maxlength="18" required />
             </div>
             <div class="form-group" style="flex:1;">
@@ -569,9 +586,30 @@ const LoginPage = {
 
 
 
+  // Alterna máscara CNPJ ↔ CPF conforme tipo de pessoa
+  _togglePersonType() {
+    const t = document.querySelector('input[name="regPersonType"]:checked')?.value || 'PJ';
+    const lbl = document.getElementById('regCnpjLabel');
+    const inp = document.getElementById('regCnpj');
+    if (!lbl || !inp) return;
+    if (t === 'CPF') {
+      lbl.textContent = 'CPF *';
+      inp.setAttribute('data-mask', 'cpf');
+      inp.setAttribute('maxlength', '14');
+      inp.setAttribute('placeholder', '000.000.000-00');
+    } else {
+      lbl.textContent = 'CNPJ *';
+      inp.setAttribute('data-mask', 'cnpj');
+      inp.setAttribute('maxlength', '18');
+      inp.setAttribute('placeholder', '00.000.000/0000-00');
+    }
+    inp.value = '';
+  },
+
   async registerSchool(e) {
     e.preventDefault();
     const alertEl = document.getElementById('reg-alert');
+    const personType = document.querySelector('input[name="regPersonType"]:checked')?.value || 'PJ';
     const schoolName = document.getElementById('regSchoolName').value.trim();
     const cnpj       = document.getElementById('regCnpj').value.trim();
     const phone      = document.getElementById('regPhone').value.trim();
@@ -653,10 +691,23 @@ const LoginPage = {
         // Agora auth.uid() IS NOT NULL — RLS de INSERT funcionar\u00e1
       }
 
+      // Validar documento conforme tipo de pessoa
+      const docDigits = (cnpj || '').replace(/\D/g, '');
+      if (personType === 'CPF' && docDigits.length !== 11) {
+        alertEl.innerHTML = '<div class="alert alert-danger">CPF inv\u00e1lido. Informe os 11 d\u00edgitos.</div>';
+        return;
+      }
+      if ((personType === 'PJ' || personType === 'MEI') && docDigits.length !== 14) {
+        alertEl.innerHTML = '<div class="alert alert-danger">CNPJ inv\u00e1lido. Informe os 14 d\u00edgitos.</div>';
+        return;
+      }
+
       // PASSO 2: Criar escola (agora com sess\u00e3o Auth ativa)
       const school = DB.addSchool({
         name: schoolName, cnpj, phone, email, planId: 'free',
         postalCode, address, addressNumber: addressNum, complement, province, city, state,
+        asaasPersonType: personType,
+        asaasDocumentsStatus: 'pending', // Gestor envia docs depois do login
       });
       DB.initSchool(school.id);
       DB.setTenant(school.id);
@@ -683,23 +734,9 @@ const LoginPage = {
       DB.saveSchoolConfig({ name: schoolName, cnpj, phone, logo: '', address });
       DB.addAuditLog('school_created', `Escola ${schoolName} criada por ${name}`);
 
-      // PASSO 5: Criar subconta Asaas automaticamente
-      try {
-        const asaasResult = await AsaasClient.createSubaccount({
-          name: schoolName, cpfCnpj: cnpj, email, phone,
-          postalCode, address, addressNumber: addressNum, complement, province, city, state,
-        });
-        if (asaasResult && (asaasResult.id || asaasResult.walletId)) {
-          DB.updateSchool(school.id, {
-            asaasAccountId: asaasResult.id || '',
-            asaasWalletId: asaasResult.walletId || '',
-          });
-          DB.addAuditLog('asaas_subaccount_created', `Subconta Asaas criada: ${asaasResult.id}`);
-        }
-      } catch (err) {
-        console.warn('[Asaas] Erro ao criar subconta durante registro:', err.message);
-        // N\u00e3o bloqueia o registro mesmo se Asaas falhar
-      }
+      // PASSO 5: Subconta Asaas ser\u00e1 criada quando o gestor enviar os documentos
+      // KYC na rota admin-asaas-documents (ap\u00f3s login). N\u00e3o criamos aqui para evitar
+      // contas pendentes sem documentos no Asaas.
 
       // PASSO 6: Montar sess\u00e3o e redirecionar
       const session = {

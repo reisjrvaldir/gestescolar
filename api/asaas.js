@@ -20,6 +20,7 @@ const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY;
 const GESTOR_ONLY_ACTIONS = new Set([
   'createSubaccount', 'requestWithdraw', 'getBalance',
   'listTransfers', 'getSubaccount', 'refreshSubaccountApiKey',
+  'uploadAndVerifySchoolDocuments', 'checkSchoolDocumentsStatus',
 ]);
 
 // Ações que usam a chave master (SaaS) — não precisam de subconta
@@ -237,14 +238,28 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;color:#3
       const schoolId = cryptoNode.randomUUID();
       const userId = cryptoNode.randomUUID();
       const now = new Date().toISOString();
+      // Validar e normalizar tipo de pessoa Asaas (PJ | MEI | CPF)
+      const personType = ['PJ','MEI','CPF'].includes(s.asaasPersonType) ? s.asaasPersonType : 'PJ';
+      const docDigits = (s.cnpj || '').replace(/\D/g, '');
+      if (personType === 'CPF' && docDigits && docDigits.length !== 11) {
+        return res.status(400).json({ error: 'CPF inválido (deve ter 11 dígitos).' });
+      }
+      if ((personType === 'PJ' || personType === 'MEI') && docDigits && docDigits.length !== 14) {
+        return res.status(400).json({ error: 'CNPJ inválido (deve ter 14 dígitos).' });
+      }
+
       const schoolRow = {
         id: schoolId, name: s.name, cnpj: s.cnpj || null, phone: s.phone || null,
         email: s.email || email, plan_id: s.planId || 'free',
         postal_code: s.postalCode || null, address: s.address || null,
         address_number: s.addressNumber || null, complement: s.complement || null,
+        province: s.province || null,
         city: s.city || null, state: s.state || null,
         owner_id: userId, status: 'trial',
         school_status: 'trial', trial_started_at: now, created_at: now,
+        // KYC Asaas: subconta será criada quando o gestor enviar os documentos
+        asaas_person_type: personType,
+        asaas_documents_status: 'pending',
       };
       const userRow = {
         id: userId, auth_id: authId, school_id: schoolId,
@@ -622,7 +637,374 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;color:#3
         warning: foundKey ? null : 'Não foi possível recuperar a API key automaticamente. O Asaas não disponibiliza esse endpoint. Configure manualmente.',
       });
     }
-    // ── FIM HANDLER ESPECIAL ───────────────────────────────────────────────────
+    // ── FIM HANDLER ESPECIAL refreshSubaccountApiKey ───────────────────────────
+
+    // ══════════════════════════════════════════════════════════════════════════
+    //  HANDLER ESPECIAL: uploadAndVerifySchoolDocuments
+    //  Recebe documentos em base64, faz upload para Supabase Storage,
+    //  cria a subconta Asaas (se ainda não existe) e envia os documentos
+    //  para verificação KYC no Asaas.
+    // ══════════════════════════════════════════════════════════════════════════
+    if (action === 'uploadAndVerifySchoolDocuments') {
+      const targetSchoolId = (userRole === 'superadmin' && data.schoolId)
+        ? data.schoolId
+        : userSchoolId;
+
+      if (!targetSchoolId) {
+        return res.status(400).json({ error: 'School ID não informado.' });
+      }
+
+      // 1. Carregar dados completos da escola do Supabase
+      const schoolUrl = `${SUPABASE_URL}/rest/v1/schools?id=eq.${targetSchoolId}&limit=1`;
+      const schoolFetch = await fetch(schoolUrl, {
+        headers: { apikey: SUPABASE_SERVICE_KEY, Authorization: `Bearer ${SUPABASE_SERVICE_KEY}` }
+      });
+      if (!schoolFetch.ok) {
+        return res.status(500).json({ error: 'Falha ao carregar escola.' });
+      }
+      const schoolRows = await schoolFetch.json();
+      const school = schoolRows?.[0];
+      if (!school) {
+        return res.status(404).json({ error: 'Escola não encontrada.' });
+      }
+
+      // 2. Validar dados mínimos da escola
+      const cpfCnpjDigits = (school.cnpj || '').replace(/\D/g, '');
+      const personType = school.asaas_person_type || 'PJ';
+      if (!school.name || !school.email || !cpfCnpjDigits) {
+        return res.status(400).json({
+          error: 'Dados da escola incompletos. Preencha nome, e-mail e CNPJ/CPF antes de enviar documentos.'
+        });
+      }
+      if (personType === 'CPF' && cpfCnpjDigits.length !== 11) {
+        return res.status(400).json({ error: 'CPF inválido.' });
+      }
+      if ((personType === 'PJ' || personType === 'MEI') && cpfCnpjDigits.length !== 14) {
+        return res.status(400).json({ error: 'CNPJ inválido.' });
+      }
+
+      // 3. Validar arquivos recebidos
+      const filesIn = data.files || {};
+      const fileKeys = Object.keys(filesIn);
+      if (fileKeys.length === 0) {
+        return res.status(400).json({ error: 'Nenhum documento enviado.' });
+      }
+
+      // Limites de segurança: máximo 5MB por arquivo, mime types restritos
+      const MAX_BYTES = 5 * 1024 * 1024;
+      const ALLOWED_MIMES = new Set(['application/pdf','image/jpeg','image/png','image/jpg','image/webp']);
+      for (const k of fileKeys) {
+        const f = filesIn[k];
+        if (!f || !f.base64 || !f.mime) {
+          return res.status(400).json({ error: `Arquivo "${k}" inválido.` });
+        }
+        if (!ALLOWED_MIMES.has(f.mime)) {
+          return res.status(400).json({ error: `Tipo do arquivo "${k}" não permitido.` });
+        }
+        // Estimar tamanho a partir do base64 (4 chars = 3 bytes)
+        const approxBytes = Math.floor(f.base64.length * 3 / 4);
+        if (approxBytes > MAX_BYTES) {
+          return res.status(400).json({ error: `Arquivo "${k}" excede 5MB.` });
+        }
+      }
+
+      // 4. Upload dos arquivos para Supabase Storage (bucket: school-documents)
+      const uploadedDocs = { ...(school.asaas_documents || {}) };
+      const bucketName = 'school-documents';
+      const nowIso = new Date().toISOString();
+
+      for (const docKey of fileKeys) {
+        const f = filesIn[docKey];
+        const ext = (f.mime.split('/')[1] || 'bin').replace('jpeg', 'jpg');
+        const safeName = `${targetSchoolId}/${docKey}_${Date.now()}.${ext}`;
+        const buffer = Buffer.from(f.base64, 'base64');
+
+        const uploadUrl = `${SUPABASE_URL}/storage/v1/object/${bucketName}/${safeName}`;
+        const uploadRes = await fetch(uploadUrl, {
+          method: 'POST',
+          headers: {
+            apikey: SUPABASE_SERVICE_KEY,
+            Authorization: `Bearer ${SUPABASE_SERVICE_KEY}`,
+            'Content-Type': f.mime,
+            'x-upsert': 'true',
+          },
+          body: buffer,
+        });
+
+        if (!uploadRes.ok) {
+          const errText = await uploadRes.text();
+          console.error(`[uploadDocs] Falha upload ${docKey}:`, uploadRes.status, errText.slice(0, 200));
+          return res.status(500).json({
+            error: `Falha ao enviar arquivo "${docKey}". Verifique se o bucket "${bucketName}" existe.`
+          });
+        }
+
+        // URL assinada (privada). Validade de 7 dias para o gestor visualizar.
+        const signedUrlRes = await fetch(
+          `${SUPABASE_URL}/storage/v1/object/sign/${bucketName}/${safeName}`,
+          {
+            method: 'POST',
+            headers: {
+              apikey: SUPABASE_SERVICE_KEY,
+              Authorization: `Bearer ${SUPABASE_SERVICE_KEY}`,
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ expiresIn: 60 * 60 * 24 * 7 }),
+          }
+        );
+        let signedUrl = '';
+        if (signedUrlRes.ok) {
+          const sj = await signedUrlRes.json();
+          signedUrl = sj?.signedURL || sj?.signedUrl || '';
+          if (signedUrl && !signedUrl.startsWith('http')) {
+            signedUrl = `${SUPABASE_URL}/storage/v1${signedUrl}`;
+          }
+        }
+
+        uploadedDocs[docKey] = {
+          path: safeName,
+          url: signedUrl,
+          fileName: f.name || `${docKey}.${ext}`,
+          mime: f.mime,
+          uploadedAt: nowIso,
+        };
+      }
+
+      // 5. Criar subconta Asaas se ainda não existe
+      let asaasAccountId = school.asaas_account_id || '';
+      let asaasWalletId  = school.asaas_wallet_id  || '';
+      let asaasApiKey    = school.asaas_sub_api_key || '';
+
+      const masterHeaders = {
+        access_token: ASAAS_API_KEY,
+        'Content-Type': 'application/json',
+      };
+
+      if (!asaasAccountId) {
+        // Mapear tipo de pessoa para companyType do Asaas
+        // PJ → LIMITED ou ASSOCIATION (usaremos LIMITED para empresas privadas)
+        // MEI → MEI
+        // CPF → não enviar companyType (pessoa física)
+        let companyType;
+        if (personType === 'PJ')  companyType = 'LIMITED';
+        else if (personType === 'MEI') companyType = 'MEI';
+        else companyType = undefined; // CPF
+
+        const subBody = {
+          name:          school.name,
+          email:         school.email,
+          cpfCnpj:       cpfCnpjDigits,
+          phone:         school.phone ? school.phone.replace(/\D/g, '') : undefined,
+          mobilePhone:   school.phone ? school.phone.replace(/\D/g, '') : undefined,
+          incomeValue:   5000,
+          postalCode:    (school.postal_code || '').replace(/\D/g, ''),
+          address:       school.address,
+          addressNumber: school.address_number,
+          complement:    school.complement,
+          province:      school.province,
+        };
+        if (companyType) subBody.companyType = companyType;
+
+        const subRes = await fetch(`${ASAAS_BASE}/accounts`, {
+          method: 'POST',
+          headers: masterHeaders,
+          body: JSON.stringify(subBody),
+        });
+        const subText = await subRes.text();
+        let subData = {};
+        try { subData = JSON.parse(subText); } catch (_) {}
+
+        if (!subRes.ok) {
+          console.error('[uploadDocs] Falha createSubaccount:', subRes.status, subText.slice(0, 300));
+          return res.status(subRes.status).json({
+            error: subData.errors?.[0]?.description || subData.message || 'Falha ao criar subconta no Asaas.'
+          });
+        }
+        asaasAccountId = subData.id || '';
+        asaasWalletId  = subData.walletId || '';
+        asaasApiKey    = subData.apiKey || '';
+      }
+
+      // 6. Enviar documentos ao Asaas para verificação KYC
+      //    Endpoint: POST /myAccount/documents/{documentId}
+      //    Mapeamento dos document keys do GestEscolar para os tipos do Asaas:
+      //    - identification → IDENTIFICATION
+      //    - addressProof   → ADDRESS_PROOF
+      //    - cnpjCard       → CUSTOM (Cartão CNPJ)
+      //    - socialContract → SOCIAL_CONTRACT
+      //    - ccmei          → CUSTOM (CCMEI)
+      //    - cpfDoc         → IDENTIFICATION
+      const asaasDocTypeMap = {
+        identification:  'IDENTIFICATION',
+        addressProof:    'ADDRESS_PROOF',
+        cnpjCard:        'CUSTOM',
+        socialContract:  'SOCIAL_CONTRACT',
+        ccmei:           'CUSTOM',
+        cpfDoc:          'IDENTIFICATION',
+      };
+
+      // Se temos a apiKey da subconta, enviamos os docs com ela (a partir da própria subconta)
+      const docHeaders = asaasApiKey
+        ? { access_token: asaasApiKey }
+        : masterHeaders;
+
+      // Listar documentos pendentes na subconta Asaas para descobrir os IDs
+      let pendingDocsList = [];
+      try {
+        const listRes = await fetch(`${ASAAS_BASE}/myAccount/documents`, {
+          method: 'GET',
+          headers: docHeaders,
+        });
+        if (listRes.ok) {
+          const lj = await listRes.json();
+          pendingDocsList = lj?.data || [];
+        }
+      } catch (e) {
+        console.warn('[uploadDocs] Erro ao listar docs Asaas:', e.message);
+      }
+
+      // Para cada arquivo, enviar para o Asaas via multipart
+      for (const docKey of fileKeys) {
+        const f = filesIn[docKey];
+        const targetType = asaasDocTypeMap[docKey] || 'CUSTOM';
+        const matchingDoc = pendingDocsList.find(d => d.type === targetType && d.status !== 'APPROVED');
+        if (!matchingDoc) {
+          console.warn(`[uploadDocs] Sem slot pendente para ${docKey} (${targetType}) — pulando.`);
+          continue;
+        }
+
+        const buffer = Buffer.from(f.base64, 'base64');
+        const boundary = '----GestEscolarBoundary' + Date.now();
+        const multipartBody = Buffer.concat([
+          Buffer.from(`--${boundary}\r\nContent-Disposition: form-data; name="documentFile"; filename="${f.name || docKey}"\r\nContent-Type: ${f.mime}\r\n\r\n`),
+          buffer,
+          Buffer.from(`\r\n--${boundary}--\r\n`),
+        ]);
+
+        const sendRes = await fetch(`${ASAAS_BASE}/myAccount/documents/${matchingDoc.id}`, {
+          method: 'POST',
+          headers: {
+            access_token: docHeaders.access_token,
+            'Content-Type': `multipart/form-data; boundary=${boundary}`,
+          },
+          body: multipartBody,
+        });
+        if (!sendRes.ok) {
+          const eText = await sendRes.text();
+          console.error(`[uploadDocs] Erro envio ${docKey} → Asaas:`, sendRes.status, eText.slice(0, 200));
+        }
+      }
+
+      // 7. Atualizar Supabase com URLs dos docs e status
+      const updatePayload = {
+        asaas_documents: uploadedDocs,
+        asaas_documents_status: 'pending_verification',
+        asaas_documents_submitted_at: nowIso,
+        asaas_account_id: asaasAccountId,
+        asaas_wallet_id:  asaasWalletId,
+        asaas_sub_api_key: asaasApiKey,
+        updated_at: nowIso,
+      };
+      try {
+        await fetch(`${SUPABASE_URL}/rest/v1/schools?id=eq.${targetSchoolId}`, {
+          method: 'PATCH',
+          headers: {
+            apikey: SUPABASE_SERVICE_KEY,
+            Authorization: `Bearer ${SUPABASE_SERVICE_KEY}`,
+            'Content-Type': 'application/json',
+            Prefer: 'return=minimal',
+          },
+          body: JSON.stringify(updatePayload),
+        });
+      } catch (saveErr) {
+        console.error('[uploadDocs] Erro ao salvar no Supabase:', saveErr.message);
+      }
+
+      return res.status(200).json({
+        ok: true,
+        accountId: asaasAccountId,
+        walletId:  asaasWalletId,
+        apiKey:    asaasApiKey,
+        documents: uploadedDocs,
+        status: 'pending_verification',
+      });
+    }
+    // ── FIM HANDLER uploadAndVerifySchoolDocuments ─────────────────────────────
+
+    // ══════════════════════════════════════════════════════════════════════════
+    //  HANDLER ESPECIAL: checkSchoolDocumentsStatus
+    //  Consulta o Asaas e atualiza schools.asaas_documents_status conforme retorno
+    // ══════════════════════════════════════════════════════════════════════════
+    if (action === 'checkSchoolDocumentsStatus') {
+      const targetSchoolId = (userRole === 'superadmin' && data.schoolId)
+        ? data.schoolId
+        : userSchoolId;
+      if (!targetSchoolId) {
+        return res.status(400).json({ error: 'School ID não informado.' });
+      }
+
+      // Carregar escola
+      const schoolUrl = `${SUPABASE_URL}/rest/v1/schools?id=eq.${targetSchoolId}&select=asaas_account_id,asaas_sub_api_key&limit=1`;
+      const sFetch = await fetch(schoolUrl, {
+        headers: { apikey: SUPABASE_SERVICE_KEY, Authorization: `Bearer ${SUPABASE_SERVICE_KEY}` },
+      });
+      const sRows = sFetch.ok ? await sFetch.json() : [];
+      const sch = sRows?.[0];
+      if (!sch?.asaas_account_id) {
+        return res.status(404).json({ error: 'Subconta Asaas ainda não foi criada.' });
+      }
+
+      const checkHeaders = sch.asaas_sub_api_key
+        ? { access_token: sch.asaas_sub_api_key }
+        : { access_token: ASAAS_API_KEY };
+
+      // Consultar status geral da subconta + status dos documentos
+      const [accRes, docsRes] = await Promise.all([
+        fetch(`${ASAAS_BASE}/myAccount/status`, { headers: checkHeaders }),
+        fetch(`${ASAAS_BASE}/myAccount/documents`, { headers: checkHeaders }),
+      ]);
+      const accData  = accRes.ok  ? await accRes.json()  : null;
+      const docsData = docsRes.ok ? await docsRes.json() : null;
+
+      // Determinar status agregado
+      let status = 'pending_verification';
+      let message = '';
+
+      const general = (accData?.general || '').toUpperCase(); // APPROVED | AWAITING_APPROVAL | REJECTED | PENDING
+      if (general === 'APPROVED') status = 'verified';
+      else if (general === 'REJECTED') {
+        status = 'rejected';
+        message = accData?.rejectReasonDescriptions?.join('; ') || 'Documentos reprovados pelo Asaas.';
+      }
+
+      // Atualizar Supabase
+      try {
+        await fetch(`${SUPABASE_URL}/rest/v1/schools?id=eq.${targetSchoolId}`, {
+          method: 'PATCH',
+          headers: {
+            apikey: SUPABASE_SERVICE_KEY,
+            Authorization: `Bearer ${SUPABASE_SERVICE_KEY}`,
+            'Content-Type': 'application/json',
+            Prefer: 'return=minimal',
+          },
+          body: JSON.stringify({
+            asaas_documents_status: status,
+            asaas_verification_message: message,
+            updated_at: new Date().toISOString(),
+          }),
+        });
+      } catch (e) {
+        console.error('[checkDocs] erro update:', e.message);
+      }
+
+      return res.status(200).json({
+        status,
+        message,
+        general,
+        documents: docsData?.data || [],
+      });
+    }
+    // ── FIM HANDLER checkSchoolDocumentsStatus ─────────────────────────────────
 
     let asaasPath = '';
     let method = 'POST';
