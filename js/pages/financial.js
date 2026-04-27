@@ -1827,10 +1827,55 @@ Router.register('fin-balance', async () => {
     <!-- Resumo geral (preenchido pelo JS) -->
     <div id="fin-balance-resumo"></div>
 
-    <!-- Saldo disponível no gateway Asaas -->
+    <!-- Saldos Consolidados (Espécie vs PIX) -->
+    <div class="card" style="background: linear-gradient(135deg, #f5f5f5 0%, #fafafa 100%); border: 2px solid var(--border); margin-bottom: 20px;">
+      <div class="card-header" style="border-bottom: 2px solid var(--border);">
+        <span class="card-title"><i class="fa-solid fa-scale-balanced"></i> Consolidação de Saldos</span>
+        <button class="btn btn-outline btn-sm" onclick="FinBalance.atualizarConsolidacao()">
+          <i class="fa-solid fa-rotate"></i> Atualizar
+        </button>
+      </div>
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; padding: 24px;">
+
+        <!-- Saldo Espécie -->
+        <div style="text-align: center; padding: 20px; background: white; border-radius: 8px; border-left: 4px solid #7b1fa2;">
+          <div style="font-size: 14px; color: var(--text-muted); text-transform: uppercase; font-weight: 700; margin-bottom: 8px;">
+            <i class="fa-solid fa-money-bill-wave"></i> Pagamento em Espécie
+          </div>
+          <div style="font-size: 32px; font-weight: 900; color: #7b1fa2; margin-bottom: 4px;" id="saldo-especie-valor">R$ 0,00</div>
+          <div style="font-size: 12px; color: var(--text-muted);">Recebido 100% (sem taxa)</div>
+          <div style="font-size: 11px; color: var(--text-muted); margin-top: 8px;" id="saldo-especie-info">–</div>
+        </div>
+
+        <!-- Saldo PIX (Asaas) -->
+        <div style="text-align: center; padding: 20px; background: white; border-radius: 8px; border-left: 4px solid #1a73e8;">
+          <div style="font-size: 14px; color: var(--text-muted); text-transform: uppercase; font-weight: 700; margin-bottom: 8px;">
+            <i class="fa-brands fa-pix"></i> Pagamento via PIX (Asaas)
+          </div>
+          <div style="font-size: 32px; font-weight: 900; color: #1a73e8; margin-bottom: 4px;" id="saldo-pix-valor">R$ 0,00</div>
+          <div style="font-size: 12px; color: var(--text-muted);">Saldo com taxa já descontada</div>
+          <div style="font-size: 11px; color: var(--text-muted); margin-top: 8px;" id="saldo-pix-info">–</div>
+        </div>
+
+      </div>
+
+      <!-- Resumo Total -->
+      <div style="padding: 16px 24px; background: #f9f9f9; border-top: 1px solid var(--border); border-radius: 0 0 8px 8px; display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+        <div style="text-align: center;">
+          <div style="font-size: 11px; color: var(--text-muted); text-transform: uppercase; font-weight: 700; margin-bottom: 4px;">Saldo Total Disponível</div>
+          <div style="font-size: 24px; font-weight: 800; color: var(--primary);" id="saldo-total-valor">R$ 0,00</div>
+        </div>
+        <div style="text-align: center;">
+          <div style="font-size: 11px; color: var(--text-muted); text-transform: uppercase; font-weight: 700; margin-bottom: 4px;">Para Resgate (PIX + Espécie)</div>
+          <div style="font-size: 24px; font-weight: 800; color: var(--secondary);" id="saldo-resgate-valor">R$ 0,00</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Saldo disponível no gateway Asaas (detalhado) -->
     <div class="card">
       <div class="card-header">
-        <span class="card-title"><i class="fa-solid fa-building-columns"></i> Saldo Disponível no Gateway (Asaas)</span>
+        <span class="card-title"><i class="fa-solid fa-building-columns"></i> Detalhes Asaas</span>
         <button class="btn btn-outline btn-sm" onclick="FinBalance.recarregarSaldo()">
           <i class="fa-solid fa-rotate"></i> Atualizar
         </button>
@@ -1849,6 +1894,7 @@ Router.register('fin-balance', async () => {
 
   FinBalance.renderMes();
   FinBalance.recarregarSaldo();
+  FinBalance.atualizarConsolidacao();
 
   // Realtime: atualiza quando invoice é paga
   if (user.schoolId) {
@@ -1858,6 +1904,7 @@ Router.register('fin-balance', async () => {
         Utils.toast('Pagamento confirmado! Atualizando...', 'success');
         FinBalance.renderMes();
         FinBalance.recarregarSaldo();
+        FinBalance.atualizarConsolidacao();
       }
     });
   }
@@ -1966,6 +2013,9 @@ const FinBalance = {
             }).join('')}
       </tbody>
     </table></div>`;
+
+    // Atualizar consolidação de saldos
+    this.atualizarConsolidacao();
   },
 
   async recarregarSaldo() {
@@ -2004,6 +2054,60 @@ const FinBalance = {
         </div>
       ` : `<div style="color:var(--text-muted);font-size:13px;">Nenhum saldo disponível para resgate no momento.</div>`}
     `;
+  },
+
+  atualizarConsolidacao() {
+    const month = this._month;
+    const year = this._year;
+    const mm = String(month + 1).padStart(2, '0');
+
+    // Calcular saldos
+    const invoices = DB.getInvoices();
+    const pagosNoMes = invoices.filter(i => i.status === 'pago' && (i.paidAt || i.updatedAt || '').slice(0, 7) === `${year}-${mm}`);
+
+    // Espécie: Recebe 100% do valor
+    const especiePagos = pagosNoMes.filter(i => i.paymentMethod === 'especie' || !i.paymentMethod);
+    const totalEspecie = especiePagos.reduce((t, i) => t + (i.amount || 0), 0);
+
+    // PIX: Precisa buscar do Asaas (já com taxa descontada)
+    const school = DB.getSchool(DB._schoolId);
+    const commissionRate = Number(school?.commissionRate) || 3;
+    const ASAAS_PIX_FEE = 1.99;
+    const calcTaxa = (amount) => ASAAS_PIX_FEE + (amount - ASAAS_PIX_FEE) * commissionRate / 100;
+
+    const pixPagos = pagosNoMes.filter(i => i.paymentMethod === 'pix_asaas');
+    const totalPixNominal = pixPagos.reduce((t, i) => t + (i.amount || 0), 0);
+    const totalTaxaPix = pixPagos.reduce((t, i) => t + calcTaxa(i.amount || 0), 0);
+    const totalPixLiquido = totalPixNominal - totalTaxaPix;
+
+    // Atualizar card de consolidação
+    const saldoEspecieEl = document.getElementById('saldo-especie-valor');
+    const saldoPixEl = document.getElementById('saldo-pix-valor');
+    const saldoTotalEl = document.getElementById('saldo-total-valor');
+    const saldoResgateEl = document.getElementById('saldo-resgate-valor');
+    const infoEspecieEl = document.getElementById('saldo-especie-info');
+    const infoPixEl = document.getElementById('saldo-pix-info');
+
+    if (saldoEspecieEl) {
+      saldoEspecieEl.textContent = Utils.currency(totalEspecie);
+      infoEspecieEl.textContent = `${especiePagos.length} pagamento(s) recebido(s)`;
+    }
+
+    if (saldoPixEl) {
+      saldoPixEl.textContent = Utils.currency(totalPixLiquido);
+      const infoTaxa = totalPixNominal > 0 ? ` (de ${Utils.currency(totalPixNominal)} com taxa de ${Utils.currency(totalTaxaPix)})` : '';
+      infoPixEl.textContent = `${pixPagos.length} pagamento(s) no Asaas${infoTaxa}`;
+    }
+
+    if (saldoTotalEl) {
+      const totalSaldoDisponivel = totalEspecie + totalPixLiquido;
+      saldoTotalEl.textContent = Utils.currency(totalSaldoDisponivel);
+    }
+
+    if (saldoResgateEl) {
+      const totalSaldoDisponivel = totalEspecie + totalPixLiquido;
+      saldoResgateEl.textContent = Utils.currency(totalSaldoDisponivel);
+    }
   },
 };
 
