@@ -1676,7 +1676,8 @@ const FinEntradas = {
       return;
     }
     const today  = new Date();
-    const defDue = new Date(today.getTime() + 7*86400000).toISOString().slice(0,10);
+    const amanha = new Date(today.getTime() + 86400000).toISOString().slice(0,10);  // mínimo = amanhã
+    const defDue = new Date(today.getTime() + 7*86400000).toISOString().slice(0,10); // padrão = +7 dias
     const html = `
       <div class="modal-overlay" onclick="if(event.target===this)this.remove()">
         <div class="modal" style="max-width:560px;">
@@ -1694,8 +1695,9 @@ const FinEntradas = {
               <input type="number" id="nc-amount" class="form-control" step="0.01" min="0.01" placeholder="0,00" />
             </div>
             <div class="form-group">
-              <label>Vencimento *</label>
-              <input type="date" id="nc-due" class="form-control" value="${defDue}" />
+              <label>Vencimento * <span style="color:var(--danger);font-size:11px;font-weight:600;">somente datas futuras</span></label>
+              <input type="date" id="nc-due" class="form-control" value="${defDue}" min="${amanha}" />
+              <small style="color: var(--text-muted);">Mínimo: amanhã (${Utils.date(amanha)})</small>
             </div>
             <div class="form-group">
               <label>Aplicar a:</label>
@@ -1746,6 +1748,16 @@ const FinEntradas = {
     if (!desc) { Utils.toast('Informe a descrição.', 'error'); return; }
     if (!amount || amount <= 0) { Utils.toast('Informe um valor válido.', 'error'); return; }
     if (!due) { Utils.toast('Informe o vencimento.', 'error'); return; }
+
+    // Validar que o vencimento é sempre no futuro (nunca hoje nem passado)
+    const hoje = new Date(); hoje.setHours(0, 0, 0, 0);
+    const amanha = new Date(hoje.getTime() + 86400000);
+    const dueDate = new Date(due + 'T00:00:00');
+    if (dueDate < amanha) {
+      Utils.toast('O vencimento deve ser para um dia futuro (a partir de amanhã).', 'error');
+      document.getElementById('nc-due')?.focus();
+      return;
+    }
 
     let alvos = [];
     if (target === 'one') {
