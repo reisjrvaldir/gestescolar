@@ -546,6 +546,84 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;color:#3
       }
     }
 
+    // ── HANDLER ESPECIAL: refreshSubaccountApiKey ──────────────────────────────
+    // Tenta múltiplas abordagens em cascata para recuperar a API key da subconta.
+    // Usa ASAAS_API_KEY (master) diretamente para todas as tentativas.
+    if (action === 'refreshSubaccountApiKey') {
+      const accountId = data.accountId;
+      const targetSchoolId = (userRole === 'superadmin' && data.schoolId)
+        ? data.schoolId
+        : userSchoolId;
+      const masterHeaders = {
+        'Content-Type': 'application/json',
+        'access_token': ASAAS_API_KEY,
+      };
+
+      const safeJsonFetch = async (url, opts = {}) => {
+        try {
+          const r = await fetch(url, { headers: masterHeaders, ...opts });
+          const txt = await r.text();
+          console.log(`[refreshSubaccountApiKey] ${opts.method || 'GET'} ${url} → ${r.status}: ${txt.slice(0, 300)}`);
+          try { return { status: r.status, ok: r.ok, data: JSON.parse(txt) }; }
+          catch (_) { return { status: r.status, ok: r.ok, data: null, rawText: txt.slice(0, 200) }; }
+        } catch (e) {
+          console.error(`[refreshSubaccountApiKey] fetch error ${url}:`, e.message);
+          return { status: 0, ok: false, data: null };
+        }
+      };
+
+      let foundKey = null;
+
+      // Tentativa 1: POST /accounts/api_key/{accountId}
+      if (!foundKey && accountId) {
+        const r1 = await safeJsonFetch(`${ASAAS_BASE}/accounts/api_key/${accountId}`, {
+          method: 'POST', body: JSON.stringify({}),
+        });
+        foundKey = r1.data?.apiKey || r1.data?.api_key || r1.data?.accessToken || r1.data?.access_token || null;
+      }
+
+      // Tentativa 2: GET /accounts/{accountId} — alguns planos retornam apiKey
+      if (!foundKey && accountId) {
+        const r2 = await safeJsonFetch(`${ASAAS_BASE}/accounts/${accountId}`);
+        foundKey = r2.data?.apiKey || r2.data?.api_key || r2.data?.accessToken || null;
+      }
+
+      // Tentativa 3: GET /accounts — listar todas subcontas e achar pelo id
+      if (!foundKey) {
+        const r3 = await safeJsonFetch(`${ASAAS_BASE}/accounts?limit=100`);
+        if (r3.data?.data && Array.isArray(r3.data.data)) {
+          const found = r3.data.data.find(a => a.id === accountId || a.walletId === accountId);
+          foundKey = found?.apiKey || found?.api_key || found?.accessToken || null;
+        }
+      }
+
+      // Se encontrou a chave, salvar no Supabase automaticamente
+      if (foundKey && targetSchoolId) {
+        try {
+          await fetch(`${SUPABASE_URL}/rest/v1/schools?id=eq.${targetSchoolId}`, {
+            method: 'PATCH',
+            headers: {
+              apikey: SUPABASE_SERVICE_KEY,
+              Authorization: `Bearer ${SUPABASE_SERVICE_KEY}`,
+              'Content-Type': 'application/json',
+              Prefer: 'return=minimal',
+            },
+            body: JSON.stringify({ asaas_sub_api_key: foundKey }),
+          });
+          console.log(`[refreshSubaccountApiKey] ✅ API key salva para escola ${targetSchoolId}`);
+        } catch (saveErr) {
+          console.error('[refreshSubaccountApiKey] Erro ao salvar no Supabase:', saveErr.message);
+        }
+      }
+
+      return res.status(200).json({
+        apiKey: foundKey,
+        schoolId: targetSchoolId,
+        warning: foundKey ? null : 'Não foi possível recuperar a API key automaticamente. O Asaas não disponibiliza esse endpoint. Configure manualmente.',
+      });
+    }
+    // ── FIM HANDLER ESPECIAL ───────────────────────────────────────────────────
+
     let asaasPath = '';
     let method = 'POST';
     let body = null;
@@ -661,16 +739,6 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;color:#3
       case 'getSubaccount':
         asaasPath = `/accounts/${data.accountId}`;
         method = 'GET';
-        break;
-
-      // ── GERAR/RECUPERAR API KEY DA SUBCONTA (usa chave master) ──
-      // Endpoint Asaas: POST /accounts/api_key/{accountId}
-      // Regenera (ou recupera) a API key da subconta. Operação administrativa
-      // do master account. ATENÇÃO: regenera invalida a chave anterior se houver.
-      case 'refreshSubaccountApiKey':
-        asaasPath = `/accounts/api_key/${data.accountId}`;
-        method = 'POST';
-        body = {};
         break;
 
       // ── PLANOS SAAS: CRIAR CUSTOMER NA CONTA MASTER ───
@@ -792,13 +860,16 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;color:#3
     if (body && method !== 'GET') fetchOpts.body = JSON.stringify(body);
 
     const asaasRes = await fetch(`${ASAAS_BASE}${asaasPath}`, fetchOpts);
-    const asaasData = await asaasRes.json();
 
-    // Log detalhado para diagnóstico de refreshSubaccountApiKey
-    if (action === 'refreshSubaccountApiKey') {
-      console.log(`[refreshSubaccountApiKey] Status: ${asaasRes.status}`);
-      console.log(`[refreshSubaccountApiKey] URL: ${ASAAS_BASE}${asaasPath}`);
-      console.log(`[refreshSubaccountApiKey] Response: ${JSON.stringify(asaasData).slice(0, 500)}`);
+    // Parse JSON com segurança: Asaas pode retornar HTML em erros (404, auth, etc.)
+    // asaasRes.json() lançaria SyntaxError causando 500 interno no proxy
+    const rawText = await asaasRes.text();
+    let asaasData = {};
+    try {
+      asaasData = JSON.parse(rawText);
+    } catch (_) {
+      console.error(`[Asaas] Resposta não-JSON (${asaasRes.status}): ${rawText.slice(0, 300)}`);
+      return res.status(502).json({ error: `Resposta inválida do Asaas (HTTP ${asaasRes.status}).` });
     }
 
     if (!asaasRes.ok) {
@@ -806,54 +877,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;color:#3
       return res.status(asaasRes.status).json({
         error: asaasData.errors?.[0]?.description || asaasData.message || 'Erro na API Asaas.',
         asaasStatus: asaasRes.status,
-        asaasRaw: asaasData, // expor detalhes para debug no client
       });
-    }
-
-    // Normalizar resposta de refreshSubaccountApiKey: Asaas pode usar
-    // diferentes nomes de campo dependendo da versão (apiKey, accessToken, etc.)
-    if (action === 'refreshSubaccountApiKey') {
-      const possibleKey = asaasData.apiKey
-        || asaasData.api_key
-        || asaasData.accessToken
-        || asaasData.access_token
-        || asaasData.token
-        || (asaasData.data && (asaasData.data.apiKey || asaasData.data.access_token))
-        || null;
-      if (possibleKey) {
-        // Determinar qual escola atualizar:
-        // - Superadmin: pode passar data.schoolId explicitamente
-        // - Gestor: usa sua própria userSchoolId
-        const targetSchoolId = (userRole === 'superadmin' && data.schoolId)
-          ? data.schoolId
-          : userSchoolId;
-
-        if (targetSchoolId && SUPABASE_SERVICE_KEY) {
-          try {
-            await fetch(`${SUPABASE_URL}/rest/v1/schools?id=eq.${targetSchoolId}`, {
-              method: 'PATCH',
-              headers: {
-                apikey: SUPABASE_SERVICE_KEY,
-                Authorization: `Bearer ${SUPABASE_SERVICE_KEY}`,
-                'Content-Type': 'application/json',
-                Prefer: 'return=minimal',
-              },
-              body: JSON.stringify({ asaas_sub_api_key: possibleKey }),
-            });
-            console.log(`[refreshSubaccountApiKey] API key salva em schools.asaas_sub_api_key (school=${targetSchoolId}, requestedBy=${userRole})`);
-          } catch (saveErr) {
-            console.error('[refreshSubaccountApiKey] Erro ao salvar no Supabase:', saveErr.message);
-          }
-        }
-        return res.status(200).json({ apiKey: possibleKey, schoolId: targetSchoolId, raw: asaasData });
-      } else {
-        console.warn('[refreshSubaccountApiKey] Resposta OK mas sem campo apiKey reconhecível:', asaasData);
-        return res.status(200).json({
-          apiKey: null,
-          raw: asaasData,
-          warning: 'Asaas retornou OK mas sem apiKey. Verifique logs.',
-        });
-      }
     }
 
     // ── IDOR: verificar propriedade do pagamento ───
