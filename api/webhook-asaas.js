@@ -84,10 +84,16 @@ module.exports = async function handler(req, res) {
         return res.status(200).json({ received: true, event });
     }
 
+    // Valor real pago (pode ser maior que invoice.amount se houve multa/juros)
+    // payment.value = valor bruto cobrado do pagador (já inclui fines/interest que setamos)
+    const actualPaidAmount = Number(payment.value) || invoice.amount;
+
     // Atualizar invoice
     const updateData = { status: newStatus };
     if (paidAt) {
       updateData.paid_at = paidAt;
+      // Registrar o valor efetivamente pago (com multa/juros se vencida)
+      updateData.paid_amount = actualPaidAmount;
       // Só define payment_method como pix_asaas se ainda NÃO foi registrado como espécie
       // (evita sobrescrever pagamento em espécie com PIX do Asaas)
       if (invoice.payment_method !== 'especie') {
@@ -112,7 +118,7 @@ module.exports = async function handler(req, res) {
       await supabase.from('transactions').insert({
         school_id: invoice.school_id,
         type: 'credit',
-        amount: invoice.amount,
+        amount: actualPaidAmount, // valor real pago (com juros/multa)
         description: `Pagamento PIX confirmado (Asaas: ${payment.id})`,
       });
 

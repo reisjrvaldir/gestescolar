@@ -1970,8 +1970,10 @@ const FinBalance = {
     const calcTaxa = (amount) => ASAAS_PIX_FEE + (amount - ASAAS_PIX_FEE) * commissionRate / 100;
 
     const pixPagos    = pagosNoMes.filter(i => i.paymentMethod === 'pix_asaas');
-    const totalPix    = pixPagos.reduce((t, i) => t + i.amount, 0);
-    const totalTaxa   = pixPagos.reduce((t, i) => t + calcTaxa(i.amount), 0);
+    // paidAmount = valor real cobrado ao pagador (inclui multa/juros se vencida)
+    // Fallback para amount se paidAmount não estiver salvo (faturas antigas)
+    const totalPix    = pixPagos.reduce((t, i) => t + (i.paidAmount || i.amount), 0);
+    const totalTaxa   = pixPagos.reduce((t, i) => t + calcTaxa(i.paidAmount || i.amount), 0);
     const especiePagos = pagosNoMes.filter(i => i.paymentMethod !== 'pix_asaas');
     const totalEspecie = especiePagos.reduce((t, i) => t + i.amount, 0);
 
@@ -2014,13 +2016,20 @@ const FinBalance = {
         ${pixPagos.length === 0
           ? `<tr><td colspan="7" style="text-align:center;color:var(--text-muted);padding:20px;">Nenhum pagamento PIX em ${this._nomes[month]}/${year}.</td></tr>`
           : pixPagos.sort((a,b) => new Date(b.paidAt||b.createdAt) - new Date(a.paidAt||a.createdAt)).map(i => {
-              const taxa = calcTaxa(i.amount);
-              const liq  = i.amount - taxa;
+              // Usar paidAmount (valor real cobrado com juros/multa) se disponível
+              const valorCobrado = i.paidAmount || i.amount;
+              const taxa = calcTaxa(valorCobrado);
+              const liq  = valorCobrado - taxa;
+              // Indicar visualmente se houve acréscimo de juros/multa
+              const temJuros = i.paidAmount && i.paidAmount > i.amount;
               return `<tr>
                 <td>${Utils.date(i.paidAt || i.createdAt)}</td>
                 <td>${Utils.escape(i.studentName)}</td>
                 <td>${Utils.escape(i.description)}</td>
-                <td style="font-weight:700;color:var(--secondary);">${Utils.currency(i.amount)}</td>
+                <td style="font-weight:700;color:var(--secondary);">
+                  ${Utils.currency(valorCobrado)}
+                  ${temJuros ? `<span title="Inclui multa/juros. Original: ${Utils.currency(i.amount)}" style="font-size:10px;color:#FF9800;font-weight:400;margin-left:4px;">+juros</span>` : ''}
+                </td>
                 <td style="color:var(--danger);">-${Utils.currency(taxa)}</td>
                 <td style="font-weight:700;">${Utils.currency(liq)}</td>
                 <td>

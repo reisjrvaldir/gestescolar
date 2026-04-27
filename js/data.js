@@ -32,7 +32,7 @@ const DB = {
     users:        ['id','auth_id','school_id','name','email','username','cpf','phone','role','active','student_id','matricula','is_demo_user','created_at','updated_at'],
     students:     ['id','school_id','name','cpf','birth_date','gender','address','matricula','class_id','status','monthly_fee','due_day','responsaveis','parent_id','parent_name','parent_email','active_since','inactivated_at','access_link','login_matricula','created_at','updated_at'],
     classes:      ['id','school_id','name','year','shift','level','teacher_id','created_at'],
-    invoices:     ['id','school_id','student_id','student_name','description','amount','due_date','status','paid_at','payment_method','asaas_id','created_at'],
+    invoices:     ['id','school_id','student_id','student_name','description','amount','due_date','status','paid_at','paid_amount','payment_method','asaas_id','created_at'],
     expenses:     ['id','school_id','description','tipo','category','amount','due_date','status','paid_at','parcelado','parcelas','parcela_num','created_at','parcela_grupo'],
     transactions: ['id','school_id','type','amount','description','created_at'],
     messages:     ['id','school_id','from_user_id','from_name','to_user_id','student_id','student_name','matricula','class_id','subject','text','read','read_at','sent_at'],
