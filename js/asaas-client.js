@@ -7,10 +7,11 @@ const AsaasClient = {
   _baseUrl: '/api/asaas',
 
   // ════════════════════════════════════════════════════════════
-  // Calcula taxa PIX considerando 100 transações grátis/mês
+  // Calcula comissão GestEscolar considerando 100 transações grátis/mês
+  // Asaas SEMPRE desconta R$1,99 de taxa, mas nas 100 primeiras
+  // transações, GestEscolar não cobra comissão adicional.
   // ════════════════════════════════════════════════════════════
-  _calcularTaxaPix(amount) {
-    // Asaas: primeiras 100 transações PIX/mês são GRÁTIS, depois R$1,99 + comissão
+  _calcularComissao(amount) {
     const dataAgora = new Date();
     const mesCorrente = `${dataAgora.getFullYear()}-${String(dataAgora.getMonth() + 1).padStart(2, '0')}`;
 
@@ -21,16 +22,15 @@ const AsaasClient = {
     });
 
     const numTransacao = invoicesPagasNoMes.length + 1; // +1 para a atual
+    const commissionRate = Number(DB.getSchool(DB._schoolId)?.commissionRate || 3);
 
-    // Se é uma das primeiras 100: sem taxa
+    // Se é uma das primeiras 100: sem comissão GestEscolar
     if (numTransacao <= 100) {
       return 0;
     }
 
-    // A partir da 101ª: R$1,99 + comissão
-    const ASAAS_PIX_FEE = 1.99;
-    const commissionRate = Number(DB.getSchool(DB._schoolId)?.commissionRate || 3);
-    return ASAAS_PIX_FEE + (amount - ASAAS_PIX_FEE) * (commissionRate / 100);
+    // A partir da 101ª: cobra comissão normalmente
+    return amount * (commissionRate / 100);
   },
 
   // Token Supabase Auth para autenticação no proxy
@@ -176,23 +176,24 @@ const AsaasClient = {
     }
 
     // 3. Calcular split via fixedValue (mais seguro que percentualValue)
-    //    O Asaas valida split contra o valor LÍQUIDO (bruto − taxa PIX).
-    //    Considera 100 transações grátis/mês: se for transação 1-100, taxa=0; se 101+, taxa=R$1,99+comissão
+    //    Asaas SEMPRE desconta R$1,99 de taxa PIX
+    //    Nas primeiras 100 transações/mês: GestEscolar também não cobra comissão (dupla isenção)
+    //    A partir da 101ª: ambas cobram (taxa Asaas + comissão GestEscolar)
     const grossValue = chargeAmount;
-    const taxaPix = this._calcularTaxaPix(grossValue);
-    const commissionRate = Number(school.commissionRate) || 3;
+    const ASAAS_PIX_FEE = 1.99;
+    const commissionGestEscolar = this._calcularComissao(grossValue);
 
-    // Valor mínimo: se não há taxa, mínimo é R$1,00; senão, precisa cobrir a taxa
-    const minValue = Math.max(1.00, taxaPix + 0.50);
+    // Valor que sobra após AMBAS as deduções
+    const netValue = grossValue - ASAAS_PIX_FEE - commissionGestEscolar;
+
+    // Valor mínimo para cobrir deduções
+    const minValue = ASAAS_PIX_FEE + commissionGestEscolar + 0.50;
     if (grossValue < minValue) {
       Utils.toast(`Valor muito baixo para PIX. Mínimo R$ ${minValue.toFixed(2)}.`, 'error');
       return null;
     }
 
-    // Valor que sobra após taxa do gateway
-    const netValue = grossValue - taxaPix;
-    // Comissão da plataforma (sobre o líquido) — já inclusa na taxa calculada acima
-    // Escola recebe o que sobra após a taxa
+    // Escola recebe o que sobra
     const schoolReceives = Number(netValue.toFixed(2));
 
     // 4. Criar cobrança PIX com split em valor fixo
