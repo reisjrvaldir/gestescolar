@@ -192,12 +192,16 @@ const DB = {
       );
       const results = await Promise.race([
         Promise.all(tables.map(t => {
-          // Excluir asaas_sub_api_key do SELECT de schools — nunca deve ir ao cliente
+          // asaas_sub_api_key é incluída pois o proxy SEMPRE valida o usuário antes de usá-la.
+          // O cliente nunca chama o Asaas diretamente — tudo passa pelo proxy /api/asaas.
+          // Sem ela no cache, o frontend não sabe se a escola está configurada e mostra o
+          // formulário de entrada de chave mesmo quando a chave já está salva no Supabase.
           if (t === 'schools') {
             return supabaseClient.from(t).select(
               'id,name,cnpj,email,phone,address,address_number,complement,province,city,state,' +
               'postal_code,plan_id,billing,pix_key,logo_url,upgraded_at,created_at,updated_at,' +
               'status,owner_id,custom_student_limit,commission_rate,asaas_account_id,asaas_wallet_id,' +
+              'asaas_sub_api_key,fine_percent,interest_day_percent,' +
               'plan_expires_at,plan_payment_id,plan_subscription_id,school_status,trial_started_at'
             );
           }
