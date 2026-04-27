@@ -964,12 +964,19 @@ const SuperAdmin = {
     }
   },
 
-  // Cria uma nova subconta Asaas automaticamente e salva todas as credenciais
+  // Cria ou sincroniza subconta Asaas automaticamente
+  // Se já tem accountId, sincroniza a chave existente
+  // Se não tem, cria uma nova subconta
   async recriarSubcontaAsaas(schoolId) {
     const school = DB.getSchool(schoolId);
     if (!school) {
       Utils.toast('Escola não encontrada.', 'error');
       return;
+    }
+
+    // Se já tem accountId, sincronizar a chave existente em vez de criar nova
+    if (school.asaasAccountId) {
+      return SuperAdmin.sincronizarApiKey(schoolId, school.asaasAccountId);
     }
 
     // Validar campos de endereço obrigatórios
