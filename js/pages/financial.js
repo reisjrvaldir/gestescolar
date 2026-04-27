@@ -2055,15 +2055,28 @@ const FinBalance = {
     area.innerHTML = `<div style="color:var(--text-muted);"><i class="fa-solid fa-spinner fa-spin"></i> Consultando saldo...</div>`;
 
     // Calcular saldo esperado baseado em invoices pagos via PIX (não usar saldo bruto do Asaas)
+    // Considera 100 transações grátis/mês: 1-100 sem taxa, 101+ com taxa
     const invoices = DB.getInvoices();
     const pixPagos = invoices.filter(i => i.status === 'pago' && i.paymentMethod === 'pix_asaas');
 
     const commissionRate = Number(school?.commissionRate) || 3;
     const ASAAS_PIX_FEE = 1.99;
-    const calcTaxa = (amount) => ASAAS_PIX_FEE + (amount - ASAAS_PIX_FEE) * commissionRate / 100;
 
     const totalPixNominal = pixPagos.reduce((t, i) => t + (i.amount || 0), 0);
-    const totalTaxaPix = pixPagos.reduce((t, i) => t + calcTaxa(i.amount || 0), 0);
+
+    // Calcular taxa considerando 100 transações grátis/mês
+    let totalTaxaPix = 0;
+    pixPagos.forEach((inv, idx) => {
+      const numTransacao = idx + 1; // Posição na lista (1ª, 2ª, etc.)
+      if (numTransacao <= 100) {
+        // Primeiras 100: sem taxa
+        totalTaxaPix += 0;
+      } else {
+        // 101+: taxa cheia
+        totalTaxaPix += ASAAS_PIX_FEE + (inv.amount - ASAAS_PIX_FEE) * (commissionRate / 100);
+      }
+    });
+
     const saldoEsperado = totalPixNominal - totalTaxaPix;
 
     // Se não há PIX pagos, não mostrar saldo (evita confusão com saldo negativo do Asaas)
@@ -2076,13 +2089,17 @@ const FinBalance = {
 
     // Mostrar saldo calculado (confiável)
     const pixKey = school?.pixKey || '';
+    const textoTaxa = pixPagos.length <= 100
+      ? `${Utils.currency(totalPixNominal)} (bruto) − R$ 0,00 (primeiras 100 transações grátis)`
+      : `${Utils.currency(totalPixNominal)} (bruto) − ${Utils.currency(totalTaxaPix)} (transação 101+ com taxa)`;
+
     area.innerHTML = `
       <div style="font-size:36px;font-weight:900;color:var(--secondary);margin-bottom:4px;">${Utils.currency(saldoEsperado)}</div>
       <div style="font-size:13px;color:var(--text-muted);margin-bottom:8px;">
         Saldo esperado em Asaas (${pixPagos.length} pagamento${pixPagos.length !== 1 ? 's' : ''} via PIX)
       </div>
       <div style="font-size:12px;color:var(--text-muted);margin-bottom:20px;">
-        ${Utils.currency(totalPixNominal)} (bruto) − ${Utils.currency(totalTaxaPix)} (taxa Asaas + comissão)
+        ${textoTaxa}
       </div>
       ${saldoEsperado > 0 ? `
         <button class="btn btn-primary" onclick="FinWithdraw.open(${saldoEsperado})" style="font-size:15px;padding:12px 32px;">
@@ -2108,15 +2125,28 @@ const FinBalance = {
     const especiePagos = pagosNoMes.filter(i => i.paymentMethod === 'especie' || !i.paymentMethod);
     const totalEspecie = especiePagos.reduce((t, i) => t + (i.amount || 0), 0);
 
-    // PIX: Precisa buscar do Asaas (já com taxa descontada)
+    // PIX: Considera 100 transações grátis/mês
+    // Transação 1-100: sem taxa | Transação 101+: R$1,99+comissão
     const school = DB.getSchool(DB._schoolId);
     const commissionRate = Number(school?.commissionRate) || 3;
     const ASAAS_PIX_FEE = 1.99;
-    const calcTaxa = (amount) => ASAAS_PIX_FEE + (amount - ASAAS_PIX_FEE) * commissionRate / 100;
 
     const pixPagos = pagosNoMes.filter(i => i.paymentMethod === 'pix_asaas');
     const totalPixNominal = pixPagos.reduce((t, i) => t + (i.amount || 0), 0);
-    const totalTaxaPix = pixPagos.reduce((t, i) => t + calcTaxa(i.amount || 0), 0);
+
+    // Calcular taxa considerando 100 transações grátis/mês
+    let totalTaxaPix = 0;
+    pixPagos.forEach((inv, idx) => {
+      const numTransacao = idx + 1; // Posição no mês (1ª, 2ª, etc.)
+      if (numTransacao <= 100) {
+        // Primeiras 100 transações: sem taxa
+        totalTaxaPix += 0;
+      } else {
+        // A partir da 101ª: taxa cheia
+        totalTaxaPix += ASAAS_PIX_FEE + (inv.amount - ASAAS_PIX_FEE) * (commissionRate / 100);
+      }
+    });
+
     const totalPixLiquido = totalPixNominal - totalTaxaPix;
 
     // Atualizar card de consolidação

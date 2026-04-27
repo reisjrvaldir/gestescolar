@@ -6,6 +6,33 @@
 const AsaasClient = {
   _baseUrl: '/api/asaas',
 
+  // ════════════════════════════════════════════════════════════
+  // Calcula taxa PIX considerando 100 transações grátis/mês
+  // ════════════════════════════════════════════════════════════
+  _calcularTaxaPix(amount) {
+    // Asaas: primeiras 100 transações PIX/mês são GRÁTIS, depois R$1,99 + comissão
+    const dataAgora = new Date();
+    const mesCorrente = `${dataAgora.getFullYear()}-${String(dataAgora.getMonth() + 1).padStart(2, '0')}`;
+
+    // Contar transações PIX pagas NESTE MÊS
+    const invoicesPagasNoMes = DB.getInvoices().filter(i => {
+      const mesPagamento = (i.paidAt || i.updatedAt || '').slice(0, 7);
+      return i.status === 'pago' && i.paymentMethod === 'pix_asaas' && mesPagamento === mesCorrente;
+    });
+
+    const numTransacao = invoicesPagasNoMes.length + 1; // +1 para a atual
+
+    // Se é uma das primeiras 100: sem taxa
+    if (numTransacao <= 100) {
+      return 0;
+    }
+
+    // A partir da 101ª: R$1,99 + comissão
+    const ASAAS_PIX_FEE = 1.99;
+    const commissionRate = Number(DB.getSchool(DB._schoolId)?.commissionRate || 3);
+    return ASAAS_PIX_FEE + (amount - ASAAS_PIX_FEE) * (commissionRate / 100);
+  },
+
   // Token Supabase Auth para autenticação no proxy
   async _getToken() {
     if (!supabaseClient) return null;
@@ -149,25 +176,24 @@ const AsaasClient = {
     }
 
     // 3. Calcular split via fixedValue (mais seguro que percentualValue)
-    //    O Asaas valida split contra o valor LÍQUIDO (bruto − taxa PIX ~R$1,99).
-    //    Reservamos R$2,50 de margem de segurança para a taxa do gateway.
+    //    O Asaas valida split contra o valor LÍQUIDO (bruto − taxa PIX).
+    //    Considera 100 transações grátis/mês: se for transação 1-100, taxa=0; se 101+, taxa=R$1,99+comissão
     const grossValue = chargeAmount;
-    const gatewayFeeReserve = 2.50; // taxa Asaas PIX (~R$1,99) + margem
+    const taxaPix = this._calcularTaxaPix(grossValue);
     const commissionRate = Number(school.commissionRate) || 3;
 
-    // Valor mínimo para cobrir gateway + comissão + R$0,50 para a escola
-    const minValue = gatewayFeeReserve + 0.50 + (gatewayFeeReserve * commissionRate / 100);
+    // Valor mínimo: se não há taxa, mínimo é R$1,00; senão, precisa cobrir a taxa
+    const minValue = Math.max(1.00, taxaPix + 0.50);
     if (grossValue < minValue) {
       Utils.toast(`Valor muito baixo para PIX. Mínimo R$ ${minValue.toFixed(2)}.`, 'error');
       return null;
     }
 
     // Valor que sobra após taxa do gateway
-    const netValue = grossValue - gatewayFeeReserve;
-    // Comissão da plataforma (sobre o líquido)
-    const platformCommission = netValue * (commissionRate / 100);
-    // Escola recebe o restante
-    const schoolReceives = Number((netValue - platformCommission).toFixed(2));
+    const netValue = grossValue - taxaPix;
+    // Comissão da plataforma (sobre o líquido) — já inclusa na taxa calculada acima
+    // Escola recebe o que sobra após a taxa
+    const schoolReceives = Number(netValue.toFixed(2));
 
     // 4. Criar cobrança PIX com split em valor fixo
     const splitConfig = {
