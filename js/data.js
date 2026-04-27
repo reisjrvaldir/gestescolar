@@ -28,7 +28,7 @@ const DB = {
 
   // Colunas validas por tabela (para filtrar campos extras antes de enviar ao Supabase)
   _cols: {
-    schools:      ['id','name','cnpj','email','phone','address','address_number','complement','province','city','state','postal_code','plan_id','billing','pix_key','logo_url','upgraded_at','created_at','updated_at','status','owner_id','custom_student_limit','commission_rate','asaas_account_id','asaas_wallet_id','plan_expires_at','plan_payment_id','plan_subscription_id','school_status','trial_started_at'],
+    schools:      ['id','name','cnpj','email','phone','address','address_number','complement','province','city','state','postal_code','plan_id','billing','pix_key','logo_url','upgraded_at','created_at','updated_at','status','owner_id','custom_student_limit','commission_rate','asaas_account_id','asaas_wallet_id','asaas_sub_api_key','fine_percent','interest_day_percent','plan_expires_at','plan_payment_id','plan_subscription_id','school_status','trial_started_at'],
     users:        ['id','auth_id','school_id','name','email','username','cpf','phone','role','active','student_id','matricula','is_demo_user','created_at','updated_at'],
     students:     ['id','school_id','name','cpf','birth_date','gender','address','matricula','class_id','status','monthly_fee','due_day','responsaveis','parent_id','parent_name','parent_email','active_since','inactivated_at','access_link','login_matricula','created_at','updated_at'],
     classes:      ['id','school_id','name','year','shift','level','teacher_id','created_at'],
