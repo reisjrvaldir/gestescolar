@@ -6,32 +6,6 @@
 const AsaasClient = {
   _baseUrl: '/api/asaas',
 
-  // ════════════════════════════════════════════════════════════
-  // Calcula comissão GestEscolar considerando 100 transações grátis/mês
-  // Asaas SEMPRE desconta R$1,99 de taxa, mas nas 100 primeiras
-  // transações, GestEscolar não cobra comissão adicional.
-  // ════════════════════════════════════════════════════════════
-  _calcularComissao(amount) {
-    const dataAgora = new Date();
-    const mesCorrente = `${dataAgora.getFullYear()}-${String(dataAgora.getMonth() + 1).padStart(2, '0')}`;
-
-    // Contar transações PIX pagas NESTE MÊS
-    const invoicesPagasNoMes = DB.getInvoices().filter(i => {
-      const mesPagamento = (i.paidAt || i.updatedAt || '').slice(0, 7);
-      return i.status === 'pago' && i.paymentMethod === 'pix_asaas' && mesPagamento === mesCorrente;
-    });
-
-    const numTransacao = invoicesPagasNoMes.length + 1; // +1 para a atual
-    const commissionRate = Number(DB.getSchool(DB._schoolId)?.commissionRate || 3);
-
-    // Se é uma das primeiras 100: sem comissão GestEscolar
-    if (numTransacao <= 100) {
-      return 0;
-    }
-
-    // A partir da 101ª: cobra comissão normalmente
-    return amount * (commissionRate / 100);
-  },
 
   // Token Supabase Auth para autenticação no proxy
   async _getToken() {
@@ -176,15 +150,16 @@ const AsaasClient = {
     }
 
     // 3. Calcular split via fixedValue (mais seguro que percentualValue)
-    //    Asaas SEMPRE desconta R$1,99 de taxa PIX
-    //    Nas primeiras 100 transações/mês: GestEscolar também não cobra comissão (dupla isenção)
-    //    A partir da 101ª: ambas cobram (taxa Asaas + comissão GestEscolar)
+    //    Asaas desconta: R$1,99 de taxa PIX (nas 100 primeiras, essa é a única taxa)
+    //    GestEscolar desconta: 3% de comissão (sempre, até nas 100 primeiras)
     const grossValue = chargeAmount;
     const ASAAS_PIX_FEE = 1.99;
-    const commissionGestEscolar = this._calcularComissao(grossValue);
+    const commissionRate = Number(school.commissionRate) || 3;
 
-    // Valor que sobra após AMBAS as deduções
-    const netValue = grossValue - ASAAS_PIX_FEE - commissionGestEscolar;
+    // Valor que sobra após deduções
+    const netAfterAsaasFee = grossValue - ASAAS_PIX_FEE;
+    const commissionGestEscolar = netAfterAsaasFee * (commissionRate / 100);
+    const netValue = netAfterAsaasFee - commissionGestEscolar;
 
     // Valor mínimo para cobrir deduções
     const minValue = ASAAS_PIX_FEE + commissionGestEscolar + 0.50;

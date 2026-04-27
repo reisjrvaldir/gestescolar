@@ -2055,7 +2055,8 @@ const FinBalance = {
     area.innerHTML = `<div style="color:var(--text-muted);"><i class="fa-solid fa-spinner fa-spin"></i> Consultando saldo...</div>`;
 
     // Calcular saldo esperado baseado em invoices pagos via PIX (não usar saldo bruto do Asaas)
-    // Asaas SEMPRE desconta R$1,99; nas primeiras 100, GestEscolar não cobra comissão
+    // Asaas: taxa isenta nas 100 primeiras transações/mês
+    // GestEscolar: comissão de 3% SEMPRE cobrada
     const invoices = DB.getInvoices();
     const pixPagos = invoices.filter(i => i.status === 'pago' && i.paymentMethod === 'pix_asaas');
 
@@ -2064,24 +2065,32 @@ const FinBalance = {
 
     const totalPixNominal = pixPagos.reduce((t, i) => t + (i.amount || 0), 0);
 
-    // Calcular deduções considerando 100 transações grátis/mês
+    // Calcular deduções
     let totalDeducoes = 0;
+    let totalTaxaAsaas = 0;
+    let totalComissao = 0;
+
     pixPagos.forEach((inv, idx) => {
-      const numTransacao = idx + 1; // Posição (1ª, 2ª, etc.)
+      const numTransacao = idx + 1;
 
-      // Taxa Asaas SEMPRE é cobrada
-      totalDeducoes += ASAAS_PIX_FEE;
-
-      // Comissão GestEscolar: só a partir da 101ª transação
+      // Taxa Asaas: isenta nas 100 primeiras
+      let taxaAsaas = 0;
       if (numTransacao > 100) {
-        const comissao = (inv.amount - ASAAS_PIX_FEE) * (commissionRate / 100);
-        totalDeducoes += comissao;
+        taxaAsaas = ASAAS_PIX_FEE;
       }
+
+      // Comissão GestEscolar: SEMPRE
+      const netAfterAsaasFee = inv.amount - taxaAsaas;
+      const comissao = netAfterAsaasFee * (commissionRate / 100);
+
+      totalTaxaAsaas += taxaAsaas;
+      totalComissao += comissao;
+      totalDeducoes += taxaAsaas + comissao;
     });
 
     const saldoEsperado = totalPixNominal - totalDeducoes;
 
-    // Se não há PIX pagos, não mostrar saldo (evita confusão com saldo negativo do Asaas)
+    // Se não há PIX pagos, não mostrar saldo
     if (pixPagos.length === 0) {
       area.innerHTML = `<div style="color:var(--text-muted);font-size:13px;">
         <i class="fa-solid fa-info-circle"></i> Nenhum pagamento via PIX. O saldo será exibido quando houver transações.
@@ -2089,12 +2098,9 @@ const FinBalance = {
       return;
     }
 
-    // Mostrar saldo calculado (confiável)
+    // Mostrar saldo calculado
     const pixKey = school?.pixKey || '';
-    const possuiTransacao101 = pixPagos.length > 100;
-    const textoTaxa = !possuiTransacao101
-      ? `${Utils.currency(totalPixNominal)} (bruto) − R$ ${(ASAAS_PIX_FEE * pixPagos.length).toFixed(2)} (taxa Asaas) − R$ 0,00 (isento comissão)`
-      : `${Utils.currency(totalPixNominal)} (bruto) − ${Utils.currency(totalDeducoes)} (taxa + comissão nas 101+)`;
+    const textoTaxa = `${Utils.currency(totalPixNominal)} (bruto) − ${Utils.currency(totalTaxaAsaas)} (taxa Asaas) − ${Utils.currency(totalComissao)} (comissão 3%)`;
 
     area.innerHTML = `
       <div style="font-size:36px;font-weight:900;color:var(--secondary);margin-bottom:4px;">${Utils.currency(saldoEsperado)}</div>
@@ -2128,9 +2134,9 @@ const FinBalance = {
     const especiePagos = pagosNoMes.filter(i => i.paymentMethod === 'especie' || !i.paymentMethod);
     const totalEspecie = especiePagos.reduce((t, i) => t + (i.amount || 0), 0);
 
-    // PIX: Asaas SEMPRE desconta R$1,99 de taxa
-    // Nas primeiras 100 transações/mês: GestEscolar também isenta de comissão
-    // A partir da 101ª: cobra ambas (taxa Asaas + comissão GestEscolar)
+    // PIX: Asaas desconta R$1,99 de taxa + GestEscolar desconta 3% de comissão
+    // As 100 transações grátis do Asaas significam que a taxa é isenta nas primeiras 100
+    // Mas GestEscolar sempre cobra sua comissão de 3%
     const school = DB.getSchool(DB._schoolId);
     const commissionRate = Number(school?.commissionRate) || 3;
     const ASAAS_PIX_FEE = 1.99;
@@ -2138,19 +2144,29 @@ const FinBalance = {
     const pixPagos = pagosNoMes.filter(i => i.paymentMethod === 'pix_asaas');
     const totalPixNominal = pixPagos.reduce((t, i) => t + (i.amount || 0), 0);
 
-    // Calcular deduções considerando 100 transações grátis/mês (sem comissão GestEscolar)
+    // Calcular deduções (taxa Asaas + comissão GestEscolar)
+    // Nas 100 primeiras: só desconta a comissão (taxa Asaas isenta)
+    // A partir da 101ª: desconta ambas
     let totalDeducoes = 0;
+    let totalTaxaAsaas = 0;
+    let totalComissao = 0;
+
     pixPagos.forEach((inv, idx) => {
-      const numTransacao = idx + 1; // Posição no mês (1ª, 2ª, etc.)
+      const numTransacao = idx + 1; // Posição (1ª, 2ª, etc.)
 
-      // Taxa Asaas SEMPRE é cobrada
-      totalDeducoes += ASAAS_PIX_FEE;
-
-      // Comissão GestEscolar: só a partir da 101ª transação
+      // Taxa Asaas: isenta nas 100 primeiras, cobrada a partir da 101ª
+      let taxaAsaas = 0;
       if (numTransacao > 100) {
-        const comissao = (inv.amount - ASAAS_PIX_FEE) * (commissionRate / 100);
-        totalDeducoes += comissao;
+        taxaAsaas = ASAAS_PIX_FEE;
       }
+
+      // Comissão GestEscolar: SEMPRE cobrada
+      const netAfterAsaasFee = inv.amount - taxaAsaas;
+      const comissao = netAfterAsaasFee * (commissionRate / 100);
+
+      totalTaxaAsaas += taxaAsaas;
+      totalComissao += comissao;
+      totalDeducoes += taxaAsaas + comissao;
     });
 
     const totalPixLiquido = totalPixNominal - totalDeducoes;
