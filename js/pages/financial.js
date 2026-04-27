@@ -1233,7 +1233,14 @@ const FinEntradas = {
     const valor = parseFloat(document.getElementById('especie-valor').value) || inv.amount;
     const obs = document.getElementById('especie-obs').value.trim();
     const desc = obs ? `${inv.description} — ${obs}` : inv.description;
-    DB.updateInvoice(invoiceId, { status: 'pago', paidAt: new Date().toISOString(), amount: valor });
+    // Registrar como pagamento em espécie (sem taxa do Asaas)
+    DB.updateInvoice(invoiceId, {
+      status: 'pago',
+      paidAt: new Date().toISOString(),
+      amount: valor,
+      paymentMethod: 'especie'  // ✅ Define tipo de pagamento como espécie
+    });
+    // Crédito completo, sem desconto de taxa (espécie não passa pelo Asaas)
     DB.addTransaction('credit', valor, `Espécie – ${inv.studentName} – ${desc}`);
     document.querySelector('.modal-overlay')?.remove();
     Utils.toast('Pagamento em espécie registrado!', 'success');
