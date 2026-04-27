@@ -150,26 +150,28 @@ const AsaasClient = {
     }
 
     // 3. Calcular split via fixedValue (mais seguro que percentualValue)
-    //    Asaas desconta: R$1,99 de taxa PIX (nas 100 primeiras, essa é a única taxa)
-    //    GestEscolar desconta: 3% de comissão (sempre, até nas 100 primeiras)
+    //    Asaas SEMPRE desconta: R$1,99 de taxa PIX
+    //    GestEscolar SEMPRE desconta: 3% de comissão (sobre o líquido após taxa Asaas)
+    //    Fórmula: Bruto - R$1,99 (taxa Asaas) - 3% (comissão sobre líquido) = Escola recebe
     const grossValue = chargeAmount;
     const ASAAS_PIX_FEE = 1.99;
     const commissionRate = Number(school.commissionRate) || 3;
 
-    // Valor que sobra após deduções
+    // Passo 1: Asaas desconta sua taxa
     const netAfterAsaasFee = grossValue - ASAAS_PIX_FEE;
-    const commissionGestEscolar = netAfterAsaasFee * (commissionRate / 100);
-    const netValue = netAfterAsaasFee - commissionGestEscolar;
 
-    // Valor mínimo para cobrir deduções
-    const minValue = ASAAS_PIX_FEE + commissionGestEscolar + 0.50;
+    // Passo 2: GestEscolar desconta comissão sobre o líquido
+    const commissionGestEscolar = netAfterAsaasFee * (commissionRate / 100);
+
+    // Passo 3: Escola recebe o restante
+    const schoolReceives = Number((netAfterAsaasFee - commissionGestEscolar).toFixed(2));
+
+    // Validação: valor mínimo
+    const minValue = ASAAS_PIX_FEE + 0.50; // Mínimo: taxa Asaas + R$0,50
     if (grossValue < minValue) {
       Utils.toast(`Valor muito baixo para PIX. Mínimo R$ ${minValue.toFixed(2)}.`, 'error');
       return null;
     }
-
-    // Escola recebe o que sobra
-    const schoolReceives = Number(netValue.toFixed(2));
 
     // 4. Criar cobrança PIX com split em valor fixo
     const splitConfig = {

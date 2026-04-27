@@ -2054,9 +2054,8 @@ const FinBalance = {
 
     area.innerHTML = `<div style="color:var(--text-muted);"><i class="fa-solid fa-spinner fa-spin"></i> Consultando saldo...</div>`;
 
-    // Calcular saldo esperado baseado em invoices pagos via PIX (não usar saldo bruto do Asaas)
-    // Asaas: taxa isenta nas 100 primeiras transações/mês
-    // GestEscolar: comissão de 3% SEMPRE cobrada
+    // Calcular saldo esperado baseado em invoices pagos via PIX
+    // Fórmula: Bruto - R$1,99 (taxa Asaas SEMPRE) - 3% sobre líquido (comissão GestEscolar)
     const invoices = DB.getInvoices();
     const pixPagos = invoices.filter(i => i.status === 'pago' && i.paymentMethod === 'pix_asaas');
 
@@ -2066,28 +2065,20 @@ const FinBalance = {
     const totalPixNominal = pixPagos.reduce((t, i) => t + (i.amount || 0), 0);
 
     // Calcular deduções
-    let totalDeducoes = 0;
     let totalTaxaAsaas = 0;
     let totalComissao = 0;
 
-    pixPagos.forEach((inv, idx) => {
-      const numTransacao = idx + 1;
+    pixPagos.forEach((inv) => {
+      // Taxa Asaas: SEMPRE R$1,99 por transação
+      totalTaxaAsaas += ASAAS_PIX_FEE;
 
-      // Taxa Asaas: isenta nas 100 primeiras
-      let taxaAsaas = 0;
-      if (numTransacao > 100) {
-        taxaAsaas = ASAAS_PIX_FEE;
-      }
-
-      // Comissão GestEscolar: SEMPRE
-      const netAfterAsaasFee = inv.amount - taxaAsaas;
+      // Comissão GestEscolar: 3% sobre o líquido (após taxa Asaas)
+      const netAfterAsaasFee = inv.amount - ASAAS_PIX_FEE;
       const comissao = netAfterAsaasFee * (commissionRate / 100);
-
-      totalTaxaAsaas += taxaAsaas;
       totalComissao += comissao;
-      totalDeducoes += taxaAsaas + comissao;
     });
 
+    const totalDeducoes = totalTaxaAsaas + totalComissao;
     const saldoEsperado = totalPixNominal - totalDeducoes;
 
     // Se não há PIX pagos, não mostrar saldo
@@ -2134,9 +2125,8 @@ const FinBalance = {
     const especiePagos = pagosNoMes.filter(i => i.paymentMethod === 'especie' || !i.paymentMethod);
     const totalEspecie = especiePagos.reduce((t, i) => t + (i.amount || 0), 0);
 
-    // PIX: Asaas desconta R$1,99 de taxa + GestEscolar desconta 3% de comissão
-    // As 100 transações grátis do Asaas significam que a taxa é isenta nas primeiras 100
-    // Mas GestEscolar sempre cobra sua comissão de 3%
+    // PIX: Asaas SEMPRE desconta R$1,99 + GestEscolar SEMPRE desconta 3%
+    // Fórmula por transação: Bruto - R$1,99 (taxa Asaas) - 3% sobre líquido = Escola recebe
     const school = DB.getSchool(DB._schoolId);
     const commissionRate = Number(school?.commissionRate) || 3;
     const ASAAS_PIX_FEE = 1.99;
@@ -2144,31 +2134,21 @@ const FinBalance = {
     const pixPagos = pagosNoMes.filter(i => i.paymentMethod === 'pix_asaas');
     const totalPixNominal = pixPagos.reduce((t, i) => t + (i.amount || 0), 0);
 
-    // Calcular deduções (taxa Asaas + comissão GestEscolar)
-    // Nas 100 primeiras: só desconta a comissão (taxa Asaas isenta)
-    // A partir da 101ª: desconta ambas
-    let totalDeducoes = 0;
+    // Calcular deduções para cada transação PIX
     let totalTaxaAsaas = 0;
     let totalComissao = 0;
 
-    pixPagos.forEach((inv, idx) => {
-      const numTransacao = idx + 1; // Posição (1ª, 2ª, etc.)
+    pixPagos.forEach((inv) => {
+      // Taxa Asaas: SEMPRE R$1,99 por transação
+      totalTaxaAsaas += ASAAS_PIX_FEE;
 
-      // Taxa Asaas: isenta nas 100 primeiras, cobrada a partir da 101ª
-      let taxaAsaas = 0;
-      if (numTransacao > 100) {
-        taxaAsaas = ASAAS_PIX_FEE;
-      }
-
-      // Comissão GestEscolar: SEMPRE cobrada
-      const netAfterAsaasFee = inv.amount - taxaAsaas;
+      // Comissão GestEscolar: 3% sobre o líquido (após taxa Asaas)
+      const netAfterAsaasFee = inv.amount - ASAAS_PIX_FEE;
       const comissao = netAfterAsaasFee * (commissionRate / 100);
-
-      totalTaxaAsaas += taxaAsaas;
       totalComissao += comissao;
-      totalDeducoes += taxaAsaas + comissao;
     });
 
+    const totalDeducoes = totalTaxaAsaas + totalComissao;
     const totalPixLiquido = totalPixNominal - totalDeducoes;
 
     // Atualizar card de consolidação
