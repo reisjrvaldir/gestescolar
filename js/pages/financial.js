@@ -2042,9 +2042,9 @@ const FinBalance = {
   async recarregarSaldo() {
     const area = document.getElementById('asaas-balance-area');
     if (!area) return;
-    const school = DB.getSchool(DB._schoolId);
+    let school = DB.getSchool(DB._schoolId);
 
-    if (!school?.asaasWalletId) {
+    if (!school?.asaasWalletId && !school?.asaasAccountId) {
       area.innerHTML = `<div style="color:var(--text-muted);font-size:13px;">
         <i class="fa-solid fa-circle-info"></i>
         Escola sem subconta Asaas configurada. Acesse o painel superadmin para criar.
@@ -2055,8 +2055,30 @@ const FinBalance = {
     area.innerHTML = `<div style="color:var(--text-muted);"><i class="fa-solid fa-spinner fa-spin"></i> Consultando saldo REAL do Asaas...</div>`;
 
     try {
-      // Buscar saldo REAL da subconta da escola no Asaas
-      const result = await AsaasClient.getBalance(school.asaasWalletId);
+      // Se escola não tem asaasSubApiKey, tentar recuperar automaticamente via accountId
+      if (!school.asaasSubApiKey && school.asaasAccountId) {
+        console.log('[recarregarSaldo] Sem asaasSubApiKey — recuperando via accountId...');
+        area.innerHTML = `<div style="color:var(--text-muted);"><i class="fa-solid fa-spinner fa-spin"></i> Recuperando credenciais da subconta...</div>`;
+        const keyResult = await AsaasClient.refreshSubaccountApiKey(school.asaasAccountId);
+        if (keyResult?.apiKey) {
+          // Salvar API key recuperada na escola
+          await DB.updateSchool(DB._schoolId, { asaasSubApiKey: keyResult.apiKey });
+          school = DB.getSchool(DB._schoolId); // Recarregar dados da escola
+          console.log('[recarregarSaldo] API key da subconta recuperada e salva com sucesso!');
+          area.innerHTML = `<div style="color:var(--text-muted);"><i class="fa-solid fa-spinner fa-spin"></i> Consultando saldo REAL do Asaas...</div>`;
+        } else {
+          console.warn('[recarregarSaldo] Não foi possível recuperar a API key da subconta.', keyResult);
+          area.innerHTML = `<div style="color:var(--warning);font-size:13px;padding:8px;">
+            <i class="fa-solid fa-triangle-exclamation"></i>
+            <strong>Credenciais da subconta não encontradas.</strong><br>
+            <span style="font-size:12px;">A escola pode ter sido criada sem API key. Recrie a subconta no painel superadmin.</span>
+          </div>`;
+          return;
+        }
+      }
+
+      // Buscar saldo REAL da subconta (usa asaasSubApiKey do servidor)
+      const result = await AsaasClient.getBalance();
 
       if (!result) {
         area.innerHTML = `<div style="color:var(--danger);font-size:13px;">
@@ -2065,8 +2087,19 @@ const FinBalance = {
         return;
       }
 
+      // Se o proxy retornou warning (sem API key configurada), mostrar aviso
+      if (result.warning) {
+        area.innerHTML = `<div style="color:var(--warning);font-size:13px;padding:8px;">
+          <i class="fa-solid fa-circle-info"></i> ${result.warning}
+        </div>`;
+        return;
+      }
+
       const saldo = result.balance !== undefined ? result.balance : (result.totalBalance || 0);
       const pixKey = school?.pixKey || '';
+
+      // Propagar saldo real para a consolidação de saldos
+      this.atualizarConsolidacao(saldo);
 
       // Se saldo negativo, mostrar aviso
       if (saldo < 0) {
@@ -2101,7 +2134,9 @@ const FinBalance = {
     }
   },
 
-  atualizarConsolidacao() {
+  // asaasSaldoReal: saldo REAL do Asaas (passado por recarregarSaldo após consulta à API).
+  // Se não fornecido, usa saldo calculado da base de dados como estimativa.
+  atualizarConsolidacao(asaasSaldoReal = null) {
     const month = this._month;
     const year = this._year;
     const mm = String(month + 1).padStart(2, '0');
@@ -2114,8 +2149,7 @@ const FinBalance = {
     const especiePagos = pagosNoMes.filter(i => i.paymentMethod === 'especie' || !i.paymentMethod);
     const totalEspecie = especiePagos.reduce((t, i) => t + (i.amount || 0), 0);
 
-    // PIX: Asaas SEMPRE desconta R$1,99 + GestEscolar SEMPRE desconta 3%
-    // Fórmula por transação: Bruto - R$1,99 (taxa Asaas) - 3% sobre líquido = Escola recebe
+    // PIX: contar transações para informação contextual
     const school = DB.getSchool(DB._schoolId);
     const commissionRate = Number(school?.commissionRate) || 3;
     const ASAAS_PIX_FEE = 1.99;
@@ -2123,22 +2157,20 @@ const FinBalance = {
     const pixPagos = pagosNoMes.filter(i => i.paymentMethod === 'pix_asaas');
     const totalPixNominal = pixPagos.reduce((t, i) => t + (i.amount || 0), 0);
 
-    // Calcular deduções para cada transação PIX
+    // Calcular deduções estimadas para exibição informativa
     let totalTaxaAsaas = 0;
     let totalComissao = 0;
-
     pixPagos.forEach((inv) => {
-      // Taxa Asaas: SEMPRE R$1,99 por transação
       totalTaxaAsaas += ASAAS_PIX_FEE;
-
-      // Comissão GestEscolar: 3% sobre o líquido (após taxa Asaas)
       const netAfterAsaasFee = inv.amount - ASAAS_PIX_FEE;
-      const comissao = netAfterAsaasFee * (commissionRate / 100);
-      totalComissao += comissao;
+      totalComissao += netAfterAsaasFee * (commissionRate / 100);
     });
-
     const totalDeducoes = totalTaxaAsaas + totalComissao;
-    const totalPixLiquido = totalPixNominal - totalDeducoes;
+    const totalPixEstimado = totalPixNominal - totalDeducoes;
+
+    // Usar saldo REAL do Asaas se disponível, senão usar estimativa da base
+    const totalPixLiquido = asaasSaldoReal !== null ? asaasSaldoReal : totalPixEstimado;
+    const usandoSaldoReal = asaasSaldoReal !== null;
 
     // Atualizar card de consolidação
     const saldoEspecieEl = document.getElementById('saldo-especie-valor');
@@ -2150,26 +2182,28 @@ const FinBalance = {
 
     if (saldoEspecieEl) {
       saldoEspecieEl.textContent = Utils.currency(totalEspecie);
-      infoEspecieEl.textContent = `${especiePagos.length} pagamento(s) recebido(s)`;
+      if (infoEspecieEl) infoEspecieEl.textContent = `${especiePagos.length} pagamento(s) recebido(s)`;
     }
 
     if (saldoPixEl) {
       saldoPixEl.textContent = Utils.currency(totalPixLiquido);
-      const infoTaxa = totalPixNominal > 0 ? ` (de ${Utils.currency(totalPixNominal)} com taxa de ${Utils.currency(totalTaxaPix)})` : '';
-      infoPixEl.textContent = `${pixPagos.length} pagamento(s) no Asaas${infoTaxa}`;
+      if (infoPixEl) {
+        infoPixEl.textContent = usandoSaldoReal
+          ? 'Saldo com taxa já descontada'
+          : `Estimativa — ${pixPagos.length} pag. (aguardando consulta Asaas)`;
+      }
     }
 
     const totalSaldoDisponivel = totalEspecie + totalPixLiquido;
-
     if (saldoTotalEl) saldoTotalEl.textContent = Utils.currency(totalSaldoDisponivel);
 
-    // Área de resgate: botão aparece quando há saldo PIX líquido > 0
+    // Área de resgate: usa sempre o saldo real do Asaas
     if (saldoResgateEl) {
-      const school = DB.getSchool(DB._schoolId);
       const pixKey = school?.pixKey || '';
       if (totalPixLiquido > 0) {
         saldoResgateEl.innerHTML = `
           <div style="font-size:24px;font-weight:800;color:var(--secondary);margin-bottom:8px;">${Utils.currency(totalPixLiquido)}</div>
+          ${usandoSaldoReal ? '<div style="font-size:11px;color:var(--success);margin-bottom:6px;"><i class="fa-solid fa-check-circle"></i> Saldo confirmado no Asaas</div>' : ''}
           <button class="btn btn-primary btn-sm" onclick="FinWithdraw.open(${totalPixLiquido})" style="margin-top:4px;">
             <i class="fa-solid fa-money-bill-transfer"></i> Resgatar via PIX
           </button>

@@ -19,7 +19,7 @@ const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY;
 // Ações que só gestores/superadmin podem executar
 const GESTOR_ONLY_ACTIONS = new Set([
   'createSubaccount', 'requestWithdraw', 'getBalance',
-  'listTransfers', 'getSubaccount',
+  'listTransfers', 'getSubaccount', 'refreshSubaccountApiKey',
 ]);
 
 // Ações que usam a chave master (SaaS) — não precisam de subconta
@@ -663,6 +663,14 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;color:#3
         method = 'GET';
         break;
 
+      // ── GERAR/RECUPERAR API KEY DA SUBCONTA (usa chave master) ──
+      // Necessário quando escola foi criada sem salvar asaasSubApiKey
+      case 'refreshSubaccountApiKey':
+        asaasPath = `/accounts/api_key/${data.accountId}`;
+        method = 'POST';
+        body = {}; // POST sem body gera/regenera a API key
+        break;
+
       // ── PLANOS SAAS: CRIAR CUSTOMER NA CONTA MASTER ───
       case 'createPlanCustomer':
         asaasPath = '/customers';
@@ -763,11 +771,13 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;color:#3
 
     // Determinar qual API key usar:
     // - Planos SaaS: sempre chave master
+    // - refreshSubaccountApiKey: SEMPRE chave master (operação administrativa)
     // - Outras ações: chave da subconta buscada do servidor (nunca do cliente)
     // Se o cliente sinalizar data.plan=true em getPixQrCode/getPayment, usa master key
     // (pagamentos de plano são criados com ASAAS_API_KEY master)
     const isPlanLookup = (action === 'getPixQrCode' || action === 'getPayment') && data?.plan === true;
-    const apiKeyToUse = (PLAN_ACTIONS.has(action) || isPlanLookup)
+    const isMasterAction = PLAN_ACTIONS.has(action) || isPlanLookup || action === 'refreshSubaccountApiKey';
+    const apiKeyToUse = isMasterAction
       ? ASAAS_API_KEY
       : (schoolApiKey || ASAAS_API_KEY);
 
