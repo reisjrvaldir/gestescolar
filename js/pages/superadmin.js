@@ -880,16 +880,9 @@ const SuperAdmin = {
         </div>
         <div class="form-group">
           <label class="form-label">Asaas API Key da Subconta</label>
-          <div style="display:flex;gap:6px;align-items:stretch;">
-            <input class="form-control" id="esSubApiKey" value="${Utils.escape(school.asaasSubApiKey||'')}" placeholder="$aact_... (preenchida automaticamente)" readonly style="background:#f0f0f0;flex:1;" />
-            ${school.asaasAccountId ? `
-              <button type="button" class="btn btn-outline btn-sm" onclick="SuperAdmin.sincronizarApiKey('${schoolId}','${school.asaasAccountId}')" title="Tenta recuperar a API key automaticamente do Asaas" style="white-space:nowrap;">
-                <i class="fa-solid fa-rotate"></i> Sincronizar
-              </button>
-            ` : ''}
-          </div>
+          <input class="form-control" id="esSubApiKey" value="${Utils.escape(school.asaasSubApiKey||'')}" placeholder="$aact_... (preenchida automaticamente)" readonly style="background:#f0f0f0;" />
           <small style="color:var(--text-muted);font-size:11px;">
-            Chave da subconta usada para consultar saldo e solicitar resgates. Preenchida automaticamente ao criar subconta.
+            Chave da subconta usada para consultar saldo e solicitar resgates. Preenchida automaticamente ao criar subconta. Se ausente, clique em "Recriar Subconta Asaas" acima.
           </small>
         </div>
         <div class="form-group"><label class="form-label">Status</label>
@@ -964,9 +957,9 @@ const SuperAdmin = {
     }
   },
 
-  // Cria ou sincroniza subconta Asaas automaticamente
-  // Se já tem accountId, sincroniza a chave existente
-  // Se não tem, cria uma nova subconta
+  // Cria nova subconta Asaas automaticamente
+  // Se já tem accountId mas não tem apiKey, cria uma nova (a anterior fica órfã)
+  // Se não tem accountId, cria primeira subconta
   async recriarSubcontaAsaas(schoolId) {
     const school = DB.getSchool(schoolId);
     if (!school) {
@@ -974,9 +967,11 @@ const SuperAdmin = {
       return;
     }
 
-    // Se já tem accountId, sincronizar a chave existente em vez de criar nova
-    if (school.asaasAccountId) {
-      return SuperAdmin.sincronizarApiKey(schoolId, school.asaasAccountId);
+    // Se já tem accountId mas não tem apiKey, avisar que vai criar nova
+    if (school.asaasAccountId && !school.asaasSubApiKey) {
+      if (!confirm('Esta escola já tem uma subconta no Asaas mas a chave não foi salva.\n\nCriar uma NOVA subconta? (A anterior ficará ativa mas desvinculada do sistema).')) {
+        return;
+      }
     }
 
     // Validar campos de endereço obrigatórios
