@@ -854,12 +854,12 @@ const SuperAdmin = {
           ${!school.asaasAccountId ? `
             <div style="margin-bottom:12px;padding:12px;background:#fff3cd;border-radius:6px;font-size:13px;color:#856404;">
               <i class="fa-solid fa-info-circle"></i> <strong>Subconta não criada.</strong>
-              Clique em "Criar Subconta Asaas" para configurar automaticamente.
+              A subconta será criada automaticamente na próxima vez que a escola fazer login ou através da funcionalidade "Nova Escola".
             </div>
           ` : !school.asaasSubApiKey ? `
             <div style="margin-bottom:12px;padding:12px;background:#fff3cd;border-radius:6px;font-size:13px;color:#856404;">
-              <i class="fa-solid fa-triangle-exclamation"></i> <strong>API Key ausente.</strong>
-              A subconta foi criada mas a chave não foi salva. Clique em "Recriar Subconta" para gerar uma nova.
+              <i class="fa-solid fa-triangle-exclamation"></i> <strong>Dados incompletos.</strong>
+              Entrar em contato com suporte para sincronizar as credenciais da subconta.
             </div>
           ` : `
             <div style="margin-bottom:12px;padding:12px;background:#d4edda;border-radius:6px;font-size:13px;color:#155724;">
@@ -867,10 +867,6 @@ const SuperAdmin = {
               Chave e IDs estão salvos. Escola pronta para receber pagamentos via Asaas.
             </div>
           `}
-          <button type="button" class="btn btn-secondary w-100" onclick="SuperAdmin.recriarSubcontaAsaas('${schoolId}')" style="margin-bottom:12px;">
-            <i class="fa-solid fa-plus-circle"></i>
-            ${school.asaasAccountId ? 'Recriar Subconta Asaas' : 'Criar Subconta Asaas'}
-          </button>
         </div>
 
         <div class="form-group">
@@ -954,92 +950,6 @@ const SuperAdmin = {
     } catch (err) {
       console.error('[sincronizarApiKey] Erro:', err);
       Utils.toast('Erro ao sincronizar: ' + (err.message || 'tente novamente'), 'error');
-    }
-  },
-
-  // Cria nova subconta Asaas automaticamente
-  // Se já tem accountId mas não tem apiKey, cria uma nova (a anterior fica órfã)
-  // Se não tem accountId, cria primeira subconta
-  async recriarSubcontaAsaas(schoolId) {
-    const school = DB.getSchool(schoolId);
-    if (!school) {
-      Utils.toast('Escola não encontrada.', 'error');
-      return;
-    }
-
-    // Se já tem accountId mas não tem apiKey, avisar que vai criar nova
-    if (school.asaasAccountId && !school.asaasSubApiKey) {
-      if (!confirm('Esta escola já tem uma subconta no Asaas mas a chave não foi salva.\n\nCriar uma NOVA subconta? (A anterior ficará ativa mas desvinculada do sistema).')) {
-        return;
-      }
-    }
-
-    // Validar campos de endereço obrigatórios
-    const requiredFields = ['postalCode', 'address', 'addressNumber', 'city', 'state'];
-    const missingFields = requiredFields.filter(field => !school[field]);
-
-    if (missingFields.length > 0) {
-      Utils.toast(`Preencha todos os campos de endereço da escola. Faltam: ${missingFields.join(', ')}`, 'error');
-      return;
-    }
-
-    // Mostrar confirmação
-    if (!confirm(`Criar nova subconta Asaas para "${school.name}"?\n\nIsso criará uma nova subconta e salverá as credenciais automaticamente.`)) {
-      return;
-    }
-
-    Utils.toast('Criando nova subconta Asaas...', 'info');
-    try {
-      // Se já tem accountId, usar email temporário para evitar duplicata
-      // Caso contrário, usar o email principal da escola
-      let emailParaSubconta = school.email;
-      if (school.asaasAccountId) {
-        // Gerar email temporário: nome@timestamp@gestescolar.app
-        const basename = school.email.split('@')[0];
-        emailParaSubconta = `${basename}-${Date.now()}@gestescolar.app`;
-      }
-
-      // Chamar createSubaccount via AsaasClient
-      const result = await AsaasClient.createSubaccount({
-        name: school.name,
-        cpfCnpj: school.cnpj,
-        email: emailParaSubconta,
-        phone: school.phone,
-        postalCode: school.postalCode,
-        address: school.address,
-        addressNumber: school.addressNumber,
-        complement: school.complement || '',
-        province: school.province || '',
-        city: school.city,
-        state: school.state,
-      });
-
-      // Verificar se conseguiu criar a subconta
-      if (!result || !result.id) {
-        console.error('[recriarSubcontaAsaas] Resposta sem id:', result);
-        Utils.toast('Falha ao criar subconta. Verifique os dados da escola e tente novamente.', 'error');
-        return;
-      }
-
-      // Salvar as credenciais no banco de dados
-      await DB.updateSchool(schoolId, {
-        asaasAccountId: result.id,
-        asaasWalletId: result.walletId || null,
-        asaasSubApiKey: result.apiKey || null,
-      });
-
-      // Atualizar os campos na modal, se existir
-      const walletInput = document.getElementById('esWalletId');
-      const apiKeyInput = document.getElementById('esSubApiKey');
-
-      if (walletInput) walletInput.value = result.walletId || '';
-      if (apiKeyInput) apiKeyInput.value = result.apiKey || '';
-
-      Utils.toast('Subconta Asaas criada com sucesso! API key configurada automaticamente.', 'success');
-
-    } catch (err) {
-      console.error('[recriarSubcontaAsaas] Erro:', err);
-      Utils.toast('Erro ao criar subconta: ' + (err.message || 'tente novamente'), 'error');
     }
   },
 
