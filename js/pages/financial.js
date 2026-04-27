@@ -2193,10 +2193,34 @@ const FinBalance = {
     try {
       await DB.updateSchool(DB._schoolId, { asaasSubApiKey: apiKey });
       Utils.toast('API Key salva! Consultando saldo...', 'success');
-      // Pequeno delay para garantir que o Supabase propagou a mudança
-      await new Promise(r => setTimeout(r, 500));
-      this.recarregarSaldo();
-      this.atualizarConsolidacao();
+
+      // Consultar saldo IMEDIATAMENTE com a chave que acabamos de salvar
+      // Não precisa re-ler do banco, usa a chave localmente
+      const area = document.getElementById('asaas-balance-area');
+      if (area) {
+        area.innerHTML = `<div style="color:var(--text-muted);"><i class="fa-solid fa-spinner fa-spin"></i> Consultando saldo com a chave fornecida...</div>`;
+
+        try {
+          const result = await AsaasClient.getBalance();
+          if (result && !result.warning) {
+            const saldo = result.balance !== undefined ? result.balance : (result.totalBalance || 0);
+            area.innerHTML = `
+              <div style="font-size:36px;font-weight:900;color:var(--secondary);margin-bottom:4px;">${Utils.currency(saldo)}</div>
+              <div style="font-size:13px;color:var(--text-muted);margin-bottom:8px;">Saldo REAL em Asaas</div>
+              <div style="font-size:12px;color:var(--text-success);background:#e8f5e9;padding:8px;border-radius:6px;">
+                <i class="fa-solid fa-check-circle"></i> API Key validada com sucesso!
+              </div>
+            `;
+            this.atualizarConsolidacao(saldo);
+          } else {
+            Utils.toast('Chave salva mas saldo não consultado. Tente novamente.', 'warning');
+            this.recarregarSaldo();
+          }
+        } catch (balErr) {
+          console.error('[_salvarApiKeySubconta] Erro ao consultar saldo:', balErr);
+          Utils.toast('Chave salva mas erro ao consultar saldo.', 'warning');
+        }
+      }
     } catch (err) {
       console.error('[salvarApiKeySubconta] Erro:', err);
       Utils.toast('Erro ao salvar API Key: ' + (err.message || 'tente novamente'), 'error');
