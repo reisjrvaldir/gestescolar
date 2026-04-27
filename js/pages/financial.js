@@ -2098,7 +2098,7 @@ const FinBalance = {
       area.innerHTML = `<div style="color:var(--danger);font-size:13px;">
         <i class="fa-solid fa-triangle-exclamation"></i> Erro ao consultar Asaas: ${err.message || 'tente novamente'}
       </div>`;
-    `;
+    }
   },
 
   atualizarConsolidacao() {
