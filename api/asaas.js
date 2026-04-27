@@ -624,7 +624,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;color:#3
 
       // ── CONSULTAR SALDO DA SUBCONTA ────────────
       case 'getBalance':
-        asaasPath = '/finance/balance';
+        asaasPath = '/finance/balance' + (data.walletId ? `?walletId=${data.walletId}` : '');
         method = 'GET';
         break;
 
