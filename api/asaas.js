@@ -623,8 +623,18 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;color:#3
         break;
 
       // ── CONSULTAR SALDO DA SUBCONTA ────────────
+      // CRÍTICO: getBalance DEVE usar a API key da subconta da escola.
+      // Sem schoolApiKey, retornaria o saldo da conta principal (master) — proibido.
       case 'getBalance':
-        asaasPath = '/finance/balance' + (data.walletId ? `?walletId=${data.walletId}` : '');
+        if (!schoolApiKey) {
+          console.warn(`[getBalance] Escola ${userSchoolId} sem asaas_sub_api_key — retornando saldo zero.`);
+          return res.status(200).json({
+            balance: 0,
+            totalBalance: 0,
+            warning: 'Subconta Asaas não configurada para esta escola. Crie a subconta no painel ou contate o suporte.',
+          });
+        }
+        asaasPath = '/finance/balance';
         method = 'GET';
         break;
 

@@ -633,7 +633,11 @@ const CheckoutPage = {
         complement: d.complement, city: d.city, state: d.state,
       });
       if (res?.id || res?.walletId) {
-        DB.updateSchool(school.id, { asaasAccountId: res.id || '', asaasWalletId: res.walletId || '' });
+        DB.updateSchool(school.id, {
+          asaasAccountId: res.id     || '',
+          asaasWalletId:  res.walletId || '',
+          asaasSubApiKey: res.apiKey  || '', // CRÍTICO: necessário para consultar saldo da subconta
+        });
       }
     } catch(e) { console.warn('[Asaas subaccount]', e.message); }
 

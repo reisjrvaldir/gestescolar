@@ -751,10 +751,15 @@ const SuperAdmin = {
       });
       if (result && (result.id || result.walletId)) {
         DB.updateSchool(school.id, {
-          asaasAccountId: result.id || '',
-          asaasWalletId: result.walletId || '',
+          asaasAccountId: result.id     || '',
+          asaasWalletId:  result.walletId || '',
+          asaasSubApiKey: result.apiKey  || '', // CRÍTICO: sem isso, saldo puxa da conta master
         });
-        Utils.toast(`Escola "${name}" criada com subconta Asaas ativa!`, 'success');
+        if (!result.apiKey) {
+          Utils.toast(`Escola "${name}" criada, mas a subconta não retornou API key. Saldo não funcionará — configure manualmente.`, 'warning');
+        } else {
+          Utils.toast(`Escola "${name}" criada com subconta Asaas ativa!`, 'success');
+        }
       } else {
         Utils.toast(`Escola criada, mas subconta Asaas falhou. Configure manualmente.`, 'warning');
       }
