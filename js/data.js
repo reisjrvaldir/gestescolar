@@ -20,6 +20,8 @@ const DB = {
     audit_log: [],
     grades: [],
     attendance: [],
+    tickets: [],
+    ticket_comments: [],
     // Dados locais (sem tabela Supabase ainda)
     documents: [],
     declarations: [],
@@ -39,6 +41,8 @@ const DB = {
     audit_log:    ['id','school_id','user_id','action','details','created_at'],
     grades:       ['id','school_id','class_id','student_id','subject','grade_type','grade_value','max_value','period','teacher_id','observations','created_at'],
     attendance:   ['id','school_id','class_id','student_id','date','status','teacher_id','observations','created_at'],
+    tickets:         ['id','ticket_number','school_id','user_id','user_name','categoria','descricao','imagem_url','status','criado_em','atualizado_em','created_at'],
+    ticket_comments: ['id','ticket_id','user_id','user_name','user_role','mensagem','criado_em','created_at'],
   },
 
   // ═══════════════════════════════════════════════════════════════
@@ -183,7 +187,7 @@ const DB = {
 
     console.log('[GestEscolar] Carregando dados do Supabase...');
     // audit_log carregado separadamente (lazy) — não bloqueia login
-    const tables = ['schools','users','students','classes','invoices','expenses','transactions','messages','grades','attendance'];
+    const tables = ['schools','users','students','classes','invoices','expenses','transactions','messages','grades','attendance','tickets','ticket_comments'];
 
     try {
       // Timeout de 12s: evita spinner infinito se Supabase não responder
@@ -849,6 +853,92 @@ const DB = {
 
   getMessagesForUser(uid) {
     return this.getMessages().filter(m => m.toUserId === uid);
+  },
+
+  // ═══════════════════════════════════════════════════════════════
+  //  TICKETS (Chamados de Suporte)
+  // ═══════════════════════════════════════════════════════════════
+
+  // Gera o proximo numero amigavel TCK-XXXXXX. Tenta usar a RPC do Supabase
+  // (atomica). Se a RPC nao existir, faz fallback baseado no maior numero
+  // ja existente em cache.
+  async _nextTicketNumber() {
+    if (supabaseClient) {
+      try {
+        const { data, error } = await supabaseClient.rpc('next_ticket_number');
+        if (!error && data) return data;
+      } catch (e) { /* fallback abaixo */ }
+    }
+    // Fallback local: pega maior TCK-XXXXXX no cache + 1
+    let max = 0;
+    this._cache.tickets.forEach(t => {
+      const m = (t.ticketNumber || '').match(/TCK-(\d+)/i);
+      if (m) max = Math.max(max, parseInt(m[1], 10) || 0);
+    });
+    return 'TCK-' + String(max + 1).padStart(6, '0');
+  },
+
+  // Retorna todos os tickets visiveis pelo usuario corrente
+  // - superadmin: todos
+  // - demais: somente os criados pelo proprio usuario
+  getTickets() {
+    const sess = (typeof Auth !== 'undefined' && Auth.current) ? Auth.current() : null;
+    const all = this._cache.tickets || [];
+    if (!sess) return [];
+    if (sess.role === 'superadmin') return all;
+    return all.filter(t => t.userId === sess.id);
+  },
+
+  // Lista TODOS os tickets (uso interno do superadmin)
+  getAllTickets() { return this._cache.tickets || []; },
+
+  getTicketById(id) {
+    return (this._cache.tickets || []).find(t => t.id === id);
+  },
+
+  // Cria um ticket. Retorna o objeto criado (com ticket_number ja preenchido).
+  async addTicket(t) {
+    const sess = (typeof Auth !== 'undefined' && Auth.current) ? Auth.current() : null;
+    t.id            = crypto.randomUUID();
+    t.ticketNumber  = await this._nextTicketNumber();
+    t.schoolId      = t.schoolId  || sess?.schoolId || null;
+    t.userId        = t.userId    || sess?.id || null;
+    t.userName      = t.userName  || sess?.name || '';
+    t.status        = t.status    || 'aberto';
+    t.criadoEm      = new Date().toISOString();
+    t.atualizadoEm  = t.criadoEm;
+    t.createdAt     = t.criadoEm;
+    this._cache.tickets.push(t);
+    await this._insert('tickets', t);
+    return t;
+  },
+
+  async updateTicket(id, d) {
+    const idx = this._cache.tickets.findIndex(t => t.id === id);
+    if (idx < 0) return;
+    d.atualizadoEm = new Date().toISOString();
+    this._cache.tickets[idx] = { ...this._cache.tickets[idx], ...d };
+    await this._update('tickets', id, d);
+  },
+
+  // Comentarios
+  getTicketComments(ticketId) {
+    return (this._cache.ticket_comments || [])
+      .filter(c => c.ticketId === ticketId)
+      .sort((a, b) => new Date(a.criadoEm || a.createdAt) - new Date(b.criadoEm || b.createdAt));
+  },
+
+  async addTicketComment(c) {
+    const sess = (typeof Auth !== 'undefined' && Auth.current) ? Auth.current() : null;
+    c.id        = crypto.randomUUID();
+    c.userId    = c.userId   || sess?.id || null;
+    c.userName  = c.userName || sess?.name || '';
+    c.userRole  = c.userRole || sess?.role || '';
+    c.criadoEm  = new Date().toISOString();
+    c.createdAt = c.criadoEm;
+    this._cache.ticket_comments.push(c);
+    await this._insert('ticket_comments', c);
+    return c;
   },
 
   // ═══════════════════════════════════════════════════════════════
