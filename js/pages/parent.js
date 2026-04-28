@@ -23,6 +23,14 @@ Router.register('parent-dashboard', () => {
   const invoices= DB.getStudentInvoices(student.id);
   const pending = invoices.filter(i => i.status === 'pendente');
 
+  // Puxar matérias da turma
+  let subjects = (cls?.subjects && cls.subjects.length > 0) ? cls.subjects : [];
+  if (subjects.length === 0 && grades.length > 0) {
+    const seen = new Set();
+    grades.forEach(g => { if (g.subject) seen.add(g.subject); });
+    subjects = [...seen].sort();
+  }
+
   // Foto do aluno (localStorage)
   const photoKey  = `student_photo_${student.id}`;
   const photoUrl  = localStorage.getItem(photoKey) || '';
@@ -105,6 +113,23 @@ Router.register('parent-dashboard', () => {
         </div>
       </div>
     </div>
+
+    <!-- MATÉRIAS DO ALUNO -->
+    ${subjects.length > 0 ? `
+    <div class="card" style="margin-bottom:20px;">
+      <div class="card-header">
+        <span class="card-title"><i class="fa-solid fa-book"></i> Matérias</span>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:12px;padding:0;">
+        ${subjects.map(sub => `
+          <div style="background:linear-gradient(135deg,#f5f7fa,#ffffff);border:1px solid #e0e6ed;border-radius:8px;padding:16px;text-align:center;">
+            <i class="fa-solid fa-book" style="font-size:24px;color:var(--primary);margin-bottom:8px;display:block;"></i>
+            <div style="font-weight:600;font-size:13px;color:#0d1b2a;">${Utils.escape(sub)}</div>
+          </div>
+        `).join('')}
+      </div>
+    </div>
+    ` : ''}
 
     <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:20px;margin-top:0;">
 
