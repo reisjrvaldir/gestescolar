@@ -13,13 +13,14 @@ const SuperTickets = {
     { value: 'sistemas',   label: 'Sistemas'   },
   ],
 
-  STATUS_FLOW: ['aberto','em_andamento','resolvido','fechado'],
+  STATUS_FLOW: ['aberto','em_andamento','aguardando_solicitante','resolvido','fechado'],
 
   STATUS_META: {
-    aberto:       { color: '#F44336', icon: 'fa-circle-exclamation', label: 'Aberto'       },
-    em_andamento: { color: '#FF9800', icon: 'fa-rotate',             label: 'Em andamento' },
-    resolvido:    { color: '#4CAF50', icon: 'fa-circle-check',       label: 'Resolvido'    },
-    fechado:      { color: '#9E9E9E', icon: 'fa-lock',               label: 'Fechado'      },
+    aberto:                 { color: '#F44336', icon: 'fa-circle-exclamation', label: 'Aberto'                },
+    em_andamento:           { color: '#FF9800', icon: 'fa-rotate',             label: 'Em andamento'          },
+    aguardando_solicitante: { color: '#9C27B0', icon: 'fa-clock',              label: 'Aguardando solicitante'},
+    resolvido:              { color: '#4CAF50', icon: 'fa-circle-check',       label: 'Resolvido'             },
+    fechado:                { color: '#9E9E9E', icon: 'fa-lock',               label: 'Fechado'               },
   },
 
   CATEGORIA_LABEL(v) { return (this.CATEGORIAS.find(c => c.value === v) || {}).label || v; },
@@ -337,9 +338,16 @@ const SuperTickets = {
           <div style="padding:16px 20px;">
             <p style="white-space:pre-wrap;line-height:1.5;margin:0 0 14px;">${Utils.escape(ticket.descricao || '')}</p>
             ${ticket.imagemUrl ? `
-              <a href="${Utils.escape(ticket.imagemUrl)}" target="_blank" rel="noopener" style="display:inline-block;">
-                <img src="${Utils.escape(ticket.imagemUrl)}" alt="Anexo" style="max-width:100%;max-height:380px;border-radius:8px;border:1px solid var(--border);" />
-              </a>
+              <div style="margin-top:4px;">
+                <img src="${Utils.escape(ticket.imagemUrl)}" alt="Anexo"
+                  style="max-width:100%;max-height:380px;border-radius:8px;border:1px solid var(--border);cursor:pointer;"
+                  onerror="this.style.display='none';this.nextElementSibling.style.display='inline-flex';"
+                  onclick="window.open('${Utils.escape(ticket.imagemUrl)}','_blank')" />
+                <a href="${Utils.escape(ticket.imagemUrl)}" target="_blank" rel="noopener"
+                  style="display:none;align-items:center;gap:6px;padding:8px 14px;background:#E3F2FD;border-radius:8px;color:#1976D2;font-size:13px;text-decoration:none;">
+                  <i class="fa-solid fa-paperclip"></i> Ver Anexo
+                </a>
+              </div>
             ` : '<div style="font-size:12px;color:var(--text-muted);"><i class="fa-solid fa-image"></i> Sem imagem anexa.</div>'}
           </div>
         </div>
@@ -420,12 +428,22 @@ const SuperTickets = {
     if (!t) return;
     if (t.status === newStatus) { Utils.toast('Status ja esta como ' + this.STATUS_LABEL(newStatus), 'info'); return; }
     try {
-      await DB.updateTicket(ticketId, { status: newStatus });
+      const update = { status: newStatus };
+      // Se mudou para "aguardando_solicitante", salva o momento para contar 48h
+      if (newStatus === 'aguardando_solicitante') {
+        update.aguardandoDesde = new Date().toISOString();
+      } else {
+        // Qualquer outro status limpa o timer
+        update.aguardandoDesde = null;
+        update.fechadoPorTimeout = false;
+      }
+      await DB.updateTicket(ticketId, update);
       Utils.toast(`Status alterado para "${this.STATUS_LABEL(newStatus)}".`, 'success');
-      // Adiciona um comentario automatico de log
       await DB.addTicketComment({
         ticketId,
-        mensagem: `Status alterado para "${this.STATUS_LABEL(newStatus)}".`,
+        mensagem: newStatus === 'aguardando_solicitante'
+          ? `Status alterado para "Aguardando solicitante". O chamado sera encerrado automaticamente em 48h sem retorno.`
+          : `Status alterado para "${this.STATUS_LABEL(newStatus)}".`,
       });
       this.updateCounters();
       this.renderDetail(ticketId);
@@ -442,10 +460,19 @@ const SuperTickets = {
     if (idx < 0 || idx >= this.STATUS_FLOW.length - 1) return;
     const next = this.STATUS_FLOW[idx + 1];
     try {
-      await DB.updateTicket(ticketId, { status: next });
+      const update = { status: next };
+      if (next === 'aguardando_solicitante') {
+        update.aguardandoDesde = new Date().toISOString();
+      } else {
+        update.aguardandoDesde = null;
+        update.fechadoPorTimeout = false;
+      }
+      await DB.updateTicket(ticketId, update);
       await DB.addTicketComment({
         ticketId,
-        mensagem: `Status alterado para "${this.STATUS_LABEL(next)}".`,
+        mensagem: next === 'aguardando_solicitante'
+          ? `Status alterado para "Aguardando solicitante". O chamado sera encerrado automaticamente em 48h sem retorno.`
+          : `Status alterado para "${this.STATUS_LABEL(next)}".`,
       });
       Utils.toast(`Avancado para "${this.STATUS_LABEL(next)}".`, 'success');
       this.updateCounters();
@@ -521,12 +548,38 @@ const SuperTickets = {
     }
     return new Blob([new Uint8Array(byteArrays)], { type: 'image/png' });
   },
+
+  // Verifica e fecha automaticamente tickets em "aguardando_solicitante" há mais de 48h
+  async checkTimeouts() {
+    const now = Date.now();
+    const LIMITE_MS = 48 * 60 * 60 * 1000; // 48 horas
+    const tickets = DB.getAllTickets().filter(t => t.status === 'aguardando_solicitante' && t.aguardandoDesde);
+    for (const t of tickets) {
+      const desde = new Date(t.aguardandoDesde).getTime();
+      if (now - desde >= LIMITE_MS) {
+        await DB.updateTicket(t.id, {
+          status: 'fechado',
+          fechadoPorTimeout: true,
+          aguardandoDesde: null,
+        });
+        await DB.addTicketComment({
+          ticketId: t.id,
+          userId: null,
+          userName: 'Sistema',
+          userRole: 'sistema',
+          mensagem: 'Este chamado foi encerrado automaticamente por falta de retorno. Caso o problema persista, abra um novo ticket.',
+        });
+      }
+    }
+  },
 };
 
 window.SuperTickets = SuperTickets;
 
 // Rotas
-Router.register('superadmin-tickets', () => {
+Router.register('superadmin-tickets', async () => {
+  // Verifica timeouts antes de renderizar
+  await SuperTickets.checkTimeouts();
   SuperTickets.render();
 
   // Realtime: atualiza lista e contadores quando qualquer ticket muda

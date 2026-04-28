@@ -137,7 +137,11 @@
       "Bash(grep -B 10 \"const fontWeight\" \"C:\\\\\\\\Users\\\\\\\\valdir.reis\\\\\\\\Documents\\\\\\\\Projetos\\\\\\\\gestescolar-main\\\\\\\\js\\\\\\\\pages\\\\\\\\user-tickets.js\")",
       "Bash(grep -n \"addTicketComment\\\\|onclick.*Responder\\\\|onclick.*responder\" \"C:\\\\\\\\Users\\\\\\\\valdir.reis\\\\\\\\Documents\\\\\\\\Projetos\\\\\\\\gestescolar-main\\\\\\\\js\\\\\\\\pages\\\\\\\\user-tickets.js\")",
       "Bash(grep -n \"loadAll\\\\|fetchAll\\\\|sync\\\\|_load.*tickets\\\\|from.*tickets.*select\" \"C:\\\\\\\\Users\\\\\\\\valdir.reis\\\\\\\\Documents\\\\\\\\Projetos\\\\\\\\gestescolar-main\\\\\\\\js\\\\\\\\data.js\")",
-      "Bash(grep -n \"hasUnreadComments\\\\|isReadByCurrentUser\\\\|isUnread\" \"C:\\\\\\\\Users\\\\\\\\valdir.reis\\\\\\\\Documents\\\\\\\\Projetos\\\\\\\\gestescolar-main\\\\\\\\js\\\\\\\\pages\\\\\\\\superadmin-tickets.js\")"
+      "Bash(grep -n \"hasUnreadComments\\\\|isReadByCurrentUser\\\\|isUnread\" \"C:\\\\\\\\Users\\\\\\\\valdir.reis\\\\\\\\Documents\\\\\\\\Projetos\\\\\\\\gestescolar-main\\\\\\\\js\\\\\\\\pages\\\\\\\\superadmin-tickets.js\")",
+      "Bash(grep -n \"Anexo\\\\|imagem_url\\\\|imagemUrl\\\\|imagem\" \"C:\\\\\\\\Users\\\\\\\\valdir.reis\\\\\\\\Documents\\\\\\\\Projetos\\\\\\\\gestescolar-main\\\\\\\\js\\\\\\\\pages\\\\\\\\user-tickets.js\")",
+      "Bash(grep -n \"status\\\\|STATUS_META\\\\|aguardando\\\\|fechado\\\\|aberto\\\\|resolvido\" \"C:\\\\\\\\Users\\\\\\\\valdir.reis\\\\\\\\Documents\\\\\\\\Projetos\\\\\\\\gestescolar-main\\\\\\\\js\\\\\\\\pages\\\\\\\\user-tickets.js\")",
+      "Bash(grep -n \"STATUS_META\\\\|aguardando\\\\|em_andamento\\\\|status.*select\\\\|Aplicar\\\\|Avancar\" \"C:\\\\\\\\Users\\\\\\\\valdir.reis\\\\\\\\Documents\\\\\\\\Projetos\\\\\\\\gestescolar-main\\\\\\\\js\\\\\\\\pages\\\\\\\\superadmin-tickets.js\")",
+      "Bash(grep -n \"^};\" \"C:\\\\\\\\Users\\\\\\\\valdir.reis\\\\\\\\Documents\\\\\\\\Projetos\\\\\\\\gestescolar-main\\\\\\\\js\\\\\\\\pages\\\\\\\\superadmin-tickets.js\")"
     ]
   }
 }

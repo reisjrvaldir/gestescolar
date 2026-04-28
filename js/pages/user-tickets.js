@@ -14,10 +14,11 @@ const UserTickets = {
   ],
 
   STATUS_META: {
-    aberto:        { color: '#F44336', icon: 'fa-circle-exclamation', label: 'Aberto'       },
-    em_andamento:  { color: '#FF9800', icon: 'fa-rotate',             label: 'Em andamento' },
-    resolvido:     { color: '#4CAF50', icon: 'fa-circle-check',       label: 'Resolvido'    },
-    fechado:       { color: '#9E9E9E', icon: 'fa-lock',               label: 'Fechado'      },
+    aberto:                 { color: '#F44336', icon: 'fa-circle-exclamation', label: 'Aberto'                },
+    em_andamento:           { color: '#FF9800', icon: 'fa-rotate',             label: 'Em andamento'          },
+    aguardando_solicitante: { color: '#9C27B0', icon: 'fa-clock',              label: 'Aguardando solicitante'},
+    resolvido:              { color: '#4CAF50', icon: 'fa-circle-check',       label: 'Resolvido'             },
+    fechado:                { color: '#9E9E9E', icon: 'fa-lock',               label: 'Fechado'               },
   },
 
   CATEGORIA_LABEL(v) {
@@ -42,11 +43,12 @@ const UserTickets = {
       : tickets.filter(t => t.status === this._filterStatus);
 
     const counts = {
-      todos:        tickets.length,
-      aberto:       tickets.filter(t => t.status === 'aberto').length,
-      em_andamento: tickets.filter(t => t.status === 'em_andamento').length,
-      resolvido:    tickets.filter(t => t.status === 'resolvido').length,
-      fechado:      tickets.filter(t => t.status === 'fechado').length,
+      todos:                  tickets.length,
+      aberto:                 tickets.filter(t => t.status === 'aberto').length,
+      em_andamento:           tickets.filter(t => t.status === 'em_andamento').length,
+      aguardando_solicitante: tickets.filter(t => t.status === 'aguardando_solicitante').length,
+      resolvido:              tickets.filter(t => t.status === 'resolvido').length,
+      fechado:                tickets.filter(t => t.status === 'fechado').length,
     };
 
     Router.renderLayout(user, 'user-tickets', `
@@ -311,14 +313,49 @@ const UserTickets = {
   openDetail(ticketId) {
     Router.go('user-ticket-detail', { ticketId });
   },
+
+  // Reabre um ticket fechado (apenas fechamento normal, nao timeout)
+  async reopenTicket(ticketId) {
+    const ticket = DB.getTicketById(ticketId);
+    if (!ticket || ticket.fechadoPorTimeout) return;
+    await DB.updateTicket(ticketId, { status: 'aberto' });
+    Utils.toast('Chamado reaberto com sucesso!', 'success');
+    Router.go('user-ticket-detail', { ticketId });
+  },
+
+  // Verifica tickets com aguardando_solicitante e fecha os que passaram de 48h
+  async checkTimeouts() {
+    const now = Date.now();
+    const LIMITE_MS = 48 * 60 * 60 * 1000; // 48 horas
+    const tickets = DB.getTickets().filter(t => t.status === 'aguardando_solicitante' && t.aguardandoDesde);
+    for (const t of tickets) {
+      const desde = new Date(t.aguardandoDesde).getTime();
+      if (now - desde >= LIMITE_MS) {
+        await DB.updateTicket(t.id, {
+          status: 'fechado',
+          fechadoPorTimeout: true,
+        });
+        // Adiciona comentario automatico
+        await DB.addTicketComment({
+          ticketId: t.id,
+          userId: null,
+          userName: 'Sistema',
+          userRole: 'sistema',
+          mensagem: 'Este chamado foi encerrado automaticamente por falta de retorno. Caso o problema persista, abra um novo ticket.',
+        });
+      }
+    }
+  },
 };
 
 window.UserTickets = UserTickets;
 
 // Rota: lista
-Router.register('user-tickets', () => {
+Router.register('user-tickets', async () => {
   const user = Auth.require();
   if (!user) return;
+  // Verifica timeouts antes de renderizar
+  await UserTickets.checkTimeouts();
   UserTickets.render();
 
   // Realtime: atualiza lista quando tickets ou comentários mudam
@@ -360,6 +397,7 @@ Router.register('user-ticket-detail', async (params) => {
   const meta = UserTickets.STATUS_META[ticket.status] || UserTickets.STATUS_META.aberto;
   const comments = DB.getTicketComments(ticket.id);
   const isClosed = ticket.status === 'fechado';
+  const isTimeout = isClosed && ticket.fechadoPorTimeout === true;
 
   // Realtime: atualiza a conversa quando chega nova mensagem
   Realtime.subscribe('ticket_comments', `ticket_id=eq.${id}`, () => {
@@ -406,9 +444,16 @@ Router.register('user-ticket-detail', async (params) => {
         <div style="padding:16px 20px;">
           <p style="white-space:pre-wrap;line-height:1.5;margin:0 0 14px;">${Utils.escape(ticket.descricao || '')}</p>
           ${ticket.imagemUrl ? `
-            <a href="${Utils.escape(ticket.imagemUrl)}" target="_blank" rel="noopener" style="display:inline-block;">
-              <img src="${Utils.escape(ticket.imagemUrl)}" alt="Anexo" style="max-width:100%;max-height:340px;border-radius:8px;border:1px solid var(--border);" />
-            </a>
+            <div style="margin-top:8px;">
+              <img src="${Utils.escape(ticket.imagemUrl)}" alt="Anexo"
+                style="max-width:100%;max-height:340px;border-radius:8px;border:1px solid var(--border);cursor:pointer;"
+                onerror="this.style.display='none';this.nextElementSibling.style.display='inline-flex';"
+                onclick="window.open('${Utils.escape(ticket.imagemUrl)}','_blank')" />
+              <a href="${Utils.escape(ticket.imagemUrl)}" target="_blank" rel="noopener"
+                style="display:none;align-items:center;gap:6px;padding:8px 14px;background:#E3F2FD;border-radius:8px;color:#1976D2;font-size:13px;text-decoration:none;">
+                <i class="fa-solid fa-paperclip"></i> Ver Anexo
+              </a>
+            </div>
           ` : ''}
         </div>
       </div>
@@ -439,8 +484,24 @@ Router.register('user-ticket-detail', async (params) => {
           }).join('')}
         </div>
         ${isClosed ? `
-          <div style="padding:14px 20px;border-top:1px solid var(--border);background:#f5f5f5;font-size:12px;color:var(--text-muted);">
-            <i class="fa-solid fa-lock"></i> Este chamado foi fechado. Para uma nova solicitacao, abra um novo chamado.
+          <div style="padding:14px 20px;border-top:1px solid var(--border);background:#f5f5f5;">
+            ${isTimeout ? `
+              <div style="font-size:13px;color:#795548;display:flex;align-items:center;gap:8px;">
+                <i class="fa-solid fa-clock"></i>
+                <span>Este chamado foi encerrado por falta de retorno. Caso o erro persista, abra um novo ticket.</span>
+              </div>
+            ` : `
+              <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;">
+                <div style="font-size:13px;color:var(--text-muted);display:flex;align-items:center;gap:8px;">
+                  <i class="fa-solid fa-lock"></i>
+                  <span>Este chamado foi fechado.</span>
+                </div>
+                <button class="btn btn-sm btn-outline" style="border-color:#FF9800;color:#FF9800;"
+                  onclick="UserTickets.reopenTicket('${ticket.id}')">
+                  <i class="fa-solid fa-rotate-left"></i> Reabrir Chamado
+                </button>
+              </div>
+            `}
           </div>
         ` : `
           <div style="padding:14px 20px;border-top:1px solid var(--border);">

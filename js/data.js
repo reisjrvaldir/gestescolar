@@ -41,7 +41,7 @@ const DB = {
     audit_log:    ['id','school_id','user_id','action','details','created_at'],
     grades:       ['id','school_id','class_id','student_id','subject','grade_type','grade_value','max_value','period','teacher_id','observations','created_at'],
     attendance:   ['id','school_id','class_id','student_id','date','status','teacher_id','observations','created_at'],
-    tickets:         ['id','ticket_number','school_id','user_id','user_name','categoria','descricao','imagem_url','status','criado_em','atualizado_em','created_at','read_by','has_unread_comments'],
+    tickets:         ['id','ticket_number','school_id','user_id','user_name','categoria','descricao','imagem_url','status','criado_em','atualizado_em','created_at','read_by','has_unread_comments','aguardando_desde','fechado_por_timeout'],
     ticket_comments: ['id','ticket_id','user_id','user_name','user_role','mensagem','criado_em','created_at','imagem_url'],
   },
 
