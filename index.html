@@ -44,12 +44,12 @@
   </div>
 
   <!--
-    Carregamento dinâmico: cada página gera um timestamp único em tempo de carregamento.
-    Isso faz o browser baixar TODOS os scripts toda vez — zero cache, 100% realtime.
+    Carregamento dinâmico: cada página gera um UUID aleatório em tempo de carregamento.
+    Isso faz o browser buscar TODOS os scripts diretamente do servidor — zero cache, 100% realtime.
   -->
   <script>
     (function () {
-      var v = Date.now(); // timestamp único por carregamento
+      var v = Math.random().toString(36).substr(2, 9) + '_' + Date.now(); // UUID aleatório + timestamp
       var scripts = [
         'js/supabase-config.js',
         'js/data.js',
@@ -74,7 +74,7 @@
         'js/onboarding.js',
         'js/app.js',
       ];
-      // Injeta scripts com async=false (mantém ordem de execução) e cache-busting
+      // Injeta scripts com async=false (mantém ordem de execução) e cache-busting agressivo
       scripts.forEach(function (src) {
         var s = document.createElement('script');
         s.src = src + '?v=' + v;
@@ -86,15 +86,38 @@
 
   <!-- Service Worker desativado — tudo realtime, sem cache -->
   <script>
-    // Remove qualquer Service Worker previamente instalado e limpa TODOS os caches
-    if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.getRegistrations().then(regs => {
-        regs.forEach(reg => reg.unregister());
-      });
-    }
-    if ('caches' in window) {
-      caches.keys().then(keys => keys.forEach(k => caches.delete(k)));
-    }
+    // Limpeza agressiva de cache: remove SWs e limpa TODOS os caches imediatamente
+    (function() {
+      // Desregistrar todos os Service Workers
+      if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.getRegistrations().then(regs => {
+          regs.forEach(reg => {
+            reg.unregister();
+            console.log('[GestEscolar] Service Worker desregistrado:', reg.scope);
+          });
+        });
+      }
+
+      // Limpar TODOS os caches
+      if ('caches' in window) {
+        caches.keys().then(keys => {
+          keys.forEach(k => {
+            caches.delete(k);
+            console.log('[GestEscolar] Cache deletado:', k);
+          });
+        });
+      }
+
+      // Limpar localStorage de cache (se houver)
+      if ('localStorage' in window) {
+        Object.keys(localStorage).forEach(key => {
+          if (key.includes('cache') || key.includes('app-state')) {
+            localStorage.removeItem(key);
+            console.log('[GestEscolar] LocalStorage limpo:', key);
+          }
+        });
+      }
+    })();
   </script>
 </body>
 </html>
