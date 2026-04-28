@@ -160,28 +160,10 @@ const Router = {
           </div>
         </aside>
         <div class="main-content">
-          <div class="topbar" id="topbar" style="display:flex;align-items:center;justify-content:space-between;">
-            <div style="display:flex;align-items:center;gap:12px;">
-              <button class="btn-menu" id="btn-menu" onclick="Router.toggleSidebar()" aria-label="Menu">
-                <i class="fa-solid fa-bars"></i>
-              </button>
-              ${Router._history.length > 0 ? `
-              <button onclick="Router.back()" title="Voltar" aria-label="Voltar"
-                style="background:none;border:none;cursor:pointer;color:var(--text-muted);
-                       font-size:14px;padding:6px 10px;display:inline-flex;align-items:center;gap:6px;">
-                <i class="fa-solid fa-arrow-left"></i><span style="font-size:13px;">Voltar</span>
-              </button>` : ''}
-              <div style="display:flex;align-items:center;gap:10px;padding-left:8px;">
-                ${school && school.logoUrl ? `<img src="${school.logoUrl}" alt="Logo" style="height:32px;max-width:120px;object-fit:contain;" />` : ''}
-                <div style="display:flex;flex-direction:column;gap:2px;">
-                  <div style="font-weight:600;font-size:13px;color:var(--text);">${Utils.escape(school?.name || 'Escola')}</div>
-                  <div style="font-size:11px;color:var(--text-muted);">${Utils.escape(user.name)}</div>
-                </div>
-              </div>
-            </div>
-            <div style="display:flex;align-items:center;gap:12px;">
-              <span class="topbar-title" style="margin:0;">GestEscolar</span>
-            </div>
+          <div class="topbar" id="topbar" style="display:none;">
+            <button class="btn-menu" id="btn-menu" onclick="Router.toggleSidebar()" aria-label="Menu">
+              <i class="fa-solid fa-bars"></i>
+            </button>
           </div>
           <div class="page-content" id="page-content">
             ${contentHTML}
