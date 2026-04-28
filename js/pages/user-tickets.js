@@ -103,13 +103,19 @@ const UserTickets = {
                   </td></tr>
                 ` : filtered.map(t => {
                   const meta = this.STATUS_META[t.status] || this.STATUS_META.aberto;
-                  return `<tr>
-                    <td style="font-family:monospace;font-weight:700;">${Utils.escape(t.ticketNumber || '--')}</td>
-                    <td>${Utils.escape(this.CATEGORIA_LABEL(t.categoria))}</td>
-                    <td style="max-width:280px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">
+                  const comments = DB.getTicketComments(t.id) || [];
+                  const hasResponse = comments.length > 0;
+                  const fontWeight = hasResponse ? '700' : '500';
+                  return `<tr style="opacity: ${hasResponse ? '1' : '0.9'};">
+                    <td style="font-family:monospace;font-weight:${fontWeight};position:relative;">
+                      ${hasResponse ? '<span style="display:inline-block;width:8px;height:8px;background:#F44336;border-radius:50%;margin-right:6px;vertical-align:middle;"></span>' : ''}
+                      ${Utils.escape(t.ticketNumber || '--')}
+                    </td>
+                    <td style="font-weight:${fontWeight};">${Utils.escape(this.CATEGORIA_LABEL(t.categoria))}</td>
+                    <td style="max-width:280px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:${fontWeight};">
                       ${Utils.escape((t.descricao || '').substring(0, 80))}${(t.descricao || '').length > 80 ? '...' : ''}
                     </td>
-                    <td style="font-size:12px;">${Utils.date(t.criadoEm || t.createdAt)}</td>
+                    <td style="font-size:12px;font-weight:${fontWeight};">${Utils.date(t.criadoEm || t.createdAt)}</td>
                     <td>
                       <span style="background:${meta.color};color:#fff;padding:3px 8px;border-radius:10px;font-size:11px;font-weight:700;display:inline-flex;align-items:center;gap:4px;">
                         <i class="fa-solid ${meta.icon}"></i> ${meta.label}
@@ -366,11 +372,18 @@ Router.register('user-ticket-detail', (params) => {
           <div style="padding:14px 20px;border-top:1px solid var(--border);">
             <textarea id="tk-comment-text" class="form-control" rows="3" maxlength="1500"
               placeholder="Escreva uma resposta ou complemento..."></textarea>
-            <div style="display:flex;justify-content:flex-end;margin-top:8px;">
+            <div style="display:flex;gap:8px;margin-top:8px;">
+              <label style="flex:1;display:flex;align-items:center;justify-content:center;border:2px dashed var(--border);border-radius:var(--radius);padding:8px;cursor:pointer;background:#fafafa;">
+                <i class="fa-solid fa-image" style="margin-right:6px;color:var(--primary);"></i>
+                <span style="font-size:12px;color:var(--text-muted);">Adicionar imagem</span>
+                <input type="file" id="tk-comment-image" accept="image/*" style="display:none;"
+                  onchange="UserTickets._onCommentImageSelected(this)" />
+              </label>
               <button class="btn btn-primary btn-sm" onclick="UserTickets.sendComment('${ticket.id}')">
                 <i class="fa-solid fa-paper-plane"></i> Enviar
               </button>
             </div>
+            <div id="tk-comment-image-preview" style="margin-top:8px;"></div>
           </div>
         `}
       </div>
@@ -378,12 +391,38 @@ Router.register('user-ticket-detail', (params) => {
   `);
 });
 
+UserTickets._commentPendingImage = null;
+
+UserTickets._onCommentImageSelected = function(input) {
+  const file = input.files?.[0];
+  const preview = document.getElementById('tk-comment-image-preview');
+  if (!file) { this._commentPendingImage = null; if (preview) preview.innerHTML = ''; return; }
+  if (file.size > 5 * 1024 * 1024) {
+    Utils.toast('Imagem muito grande. Máximo 5MB.', 'error');
+    input.value = ''; return;
+  }
+  if (!/^image\/(png|jpe?g|webp)$/.test(file.type)) {
+    Utils.toast('Formato inválido. Use PNG, JPG ou WEBP.', 'error');
+    input.value = ''; return;
+  }
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    this._commentPendingImage = e.target.result;
+    if (preview) preview.innerHTML = `<img src="${e.target.result}" style="max-height:120px;border-radius:var(--radius);" />`;
+  };
+  reader.readAsDataURL(file);
+};
+
 UserTickets.sendComment = async function(ticketId) {
   const txt = (document.getElementById('tk-comment-text')?.value || '').trim();
   if (txt.length < 2) { Utils.toast('Escreva uma mensagem.', 'error'); return; }
   if (txt.length > 1500) { Utils.toast('Mensagem muito longa.', 'error'); return; }
   try {
-    await DB.addTicketComment({ ticketId, mensagem: txt });
+    let imagemUrl = null;
+    if (UserTickets._commentPendingImage) {
+      imagemUrl = await UserTickets._uploadImage(UserTickets._commentPendingImage);
+    }
+    await DB.addTicketComment({ ticketId, mensagem: txt, imagemUrl });
     // Se o ticket estava resolvido e o usuario respondeu, reabre como em_andamento
     const t = DB.getTicketById(ticketId);
     if (t && t.status === 'resolvido') {

@@ -185,15 +185,21 @@ const SuperTickets = {
                   const meta = this.STATUS_META[t.status] || this.STATUS_META.aberto;
                   const sch  = DB.getSchool(t.schoolId);
                   const schName = sch?.name || (t.schoolId ? '(escola removida)' : '--');
-                  return `<tr>
-                    <td style="font-family:monospace;font-weight:700;">${Utils.escape(t.ticketNumber || '--')}</td>
-                    <td style="font-size:12px;">${Utils.escape(schName)}</td>
-                    <td style="font-size:12px;">${Utils.escape(t.userName || '--')}</td>
-                    <td>${Utils.escape(this.CATEGORIA_LABEL(t.categoria))}</td>
-                    <td style="max-width:240px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px;">
+                  const comments = DB.getTicketComments(t.id) || [];
+                  const hasResponse = comments.length > 0;
+                  const fontWeight = hasResponse ? '700' : '500';
+                  return `<tr style="opacity: ${hasResponse ? '1' : '0.9'};">
+                    <td style="font-family:monospace;font-weight:${fontWeight};position:relative;">
+                      ${hasResponse ? '<span style="display:inline-block;width:8px;height:8px;background:#F44336;border-radius:50%;margin-right:6px;vertical-align:middle;"></span>' : ''}
+                      ${Utils.escape(t.ticketNumber || '--')}
+                    </td>
+                    <td style="font-size:12px;font-weight:${fontWeight};">${Utils.escape(schName)}</td>
+                    <td style="font-size:12px;font-weight:${fontWeight};">${Utils.escape(t.userName || '--')}</td>
+                    <td style="font-weight:${fontWeight};">${Utils.escape(this.CATEGORIA_LABEL(t.categoria))}</td>
+                    <td style="max-width:240px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px;font-weight:${fontWeight};">
                       ${Utils.escape((t.descricao || '').substring(0, 70))}${(t.descricao || '').length > 70 ? '...' : ''}
                     </td>
-                    <td style="font-size:12px;white-space:nowrap;">${Utils.date(t.criadoEm || t.createdAt)}</td>
+                    <td style="font-size:12px;white-space:nowrap;font-weight:${fontWeight};">${Utils.date(t.criadoEm || t.createdAt)}</td>
                     <td>
                       <span style="background:${meta.color};color:#fff;padding:3px 8px;border-radius:10px;font-size:10px;font-weight:700;display:inline-flex;align-items:center;gap:4px;">
                         <i class="fa-solid ${meta.icon}"></i> ${meta.label}
@@ -357,12 +363,19 @@ const SuperTickets = {
           <div style="padding:14px 20px;border-top:1px solid var(--border);">
             <textarea id="adm-comment-text" class="form-control" rows="3" maxlength="1500"
               placeholder="Responda ao usuario..."></textarea>
-            <div style="display:flex;justify-content:space-between;align-items:center;margin-top:8px;flex-wrap:wrap;gap:8px;">
-              <small style="color:var(--text-muted);">A resposta sera visivel ao usuario imediatamente.</small>
+            <div style="display:flex;gap:8px;margin-top:8px;">
+              <label style="flex:1;display:flex;align-items:center;justify-content:center;border:2px dashed var(--border);border-radius:var(--radius);padding:8px;cursor:pointer;background:#fafafa;">
+                <i class="fa-solid fa-image" style="margin-right:6px;color:var(--primary);"></i>
+                <span style="font-size:12px;color:var(--text-muted);">Adicionar imagem</span>
+                <input type="file" id="adm-comment-image" accept="image/*" style="display:none;"
+                  onchange="SuperTickets._onCommentImageSelected(this)" />
+              </label>
               <button class="btn btn-primary btn-sm" onclick="SuperTickets.sendComment('${ticket.id}')">
                 <i class="fa-solid fa-paper-plane"></i> Enviar resposta
               </button>
             </div>
+            <div id="adm-comment-image-preview" style="margin-top:8px;"></div>
+            <small style="color:var(--text-muted);margin-top:8px;display:block;">A resposta sera visivel ao usuario imediatamente.</small>
           </div>
         </div>
       </div>
@@ -410,12 +423,38 @@ const SuperTickets = {
     }
   },
 
+  _commentPendingImage: null,
+
+  _onCommentImageSelected(input) {
+    const file = input.files?.[0];
+    const preview = document.getElementById('adm-comment-image-preview');
+    if (!file) { this._commentPendingImage = null; if (preview) preview.innerHTML = ''; return; }
+    if (file.size > 5 * 1024 * 1024) {
+      Utils.toast('Imagem muito grande. Máximo 5MB.', 'error');
+      input.value = ''; return;
+    }
+    if (!/^image\/(png|jpe?g|webp)$/.test(file.type)) {
+      Utils.toast('Formato inválido. Use PNG, JPG ou WEBP.', 'error');
+      input.value = ''; return;
+    }
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      this._commentPendingImage = e.target.result;
+      if (preview) preview.innerHTML = `<img src="${e.target.result}" style="max-height:120px;border-radius:var(--radius);" />`;
+    };
+    reader.readAsDataURL(file);
+  },
+
   async sendComment(ticketId) {
     const txt = (document.getElementById('adm-comment-text')?.value || '').trim();
     if (txt.length < 2) { Utils.toast('Escreva uma mensagem.', 'error'); return; }
     if (txt.length > 1500) { Utils.toast('Mensagem muito longa.', 'error'); return; }
     try {
-      await DB.addTicketComment({ ticketId, mensagem: txt });
+      let imagemUrl = null;
+      if (this._commentPendingImage) {
+        imagemUrl = await this._uploadImage(this._commentPendingImage);
+      }
+      await DB.addTicketComment({ ticketId, mensagem: txt, imagemUrl });
       // Se estava aberto, move automaticamente para em_andamento
       const t = DB.getTicketById(ticketId);
       if (t && t.status === 'aberto') {
@@ -427,6 +466,26 @@ const SuperTickets = {
       console.error('[SuperTickets] erro sendComment:', err);
       Utils.toast('Erro ao enviar resposta.', 'error');
     }
+  },
+
+  async _uploadImage(base64) {
+    const user = Auth.current();
+    if (!user?.schoolId) throw new Error('Sem escola associada');
+    const fileName = `ticket-comment-${Date.now()}.png`;
+    const bucket = 'ticket-attachments';
+    const path = `${user.schoolId}/comments/${fileName}`;
+    const [data, error] = await supabase.storage.from(bucket).upload(path, this._base64ToBlob(base64));
+    if (error) throw error;
+    return supabase.storage.from(bucket).getPublicUrl(path).data.publicUrl;
+  },
+
+  _base64ToBlob(base64) {
+    const byteCharacters = atob(base64.split(',')[1]);
+    const byteArrays = [];
+    for (let i = 0; i < byteCharacters.length; i++) {
+      byteArrays.push(byteCharacters.charCodeAt(i));
+    }
+    return new Blob([new Uint8Array(byteArrays)], { type: 'image/png' });
   },
 };
 
