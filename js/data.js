@@ -922,11 +922,13 @@ const DB = {
     if (idx < 0) return;
     d.atualizadoEm = new Date().toISOString();
 
-    // Se o status foi alterado, marca como tendo nova atividade (exceto se estiver recebendo readBy/hasUnreadComments explicitamente)
+    // Se o status foi alterado, marca como nova atividade
+    // readBy fica apenas com quem fez a mudanca (todos os outros precisam "ler" novamente)
     const ticket = this._cache.tickets[idx];
-    if (d.status && d.status !== ticket.status && d.hasUnreadComments === undefined) {
+    if (d.status && d.status !== ticket.status && d.readBy === undefined) {
+      const sess = (typeof Auth !== 'undefined' && Auth.current) ? Auth.current() : null;
       d.hasUnreadComments = true;
-      d.readBy = [];
+      d.readBy = sess?.id ? [sess.id] : [];
     }
 
     this._cache.tickets[idx] = { ...this._cache.tickets[idx], ...d };
@@ -934,6 +936,8 @@ const DB = {
   },
 
   // Marca um ticket como lido pelo usuario atual
+  // IMPORTANTE: NAO zera hasUnreadComments — apenas adiciona o usuario atual ao readBy.
+  // Outros usuarios continuam vendo a notificacao ate que tambem leiam o ticket.
   async markTicketAsRead(ticketId) {
     const sess = (typeof Auth !== 'undefined' && Auth.current) ? Auth.current() : null;
     if (!sess || !sess.id) return;
@@ -944,7 +948,8 @@ const DB = {
     const readBy = Array.isArray(ticket.readBy) ? [...ticket.readBy] : [];
     if (!readBy.includes(sess.id)) {
       readBy.push(sess.id);
-      await this.updateTicket(ticketId, { readBy, hasUnreadComments: false });
+      // NAO zera hasUnreadComments — cada usuario controla seu proprio "lido" via readBy
+      await this.updateTicket(ticketId, { readBy });
     }
   },
 
@@ -967,11 +972,14 @@ const DB = {
     await this._insert('ticket_comments', c);
 
     // Quando um novo comentario eh adicionado, marca o ticket como tendo nova atividade
-    // (readBy sera limpo para forcar que usuarios vejam a nova resposta)
+    // readBy fica apenas com quem comentou (todos os outros precisam "ler" novamente)
     const ticket = this.getTicketById(c.ticketId);
     if (ticket) {
-      // Reseta readBy e marca como tendo comentarios nao lidos
-      await this.updateTicket(c.ticketId, { hasUnreadComments: true, readBy: [] });
+      const commentAuthor = c.userId || sess?.id;
+      await this.updateTicket(c.ticketId, {
+        hasUnreadComments: true,
+        readBy: commentAuthor ? [commentAuthor] : []
+      });
     }
     return c;
   },

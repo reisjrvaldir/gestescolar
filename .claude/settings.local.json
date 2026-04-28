@@ -135,7 +135,9 @@
       "Bash(cd \"C:\\\\\\\\Users\\\\\\\\valdir.reis\\\\\\\\Documents\\\\\\\\Projetos\\\\\\\\gestescolar-main\")",
       "Bash(grep -A5 \"Router.register\" \"C:\\\\\\\\Users\\\\\\\\valdir.reis\\\\\\\\Documents\\\\\\\\Projetos\\\\\\\\gestescolar-main\\\\\\\\js\\\\\\\\pages\\\\\\\\user-tickets.js\")",
       "Bash(grep -B 10 \"const fontWeight\" \"C:\\\\\\\\Users\\\\\\\\valdir.reis\\\\\\\\Documents\\\\\\\\Projetos\\\\\\\\gestescolar-main\\\\\\\\js\\\\\\\\pages\\\\\\\\user-tickets.js\")",
-      "Bash(grep -n \"addTicketComment\\\\|onclick.*Responder\\\\|onclick.*responder\" \"C:\\\\\\\\Users\\\\\\\\valdir.reis\\\\\\\\Documents\\\\\\\\Projetos\\\\\\\\gestescolar-main\\\\\\\\js\\\\\\\\pages\\\\\\\\user-tickets.js\")"
+      "Bash(grep -n \"addTicketComment\\\\|onclick.*Responder\\\\|onclick.*responder\" \"C:\\\\\\\\Users\\\\\\\\valdir.reis\\\\\\\\Documents\\\\\\\\Projetos\\\\\\\\gestescolar-main\\\\\\\\js\\\\\\\\pages\\\\\\\\user-tickets.js\")",
+      "Bash(grep -n \"loadAll\\\\|fetchAll\\\\|sync\\\\|_load.*tickets\\\\|from.*tickets.*select\" \"C:\\\\\\\\Users\\\\\\\\valdir.reis\\\\\\\\Documents\\\\\\\\Projetos\\\\\\\\gestescolar-main\\\\\\\\js\\\\\\\\data.js\")",
+      "Bash(grep -n \"hasUnreadComments\\\\|isReadByCurrentUser\\\\|isUnread\" \"C:\\\\\\\\Users\\\\\\\\valdir.reis\\\\\\\\Documents\\\\\\\\Projetos\\\\\\\\gestescolar-main\\\\\\\\js\\\\\\\\pages\\\\\\\\superadmin-tickets.js\")"
     ]
   }
 }

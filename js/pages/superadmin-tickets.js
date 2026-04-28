@@ -189,9 +189,10 @@ const SuperTickets = {
                   const sch  = DB.getSchool(t.schoolId);
                   const schName = sch?.name || (t.schoolId ? '(escola removida)' : '--');
                   const user = Auth.current();
-                  const hasUnread = t.hasUnreadComments || false;
+                  // Nao lido = usuario atual NAO esta na lista readBy
+                  // (cada usuario tem seu proprio status independente)
                   const isReadByCurrentUser = Array.isArray(t.readBy) && t.readBy.includes(user?.id);
-                  const isUnread = hasUnread && !isReadByCurrentUser;
+                  const isUnread = !isReadByCurrentUser;
                   const fontWeight = isUnread ? '700' : '500';
                   return `<tr style="opacity: ${isUnread ? '1' : '0.9'};">
                     <td style="font-family:monospace;font-weight:${fontWeight};position:relative;">

@@ -71,10 +71,10 @@ const Router = {
   // Atualiza apenas o badge de tickets no sidebar (sem re-renderizar a página inteira)
   _updateTicketBadge(user) {
     if (!user) return;
+    // Nao lido = usuario atual NAO esta na lista readBy
     const unreadTickets = DB.getAllTickets().filter(t => {
-      const hasUnread = t.hasUnreadComments || false;
       const isReadByUser = Array.isArray(t.readBy) && t.readBy.includes(user.id);
-      return hasUnread && !isReadByUser;
+      return !isReadByUser;
     }).length;
 
     // Atualiza ou remove o badge em todos os itens de ticket no sidebar
@@ -104,11 +104,10 @@ const Router = {
     const unread   = DB.getMessages().filter(m => m.toUserId === user.id && !m.read).length;
     const MSG_ROUTES = new Set(['teacher-messages', 'parent-messages']);
 
-    // Calcula tickets nao lidos (hasUnreadComments AND usuario atual nao leu)
+    // Calcula tickets nao lidos (usuario atual nao esta na lista readBy)
     const unreadTickets = DB.getAllTickets().filter(t => {
-      const hasUnread = t.hasUnreadComments || false;
       const isReadByUser = Array.isArray(t.readBy) && t.readBy.includes(user.id);
-      return hasUnread && !isReadByUser;
+      return !isReadByUser;
     }).length;
     const TICKET_ROUTES = new Set(['user-tickets', 'superadmin-tickets']);
 
