@@ -103,15 +103,12 @@ Router.register('admin-dashboard', () => {
 
   const school = DB.getSchool(user.schoolId);
   const welcomeHTML = `
-    <div style="display:flex;align-items:center;gap:20px;margin-bottom:30px;padding:20px;background:linear-gradient(135deg,#f5f7fa,#ffffff);border-radius:12px;border:1px solid #e0e6ed;">
-      ${school && school.logoUrl ? `<img src="${school.logoUrl}" alt="Logo" style="height:80px;max-width:200px;object-fit:contain;" />` : `<div style="width:80px;height:80px;background:#f0f4f8;border-radius:8px;display:flex;align-items:center;justify-content:center;color:#b0bec5;"><i class="fa-solid fa-image" style="font-size:32px;"></i></div>`}
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:20px;margin-bottom:30px;padding:20px;background:linear-gradient(135deg,#f5f7fa,#ffffff);border-radius:12px;border:1px solid #e0e6ed;">
       <div>
         <div style="font-size:28px;font-weight:700;color:#0d1b2a;margin-bottom:4px;">${Utils.escape(school?.name || 'Escola')}</div>
-        <div style="font-size:16px;color:#5f6368;margin-bottom:8px;">Bem-vindo(a), <strong>${Utils.escape(user.name)}</strong>! 👋</div>
-        <div style="font-size:13px;color:#80868b;margin-top:6px;">
-          <i class="fa-solid fa-circle-user" style="margin-right:6px;"></i>${Auth.roleLabel(user.role)}
-        </div>
+        <div style="font-size:16px;color:#5f6368;">Bem-vindo(a), <strong>${Utils.escape(user.name)}</strong>! 👋</div>
       </div>
+      ${school && school.logoUrl ? `<img src="${school.logoUrl}" alt="Logo" style="height:80px;max-width:200px;object-fit:contain;" />` : `<div style="width:80px;height:80px;background:#f0f4f8;border-radius:8px;display:flex;align-items:center;justify-content:center;color:#b0bec5;"><i class="fa-solid fa-image" style="font-size:32px;"></i></div>`}
     </div>
   `;
 
