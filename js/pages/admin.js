@@ -1037,15 +1037,12 @@ function _renderStudentForm(user, student) {
             </div>
           </div>
           <div style="display:flex;gap:8px;align-items:center;">
-            <input id="fichaAccessLink" type="text" value="${s.accessLink}" readonly
-              style="flex:1;padding:8px 10px;border:1px solid #a5d6a7;border-radius:6px;font-size:12px;background:#fff;color:#333;" />
-            <button type="button" onclick="AdminStudents.copyText('fichaAccessLink')"
-              style="padding:8px 14px;border:none;border-radius:6px;background:#388e3c;color:#fff;font-size:12px;font-weight:600;cursor:pointer;">
+            <textarea id="fichaCredenciais" readonly
+              style="flex:1;padding:8px 10px;border:1px solid #a5d6a7;border-radius:6px;font-size:12px;background:#fff;color:#333;font-family:monospace;resize:none;height:60px;">Login (Matrícula): ${s.loginMatricula || s.matricula || ''}
+Senha: ${s.loginSenha || '(6 primeiros dígitos do CPF)'}</textarea>
+            <button type="button" onclick="AdminStudents.copyText('fichaCredenciais')"
+              style="padding:8px 14px;border:none;border-radius:6px;background:#388e3c;color:#fff;font-size:12px;font-weight:600;cursor:pointer;height:fit-content;">
               <i class="fa-solid fa-copy"></i> Copiar
-            </button>
-            <button type="button" onclick="AdminStudents.shareWhatsApp(encodeURIComponent('Olá! Segue o acesso ao portal do aluno ${Utils.escape(s.name||'')}:\\n\\nLogin: ${s.loginMatricula || s.matricula || ''}\\nSenha: ${s.loginSenha || ''}\\nLink: ${s.accessLink}'))"
-              style="padding:8px 14px;border:none;border-radius:6px;background:#25D366;color:#fff;font-size:12px;font-weight:600;cursor:pointer;">
-              <i class="fa-brands fa-whatsapp"></i> WhatsApp
             </button>
           </div>
         </div>
