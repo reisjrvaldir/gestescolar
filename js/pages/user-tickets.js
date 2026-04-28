@@ -348,9 +348,12 @@ Router.register('user-ticket-detail', async (params) => {
     return;
   }
 
-  // Marca como lido PRIMEIRO — depois rebusca ticket com dados atualizados
-  await DB.markTicketAsRead(id);
-  ticket = DB.getTicketById(id); // rebusca para pegar hasUnreadComments:false atualizado
+  // Marca como lido APENAS se o usuario NAO eh o dono do ticket
+  // (evita que superadmin marque seu próprio ticket como lido ao responder)
+  if (ticket.userId !== user.id) {
+    await DB.markTicketAsRead(id);
+    ticket = DB.getTicketById(id); // rebusca para pegar hasUnreadComments:false atualizado
+  }
 
   // Atualiza badge do sidebar imediatamente
   Router._updateTicketBadge(user);
