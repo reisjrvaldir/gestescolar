@@ -86,11 +86,14 @@ const SuperTickets = {
           { key:'resolvido',    color:'#4CAF50', icon:'fa-circle-check',         label:'Resolvidos'   },
           { key:'fechado',      color:'#9E9E9E', icon:'fa-lock',                 label:'Fechados'     },
         ].map(k => `
-          <div class="card" style="padding:14px;border-left:4px solid ${k.color};">
+          <div class="card" style="padding:14px;border-left:4px solid ${k.color};cursor:pointer;transition:all .2s;"
+            onclick="SuperTickets._setFilter('status', '${k.key}')"
+            onmouseover="this.style.boxShadow='0 2px 8px rgba(0,0,0,0.1)'"
+            onmouseout="this.style.boxShadow='none'">
             <div style="display:flex;align-items:center;gap:10px;">
               <i class="fa-solid ${k.icon}" style="color:${k.color};font-size:22px;"></i>
               <div>
-                <div style="font-size:22px;font-weight:800;line-height:1;">${stats[k.key] || 0}</div>
+                <div style="font-size:22px;font-weight:800;line-height:1;" id="count-${k.key}">${stats[k.key] || 0}</div>
                 <div style="font-size:11px;color:var(--text-muted);text-transform:uppercase;">${k.label}</div>
               </div>
             </div>
@@ -185,12 +188,14 @@ const SuperTickets = {
                   const meta = this.STATUS_META[t.status] || this.STATUS_META.aberto;
                   const sch  = DB.getSchool(t.schoolId);
                   const schName = sch?.name || (t.schoolId ? '(escola removida)' : '--');
-                  const comments = DB.getTicketComments(t.id) || [];
-                  const hasResponse = comments.length > 0;
-                  const fontWeight = hasResponse ? '700' : '500';
-                  return `<tr style="opacity: ${hasResponse ? '1' : '0.9'};">
+                  const user = Auth.current();
+                  const hasUnread = t.hasUnreadComments || false;
+                  const isReadByCurrentUser = Array.isArray(t.readBy) && t.readBy.includes(user?.id);
+                  const isUnread = hasUnread && !isReadByCurrentUser;
+                  const fontWeight = isUnread ? '700' : '500';
+                  return `<tr style="opacity: ${isUnread ? '1' : '0.9'};">
                     <td style="font-family:monospace;font-weight:${fontWeight};position:relative;">
-                      ${hasResponse ? '<span style="display:inline-block;width:8px;height:8px;background:#F44336;border-radius:50%;margin-right:6px;vertical-align:middle;"></span>' : ''}
+                      ${isUnread ? '<span style="display:inline-block;width:8px;height:8px;background:#F44336;border-radius:50%;margin-right:6px;vertical-align:middle;"></span>' : ''}
                       ${Utils.escape(t.ticketNumber || '--')}
                     </td>
                     <td style="font-size:12px;font-weight:${fontWeight};">${Utils.escape(schName)}</td>
@@ -237,8 +242,27 @@ const SuperTickets = {
     this.render();
   },
 
+  // Atualiza contadores em tempo real
+  updateCounters() {
+    const all = (DB.getAllTickets() || []);
+
+    const stats = {
+      total:        all.length,
+      aberto:       all.filter(t => t.status === 'aberto').length,
+      em_andamento: all.filter(t => t.status === 'em_andamento').length,
+      resolvido:    all.filter(t => t.status === 'resolvido').length,
+      fechado:      all.filter(t => t.status === 'fechado').length,
+    };
+
+    // Atualiza os elementos DOM
+    ['total','aberto','em_andamento','resolvido','fechado'].forEach(status => {
+      const el = document.getElementById(`count-${status}`);
+      if (el) el.textContent = stats[status] || 0;
+    });
+  },
+
   // -------- DETALHE COM ACOES DO ADMIN --------
-  renderDetail(ticketId) {
+  async renderDetail(ticketId) {
     const user = Auth.require();
     if (!user || user.role !== 'superadmin') {
       Utils.toast('Acesso restrito.', 'error');
@@ -246,7 +270,13 @@ const SuperTickets = {
       return;
     }
 
-    const ticket = DB.getTicketById(ticketId);
+    // Marca como lido ANTES de buscar o ticket
+    await DB.markTicketAsRead(ticketId);
+
+    // Atualiza badge do sidebar imediatamente
+    Router._updateTicketBadge(user);
+
+    const ticket = DB.getTicketById(ticketId); // rebusca depois de marcar como lido
     if (!ticket) {
       Utils.toast('Chamado nao encontrado.', 'error');
       Router.go('superadmin-tickets');
@@ -396,6 +426,7 @@ const SuperTickets = {
         ticketId,
         mensagem: `Status alterado para "${this.STATUS_LABEL(newStatus)}".`,
       });
+      this.updateCounters();
       this.renderDetail(ticketId);
     } catch (err) {
       console.error('[SuperTickets] erro changeStatus:', err);
@@ -416,6 +447,7 @@ const SuperTickets = {
         mensagem: `Status alterado para "${this.STATUS_LABEL(next)}".`,
       });
       Utils.toast(`Avancado para "${this.STATUS_LABEL(next)}".`, 'success');
+      this.updateCounters();
       this.renderDetail(ticketId);
     } catch (err) {
       console.error('[SuperTickets] erro advanceStatus:', err);
@@ -461,6 +493,7 @@ const SuperTickets = {
         await DB.updateTicket(ticketId, { status: 'em_andamento' });
       }
       Utils.toast('Resposta enviada!', 'success');
+      this.updateCounters();
       this.renderDetail(ticketId);
     } catch (err) {
       console.error('[SuperTickets] erro sendComment:', err);
@@ -494,9 +527,25 @@ window.SuperTickets = SuperTickets;
 // Rotas
 Router.register('superadmin-tickets', () => {
   SuperTickets.render();
+
+  // Realtime: atualiza lista e contadores quando qualquer ticket muda
+  Realtime.subscribe('tickets', null, () => {
+    SuperTickets.render();
+  });
+  Realtime.subscribe('ticket_comments', null, () => {
+    SuperTickets.render();
+  });
 });
 
-Router.register('superadmin-ticket-detail', (params) => {
+Router.register('superadmin-ticket-detail', async (params) => {
   if (!params?.ticketId) { Router.go('superadmin-tickets'); return; }
-  SuperTickets.renderDetail(params.ticketId);
+  await SuperTickets.renderDetail(params.ticketId);
+
+  // Realtime: atualiza conversa ao vivo quando chega nova mensagem
+  Realtime.subscribe('ticket_comments', `ticket_id=eq.${params.ticketId}`, () => {
+    SuperTickets.renderDetail(params.ticketId);
+  });
+  Realtime.subscribe('tickets', `id=eq.${params.ticketId}`, () => {
+    SuperTickets.renderDetail(params.ticketId);
+  });
 });

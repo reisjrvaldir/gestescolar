@@ -65,6 +65,29 @@ const UserTickets = {
           Reporte aqui qualquer problema ou duvida. Nossa equipe de suporte respondera em ate 24h uteis.
         </p>
 
+        <!-- Painel de Estatísticas em Tempo Real -->
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px;margin-bottom:16px;">
+          ${[
+            { key:'aberto',       color:'#F44336', icon:'fa-circle-exclamation',   label:'Abertos'      },
+            { key:'em_andamento', color:'#FF9800', icon:'fa-rotate',               label:'Em andamento' },
+            { key:'resolvido',    color:'#4CAF50', icon:'fa-circle-check',         label:'Resolvidos'   },
+            { key:'fechado',      color:'#9E9E9E', icon:'fa-lock',                 label:'Fechados'     },
+          ].map(k => `
+            <div class="card" style="padding:14px;border-left:4px solid ${k.color};cursor:pointer;transition:all .2s;"
+              onclick="UserTickets.setFilter('${k.key}')"
+              onmouseover="this.style.boxShadow='0 2px 8px rgba(0,0,0,0.1)'"
+              onmouseout="this.style.boxShadow='none'">
+              <div style="display:flex;align-items:center;gap:10px;">
+                <i class="fa-solid ${k.icon}" style="color:${k.color};font-size:22px;"></i>
+                <div>
+                  <div style="font-size:22px;font-weight:800;line-height:1;" id="count-${k.key}">${counts[k.key] || 0}</div>
+                  <div style="font-size:11px;color:var(--text-muted);text-transform:uppercase;">${k.label}</div>
+                </div>
+              </div>
+            </div>
+          `).join('')}
+        </div>
+
         <!-- Filtros por status -->
         <div class="card" style="margin-bottom:16px;padding:8px;">
           <div style="display:flex;gap:6px;flex-wrap:wrap;">
@@ -103,12 +126,14 @@ const UserTickets = {
                   </td></tr>
                 ` : filtered.map(t => {
                   const meta = this.STATUS_META[t.status] || this.STATUS_META.aberto;
-                  const comments = DB.getTicketComments(t.id) || [];
-                  const hasResponse = comments.length > 0;
-                  const fontWeight = hasResponse ? '700' : '500';
-                  return `<tr style="opacity: ${hasResponse ? '1' : '0.9'};">
+                  const user = Auth.current();
+                  const hasUnread = t.hasUnreadComments || false;
+                  const isReadByCurrentUser = Array.isArray(t.readBy) && t.readBy.includes(user?.id);
+                  const isUnread = hasUnread && !isReadByCurrentUser;
+                  const fontWeight = isUnread ? '700' : '500';
+                  return `<tr style="opacity: ${isUnread ? '1' : '0.9'};">
                     <td style="font-family:monospace;font-weight:${fontWeight};position:relative;">
-                      ${hasResponse ? '<span style="display:inline-block;width:8px;height:8px;background:#F44336;border-radius:50%;margin-right:6px;vertical-align:middle;"></span>' : ''}
+                      ${isUnread ? '<span style="display:inline-block;width:8px;height:8px;background:#F44336;border-radius:50%;margin-right:6px;vertical-align:middle;"></span>' : ''}
                       ${Utils.escape(t.ticketNumber || '--')}
                     </td>
                     <td style="font-weight:${fontWeight};">${Utils.escape(this.CATEGORIA_LABEL(t.categoria))}</td>
@@ -137,6 +162,28 @@ const UserTickets = {
   },
 
   setFilter(s) { this._filterStatus = s; this.render(); },
+
+  // Atualiza contadores em tempo real
+  updateCounters() {
+    const user = Auth.require();
+    if (!user) return;
+
+    const tickets = DB.getTickets()
+      .filter(t => t.userId === user.id);
+
+    const counts = {
+      aberto:       tickets.filter(t => t.status === 'aberto').length,
+      em_andamento: tickets.filter(t => t.status === 'em_andamento').length,
+      resolvido:    tickets.filter(t => t.status === 'resolvido').length,
+      fechado:      tickets.filter(t => t.status === 'fechado').length,
+    };
+
+    // Atualiza os elementos DOM
+    ['aberto','em_andamento','resolvido','fechado'].forEach(status => {
+      const el = document.getElementById(`count-${status}`);
+      if (el) el.textContent = counts[status] || 0;
+    });
+  },
 
   // -------- MODAL DE CRIACAO --------
   openCreateModal() {
@@ -218,6 +265,7 @@ const UserTickets = {
 
       document.querySelector('.modal-overlay')?.remove();
       Utils.toast(`Chamado ${ticket.ticketNumber} aberto com sucesso!`, 'success');
+      this.updateCounters();
       this.render();
     } catch (err) {
       console.error('[UserTickets] Erro ao criar:', err);
@@ -271,14 +319,23 @@ Router.register('user-tickets', () => {
   const user = Auth.require();
   if (!user) return;
   UserTickets.render();
+
+  // Realtime: atualiza lista quando tickets ou comentários mudam
+  Realtime.subscribe('tickets', `user_id=eq.${user.id}`, () => {
+    UserTickets.render();
+  });
+  Realtime.subscribe('ticket_comments', null, () => {
+    // Rebusca dados e atualiza contadores sem re-render completo
+    UserTickets.render();
+  });
 });
 
 // Rota: detalhe
-Router.register('user-ticket-detail', (params) => {
+Router.register('user-ticket-detail', async (params) => {
   const user = Auth.require();
   if (!user) return;
   const id = params?.ticketId;
-  const ticket = id ? DB.getTicketById(id) : null;
+  let ticket = id ? DB.getTicketById(id) : null;
   if (!ticket) {
     Utils.toast('Chamado nao encontrado.', 'error');
     Router.go('user-tickets');
@@ -291,9 +348,24 @@ Router.register('user-ticket-detail', (params) => {
     return;
   }
 
+  // Marca como lido PRIMEIRO — depois rebusca ticket com dados atualizados
+  await DB.markTicketAsRead(id);
+  ticket = DB.getTicketById(id); // rebusca para pegar hasUnreadComments:false atualizado
+
+  // Atualiza badge do sidebar imediatamente
+  Router._updateTicketBadge(user);
+
   const meta = UserTickets.STATUS_META[ticket.status] || UserTickets.STATUS_META.aberto;
   const comments = DB.getTicketComments(ticket.id);
   const isClosed = ticket.status === 'fechado';
+
+  // Realtime: atualiza a conversa quando chega nova mensagem
+  Realtime.subscribe('ticket_comments', `ticket_id=eq.${id}`, () => {
+    Router.go('user-ticket-detail', { ticketId: id });
+  });
+  Realtime.subscribe('tickets', `id=eq.${id}`, () => {
+    Router.go('user-ticket-detail', { ticketId: id });
+  });
 
   Router.renderLayout(user, 'user-tickets', `
     <div style="max-width:900px;margin:0 auto;">
@@ -429,6 +501,7 @@ UserTickets.sendComment = async function(ticketId) {
       await DB.updateTicket(ticketId, { status: 'em_andamento' });
     }
     Utils.toast('Mensagem enviada!', 'success');
+    UserTickets.updateCounters();
     Router.go('user-ticket-detail', { ticketId });
   } catch (err) {
     console.error('[UserTickets] erro sendComment:', err);

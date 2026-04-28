@@ -126,7 +126,13 @@
       "PowerShell($files = @\\('js/pages/admin-asaas-documents.js','js/pages/superadmin.js','js/pages/admin.js','js/data.js','js/router.js','api/asaas.js'\\); foreach \\($f in $files\\) { $output = & node -c $f 2>&1; if \\($LASTEXITCODE -eq 0\\) { Write-Output \"OK $f\" } else { Write-Output \"ERR $f`n$output\" } })",
       "PowerShell(Get-Command vercel -ErrorAction SilentlyContinue)",
       "PowerShell(Get-Command npx -ErrorAction SilentlyContinue)",
-      "PowerShell(npm list -g --depth=0 2>&1)"
+      "PowerShell(npm list -g --depth=0 2>&1)",
+      "Bash(grep -A2 -B2 \"markTicketAsRead\" \"C:\\\\\\\\Users\\\\\\\\valdir.reis\\\\\\\\Documents\\\\\\\\Projetos\\\\\\\\gestescolar-main\\\\\\\\js\\\\\\\\pages\\\\\\\\user-tickets.js\")",
+      "Bash(grep -n \"^const DB = \\\\|^let DB = \\\\|^var DB = \\\\|^DB\\\\.\" \"C:\\\\\\\\Users\\\\\\\\valdir.reis\\\\\\\\Documents\\\\\\\\Projetos\\\\\\\\gestescolar-main\\\\\\\\js\\\\\\\\data.js\")",
+      "Bash(tail -50 \"C:\\\\\\\\Users\\\\\\\\valdir.reis\\\\\\\\Documents\\\\\\\\Projetos\\\\\\\\gestescolar-main\\\\\\\\js\\\\\\\\data.js\")",
+      "Bash(wc -l \"C:\\\\\\\\Users\\\\\\\\valdir.reis\\\\\\\\Documents\\\\\\\\Projetos\\\\\\\\gestescolar-main\\\\\\\\js\\\\\\\\data.js\")",
+      "Bash(grep -n \"async _update\\\\|_update\\(\" \"C:\\\\\\\\Users\\\\\\\\valdir.reis\\\\\\\\Documents\\\\\\\\Projetos\\\\\\\\gestescolar-main\\\\\\\\js\\\\\\\\data.js\")",
+      "Bash(cd \"C:\\\\\\\\Users\\\\\\\\valdir.reis\\\\\\\\Documents\\\\\\\\Projetos\\\\\\\\gestescolar-main\")"
     ]
   }
 }

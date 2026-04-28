@@ -68,11 +68,50 @@ const Router = {
     if (fn) fn({});
   },
 
+  // Atualiza apenas o badge de tickets no sidebar (sem re-renderizar a página inteira)
+  _updateTicketBadge(user) {
+    if (!user) return;
+    const unreadTickets = DB.getAllTickets().filter(t => {
+      const hasUnread = t.hasUnreadComments || false;
+      const isReadByUser = Array.isArray(t.readBy) && t.readBy.includes(user.id);
+      return hasUnread && !isReadByUser;
+    }).length;
+
+    // Atualiza ou remove o badge em todos os itens de ticket no sidebar
+    const TICKET_IDS = ['user-tickets', 'superadmin-tickets'];
+    TICKET_IDS.forEach(routeId => {
+      const navItem = document.querySelector(`.nav-item[onclick*="${routeId}"]`);
+      if (!navItem) return;
+
+      // Remove badge existente
+      const oldBadge = navItem.querySelector('.ticket-badge');
+      if (oldBadge) oldBadge.remove();
+
+      // Adiciona novo badge se necessário
+      if (unreadTickets > 0) {
+        const badge = document.createElement('span');
+        badge.className = 'ticket-badge';
+        badge.style.cssText = 'min-width:18px;height:18px;border-radius:9px;background:var(--danger);color:#fff;font-size:10px;font-weight:700;display:inline-flex;align-items:center;justify-content:center;padding:0 4px;margin-left:auto;';
+        badge.textContent = unreadTickets > 9 ? '9+' : unreadTickets;
+        navItem.appendChild(badge);
+      }
+    });
+  },
+
   // Renderizar layout com sidebar
   renderLayout(user, activeNav, contentHTML) {
     const navItems = Router._navForRole(user.role, user.roles);
     const unread   = DB.getMessages().filter(m => m.toUserId === user.id && !m.read).length;
     const MSG_ROUTES = new Set(['teacher-messages', 'parent-messages']);
+
+    // Calcula tickets nao lidos (hasUnreadComments AND usuario atual nao leu)
+    const unreadTickets = DB.getAllTickets().filter(t => {
+      const hasUnread = t.hasUnreadComments || false;
+      const isReadByUser = Array.isArray(t.readBy) && t.readBy.includes(user.id);
+      return hasUnread && !isReadByUser;
+    }).length;
+    const TICKET_ROUTES = new Set(['user-tickets', 'superadmin-tickets']);
+
     const school   = DB.getSchool(user?.schoolId);
     const app = document.getElementById('app');
     const trialNotif   = Plans && school ? Plans.getTrialNotificationHTML(school) : '';
@@ -108,10 +147,15 @@ const Router = {
                       style="font-size:10px;transition:transform .2s;"></i>
                   </div>`;
                 }
-                const isMsg  = MSG_ROUTES.has(item.route || item.id);
-                const badge  = isMsg && unread > 0 && !MSG_ROUTES.has(activeNav)
+                const isMsg     = MSG_ROUTES.has(item.route || item.id);
+                const isTicket  = TICKET_ROUTES.has(item.route || item.id);
+                const msgBadge  = isMsg && unread > 0 && !MSG_ROUTES.has(activeNav)
                   ? `<span style="min-width:18px;height:18px;border-radius:9px;background:var(--danger);color:#fff;font-size:10px;font-weight:700;display:inline-flex;align-items:center;justify-content:center;padding:0 4px;margin-left:auto;">${unread > 9 ? '9+' : unread}</span>`
                   : '';
+                const ticketBadge = isTicket && unreadTickets > 0 && !TICKET_ROUTES.has(activeNav)
+                  ? `<span class="ticket-badge" style="min-width:18px;height:18px;border-radius:9px;background:var(--danger);color:#fff;font-size:10px;font-weight:700;display:inline-flex;align-items:center;justify-content:center;padding:0 4px;margin-left:auto;">${unreadTickets > 9 ? '9+' : unreadTickets}</span>`
+                  : '';
+                const badge = msgBadge || ticketBadge;
                 return `<div class="nav-item ${item.id === activeNav ? 'active' : ''}" data-section="${sec}"
                   onclick="Router.go('${item.route || item.id}'); Router.closeSidebar();">
                   <i class="fa-solid ${item.icon}"></i>

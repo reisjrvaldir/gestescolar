@@ -41,8 +41,8 @@ const DB = {
     audit_log:    ['id','school_id','user_id','action','details','created_at'],
     grades:       ['id','school_id','class_id','student_id','subject','grade_type','grade_value','max_value','period','teacher_id','observations','created_at'],
     attendance:   ['id','school_id','class_id','student_id','date','status','teacher_id','observations','created_at'],
-    tickets:         ['id','ticket_number','school_id','user_id','user_name','categoria','descricao','imagem_url','status','criado_em','atualizado_em','created_at'],
-    ticket_comments: ['id','ticket_id','user_id','user_name','user_role','mensagem','criado_em','created_at'],
+    tickets:         ['id','ticket_number','school_id','user_id','user_name','categoria','descricao','imagem_url','status','criado_em','atualizado_em','created_at','read_by','has_unread_comments'],
+    ticket_comments: ['id','ticket_id','user_id','user_name','user_role','mensagem','criado_em','created_at','imagem_url'],
   },
 
   // ═══════════════════════════════════════════════════════════════
@@ -917,8 +917,31 @@ const DB = {
     const idx = this._cache.tickets.findIndex(t => t.id === id);
     if (idx < 0) return;
     d.atualizadoEm = new Date().toISOString();
+
+    // Se o status foi alterado, marca como tendo nova atividade (exceto se estiver recebendo readBy/hasUnreadComments explicitamente)
+    const ticket = this._cache.tickets[idx];
+    if (d.status && d.status !== ticket.status && d.hasUnreadComments === undefined) {
+      d.hasUnreadComments = true;
+      d.readBy = [];
+    }
+
     this._cache.tickets[idx] = { ...this._cache.tickets[idx], ...d };
     await this._update('tickets', id, d);
+  },
+
+  // Marca um ticket como lido pelo usuario atual
+  async markTicketAsRead(ticketId) {
+    const sess = (typeof Auth !== 'undefined' && Auth.current) ? Auth.current() : null;
+    if (!sess || !sess.id) return;
+
+    const ticket = this.getTicketById(ticketId);
+    if (!ticket) return;
+
+    const readBy = Array.isArray(ticket.readBy) ? [...ticket.readBy] : [];
+    if (!readBy.includes(sess.id)) {
+      readBy.push(sess.id);
+      await this.updateTicket(ticketId, { readBy, hasUnreadComments: false });
+    }
   },
 
   // Comentarios
@@ -938,6 +961,14 @@ const DB = {
     c.createdAt = c.criadoEm;
     this._cache.ticket_comments.push(c);
     await this._insert('ticket_comments', c);
+
+    // Quando um novo comentario eh adicionado, marca o ticket como tendo nova atividade
+    // (readBy sera limpo para forcar que usuarios vejam a nova resposta)
+    const ticket = this.getTicketById(c.ticketId);
+    if (ticket) {
+      // Reseta readBy e marca como tendo comentarios nao lidos
+      await this.updateTicket(c.ticketId, { hasUnreadComments: true, readBy: [] });
+    }
     return c;
   },
 
