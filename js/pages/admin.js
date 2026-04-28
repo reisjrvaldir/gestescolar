@@ -1046,7 +1046,7 @@ function _renderStudentForm(user, student) {
             </div>
             <div>
               <div style="font-size:11px;font-weight:700;color:#388e3c;text-transform:uppercase;margin-bottom:2px;">Senha</div>
-              <div style="font-size:15px;font-weight:700;color:#1b5e20;">${s.loginSenha || '(5 primeiros dígitos do CPF)'}</div>
+              <div style="font-size:15px;font-weight:700;color:#1b5e20;">${s.loginSenha || '(6 primeiros dígitos do CPF)'}</div>
             </div>
           </div>
           <div style="display:flex;gap:8px;align-items:center;">
