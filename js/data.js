@@ -908,6 +908,10 @@ const DB = {
     t.criadoEm      = new Date().toISOString();
     t.atualizadoEm  = t.criadoEm;
     t.createdAt     = t.criadoEm;
+    // Marca como nao lido para todos (exceto o criador, que ja "leu")
+    // Isso faz aparecer notificacao para superadmin ao criar novo ticket
+    t.hasUnreadComments = true;
+    t.readBy = t.userId ? [t.userId] : [];
     this._cache.tickets.push(t);
     await this._insert('tickets', t);
     return t;
