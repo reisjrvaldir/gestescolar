@@ -497,9 +497,10 @@ const SuperTickets = {
       Utils.toast('Formato inválido. Use PNG, JPG ou WEBP.', 'error');
       input.value = ''; return;
     }
+    // Guarda o File object (necessario para upload no Supabase Storage)
+    this._commentPendingImage = file;
     const reader = new FileReader();
     reader.onload = (e) => {
-      this._commentPendingImage = e.target.result;
       if (preview) preview.innerHTML = `<img src="${e.target.result}" style="max-height:120px;border-radius:var(--radius);" />`;
     };
     reader.readAsDataURL(file);
