@@ -333,7 +333,17 @@ Router.register('admin-students', () => {
 
 const AdminStudents = {
   showAccessModal(name, matricula, senha, url) {
-    const credenciais = `Login (Matrícula): ${matricula}\nSenha: ${senha}`;
+    const senhaLimpa = senha.replace(/\D/g, '').substring(0, 6);
+    const credenciais = `Olá, você já consegue acompanhar a evolução do seu filho através do nosso portal.
+
+Link
+${url}
+
+Matricula - ${matricula}
+
+Senha - ${senhaLimpa}
+
+Em breve estaremos disponibilizando apps Nativos Android e iOS`;
     Utils.modal(
       'Acesso do Responsável Criado',
       `<div style="text-align:center;margin-bottom:16px;">
@@ -349,7 +359,7 @@ const AdminStudents = {
           </div>
           <div>
             <div style="color:var(--text-muted);font-size:11px;margin-bottom:3px;">Senha (6 primeiros dígitos do CPF)</div>
-            <div style="font-weight:700;font-family:monospace;font-size:15px;">${Utils.escape(senha)}</div>
+            <div style="font-weight:700;font-family:monospace;font-size:15px;">${Utils.escape(senhaLimpa)}</div>
           </div>
         </div>
       </div>
@@ -357,11 +367,11 @@ const AdminStudents = {
         <i class="fa-solid fa-info-circle"></i>
         O responsável acessa com a <strong>matrícula do aluno</strong> como login e os <strong>6 primeiros dígitos do CPF</strong> como senha.
       </div>
-      <textarea id="credenciaisText" class="form-control" rows="3" readonly
-        style="font-size:12px;resize:none;font-family:monospace;">${Utils.escape(credenciais)}</textarea>`,
+      <textarea id="credenciaisText" class="form-control" rows="8" readonly
+        style="font-size:12px;resize:none;">${Utils.escape(credenciais)}</textarea>`,
       `<button class="btn btn-outline" onclick="this.closest('.modal-overlay').remove();Router.go('admin-students');">Fechar</button>
        <button class="btn btn-primary" onclick="AdminStudents.copyText('credenciaisText')">
-         <i class="fa-solid fa-copy"></i> Copiar Credenciais
+         <i class="fa-solid fa-copy"></i> Copiar Mensagem
        </button>`
     );
   },
@@ -1038,8 +1048,16 @@ function _renderStudentForm(user, student) {
           </div>
           <div style="display:flex;gap:8px;align-items:center;">
             <textarea id="fichaCredenciais" readonly
-              style="flex:1;padding:8px 10px;border:1px solid #a5d6a7;border-radius:6px;font-size:12px;background:#fff;color:#333;font-family:monospace;resize:none;height:60px;">Login (Matrícula): ${s.loginMatricula || s.matricula || ''}
-Senha: ${s.loginSenha || '(6 primeiros dígitos do CPF)'}</textarea>
+              style="flex:1;padding:8px 10px;border:1px solid #a5d6a7;border-radius:6px;font-size:12px;background:#fff;color:#333;resize:none;height:120px;">Olá, você já consegue acompanhar a evolução do seu filho através do nosso portal.
+
+Link
+${window.location.origin}
+
+Matricula - ${s.loginMatricula || s.matricula || ''}
+
+Senha - ${(s.loginSenha || '').replace(/\D/g, '').substring(0, 6) || '(6 primeiros dígitos do CPF)'}
+
+Em breve estaremos disponibilizando apps Nativos Android e iOS</textarea>
             <button type="button" onclick="AdminStudents.copyText('fichaCredenciais')"
               style="padding:8px 14px;border:none;border-radius:6px;background:#388e3c;color:#fff;font-size:12px;font-weight:600;cursor:pointer;height:fit-content;">
               <i class="fa-solid fa-copy"></i> Copiar
