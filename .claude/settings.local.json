@@ -117,7 +117,16 @@
       "mcp__Claude_in_Chrome__tabs_context_mcp",
       "mcp__Claude_in_Chrome__navigate",
       "mcp__Claude_in_Chrome__computer",
-      "Bash(curl -s http://localhost:3000/app)"
+      "Bash(curl -s http://localhost:3000/app)",
+      "WebFetch(domain:docs.asaas.com)",
+      "Bash(node -c js/pages/admin-asaas-documents.js)",
+      "Bash(node -c js/pages/superadmin.js)",
+      "Bash(node -c js/pages/admin.js)",
+      "Bash(node -c js/data.js)",
+      "PowerShell($files = @\\('js/pages/admin-asaas-documents.js','js/pages/superadmin.js','js/pages/admin.js','js/data.js','js/router.js','api/asaas.js'\\); foreach \\($f in $files\\) { $output = & node -c $f 2>&1; if \\($LASTEXITCODE -eq 0\\) { Write-Output \"OK $f\" } else { Write-Output \"ERR $f`n$output\" } })",
+      "PowerShell(Get-Command vercel -ErrorAction SilentlyContinue)",
+      "PowerShell(Get-Command npx -ErrorAction SilentlyContinue)",
+      "PowerShell(npm list -g --depth=0 2>&1)"
     ]
   }
 }
