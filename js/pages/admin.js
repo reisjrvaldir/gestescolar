@@ -333,25 +333,15 @@ Router.register('admin-students', () => {
 
 const AdminStudents = {
   showAccessModal(name, matricula, senha, url) {
-    const texto = `Olá! O acesso ao acompanhamento escolar de ${name} está disponível:\n\nLink: ${url}\nLogin (Matrícula): ${matricula}\nSenha: ${senha}\n\nAcesse e acompanhe notas, frequência, financeiro e mensagens.`;
+    const credenciais = `Login (Matrícula): ${matricula}\nSenha: ${senha}`;
     Utils.modal(
       'Acesso do Responsável Criado',
       `<div style="text-align:center;margin-bottom:16px;">
         <i class="fa-solid fa-circle-check" style="font-size:40px;color:var(--secondary);"></i>
         <p style="font-weight:700;font-size:16px;margin:10px 0 4px;">Aluno cadastrado com sucesso!</p>
-        <p style="font-size:13px;color:var(--text-muted);">Compartilhe o link abaixo com o responsável.</p>
+        <p style="font-size:13px;color:var(--text-muted);">Compartilhe as credenciais de acesso com o responsável.</p>
       </div>
       <div style="background:var(--bg);border:1px solid var(--border);border-radius:var(--radius);padding:16px;margin-bottom:12px;">
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
-          <span style="font-size:12px;font-weight:700;text-transform:uppercase;color:var(--text-muted);">Link de Acesso</span>
-        </div>
-        <div style="display:flex;gap:8px;margin-bottom:10px;">
-          <input class="form-control" id="accessLinkInput" value="${Utils.escape(url)}" readonly
-            style="font-size:12px;font-family:monospace;background:#fff;" />
-          <button class="btn btn-outline btn-sm" onclick="AdminStudents.copyText('accessLinkInput')" title="Copiar link">
-            <i class="fa-solid fa-copy"></i>
-          </button>
-        </div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;font-size:13px;">
           <div>
             <div style="color:var(--text-muted);font-size:11px;margin-bottom:3px;">Login (Matrícula)</div>
@@ -365,16 +355,13 @@ const AdminStudents = {
       </div>
       <div style="background:#e8f5e9;border:1px solid #a5d6a7;border-radius:var(--radius);padding:12px;font-size:12px;color:#2e7d32;margin-bottom:12px;">
         <i class="fa-solid fa-info-circle"></i>
-        O responsável acessa com a <strong>matrícula do aluno</strong> como login e os <strong>6 primeiros dígitos do CPF</strong> do aluno como senha.
+        O responsável acessa com a <strong>matrícula do aluno</strong> como login e os <strong>6 primeiros dígitos do CPF</strong> como senha.
       </div>
-      <textarea id="textoCompartilhamento" class="form-control" rows="5" readonly
-        style="font-size:12px;resize:none;">${Utils.escape(texto)}</textarea>`,
+      <textarea id="credenciaisText" class="form-control" rows="3" readonly
+        style="font-size:12px;resize:none;font-family:monospace;">${Utils.escape(credenciais)}</textarea>`,
       `<button class="btn btn-outline" onclick="this.closest('.modal-overlay').remove();Router.go('admin-students');">Fechar</button>
-       <button class="btn btn-outline" onclick="AdminStudents.copyText('textoCompartilhamento')">
-         <i class="fa-solid fa-copy"></i> Copiar Mensagem
-       </button>
-       <button class="btn btn-primary" onclick="AdminStudents.shareWhatsApp('${encodeURIComponent(texto)}')">
-         <i class="fa-brands fa-whatsapp"></i> Enviar WhatsApp
+       <button class="btn btn-primary" onclick="AdminStudents.copyText('credenciaisText')">
+         <i class="fa-solid fa-copy"></i> Copiar Credenciais
        </button>`
     );
   },
