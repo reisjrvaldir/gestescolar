@@ -143,7 +143,9 @@
       "Bash(grep -n \"STATUS_META\\\\|aguardando\\\\|em_andamento\\\\|status.*select\\\\|Aplicar\\\\|Avancar\" \"C:\\\\\\\\Users\\\\\\\\valdir.reis\\\\\\\\Documents\\\\\\\\Projetos\\\\\\\\gestescolar-main\\\\\\\\js\\\\\\\\pages\\\\\\\\superadmin-tickets.js\")",
       "Bash(grep -n \"^};\" \"C:\\\\\\\\Users\\\\\\\\valdir.reis\\\\\\\\Documents\\\\\\\\Projetos\\\\\\\\gestescolar-main\\\\\\\\js\\\\\\\\pages\\\\\\\\superadmin-tickets.js\")",
       "Bash(grep -n \"_commentPendingImage\\\\|onCommentImage\\\\|comment.*image\\\\|image.*comment\" \"C:\\\\\\\\Users\\\\\\\\valdir.reis\\\\\\\\Documents\\\\\\\\Projetos\\\\\\\\gestescolar-main\\\\\\\\js\\\\\\\\pages\\\\\\\\user-tickets.js\")",
-      "Bash(grep -n \"_commentPendingImage\\\\|onCommentImage\\\\|reader.onload\" \"C:\\\\\\\\Users\\\\\\\\valdir.reis\\\\\\\\Documents\\\\\\\\Projetos\\\\\\\\gestescolar-main\\\\\\\\js\\\\\\\\pages\\\\\\\\superadmin-tickets.js\")"
+      "Bash(grep -n \"_commentPendingImage\\\\|onCommentImage\\\\|reader.onload\" \"C:\\\\\\\\Users\\\\\\\\valdir.reis\\\\\\\\Documents\\\\\\\\Projetos\\\\\\\\gestescolar-main\\\\\\\\js\\\\\\\\pages\\\\\\\\superadmin-tickets.js\")",
+      "Bash(ls \"C:\\\\\\\\Users\\\\\\\\valdir.reis\\\\\\\\Documents\\\\\\\\Projetos\\\\\\\\gestescolar-main\\\\\\\\api\\\\\\\\\")",
+      "Bash(cat \"C:\\\\\\\\Users\\\\\\\\valdir.reis\\\\\\\\Documents\\\\\\\\Projetos\\\\\\\\gestescolar-main\\\\\\\\api\\\\\\\\_middleware.js\")"
     ]
   }
 }
