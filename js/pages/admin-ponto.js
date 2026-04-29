@@ -5,7 +5,7 @@
 
 const AdminPonto = {
 
-  _aba: 'registros', // 'registros' | 'ajustes'
+  _aba: 'registros', // 'registros' | 'ajustes' | 'relatorio'
 
   TIPOS: [
     { value: 'ENTRADA',          label: 'Entrada',          icon: 'fa-sign-in-alt',  color: '#4CAF50' },
@@ -34,6 +34,11 @@ const AdminPonto = {
     page: 1,
   },
 
+  _filtrosRelatorio: {
+    mes: new Date().getMonth() + 1,
+    ano: new Date().getFullYear(),
+  },
+
   // ─── RENDER ────────────────────────────────────────────────────────────────
 
   async render(aba) {
@@ -49,7 +54,7 @@ const AdminPonto = {
 
     const [resumo, dados] = await Promise.all([
       this._buscarResumo(),
-      this._aba === 'registros' ? this._buscarRegistros() : this._buscarAjustes(),
+      this._aba === 'registros' ? this._buscarRegistros() : this._aba === 'ajustes' ? this._buscarAjustes() : this._buscarRelatorio(),
     ]);
 
     const hoje = new Date().toLocaleDateString('pt-BR', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
@@ -78,7 +83,7 @@ const AdminPonto = {
         </div>
 
         <!-- Abas -->
-        <div style="display:flex;gap:0;border-bottom:2px solid var(--border);margin-bottom:20px;">
+        <div style="display:flex;gap:0;border-bottom:2px solid var(--border);margin-bottom:20px;flex-wrap:wrap;">
           <button onclick="AdminPonto.render('registros')"
             style="padding:10px 20px;border:none;background:none;cursor:pointer;font-weight:600;font-size:14px;
                    border-bottom:${this._aba === 'registros' ? '2px solid var(--primary);color:var(--primary)' : '2px solid transparent;color:var(--text-muted)'};
@@ -92,9 +97,15 @@ const AdminPonto = {
             <i class="fa-solid fa-pen-to-square"></i> Solicitações de Ajuste
             ${resumo.ajustesPendentes > 0 ? `<span style="background:#9C27B0;color:#fff;border-radius:10px;padding:1px 7px;font-size:11px;margin-left:6px;">${resumo.ajustesPendentes}</span>` : ''}
           </button>
+          <button onclick="AdminPonto.render('relatorio')"
+            style="padding:10px 20px;border:none;background:none;cursor:pointer;font-weight:600;font-size:14px;
+                   border-bottom:${this._aba === 'relatorio' ? '2px solid var(--primary);color:var(--primary)' : '2px solid transparent;color:var(--text-muted)'};
+                   margin-bottom:-2px;transition:all .2s;">
+            <i class="fa-solid fa-file-pdf"></i> Relatório
+          </button>
         </div>
 
-        ${this._aba === 'registros' ? this._htmlRegistros(dados) : this._htmlAjustes(dados)}
+        ${this._aba === 'registros' ? this._htmlRegistros(dados) : this._aba === 'ajustes' ? this._htmlAjustes(dados) : this._htmlRelatorio(dados)}
 
       </div>
     `);
@@ -310,6 +321,93 @@ const AdminPonto = {
     </tr>`;
   },
 
+  // ─── HTML RELATÓRIO ───────────────────────────────────────────────────────
+
+  _htmlRelatorio(dados) {
+    const pontos = dados?.pontos || [];
+
+    // Agrupar por professor
+    const porProfessor = {};
+    pontos.forEach(p => {
+      const prof = p.user_name || 'Desconhecido';
+      if (!porProfessor[prof]) porProfessor[prof] = [];
+      porProfessor[prof].push(p);
+    });
+
+    const mesLabel = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'][this._filtrosRelatorio.mes - 1];
+
+    return `
+      <!-- Filtros -->
+      <div class="card" style="margin-bottom:16px;">
+        <div style="padding:14px 20px;display:flex;align-items:center;flex-wrap:wrap;gap:12px;">
+          <select id="filtro-mes" class="form-control" style="width:auto;min-width:120px;"
+            onchange="AdminPonto._filtrosRelatorio.mes=this.value;AdminPonto.render('relatorio')">
+            ${[...Array(12)].map((_, i) => `<option value="${i+1}" ${this._filtrosRelatorio.mes == i+1 ? 'selected' : ''}>${['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'][i]}</option>`).join('')}
+          </select>
+          <select id="filtro-ano" class="form-control" style="width:auto;min-width:100px;"
+            onchange="AdminPonto._filtrosRelatorio.ano=this.value;AdminPonto.render('relatorio')">
+            ${[...Array(5)].map((_, i) => {
+              const y = new Date().getFullYear() - i;
+              return `<option value="${y}" ${this._filtrosRelatorio.ano == y ? 'selected' : ''}>${y}</option>`;
+            }).join('')}
+          </select>
+          <span style="margin-left:auto;font-size:13px;color:var(--text-muted);">${pontos.length} ponto(s) em ${mesLabel}/${this._filtrosRelatorio.ano}</span>
+          <button class="btn btn-sm btn-outline" onclick="AdminPonto._imprimirRelatorio()">
+            <i class="fa-solid fa-print"></i> Imprimir
+          </button>
+        </div>
+      </div>
+
+      <!-- Tabela -->
+      <div class="card">
+        <div style="padding:8px 0;">
+          ${pontos.length === 0 ? `
+            <div style="padding:40px;text-align:center;color:var(--text-muted);">
+              <i class="fa-solid fa-inbox" style="font-size:36px;opacity:.35;display:block;margin-bottom:10px;"></i>
+              Nenhum registro neste período.
+            </div>
+          ` : `
+            <div style="overflow-x:auto;">
+              <table class="table">
+                <thead>
+                  <tr>
+                    <th>Data / Hora</th>
+                    <th>Professor</th>
+                    <th>Tipo</th>
+                    <th>Status</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  ${pontos.map(p => {
+                    const tipo   = this.TIPOS.find(t => t.value === p.tipo)   || { label: p.tipo,   color: '#666', icon: 'fa-circle' };
+                    const status = this.STATUS_META[p.status]                 || { label: p.status, color: '#666' };
+                    const dt     = new Date(p.timestamp);
+                    return `<tr>
+                      <td style="font-family:monospace;font-size:13px;white-space:nowrap;">
+                        ${dt.toLocaleDateString('pt-BR')} ${dt.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'})}
+                      </td>
+                      <td style="font-size:13px;font-weight:600;">${Utils.escape(p.user_name || '—')}</td>
+                      <td>
+                        <span style="display:inline-flex;align-items:center;gap:5px;color:${tipo.color};font-weight:700;font-size:12px;">
+                          <i class="fa-solid ${tipo.icon}"></i> ${tipo.label}
+                        </span>
+                      </td>
+                      <td>
+                        <span style="background:${status.color};color:#fff;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:700;">
+                          ${status.label}
+                        </span>
+                      </td>
+                    </tr>`;
+                  }).join('')}
+                </tbody>
+              </table>
+            </div>
+          `}
+        </div>
+      </div>
+    `;
+  },
+
   // ─── AÇÕES ─────────────────────────────────────────────────────────────────
 
   async acaoRegistro(pontoId, acao) {
@@ -474,6 +572,80 @@ const AdminPonto = {
       const json = await resp.json();
       return json.data || [];
     } catch { return []; }
+  },
+
+  async _buscarRelatorio() {
+    try {
+      const token = await this._getToken();
+      if (!token) return { pontos: [], total: 0 };
+
+      const mes = String(this._filtrosRelatorio.mes).padStart(2, '0');
+      const ano = this._filtrosRelatorio.ano;
+      const dataInicio = new Date(`${ano}-${mes}-01`).toISOString();
+      const proximoMes = this._filtrosRelatorio.mes === 12 ? 1 : this._filtrosRelatorio.mes + 1;
+      const anoProx = this._filtrosRelatorio.mes === 12 ? ano + 1 : ano;
+      const mesProx = String(proximoMes).padStart(2, '0');
+      const dataFim = new Date(`${anoProx}-${mesProx}-01`);
+      dataFim.setDate(dataFim.getDate() - 1);
+      dataFim.setHours(23, 59, 59, 999);
+
+      const params = new URLSearchParams({
+        limit: 500,
+        data_inicio: dataInicio,
+        data_fim: dataFim.toISOString(),
+      });
+
+      const resp = await fetch(`/api/pontos?${params}`, {
+        headers: { 'Authorization': `Bearer ${token}` },
+      });
+      if (!resp.ok) return { pontos: [], total: 0 };
+      const json = await resp.json();
+      return { pontos: json.data?.pontos || [], total: json.data?.total || 0 };
+    } catch { return { pontos: [], total: 0 }; }
+  },
+
+  _imprimirRelatorio() {
+    const mes = String(this._filtrosRelatorio.mes).padStart(2, '0');
+    const ano = this._filtrosRelatorio.ano;
+    const mesLabel = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'][this._filtrosRelatorio.mes - 1];
+
+    const tabela = document.querySelector('.page-content table');
+    if (!tabela) {
+      Utils.toast('Nenhum dado para imprimir.', 'warning');
+      return;
+    }
+
+    const html = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <meta charset="UTF-8">
+        <title>Relatório de Ponto - ${mesLabel} ${ano}</title>
+        <style>
+          body { font-family: Arial, sans-serif; margin: 20px; }
+          h1 { text-align: center; color: #333; }
+          table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+          th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+          th { background-color: #2196F3; color: white; font-weight: bold; }
+          tr:nth-child(even) { background-color: #f9f9f9; }
+          .footer { margin-top: 30px; text-align: center; font-size: 12px; color: #666; }
+        </style>
+      </head>
+      <body>
+        <h1>Relatório de Ponto Docente</h1>
+        <p style="text-align: center; color: #666;">Período: ${mesLabel}/${ano}</p>
+        ${tabela.outerHTML}
+        <div class="footer">
+          <p>Relatório gerado em ${new Date().toLocaleDateString('pt-BR')} às ${new Date().toLocaleTimeString('pt-BR')}</p>
+        </div>
+      </body>
+      </html>
+    `;
+
+    const win = window.open('', '', 'width=1000,height=600');
+    win.document.write(html);
+    win.document.close();
+    setTimeout(() => win.print(), 250);
   },
 
   async _getToken() {

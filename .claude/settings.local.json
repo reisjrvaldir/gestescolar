@@ -145,7 +145,8 @@
       "Bash(grep -n \"_commentPendingImage\\\\|onCommentImage\\\\|comment.*image\\\\|image.*comment\" \"C:\\\\\\\\Users\\\\\\\\valdir.reis\\\\\\\\Documents\\\\\\\\Projetos\\\\\\\\gestescolar-main\\\\\\\\js\\\\\\\\pages\\\\\\\\user-tickets.js\")",
       "Bash(grep -n \"_commentPendingImage\\\\|onCommentImage\\\\|reader.onload\" \"C:\\\\\\\\Users\\\\\\\\valdir.reis\\\\\\\\Documents\\\\\\\\Projetos\\\\\\\\gestescolar-main\\\\\\\\js\\\\\\\\pages\\\\\\\\superadmin-tickets.js\")",
       "Bash(ls \"C:\\\\\\\\Users\\\\\\\\valdir.reis\\\\\\\\Documents\\\\\\\\Projetos\\\\\\\\gestescolar-main\\\\\\\\api\\\\\\\\\")",
-      "Bash(cat \"C:\\\\\\\\Users\\\\\\\\valdir.reis\\\\\\\\Documents\\\\\\\\Projetos\\\\\\\\gestescolar-main\\\\\\\\api\\\\\\\\_middleware.js\")"
+      "Bash(cat \"C:\\\\\\\\Users\\\\\\\\valdir.reis\\\\\\\\Documents\\\\\\\\Projetos\\\\\\\\gestescolar-main\\\\\\\\api\\\\\\\\_middleware.js\")",
+      "Bash(grep -n \"_navForRole\\\\|professor\\\\|admin\\\\|gestor\\\\|PEDAGOG\\\\|GESTAO\\\\|nav.*professor\\\\|nav.*ponto\" \"C:\\\\\\\\Users\\\\\\\\valdir.reis\\\\\\\\Documents\\\\\\\\Projetos\\\\\\\\gestescolar-main\\\\\\\\js\\\\\\\\router.js\")"
     ]
   }
 }

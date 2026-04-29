@@ -319,8 +319,6 @@ const Router = {
         { id: 'teacher-messages',route: 'teacher-messages',icon: 'fa-envelope',         label: 'Mensagens' },
         { section: 'Ponto' },
         { id: 'professor-ponto', route: 'professor-ponto', icon: 'fa-fingerprint',      label: 'Meu Ponto' },
-        { section: 'Suporte' },
-        { id: 'user-tickets',    route: 'user-tickets',    icon: 'fa-headset',          label: 'Chamados' },
       ],
       pai: [
         { section: 'Pedagógico' },
