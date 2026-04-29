@@ -664,4 +664,14 @@ window.AdminPonto = AdminPonto;
 
 Router.register('admin-ponto', () => {
   AdminPonto.render();
+
+  // Realtime: sincroniza painel quando há novos pontos/ajustes ou alterações
+  if (typeof Realtime !== 'undefined') {
+    const refresh = () => {
+      clearTimeout(AdminPonto._rtTimer);
+      AdminPonto._rtTimer = setTimeout(() => AdminPonto.render(AdminPonto._aba), 300);
+    };
+    Realtime.subscribe('pontos_docente', null, refresh);
+    Realtime.subscribe('ajustes_ponto',  null, refresh);
+  }
 });

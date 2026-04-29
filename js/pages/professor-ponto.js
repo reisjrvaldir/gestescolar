@@ -302,4 +302,14 @@ window.ProfessorPonto = ProfessorPonto;
 
 Router.register('professor-ponto', () => {
   ProfessorPonto.render();
+
+  // Realtime: re-renderiza ao receber update do gestor (aprovação/rejeição/ajuste)
+  if (typeof Realtime !== 'undefined') {
+    const refresh = () => {
+      clearTimeout(ProfessorPonto._rtTimer);
+      ProfessorPonto._rtTimer = setTimeout(() => ProfessorPonto.render(), 300);
+    };
+    Realtime.subscribe('pontos_docente', null, refresh);
+    Realtime.subscribe('ajustes_ponto',  null, refresh);
+  }
 });
