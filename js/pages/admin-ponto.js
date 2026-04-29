@@ -238,7 +238,11 @@ const AdminPonto = {
             onclick="AdminPonto.acaoRegistro('${p.id}', 'REJEITAR')">
             <i class="fa-solid fa-xmark"></i>
           </button>
-        ` : '—'}
+        ` : `
+          <span style="background:${status.color};color:#fff;padding:4px 10px;border-radius:10px;font-size:12px;font-weight:700;display:inline-block;">
+            ${status.label}
+          </span>
+        `}
       </td>
     </tr>`;
   },
