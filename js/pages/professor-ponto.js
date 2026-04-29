@@ -82,12 +82,12 @@ const ProfessorPonto = {
             </div>
           </div>
           <div style="padding:8px 0;">
-            ${pontos.length === 0 ? `
+            ${pontos.length === 0 ? (this._filtroData ? this._htmlRegistroManual() : `
               <div style="padding:32px;text-align:center;color:var(--text-muted);">
                 <i class="fa-solid fa-inbox" style="font-size:32px;opacity:.4;display:block;margin-bottom:8px;"></i>
                 Nenhum registro encontrado.
               </div>
-            ` : `
+            `) : `
               <table class="table">
                 <thead>
                   <tr>
@@ -140,6 +140,113 @@ const ProfessorPonto = {
 
     // Relógio em tempo real
     this._iniciarRelogio();
+  },
+
+  // ─── REGISTRO MANUAL RETROATIVO ────────────────────────────────────────────
+
+  _htmlRegistroManual() {
+    const data = this._filtroData;
+    const dataFmt = new Date(data + 'T12:00:00').toLocaleDateString('pt-BR', { weekday:'long', day:'numeric', month:'long', year:'numeric' });
+
+    return `
+      <div style="padding:24px;">
+        <div style="background:#FFF3E0;border-left:4px solid #FF9800;padding:14px 16px;border-radius:8px;margin-bottom:20px;">
+          <div style="font-weight:700;color:#E65100;font-size:14px;margin-bottom:4px;">
+            <i class="fa-solid fa-triangle-exclamation"></i> Nenhum ponto registrado em ${dataFmt}
+          </div>
+          <div style="font-size:12px;color:#5D4037;">
+            Você pode cadastrar manualmente os horários abaixo. Os registros serão enviados para
+            <strong>aprovação do gestor</strong>.
+          </div>
+        </div>
+
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:14px;margin-bottom:18px;">
+          ${this.TIPOS.map(t => `
+            <div style="border:2px solid ${t.color}33;border-radius:10px;padding:12px;">
+              <label style="display:flex;align-items:center;gap:8px;font-size:13px;font-weight:700;color:${t.color};margin-bottom:8px;">
+                <i class="fa-solid ${t.icon}"></i> ${t.label}
+              </label>
+              <input type="time" id="manual-${t.value}" class="form-control" style="width:100%;font-family:monospace;font-size:14px;" />
+            </div>
+          `).join('')}
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Justificativa <span style="color:#F44336;">*</span></label>
+          <textarea id="manual-justificativa" class="form-control" rows="3" maxlength="1000"
+            placeholder="Ex: Esqueci de bater o ponto neste dia, estava em reunião externa, etc. (mínimo 10 caracteres)"></textarea>
+          <div style="font-size:11px;color:var(--text-muted);margin-top:4px;">
+            <i class="fa-solid fa-info-circle"></i> A mesma justificativa será aplicada a todos os registros.
+          </div>
+        </div>
+
+        <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:16px;">
+          <button class="btn btn-outline" onclick="ProfessorPonto._limparFiltroData()">
+            <i class="fa-solid fa-arrow-left"></i> Voltar
+          </button>
+          <button class="btn btn-primary" onclick="ProfessorPonto.enviarPontosManuais()">
+            <i class="fa-solid fa-paper-plane"></i> Enviar para aprovação
+          </button>
+        </div>
+      </div>
+    `;
+  },
+
+  async enviarPontosManuais() {
+    const justificativa = document.getElementById('manual-justificativa')?.value?.trim() || '';
+    if (justificativa.length < 10)
+      return Utils.toast('Justificativa deve ter ao menos 10 caracteres.', 'error');
+
+    // Coleta horários preenchidos
+    const horarios = this.TIPOS
+      .map(t => ({ tipo: t.value, label: t.label, hora: document.getElementById(`manual-${t.value}`)?.value }))
+      .filter(item => item.hora);
+
+    if (horarios.length === 0)
+      return Utils.toast('Preencha ao menos um horário.', 'error');
+
+    // Confirmação
+    if (!confirm(`Enviar ${horarios.length} registro(s) para aprovação do gestor?`)) return;
+
+    const token = await this._getToken();
+    if (!token) return Utils.toast('Sessão expirada.', 'error');
+
+    const data = this._filtroData; // YYYY-MM-DD
+    let sucessos = 0, falhas = 0;
+    const erros = [];
+
+    for (const item of horarios) {
+      try {
+        // Monta timestamp local: data + hora
+        const timestamp_manual = new Date(`${data}T${item.hora}:00`).toISOString();
+
+        const resp = await fetch('/api/pontos', {
+          method:  'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+          body:    JSON.stringify({
+            tipo: item.tipo,
+            timestamp_manual,
+            justificativa,
+          }),
+        });
+        const json = await resp.json();
+        if (resp.ok) sucessos++;
+        else { falhas++; erros.push(`${item.label}: ${json.message || 'erro'}`); }
+      } catch (e) {
+        falhas++;
+        erros.push(`${item.label}: erro de conexão`);
+      }
+    }
+
+    if (sucessos > 0) {
+      Utils.toast(`✅ ${sucessos} registro(s) enviado(s) para aprovação${falhas > 0 ? ` (${falhas} falhou)` : ''}!`, 'success');
+    }
+    if (erros.length > 0) {
+      console.warn('[ProfessorPonto] erros no envio manual:', erros);
+      if (sucessos === 0) Utils.toast(erros[0], 'error');
+    }
+
+    await this.render();
   },
 
   // ─── REGISTRAR PONTO (abre modal com campo descrição) ──────────────────────

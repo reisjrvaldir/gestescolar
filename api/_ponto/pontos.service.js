@@ -8,17 +8,42 @@ const { ConflitoPontoError, NaoEncontradoError, ForbiddenError } = require('./er
 // ─── CRIAR PONTO ──────────────────────────────────────────────────────────────
 
 async function criarPonto(dto, userId) {
+  const agora = new Date().toISOString();
+
+  // ── Registro RETROATIVO (manual com timestamp passado + justificativa) ───
+  if (dto.timestamp_manual) {
+    const descBase = dto.descricao ? `${dto.descricao} | ` : '';
+    const ponto = await repo.inserirPonto({
+      user_id:       userId,
+      tipo:          dto.tipo,
+      timestamp:     dto.timestamp_manual,
+      descricao:     `[Registro manual] ${descBase}Justificativa: ${dto.justificativa}`,
+      device_id:     null,
+      status:        StatusPonto.PENDENTE,
+      criado_em:     agora,
+      atualizado_em: agora,
+    });
+
+    await auditoria.registrar({
+      ponto_id:             ponto.id,
+      acao:                 'PONTO_MANUAL_CRIADO',
+      usuario_responsavel:  userId,
+      dados_anteriores:     null,
+      dados_novos:          ponto,
+    });
+
+    return ponto;
+  }
+
+  // ── Registro EM TEMPO REAL ───────────────────────────────────────────────
   // 1. Bloquear registros duplicados (janela de 60s)
   const recente = await repo.buscarUltimoPonto(userId, 60);
   if (recente) throw new ConflitoPontoError();
 
-  // 2. Timestamp SEMPRE gerado no servidor
-  const agora = new Date().toISOString();
-
-  // 3. Status baseado em device_id
+  // 2. Status baseado em device_id
   const status = dto.device_id ? StatusPonto.AUTO_VALIDADO : StatusPonto.PENDENTE;
 
-  // 4. Persistir
+  // 3. Persistir
   const ponto = await repo.inserirPonto({
     user_id:    userId,
     tipo:       dto.tipo,
@@ -30,7 +55,7 @@ async function criarPonto(dto, userId) {
     atualizado_em: agora,
   });
 
-  // 5. Auditoria
+  // 4. Auditoria
   await auditoria.registrar({
     ponto_id:             ponto.id,
     acao:                 'PONTO_CRIADO',

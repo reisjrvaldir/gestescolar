@@ -4,7 +4,7 @@ const { TipoPonto, AcaoGestor } = require('./enums');
 const { AppError } = require('./errors');
 
 function validarCriarPonto(body) {
-  const { tipo, descricao, device_id } = body || {};
+  const { tipo, descricao, device_id, timestamp_manual, justificativa } = body || {};
 
   if (!tipo) throw new AppError('Campo "tipo" é obrigatório.');
   if (!Object.values(TipoPonto).includes(tipo))
@@ -16,14 +16,29 @@ function validarCriarPonto(body) {
   if (descricao && descricao.length > 500)
     throw new AppError('Campo "descricao" deve ter no máximo 500 caracteres.');
 
-  // BLOQUEAR qualquer tentativa de envio de timestamp pelo cliente
+  // Bloqueia campos genéricos de timestamp (mantém segurança)
   if (body.timestamp || body.criado_em || body.created_at || body.data || body.hora)
-    throw new AppError('Não é permitido enviar data/hora manual. O timestamp é gerado pelo servidor.', 400, 'TIMESTAMP_PROIBIDO');
+    throw new AppError('Use "timestamp_manual" para registrar pontos retroativos.', 400, 'TIMESTAMP_PROIBIDO');
+
+  // Registro retroativo requer timestamp_manual + justificativa
+  let timestampManual = null;
+  if (timestamp_manual) {
+    if (!justificativa || typeof justificativa !== 'string' || justificativa.trim().length < 10)
+      throw new AppError('Justificativa obrigatória (mínimo 10 caracteres) para registro manual.');
+
+    const ts = new Date(timestamp_manual);
+    if (isNaN(ts.getTime())) throw new AppError('"timestamp_manual" inválido.');
+    if (ts > new Date())     throw new AppError('Não é permitido registrar pontos no futuro.');
+
+    timestampManual = ts.toISOString();
+  }
 
   return {
     tipo,
     descricao: descricao?.trim() || null,
     device_id: device_id?.trim() || null,
+    timestamp_manual: timestampManual,
+    justificativa:    timestampManual ? justificativa.trim() : null,
   };
 }
 
