@@ -75,7 +75,7 @@ const AdminPonto = {
 
         <!-- Cards de resumo -->
         <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:14px;margin-bottom:24px;">
-          ${this._cardResumo('fa-list-check', resumo.total, 'Total hoje', '#607D8B')}
+          ${this._cardResumo('fa-list-check', resumo.total, resumo.labelPeriodo, '#607D8B')}
           ${this._cardResumo('fa-hourglass-half', resumo.pendente, 'Pendentes', '#FF9800')}
           ${this._cardResumo('fa-circle-check', resumo.aprovado + resumo.auto_validado, 'Aprovados', '#4CAF50')}
           ${this._cardResumo('fa-circle-xmark', resumo.rejeitado, 'Rejeitados', '#F44336')}
@@ -131,6 +131,7 @@ const AdminPonto = {
   _htmlRegistros(dados) {
     const pontos = dados?.pontos || [];
     const total  = dados?.total || 0;
+    const temFiltro = !!(this._filtros.data_inicio || this._filtros.data_fim);
 
     return `
       <!-- Filtros -->
@@ -145,16 +146,19 @@ const AdminPonto = {
             <option value="REJEITADO"     ${this._filtros.status === 'REJEITADO'     ? 'selected' : ''}>Rejeitado</option>
           </select>
           <input type="date" id="filtro-inicio" class="form-control" style="width:auto;"
-            value="${this._filtros.data_inicio}"
-            onchange="AdminPonto._filtros.data_inicio=this.value;AdminPonto._filtros.page=1;AdminPonto._recarregar()"
-            title="Data início" />
+            value="${this._filtros.data_inicio}" title="Data início" />
           <input type="date" id="filtro-fim" class="form-control" style="width:auto;"
-            value="${this._filtros.data_fim}"
-            onchange="AdminPonto._filtros.data_fim=this.value;AdminPonto._filtros.page=1;AdminPonto._recarregar()"
-            title="Data fim" />
-          <button class="btn btn-sm btn-outline" onclick="AdminPonto._limparFiltros()">
-            <i class="fa-solid fa-xmark"></i> Limpar
-          </button>
+            value="${this._filtros.data_fim}" title="Data fim" />
+          ${temFiltro ? `
+            <button class="btn btn-sm" style="background:var(--danger,#F44336);color:#fff;border:none;"
+              onclick="AdminPonto._limparFiltros()">
+              <i class="fa-solid fa-xmark"></i> Limpar
+            </button>
+          ` : `
+            <button class="btn btn-sm btn-primary" onclick="AdminPonto._aplicarFiltros()">
+              <i class="fa-solid fa-magnifying-glass"></i> Buscar
+            </button>
+          `}
           <span style="margin-left:auto;font-size:13px;color:var(--text-muted);">${total} registro(s) encontrado(s)</span>
         </div>
       </div>
@@ -488,6 +492,19 @@ const AdminPonto = {
     await this.render(this._aba);
   },
 
+  _aplicarFiltros() {
+    const inicio = document.getElementById('filtro-inicio')?.value || '';
+    const fim    = document.getElementById('filtro-fim')?.value || '';
+    if (!inicio && !fim) {
+      Utils.toast('Selecione ao menos uma data para buscar.', 'warning');
+      return;
+    }
+    this._filtros.data_inicio = inicio;
+    this._filtros.data_fim    = fim;
+    this._filtros.page        = 1;
+    this._recarregar();
+  },
+
   _limparFiltros() {
     this._filtros = { status: '', data_inicio: '', data_fim: '', page: 1 };
     this._recarregar();
@@ -510,14 +527,29 @@ const AdminPonto = {
       const token = await this._getToken();
       if (!token) return {};
 
-      // Resumo do dia atual
-      const hoje      = new Date();
-      const inicioDia = new Date(hoje.setHours(0, 0, 0, 0)).toISOString();
-      const fimDia    = new Date(hoje.setHours(23, 59, 59, 999)).toISOString();
+      // Se há filtro de período aplicado, usa-o; senão usa o dia atual
+      let inicioISO, fimISO, labelPeriodo;
+      if (this._filtros.data_inicio || this._filtros.data_fim) {
+        const di = this._filtros.data_inicio ? new Date(this._filtros.data_inicio) : new Date();
+        const df = this._filtros.data_fim    ? new Date(this._filtros.data_fim)    : new Date();
+        di.setHours(0, 0, 0, 0);
+        df.setHours(23, 59, 59, 999);
+        inicioISO    = di.toISOString();
+        fimISO       = df.toISOString();
+        labelPeriodo = `Total ${di.toLocaleDateString('pt-BR')} a ${df.toLocaleDateString('pt-BR')}`;
+      } else {
+        const hoje = new Date();
+        inicioISO    = new Date(hoje.setHours(0, 0, 0, 0)).toISOString();
+        fimISO       = new Date(hoje.setHours(23, 59, 59, 999)).toISOString();
+        labelPeriodo = 'Total hoje';
+      }
 
-      // Busca registros de hoje + ajustes pendentes em paralelo
+      const params = new URLSearchParams({ limit: 500, data_inicio: inicioISO, data_fim: fimISO });
+      if (this._filtros.status) params.set('status', this._filtros.status);
+
+      // Busca registros do período + ajustes pendentes em paralelo
       const [respPontos, respAjustes] = await Promise.all([
-        fetch(`/api/pontos?limit=200&data_inicio=${inicioDia}&data_fim=${fimDia}`, {
+        fetch(`/api/pontos?${params}`, {
           headers: { 'Authorization': `Bearer ${token}` },
         }),
         fetch(`/api/pontos-ajuste?status=PENDENTE&limit=200`, {
@@ -529,7 +561,7 @@ const AdminPonto = {
       const ajustesJson = respAjustes.ok ? await respAjustes.json() : {};
 
       const pontos  = pontosJson.data?.pontos  || [];
-      const ajustes = ajustesJson.data          || [];
+      const ajustes = ajustesJson.data         || [];
 
       const contagem = { total: pontos.length, pendente: 0, auto_validado: 0, aprovado: 0, rejeitado: 0 };
       pontos.forEach(p => {
@@ -537,8 +569,8 @@ const AdminPonto = {
         if (contagem[k] !== undefined) contagem[k]++;
       });
 
-      return { ...contagem, ajustesPendentes: Array.isArray(ajustes) ? ajustes.length : 0 };
-    } catch { return { total: 0, pendente: 0, auto_validado: 0, aprovado: 0, rejeitado: 0, ajustesPendentes: 0 }; }
+      return { ...contagem, ajustesPendentes: Array.isArray(ajustes) ? ajustes.length : 0, labelPeriodo };
+    } catch { return { total: 0, pendente: 0, auto_validado: 0, aprovado: 0, rejeitado: 0, ajustesPendentes: 0, labelPeriodo: 'Total hoje' }; }
   },
 
   async _buscarRegistros() {

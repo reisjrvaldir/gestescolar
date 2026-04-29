@@ -6,6 +6,7 @@
 const ProfessorPonto = {
 
   _ajusteModal: null,
+  _filtroData:  '', // Data específica (YYYY-MM-DD) ou vazio = mostra histórico geral
 
   TIPOS: [
     { value: 'ENTRADA',          label: 'Entrada',          icon: 'fa-sign-in-alt',  color: '#4CAF50' },
@@ -62,11 +63,23 @@ const ProfessorPonto = {
 
         <!-- Histórico -->
         <div class="card">
-          <div class="card-header" style="display:flex;justify-content:space-between;align-items:center;">
+          <div class="card-header" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">
             <span class="card-title"><i class="fa-solid fa-clock-rotate-left"></i> Histórico</span>
-            <button class="btn btn-sm btn-outline" onclick="ProfessorPonto.render()">
-              <i class="fa-solid fa-rotate"></i> Atualizar
-            </button>
+            <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+              <input type="date" id="prof-filtro-data" class="form-control" style="width:auto;font-size:13px;padding:6px 10px;"
+                value="${this._filtroData}" max="${new Date().toISOString().slice(0,10)}"
+                title="Buscar dia específico" />
+              ${this._filtroData ? `
+                <button class="btn btn-sm" style="background:var(--danger,#F44336);color:#fff;border:none;"
+                  onclick="ProfessorPonto._limparFiltroData()">
+                  <i class="fa-solid fa-xmark"></i> Limpar
+                </button>
+              ` : `
+                <button class="btn btn-sm btn-primary" onclick="ProfessorPonto._aplicarFiltroData()">
+                  <i class="fa-solid fa-magnifying-glass"></i> Buscar
+                </button>
+              `}
+            </div>
           </div>
           <div style="padding:8px 0;">
             ${pontos.length === 0 ? `
@@ -270,13 +283,39 @@ const ProfessorPonto = {
     try {
       const token = await this._getToken();
       if (!token) return [];
-      const resp = await fetch(`/api/pontos?limit=30`, {
+
+      const params = new URLSearchParams({ limit: 30 });
+      if (this._filtroData) {
+        const di = new Date(this._filtroData);
+        di.setHours(0, 0, 0, 0);
+        const df = new Date(this._filtroData);
+        df.setHours(23, 59, 59, 999);
+        params.set('data_inicio', di.toISOString());
+        params.set('data_fim',    df.toISOString());
+      }
+
+      const resp = await fetch(`/api/pontos?${params}`, {
         headers: { 'Authorization': `Bearer ${token}` },
       });
       if (!resp.ok) return [];
       const json = await resp.json();
       return json.data?.pontos || [];
     } catch { return []; }
+  },
+
+  _aplicarFiltroData() {
+    const valor = document.getElementById('prof-filtro-data')?.value || '';
+    if (!valor) {
+      Utils.toast('Selecione uma data para buscar.', 'warning');
+      return;
+    }
+    this._filtroData = valor;
+    this.render();
+  },
+
+  _limparFiltroData() {
+    this._filtroData = '';
+    this.render();
   },
 
   async _getToken() {
