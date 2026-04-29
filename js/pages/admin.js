@@ -1633,6 +1633,9 @@ const MATERIAS_MEC = {
   ]
 };
 
+// Expõe globalmente para uso em outras páginas (ex: teacher-grades)
+window.MATERIAS_MEC = MATERIAS_MEC;
+
 const AdminClasses = {
   openNew() {
     const teachers = DB.getUsers().filter(u => u.role === 'professor');

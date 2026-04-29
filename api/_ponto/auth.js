@@ -9,22 +9,26 @@ async function extrairUsuario(req) {
   const token = auth.startsWith('Bearer ') ? auth.slice(7) : null;
   if (!token) throw new NaoAutorizadoError('Token não informado.');
 
-  const sb = createClient(
+  // Usa service_key (também funciona para auth.getUser(token))
+  const sbSvc = createClient(
     process.env.SUPABASE_URL,
-    process.env.SUPABASE_ANON_KEY,
+    process.env.SUPABASE_SERVICE_KEY,
   );
 
-  const { data: { user }, error } = await sb.auth.getUser(token);
-  if (error || !user) throw new NaoAutorizadoError('Token inválido ou expirado.');
+  const { data: { user }, error } = await sbSvc.auth.getUser(token);
+  if (error || !user) {
+    console.error('[auth] getUser error:', error?.message);
+    throw new NaoAutorizadoError('Token inválido ou expirado.');
+  }
 
   // Busca dados do usuário no banco (role, escola, etc.)
-  const sbSvc = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_KEY);
-  const { data: perfil } = await sbSvc
+  const { data: perfil, error: perfilError } = await sbSvc
     .from('users')
     .select('id, name, role, school_id')
     .eq('auth_id', user.id)
     .single();
 
+  if (perfilError) console.error('[auth] perfil error:', perfilError.message);
   if (!perfil) throw new NaoAutorizadoError('Usuário não encontrado no sistema.');
 
   return {

@@ -387,7 +387,12 @@ const TeacherGrades = {
 
   // ── TELA 1: lista de turmas ───────────────────────────────
   renderClassList() {
-    const classes  = DB.getClasses().sort((a, b) => a.name.localeCompare(b.name, 'pt-BR', { numeric: true }));
+    const user     = this._user;
+    const isGestor = user && (user.role === 'gestor' || user.role === 'administrativo');
+    // Professor vê apenas as turmas onde é o titular; gestor vê todas
+    const classes  = DB.getClasses()
+      .filter(c => isGestor || c.teacherId === user.id)
+      .sort((a, b) => a.name.localeCompare(b.name, 'pt-BR', { numeric: true }));
     const students = DB.getStudents().filter(s => s.status === 'ativo');
     const users    = DB.getUsers();
 
@@ -430,7 +435,9 @@ const TeacherGrades = {
   openClass(classId) {
     this._classId = classId;
     this._unit    = '1ª Unidade';
-    this._subject = 'Matemática';
+    // Define a primeira matéria da turma (ou Matemática como fallback)
+    const cls = DB.getClasses().find(c => c.id === classId);
+    this._subject = (cls?.subjects?.[0]) || 'Matemática';
     this._renderGrades();
   },
 
@@ -455,8 +462,15 @@ const TeacherGrades = {
     const grades   = DB.getGrades();
     const unit     = this._unit;
 
-    const subjects = (cls && cls.subjects && cls.subjects.length > 0)
-      ? cls.subjects : this._subjects;
+    // Prioridade: matérias da turma > todas MATERIAS_MEC > fallback hardcoded
+    let subjects;
+    if (cls && cls.subjects && cls.subjects.length > 0) {
+      subjects = cls.subjects;
+    } else if (window.MATERIAS_MEC) {
+      subjects = [...new Set(Object.values(window.MATERIAS_MEC).flat())].sort((a, b) => a.localeCompare(b, 'pt-BR'));
+    } else {
+      subjects = this._subjects;
+    }
     if (!subjects.includes(this._subject)) this._subject = subjects[0] || 'Matemática';
     const subject = this._subject;
 
