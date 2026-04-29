@@ -52,10 +52,10 @@ async function listarPontos(filtros) {
   const sb = getSupabase();
   let query = sb
     .from('pontos_docente')
-    .select('*, ajustes_ponto(*)', { count: 'exact' });
+    .select('*, users!user_id(name), ajustes_ponto(*)', { count: 'exact' });
 
-  if (filtros.user_id)    query = query.eq('user_id', filtros.user_id);
-  if (filtros.status)     query = query.eq('status', filtros.status);
+  if (filtros.user_id)     query = query.eq('user_id', filtros.user_id);
+  if (filtros.status)      query = query.eq('status', filtros.status);
   if (filtros.data_inicio) query = query.gte('timestamp', filtros.data_inicio);
   if (filtros.data_fim)    query = query.lte('timestamp', filtros.data_fim);
 
@@ -66,7 +66,42 @@ async function listarPontos(filtros) {
 
   const { data, error, count } = await query;
   if (error) throw new Error(`DB listarPontos: ${error.message}`);
-  return { pontos: data || [], total: count || 0 };
+
+  // Achata user_name do join
+  const pontos = (data || []).map(p => ({
+    ...p,
+    user_name: p.users?.name || p.user_id,
+    users: undefined,
+  }));
+  return { pontos, total: count || 0 };
+}
+
+async function listarAjustes(filtros = {}) {
+  const sb = getSupabase();
+  let query = sb
+    .from('ajustes_ponto')
+    .select('*, pontos_docente!ponto_id(user_id, tipo, timestamp, users!user_id(name))', { count: 'exact' });
+
+  if (filtros.status) query = query.eq('status', filtros.status);
+
+  const limit  = filtros.limit  || 50;
+  const page   = filtros.page   || 1;
+  const offset = (page - 1) * limit;
+  query = query
+    .order('criado_em', { ascending: false })
+    .range(offset, offset + limit - 1);
+
+  const { data, error, count } = await query;
+  if (error) throw new Error(`DB listarAjustes: ${error.message}`);
+
+  // Achata user_name do join aninhado
+  const ajustes = (data || []).map(a => ({
+    ...a,
+    user_name: a.pontos_docente?.users?.name || null,
+    ponto:     a.pontos_docente ? { user_id: a.pontos_docente.user_id, tipo: a.pontos_docente.tipo, timestamp: a.pontos_docente.timestamp } : null,
+    pontos_docente: undefined,
+  }));
+  return { ajustes, total: count || 0 };
 }
 
 async function atualizarPonto(id, dados) {
@@ -128,6 +163,6 @@ async function inserirAuditoria(dados) {
 
 module.exports = {
   inserirPonto, buscarPontoPorId, buscarUltimoPonto, listarPontos, atualizarPonto,
-  inserirAjuste, buscarAjustePorId, atualizarAjuste,
+  inserirAjuste, buscarAjustePorId, atualizarAjuste, listarAjustes,
   inserirAuditoria,
 };

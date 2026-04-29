@@ -70,4 +70,10 @@ async function executarAcaoAjuste(ajusteId, dto, gestor) {
   return ajusteAtualizado;
 }
 
-module.exports = { criarAjuste, executarAcaoAjuste };
+// ─── LISTAR AJUSTES ───────────────────────────────────────────────────────────
+
+async function listarAjustes(filtros) {
+  return repo.listarAjustes(filtros);
+}
+
+module.exports = { criarAjuste, executarAcaoAjuste, listarAjustes };

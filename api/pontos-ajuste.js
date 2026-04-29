@@ -11,9 +11,27 @@ const { sucesso, criado, erro }               = require('./_ponto/resposta');
 
 module.exports = async (req, res) => {
   res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
   if (req.method === 'OPTIONS') return res.status(204).end();
+
+  // ── GET /api/pontos-ajuste → gestor lista ajustes ──────────────────────────
+  if (req.method === 'GET') {
+    try {
+      const usuario = await extrairUsuario(req);
+      await exigirRole(Roles.GESTOR, Roles.SUPERADMIN)(usuario);
+      const filtros = {
+        status: req.query.status || '',
+        limit:  Math.min(parseInt(req.query.limit  || '50', 10), 100),
+        page:   Math.max(parseInt(req.query.page   || '1',  10), 1),
+      };
+      const resultado = await ajustesService.listarAjustes(filtros);
+      return sucesso(res, resultado.ajustes);
+    } catch (err) {
+      return erro(res, err);
+    }
+  }
+
   if (req.method !== 'POST')
     return res.status(405).json({ ok: false, message: 'Método não permitido.' });
 
