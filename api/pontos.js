@@ -36,8 +36,9 @@ module.exports = async (req, res) => {
 
     // ── POST /api/pontos ────────────────────────────────────────────────────
     if (req.method === 'POST') {
-      // Apenas professores registram ponto
-      if (![Roles.PROFESSOR, Roles.GESTOR, Roles.SUPERADMIN].includes(usuario.role))
+      // Professores, gestores e admin podem registrar ponto
+      const rolesPermitidas = ['professor', 'gestor', 'administrativo', 'admin', 'superadmin'];
+      if (!rolesPermitidas.includes(usuario.role))
         return erro(res, { statusCode: 403, code: 'FORBIDDEN', message: 'Acesso negado.' });
 
       const dto   = validarCriarPonto(req.body);

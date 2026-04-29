@@ -129,21 +129,56 @@ const ProfessorPonto = {
     this._iniciarRelogio();
   },
 
-  // ─── REGISTRAR PONTO ───────────────────────────────────────────────────────
+  // ─── REGISTRAR PONTO (abre modal com campo descrição) ──────────────────────
 
-  async registrar(tipo) {
-    const user  = Auth.current();
+  registrar(tipo) {
+    const tipoMeta = this.TIPOS.find(t => t.value === tipo);
+    if (!tipoMeta) return;
+
+    const agora = new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+
+    Utils.modal(`Confirmar ${tipoMeta.label}`, `
+      <div style="display:flex;align-items:center;gap:14px;padding:12px 0;margin-bottom:8px;border-bottom:1px solid var(--border);">
+        <div style="width:48px;height:48px;border-radius:12px;background:${tipoMeta.color}22;display:flex;align-items:center;justify-content:center;">
+          <i class="fa-solid ${tipoMeta.icon}" style="color:${tipoMeta.color};font-size:22px;"></i>
+        </div>
+        <div>
+          <div style="font-weight:700;font-size:16px;color:${tipoMeta.color};">${tipoMeta.label}</div>
+          <div style="font-size:13px;color:var(--text-muted);font-family:monospace;">Horário: ${agora}</div>
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Descrição / Justificativa <span style="color:var(--text-muted);font-weight:400;">(opcional)</span></label>
+        <textarea id="ponto-descricao" class="form-control" rows="3" maxlength="500"
+          placeholder="Ex: Atrasado por trânsito, saindo mais cedo para consulta médica..."></textarea>
+        <div style="font-size:11px;color:var(--text-muted);margin-top:4px;">
+          <i class="fa-solid fa-info-circle"></i> Descreva o motivo se houver alguma observação importante.
+        </div>
+      </div>
+    `, `
+      <button class="btn btn-outline" onclick="document.querySelector('.modal-overlay').remove()">Cancelar</button>
+      <button class="btn btn-primary" onclick="ProfessorPonto._confirmarRegistro('${tipo}')">
+        <i class="fa-solid fa-check"></i> Confirmar
+      </button>
+    `);
+
+    setTimeout(() => document.getElementById('ponto-descricao')?.focus(), 100);
+  },
+
+  async _confirmarRegistro(tipo) {
+    const tipoMeta  = this.TIPOS.find(t => t.value === tipo);
+    const descricao = document.getElementById('ponto-descricao')?.value?.trim() || null;
+
     const token = await this._getToken();
     if (!token) return Utils.toast('Sessão expirada. Faça login novamente.', 'error');
 
-    const tipoMeta = this.TIPOS.find(t => t.value === tipo);
-    if (!confirm(`Confirmar registro de ${tipoMeta?.label}?`)) return;
+    document.querySelector('.modal-overlay')?.remove();
 
     try {
       const resp = await fetch('/api/pontos', {
         method:  'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-        body:    JSON.stringify({ tipo }),
+        body:    JSON.stringify({ tipo, descricao }),
       });
       const json = await resp.json();
 

@@ -42,13 +42,15 @@ async function extrairUsuario(req) {
 
 function exigirRole(...roles) {
   return async (usuario) => {
-    if (!roles.includes(usuario.role))
+    // Aceita tanto 'gestor' quanto 'administrativo' quando exige GESTOR
+    const rolesExpandidos = roles.flatMap(r => r === 'gestor' ? ['gestor', 'administrativo', 'admin'] : [r]);
+    if (!rolesExpandidos.includes(usuario.role))
       throw new ForbiddenError(`Acesso restrito a: ${roles.join(', ')}.`);
   };
 }
 
 const Roles = {
-  GESTOR:     'admin',
+  GESTOR:     'gestor',
   PROFESSOR:  'professor',
   SUPERADMIN: 'superadmin',
 };
