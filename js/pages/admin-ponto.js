@@ -31,6 +31,7 @@ const AdminPonto = {
     status: '',
     data_inicio: '',
     data_fim: '',
+    professor_id: '',
     page: 1,
   },
 
@@ -131,12 +132,24 @@ const AdminPonto = {
   _htmlRegistros(dados) {
     const pontos = dados?.pontos || [];
     const total  = dados?.total || 0;
-    const temFiltro = !!(this._filtros.data_inicio || this._filtros.data_fim);
+    const temFiltro = !!(this._filtros.data_inicio || this._filtros.data_fim || this._filtros.professor_id);
+
+    // Lista de professores em ordem alfabética
+    const professores = (typeof DB !== 'undefined' ? DB.getUsers() : [])
+      .filter(u => u.role === 'professor')
+      .sort((a, b) => (a.name || '').localeCompare(b.name || ''));
 
     return `
       <!-- Filtros -->
       <div class="card" style="margin-bottom:16px;">
         <div style="padding:14px 20px;display:flex;align-items:center;flex-wrap:wrap;gap:12px;">
+          <select id="filtro-professor" class="form-control" style="width:auto;min-width:200px;"
+            onchange="AdminPonto._filtros.professor_id=this.value;AdminPonto._filtros.page=1;AdminPonto._recarregar()">
+            <option value="">Todos os professores</option>
+            ${professores.map(p => `
+              <option value="${p.id}" ${this._filtros.professor_id === p.id ? 'selected' : ''}>${Utils.escape(p.name)}</option>
+            `).join('')}
+          </select>
           <select id="filtro-status" class="form-control" style="width:auto;min-width:150px;"
             onchange="AdminPonto._filtros.status=this.value;AdminPonto._filtros.page=1;AdminPonto._recarregar()">
             <option value="">Todos os status</option>
@@ -171,7 +184,7 @@ const AdminPonto = {
               <i class="fa-solid fa-inbox" style="font-size:36px;opacity:.35;display:block;margin-bottom:10px;"></i>
               Nenhum registro encontrado.
             </div>
-          ` : `
+          ` : (this._filtros.professor_id ? this._htmlTabelaPorDia(pontos) : `
             <div style="overflow-x:auto;">
               <table class="table">
                 <thead>
@@ -202,8 +215,104 @@ const AdminPonto = {
                 Próxima <i class="fa-solid fa-chevron-right"></i>
               </button>
             </div>
-          `}
+          `)}
         </div>
+      </div>
+    `;
+  },
+
+  // ─── TABELA POR DIA (1 linha = 1 dia, 4 horários lado a lado) ──────────────
+
+  _htmlTabelaPorDia(pontos) {
+    const porDia = {};
+    pontos.forEach(p => {
+      const dia = new Date(p.timestamp).toISOString().slice(0, 10);
+      if (!porDia[dia]) porDia[dia] = [];
+      porDia[dia].push(p);
+    });
+
+    const dias = Object.entries(porDia).sort(([a], [b]) => b.localeCompare(a));
+
+    let saldoMes = 0;
+    let totalTrab = 0;
+
+    const linhas = dias.map(([dia, pts]) => {
+      const get = (tipo) => pts.find(x => x.tipo === tipo);
+      const cell = (tipo, cor) => {
+        const p = get(tipo);
+        if (!p) return `<td style="text-align:center;color:#ccc;font-family:monospace;">—</td>`;
+        const hora    = new Date(p.timestamp).toLocaleTimeString('pt-BR', { hour:'2-digit', minute:'2-digit' });
+        const status  = this.STATUS_META[p.status] || { color:'#666', label:p.status };
+        const isPend  = p.status === 'PENDENTE';
+        const desc    = p.descricao ? Utils.escape(p.descricao).slice(0,60) : '';
+        return `<td style="font-family:monospace;font-size:12px;text-align:center;" title="${status.label}${desc ? ' - ' + desc : ''}">
+          <div style="color:${cor};font-weight:700;font-size:13px;">${hora}</div>
+          <div style="display:inline-block;width:7px;height:7px;border-radius:50%;background:${status.color};margin-top:3px;" title="${status.label}"></div>
+          ${isPend ? `
+            <div style="margin-top:4px;display:flex;justify-content:center;gap:3px;">
+              <button class="btn btn-sm" style="background:#4CAF50;color:#fff;padding:2px 6px;font-size:10px;border:none;"
+                onclick="AdminPonto.acaoRegistro('${p.id}', 'APROVAR')" title="Aprovar">
+                <i class="fa-solid fa-check"></i>
+              </button>
+              <button class="btn btn-sm" style="background:#F44336;color:#fff;padding:2px 6px;font-size:10px;border:none;"
+                onclick="AdminPonto.acaoRegistro('${p.id}', 'REJEITAR')" title="Rejeitar">
+                <i class="fa-solid fa-xmark"></i>
+              </button>
+            </div>
+          ` : ''}
+        </td>`;
+      };
+
+      const min   = this._minutosTrabalhados(pts);
+      const saldo = (min !== null) ? min - this.CARGA_HORARIA_DIARIA : null;
+      if (min !== null)   totalTrab += min;
+      if (saldo !== null) saldoMes  += saldo;
+
+      const dataObj   = new Date(dia + 'T12:00:00');
+      const diaSemana = ['Dom','Seg','Ter','Qua','Qui','Sex','Sáb'][dataObj.getDay()];
+
+      return `<tr>
+        <td style="font-family:monospace;font-size:12px;font-weight:600;white-space:nowrap;">
+          ${dataObj.toLocaleDateString('pt-BR')}
+          <div style="font-size:10px;color:var(--text-muted);font-weight:400;">${diaSemana}</div>
+        </td>
+        ${cell('ENTRADA',          '#4CAF50')}
+        ${cell('INTERVALO_INICIO', '#FF9800')}
+        ${cell('INTERVALO_FIM',    '#2196F3')}
+        ${cell('SAIDA',            '#F44336')}
+        <td style="font-family:monospace;font-size:12px;text-align:center;font-weight:700;">${this._formatHoras(min)}</td>
+        <td style="font-family:monospace;font-size:12px;text-align:center;font-weight:700;color:${this._saldoCor(saldo)};">
+          ${saldo !== null ? (saldo > 0 ? '+' : '') + this._formatHoras(saldo) : '—'}
+        </td>
+      </tr>`;
+    }).join('');
+
+    const corSaldoMes = this._saldoCor(saldoMes);
+    const sinalMes    = saldoMes > 0 ? '+' : '';
+
+    return `
+      <div style="overflow-x:auto;">
+        <table class="table" style="font-size:12px;">
+          <thead>
+            <tr>
+              <th>Data</th>
+              <th style="text-align:center;color:#4CAF50;">Entrada</th>
+              <th style="text-align:center;color:#FF9800;">Início Int.</th>
+              <th style="text-align:center;color:#2196F3;">Fim Int.</th>
+              <th style="text-align:center;color:#F44336;">Saída</th>
+              <th style="text-align:center;">Trabalhado</th>
+              <th style="text-align:center;">Saldo</th>
+            </tr>
+          </thead>
+          <tbody>${linhas}</tbody>
+          <tfoot>
+            <tr style="background:#f5f5f5;font-weight:700;">
+              <td colspan="5" style="text-align:right;">TOTAL DO PERÍODO:</td>
+              <td style="text-align:center;">${this._formatHoras(totalTrab)}</td>
+              <td style="text-align:center;color:${corSaldoMes};">${sinalMes}${this._formatHoras(saldoMes)}</td>
+            </tr>
+          </tfoot>
+        </table>
       </div>
     `;
   },
@@ -557,18 +666,20 @@ const AdminPonto = {
   _aplicarFiltros() {
     const inicio = document.getElementById('filtro-inicio')?.value || '';
     const fim    = document.getElementById('filtro-fim')?.value || '';
-    if (!inicio && !fim) {
-      Utils.toast('Selecione ao menos uma data para buscar.', 'warning');
+    const prof   = document.getElementById('filtro-professor')?.value || '';
+    if (!inicio && !fim && !prof) {
+      Utils.toast('Selecione data ou professor para buscar.', 'warning');
       return;
     }
-    this._filtros.data_inicio = inicio;
-    this._filtros.data_fim    = fim;
-    this._filtros.page        = 1;
+    this._filtros.data_inicio  = inicio;
+    this._filtros.data_fim     = fim;
+    this._filtros.professor_id = prof;
+    this._filtros.page         = 1;
     this._recarregar();
   },
 
   _limparFiltros() {
-    this._filtros = { status: '', data_inicio: '', data_fim: '', page: 1 };
+    this._filtros = { status: '', data_inicio: '', data_fim: '', professor_id: '', page: 1 };
     this._recarregar();
   },
 
@@ -640,9 +751,12 @@ const AdminPonto = {
       const token = await this._getToken();
       if (!token) return { pontos: [], total: 0 };
 
-      const params = new URLSearchParams({ limit: 30, page: this._filtros.page });
-      if (this._filtros.status)      params.set('status',      this._filtros.status);
-      if (this._filtros.data_inicio) params.set('data_inicio', new Date(this._filtros.data_inicio).toISOString());
+      // Quando há professor selecionado, busca mais registros (mês inteiro)
+      const limit = this._filtros.professor_id ? 100 : 30;
+      const params = new URLSearchParams({ limit, page: this._filtros.page });
+      if (this._filtros.status)       params.set('status',       this._filtros.status);
+      if (this._filtros.professor_id) params.set('user_id',      this._filtros.professor_id);
+      if (this._filtros.data_inicio)  params.set('data_inicio',  new Date(this._filtros.data_inicio).toISOString());
       if (this._filtros.data_fim) {
         const fim = new Date(this._filtros.data_fim);
         fim.setHours(23, 59, 59, 999);

@@ -95,7 +95,7 @@ const ProfessorPonto = {
                 <i class="fa-solid fa-inbox" style="font-size:32px;opacity:.4;display:block;margin-bottom:8px;"></i>
                 Nenhum registro encontrado.
               </div>
-            `) : `
+            `) : this._htmlTabelaDias(pontos) /*`
               <table class="table">
                 <thead>
                   <tr>
@@ -140,7 +140,7 @@ const ProfessorPonto = {
                   }).join('')}
                 </tbody>
               </table>
-            `}
+            `*/}
           </div>
         </div>
       </div>
@@ -390,6 +390,81 @@ const ProfessorPonto = {
       console.error('[ProfessorPonto] enviarAjuste:', e);
       Utils.toast('Erro de conexão.', 'error');
     }
+  },
+
+  // ─── TABELA AGRUPADA POR DIA ───────────────────────────────────────────────
+
+  _htmlTabelaDias(pontos) {
+    // Agrupa por dia
+    const porDia = {};
+    pontos.forEach(p => {
+      const dia = new Date(p.timestamp).toISOString().slice(0, 10);
+      if (!porDia[dia]) porDia[dia] = [];
+      porDia[dia].push(p);
+    });
+
+    const dias = Object.entries(porDia).sort(([a], [b]) => b.localeCompare(a)); // mais recente primeiro
+
+    const linhas = dias.map(([dia, pts]) => {
+      const get = (tipo) => pts.find(x => x.tipo === tipo);
+      const cell = (tipo, cor) => {
+        const p = get(tipo);
+        if (!p) return `<td style="text-align:center;color:#ccc;font-family:monospace;">—</td>`;
+        const hora     = new Date(p.timestamp).toLocaleTimeString('pt-BR', { hour:'2-digit', minute:'2-digit' });
+        const status   = this.STATUS_META[p.status] || { color:'#666', label:p.status };
+        const ajustar  = ['PENDENTE','REJEITADO'].includes(p.status);
+        const titleDesc = p.descricao ? `\n${p.descricao}` : '';
+        return `<td style="font-family:monospace;font-size:13px;text-align:center;" title="${status.label}${titleDesc}">
+          <div style="color:${cor};font-weight:700;">${hora}</div>
+          <div style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${status.color};margin-top:4px;" title="${status.label}"></div>
+          ${ajustar ? `
+            <button class="btn btn-sm btn-outline" style="padding:2px 6px;font-size:10px;margin-top:4px;display:block;margin-left:auto;margin-right:auto;"
+              onclick="ProfessorPonto.abrirAjuste('${p.id}', '${p.timestamp}')" title="Solicitar ajuste">
+              <i class="fa-solid fa-pen"></i>
+            </button>
+          ` : ''}
+        </td>`;
+      };
+
+      const min       = this._minutosTrabalhados(pts);
+      const saldo     = (min !== null) ? min - this.CARGA_HORARIA_DIARIA : null;
+      const dataObj   = new Date(dia + 'T12:00:00');
+      const diaSemana = ['Dom','Seg','Ter','Qua','Qui','Sex','Sáb'][dataObj.getDay()];
+
+      return `<tr>
+        <td style="font-family:monospace;font-size:13px;font-weight:600;white-space:nowrap;">
+          ${dataObj.toLocaleDateString('pt-BR')}
+          <div style="font-size:10px;color:var(--text-muted);font-weight:400;">${diaSemana}</div>
+        </td>
+        ${cell('ENTRADA',          '#4CAF50')}
+        ${cell('INTERVALO_INICIO', '#FF9800')}
+        ${cell('INTERVALO_FIM',    '#2196F3')}
+        ${cell('SAIDA',            '#F44336')}
+        <td style="font-family:monospace;font-size:12px;text-align:center;font-weight:700;">${this._formatHoras(min)}</td>
+        <td style="font-family:monospace;font-size:12px;text-align:center;font-weight:700;color:${this._saldoCor(saldo)};">
+          ${saldo !== null ? (saldo > 0 ? '+' : '') + this._formatHoras(saldo) : '—'}
+        </td>
+      </tr>`;
+    }).join('');
+
+    return `
+      <div style="overflow-x:auto;">
+        <table class="table" style="font-size:12px;">
+          <thead>
+            <tr>
+              <th>Data</th>
+              <th style="text-align:center;color:#4CAF50;">Entrada</th>
+              <th style="text-align:center;color:#FF9800;">Início Int.</th>
+              <th style="text-align:center;color:#2196F3;">Fim Int.</th>
+              <th style="text-align:center;color:#F44336;">Saída</th>
+              <th style="text-align:center;">Trabalhado</th>
+              <th style="text-align:center;">Saldo</th>
+            </tr>
+          </thead>
+          <tbody>${linhas}</tbody>
+        </table>
+      </div>
+    `;
   },
 
   // ─── BANCO DE HORAS ────────────────────────────────────────────────────────
