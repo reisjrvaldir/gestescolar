@@ -331,17 +331,57 @@ const AdminPonto = {
 
   // ─── HTML RELATÓRIO ───────────────────────────────────────────────────────
 
-  _htmlRelatorio(dados) {
-    const pontos = dados?.pontos || [];
+  CARGA_HORARIA_DIARIA: 8 * 60, // minutos (8h)
 
-    // Agrupar por professor
-    const porProfessor = {};
+  // Agrupa pontos por professor + dia retornando estrutura {[professor]: {[dia]: [pontos]}}
+  _agruparPorProfDia(pontos) {
+    const map = {};
     pontos.forEach(p => {
       const prof = p.user_name || 'Desconhecido';
-      if (!porProfessor[prof]) porProfessor[prof] = [];
-      porProfessor[prof].push(p);
+      const dia  = new Date(p.timestamp).toISOString().slice(0, 10);
+      if (!map[prof])      map[prof] = {};
+      if (!map[prof][dia]) map[prof][dia] = [];
+      map[prof][dia].push(p);
     });
+    return map;
+  },
 
+  // Calcula minutos trabalhados num dia: (Saída - Entrada) - (Fim Int - Início Int)
+  _minutosTrabalhados(pontosDia) {
+    const get = (tipo) => {
+      const p = pontosDia.find(x => x.tipo === tipo);
+      return p ? new Date(p.timestamp) : null;
+    };
+    const entrada = get('ENTRADA');
+    const saida   = get('SAIDA');
+    const intIni  = get('INTERVALO_INICIO');
+    const intFim  = get('INTERVALO_FIM');
+
+    if (!entrada || !saida) return null; // dia incompleto
+    let total = (saida - entrada) / 60000; // ms → min
+    if (intIni && intFim) total -= (intFim - intIni) / 60000;
+    return Math.max(0, Math.round(total));
+  },
+
+  _formatHoras(min) {
+    if (min === null || min === undefined) return '—';
+    const sinal = min < 0 ? '-' : '';
+    const m = Math.abs(min);
+    const h = Math.floor(m / 60);
+    const mm = String(m % 60).padStart(2, '0');
+    return `${sinal}${h}h${mm}`;
+  },
+
+  _saldoCor(min) {
+    if (min === null || min === undefined) return '#666';
+    if (min > 0)  return '#4CAF50'; // verde - excedente
+    if (min < 0)  return '#F44336'; // vermelho - faltante
+    return '#666';
+  },
+
+  _htmlRelatorio(dados) {
+    const pontos = dados?.pontos || [];
+    const agrupado = this._agruparPorProfDia(pontos);
     const mesLabel = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'][this._filtrosRelatorio.mes - 1];
 
     return `
@@ -360,57 +400,79 @@ const AdminPonto = {
             }).join('')}
           </select>
           <span style="margin-left:auto;font-size:13px;color:var(--text-muted);">${pontos.length} ponto(s) em ${mesLabel}/${this._filtrosRelatorio.ano}</span>
-          <button class="btn btn-sm btn-outline" onclick="AdminPonto._imprimirRelatorio()">
+          <button class="btn btn-sm btn-primary" onclick="AdminPonto._imprimirRelatorio()">
             <i class="fa-solid fa-print"></i> Imprimir
           </button>
         </div>
       </div>
 
-      <!-- Tabela -->
-      <div class="card">
-        <div style="padding:8px 0;">
-          ${pontos.length === 0 ? `
-            <div style="padding:40px;text-align:center;color:var(--text-muted);">
-              <i class="fa-solid fa-inbox" style="font-size:36px;opacity:.35;display:block;margin-bottom:10px;"></i>
-              Nenhum registro neste período.
-            </div>
-          ` : `
-            <div style="overflow-x:auto;">
-              <table class="table">
-                <thead>
-                  <tr>
-                    <th>Data / Hora</th>
-                    <th>Professor</th>
-                    <th>Tipo</th>
-                    <th>Status</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  ${pontos.map(p => {
-                    const tipo   = this.TIPOS.find(t => t.value === p.tipo)   || { label: p.tipo,   color: '#666', icon: 'fa-circle' };
-                    const status = this.STATUS_META[p.status]                 || { label: p.status, color: '#666' };
-                    const dt     = new Date(p.timestamp);
-                    return `<tr>
-                      <td style="font-family:monospace;font-size:13px;white-space:nowrap;">
-                        ${dt.toLocaleDateString('pt-BR')} ${dt.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'})}
-                      </td>
-                      <td style="font-size:13px;font-weight:600;">${Utils.escape(p.user_name || '—')}</td>
-                      <td>
-                        <span style="display:inline-flex;align-items:center;gap:5px;color:${tipo.color};font-weight:700;font-size:12px;">
-                          <i class="fa-solid ${tipo.icon}"></i> ${tipo.label}
-                        </span>
-                      </td>
-                      <td>
-                        <span style="background:${status.color};color:#fff;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:700;">
-                          ${status.label}
-                        </span>
-                      </td>
-                    </tr>`;
-                  }).join('')}
-                </tbody>
-              </table>
-            </div>
-          `}
+      <!-- Conteúdo -->
+      ${Object.keys(agrupado).length === 0 ? `
+        <div class="card" style="padding:40px;text-align:center;color:var(--text-muted);">
+          <i class="fa-solid fa-inbox" style="font-size:36px;opacity:.35;display:block;margin-bottom:10px;"></i>
+          Nenhum registro neste período.
+        </div>
+      ` : Object.entries(agrupado).map(([prof, dias]) => this._htmlBlocoProfessor(prof, dias)).join('')}
+    `;
+  },
+
+  _htmlBlocoProfessor(prof, dias) {
+    let saldoMes = 0;
+    let totalTrabalhado = 0;
+
+    const linhas = Object.entries(dias).sort(([a], [b]) => a.localeCompare(b)).map(([dia, pts]) => {
+      const get = (tipo) => pts.find(x => x.tipo === tipo);
+      const fmt = (p) => p ? new Date(p.timestamp).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : '—';
+
+      const min = this._minutosTrabalhados(pts);
+      const saldo = (min !== null) ? min - this.CARGA_HORARIA_DIARIA : null;
+      if (min !== null) totalTrabalhado += min;
+      if (saldo !== null) saldoMes += saldo;
+
+      const dataObj = new Date(dia + 'T12:00:00');
+      const diaSemana = ['Dom','Seg','Ter','Qua','Qui','Sex','Sáb'][dataObj.getDay()];
+
+      return `<tr>
+        <td style="font-family:monospace;font-size:12px;white-space:nowrap;">${dataObj.toLocaleDateString('pt-BR')} <span style="color:var(--text-muted);">${diaSemana}</span></td>
+        <td style="font-family:monospace;font-size:12px;color:#4CAF50;">${fmt(get('ENTRADA'))}</td>
+        <td style="font-family:monospace;font-size:12px;color:#FF9800;">${fmt(get('INTERVALO_INICIO'))}</td>
+        <td style="font-family:monospace;font-size:12px;color:#2196F3;">${fmt(get('INTERVALO_FIM'))}</td>
+        <td style="font-family:monospace;font-size:12px;color:#F44336;">${fmt(get('SAIDA'))}</td>
+        <td style="font-family:monospace;font-size:12px;font-weight:700;">${this._formatHoras(min)}</td>
+        <td style="font-family:monospace;font-size:12px;font-weight:700;color:${this._saldoCor(saldo)};">
+          ${saldo !== null ? (saldo > 0 ? '+' : '') + this._formatHoras(saldo) : '—'}
+        </td>
+      </tr>`;
+    }).join('');
+
+    return `
+      <div class="card" style="margin-bottom:16px;">
+        <div class="card-header" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">
+          <span class="card-title"><i class="fa-solid fa-user-tie"></i> ${Utils.escape(prof)}</span>
+          <div style="display:flex;gap:14px;align-items:center;">
+            <span style="font-size:12px;color:var(--text-muted);">Trabalhado: <strong style="color:#333;">${this._formatHoras(totalTrabalhado)}</strong></span>
+            <span style="font-size:12px;color:var(--text-muted);">Banco de Horas:
+              <strong style="color:${this._saldoCor(saldoMes)};font-size:14px;">
+                ${saldoMes > 0 ? '+' : ''}${this._formatHoras(saldoMes)}
+              </strong>
+            </span>
+          </div>
+        </div>
+        <div style="overflow-x:auto;">
+          <table class="table" style="font-size:12px;">
+            <thead>
+              <tr>
+                <th>Data</th>
+                <th style="color:#4CAF50;">Entrada</th>
+                <th style="color:#FF9800;">Início Int.</th>
+                <th style="color:#2196F3;">Fim Int.</th>
+                <th style="color:#F44336;">Saída</th>
+                <th>Trabalhado</th>
+                <th>Saldo</th>
+              </tr>
+            </thead>
+            <tbody>${linhas}</tbody>
+          </table>
         </div>
       </div>
     `;
@@ -640,16 +702,90 @@ const AdminPonto = {
     } catch { return { pontos: [], total: 0 }; }
   },
 
-  _imprimirRelatorio() {
-    const mes = String(this._filtrosRelatorio.mes).padStart(2, '0');
+  async _imprimirRelatorio() {
     const ano = this._filtrosRelatorio.ano;
     const mesLabel = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'][this._filtrosRelatorio.mes - 1];
 
-    const tabela = document.querySelector('.page-content table');
-    if (!tabela) {
+    const dados  = await this._buscarRelatorio();
+    const pontos = dados?.pontos || [];
+    if (pontos.length === 0) {
       Utils.toast('Nenhum dado para imprimir.', 'warning');
       return;
     }
+
+    const agrupado = this._agruparPorProfDia(pontos);
+
+    // Dados da escola
+    const user   = Auth.current();
+    const school = user?.schoolId ? DB.getSchool(user.schoolId) : null;
+    const escolaNome = Utils.escape(school?.name || 'Escola');
+    const escolaDoc  = school?.cnpj ? `CNPJ/CPF: ${Utils.escape(school.cnpj)}` : '';
+    const logoUrl    = school?.logoUrl || '';
+
+    // Bloco por professor
+    const blocosHtml = Object.entries(agrupado).map(([prof, dias]) => {
+      let saldoMes = 0;
+      let totalTrab = 0;
+
+      const linhas = Object.entries(dias).sort(([a], [b]) => a.localeCompare(b)).map(([dia, pts]) => {
+        const get = (tipo) => pts.find(x => x.tipo === tipo);
+        const fmt = (p) => p ? new Date(p.timestamp).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : '—';
+
+        const min = this._minutosTrabalhados(pts);
+        const saldo = (min !== null) ? min - this.CARGA_HORARIA_DIARIA : null;
+        if (min !== null)   totalTrab += min;
+        if (saldo !== null) saldoMes  += saldo;
+
+        const dataObj = new Date(dia + 'T12:00:00');
+        const diaSemana = ['Dom','Seg','Ter','Qua','Qui','Sex','Sáb'][dataObj.getDay()];
+        const corSaldo  = this._saldoCor(saldo);
+        const sinal     = saldo !== null && saldo > 0 ? '+' : '';
+
+        return `<tr>
+          <td>${dataObj.toLocaleDateString('pt-BR')} <span style="color:#999;font-size:10px;">${diaSemana}</span></td>
+          <td style="color:#4CAF50;">${fmt(get('ENTRADA'))}</td>
+          <td style="color:#FF9800;">${fmt(get('INTERVALO_INICIO'))}</td>
+          <td style="color:#2196F3;">${fmt(get('INTERVALO_FIM'))}</td>
+          <td style="color:#F44336;">${fmt(get('SAIDA'))}</td>
+          <td style="font-weight:bold;">${this._formatHoras(min)}</td>
+          <td style="color:${corSaldo};font-weight:bold;">
+            ${saldo !== null ? sinal + this._formatHoras(saldo) : '—'}
+          </td>
+        </tr>`;
+      }).join('');
+
+      const corSaldoMes = this._saldoCor(saldoMes);
+      const sinalMes    = saldoMes > 0 ? '+' : '';
+
+      return `
+        <div style="page-break-inside:avoid;margin-bottom:24px;">
+          <div style="background:#f0f7ff;padding:8px 12px;border-left:4px solid #2196F3;margin-bottom:8px;">
+            <strong style="font-size:14px;">Colaborador:</strong> ${Utils.escape(prof)}
+          </div>
+          <table>
+            <thead>
+              <tr>
+                <th>Data</th>
+                <th>Entrada</th>
+                <th>Início Int.</th>
+                <th>Fim Int.</th>
+                <th>Saída</th>
+                <th>Trabalhado</th>
+                <th>Saldo</th>
+              </tr>
+            </thead>
+            <tbody>${linhas}</tbody>
+            <tfoot>
+              <tr style="background:#fafafa;font-weight:bold;">
+                <td colspan="5" style="text-align:right;">TOTAL DO PERÍODO:</td>
+                <td>${this._formatHoras(totalTrab)}</td>
+                <td style="color:${corSaldoMes};">${sinalMes}${this._formatHoras(saldoMes)}</td>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+      `;
+    }).join('');
 
     const html = `
       <!DOCTYPE html>
@@ -658,30 +794,57 @@ const AdminPonto = {
         <meta charset="UTF-8">
         <title>Relatório de Ponto - ${mesLabel} ${ano}</title>
         <style>
-          body { font-family: Arial, sans-serif; margin: 20px; }
-          h1 { text-align: center; color: #333; }
-          table { width: 100%; border-collapse: collapse; margin-top: 20px; }
-          th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
-          th { background-color: #2196F3; color: white; font-weight: bold; }
+          @page { size: A4 landscape; margin: 12mm; }
+          body { font-family: Arial, sans-serif; margin: 0; color: #222; }
+          .header { display:flex; align-items:center; gap:14px; border-bottom:2px solid #2196F3; padding-bottom:10px; margin-bottom:14px; }
+          .header img { max-height:60px; max-width:80px; object-fit:contain; }
+          .header .info { flex:1; }
+          .header h1 { margin:0; font-size:18px; color:#333; }
+          .header .doc { font-size:11px; color:#666; margin-top:2px; }
+          .header .periodo { font-size:12px; color:#2196F3; font-weight:bold; margin-top:4px; }
+          table { width: 100%; border-collapse: collapse; font-size: 11px; }
+          th, td { border: 1px solid #ddd; padding: 4px 6px; text-align: left; }
+          th { background-color: #2196F3; color: white; font-weight: bold; font-size:11px; }
           tr:nth-child(even) { background-color: #f9f9f9; }
-          .footer { margin-top: 30px; text-align: center; font-size: 12px; color: #666; }
+          tfoot td { background:#fafafa; }
+          .footer { margin-top:18px; text-align:center; font-size:10px; color:#666; border-top:1px solid #ddd; padding-top:6px; }
+          .legenda { font-size:10px; color:#666; margin:6px 0 12px; }
+          .legenda span { margin-right:14px; }
         </style>
       </head>
       <body>
-        <h1>Relatório de Ponto Docente</h1>
-        <p style="text-align: center; color: #666;">Período: ${mesLabel}/${ano}</p>
-        ${tabela.outerHTML}
+        <div class="header">
+          ${logoUrl ? `<img src="${logoUrl}" alt="Logo" />` : ''}
+          <div class="info">
+            <h1>${escolaNome}</h1>
+            ${escolaDoc ? `<div class="doc">${escolaDoc}</div>` : ''}
+            <div class="periodo">Relatório de Ponto Docente — ${mesLabel}/${ano}</div>
+          </div>
+        </div>
+
+        <div class="legenda">
+          <span><strong style="color:#4CAF50;">●</strong> Entrada</span>
+          <span><strong style="color:#FF9800;">●</strong> Início Intervalo</span>
+          <span><strong style="color:#2196F3;">●</strong> Fim Intervalo</span>
+          <span><strong style="color:#F44336;">●</strong> Saída</span>
+          <span><strong style="color:#4CAF50;">+saldo</strong> excedente</span>
+          <span><strong style="color:#F44336;">-saldo</strong> faltante</span>
+          <span>Carga diária: 8h00</span>
+        </div>
+
+        ${blocosHtml}
+
         <div class="footer">
-          <p>Relatório gerado em ${new Date().toLocaleDateString('pt-BR')} às ${new Date().toLocaleTimeString('pt-BR')}</p>
+          Relatório gerado em ${new Date().toLocaleDateString('pt-BR')} às ${new Date().toLocaleTimeString('pt-BR')}
         </div>
       </body>
       </html>
     `;
 
-    const win = window.open('', '', 'width=1000,height=600');
+    const win = window.open('', '', 'width=1100,height=700');
     win.document.write(html);
     win.document.close();
-    setTimeout(() => win.print(), 250);
+    setTimeout(() => win.print(), 350);
   },
 
   async _getToken() {

@@ -8,6 +8,8 @@ const ProfessorPonto = {
   _ajusteModal: null,
   _filtroData:  '', // Data específica (YYYY-MM-DD) ou vazio = mostra histórico geral
 
+  CARGA_HORARIA_DIARIA: 8 * 60, // minutos (8h)
+
   TIPOS: [
     { value: 'ENTRADA',          label: 'Entrada',          icon: 'fa-sign-in-alt',  color: '#4CAF50' },
     { value: 'INTERVALO_INICIO', label: 'Início Intervalo', icon: 'fa-coffee',       color: '#FF9800' },
@@ -28,8 +30,11 @@ const ProfessorPonto = {
     const user = Auth.require();
     if (!user) return;
 
-    const pontos = await this._buscarPontos(user);
-    const hoje   = new Date().toLocaleDateString('pt-BR', { weekday:'long', year:'numeric', month:'long', day:'numeric' });
+    const [pontos, bancoMes] = await Promise.all([
+      this._buscarPontos(user),
+      this._buscarBancoMes(),
+    ]);
+    const hoje = new Date().toLocaleDateString('pt-BR', { weekday:'long', year:'numeric', month:'long', day:'numeric' });
 
     Router.renderLayout(user, 'professor-ponto', `
       <div style="max-width:900px;margin:0 auto;">
@@ -42,6 +47,9 @@ const ProfessorPonto = {
           </div>
           <div id="relogio" style="font-size:28px;font-weight:800;font-family:monospace;color:var(--primary);"></div>
         </div>
+
+        <!-- Banco de Horas (mês atual) -->
+        ${this._htmlBancoHoras(bancoMes)}
 
         <!-- Botões de registro -->
         <div class="card" style="margin-bottom:20px;">
@@ -382,6 +390,116 @@ const ProfessorPonto = {
       console.error('[ProfessorPonto] enviarAjuste:', e);
       Utils.toast('Erro de conexão.', 'error');
     }
+  },
+
+  // ─── BANCO DE HORAS ────────────────────────────────────────────────────────
+
+  _formatHoras(min) {
+    if (min === null || min === undefined) return '—';
+    const sinal = min < 0 ? '-' : '';
+    const m = Math.abs(min);
+    const h = Math.floor(m / 60);
+    const mm = String(m % 60).padStart(2, '0');
+    return `${sinal}${h}h${mm}`;
+  },
+
+  _saldoCor(min) {
+    if (min === null || min === undefined) return '#666';
+    if (min > 0)  return '#4CAF50';
+    if (min < 0)  return '#F44336';
+    return '#666';
+  },
+
+  _minutosTrabalhados(pontosDia) {
+    const get = (tipo) => {
+      const p = pontosDia.find(x => x.tipo === tipo);
+      return p ? new Date(p.timestamp) : null;
+    };
+    const entrada = get('ENTRADA');
+    const saida   = get('SAIDA');
+    const intIni  = get('INTERVALO_INICIO');
+    const intFim  = get('INTERVALO_FIM');
+    if (!entrada || !saida) return null;
+    let total = (saida - entrada) / 60000;
+    if (intIni && intFim) total -= (intFim - intIni) / 60000;
+    return Math.max(0, Math.round(total));
+  },
+
+  async _buscarBancoMes() {
+    try {
+      const token = await this._getToken();
+      if (!token) return null;
+
+      const hoje = new Date();
+      const inicio = new Date(hoje.getFullYear(), hoje.getMonth(), 1);
+      const fim    = new Date(hoje.getFullYear(), hoje.getMonth() + 1, 0, 23, 59, 59, 999);
+
+      const params = new URLSearchParams({
+        limit: 500,
+        data_inicio: inicio.toISOString(),
+        data_fim:    fim.toISOString(),
+      });
+      const resp = await fetch(`/api/pontos?${params}`, {
+        headers: { 'Authorization': `Bearer ${token}` },
+      });
+      if (!resp.ok) return null;
+      const json = await resp.json();
+      const pontos = json.data?.pontos || [];
+
+      // Agrupa por dia e calcula saldo
+      const porDia = {};
+      pontos.forEach(p => {
+        const dia = new Date(p.timestamp).toISOString().slice(0, 10);
+        if (!porDia[dia]) porDia[dia] = [];
+        porDia[dia].push(p);
+      });
+
+      let saldoTotal = 0;
+      let totalTrabalhado = 0;
+      let diasComputados = 0;
+      Object.values(porDia).forEach(pts => {
+        const min = this._minutosTrabalhados(pts);
+        if (min !== null) {
+          saldoTotal      += min - this.CARGA_HORARIA_DIARIA;
+          totalTrabalhado += min;
+          diasComputados++;
+        }
+      });
+
+      return { saldoTotal, totalTrabalhado, diasComputados, mesLabel: hoje.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' }) };
+    } catch { return null; }
+  },
+
+  _htmlBancoHoras(banco) {
+    if (!banco) return '';
+    const cor   = this._saldoCor(banco.saldoTotal);
+    const sinal = banco.saldoTotal > 0 ? '+' : '';
+    const icon  = banco.saldoTotal >= 0 ? 'fa-arrow-trend-up' : 'fa-arrow-trend-down';
+
+    return `
+      <div class="card" style="margin-bottom:20px;border-left:5px solid ${cor};">
+        <div style="padding:16px 20px;display:flex;align-items:center;flex-wrap:wrap;gap:18px;">
+          <div style="flex:1;min-width:200px;">
+            <div style="font-size:12px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px;">
+              <i class="fa-solid fa-piggy-bank"></i> Banco de Horas — ${banco.mesLabel}
+            </div>
+            <div style="display:flex;align-items:baseline;gap:6px;">
+              <span style="font-size:28px;font-weight:800;color:${cor};font-family:monospace;">
+                <i class="fa-solid ${icon}" style="font-size:18px;"></i> ${sinal}${this._formatHoras(banco.saldoTotal)}
+              </span>
+              <span style="font-size:12px;color:var(--text-muted);">
+                ${banco.saldoTotal > 0 ? 'horas a mais' : banco.saldoTotal < 0 ? 'horas em débito' : 'em equilíbrio'}
+              </span>
+            </div>
+          </div>
+          <div style="text-align:right;font-size:12px;color:var(--text-muted);">
+            <div>Trabalhado: <strong style="color:#333;">${this._formatHoras(banco.totalTrabalhado)}</strong></div>
+            <div>Dias completos: <strong style="color:#333;">${banco.diasComputados}</strong></div>
+            <div>Meta diária: <strong style="color:#333;">8h00</strong></div>
+          </div>
+        </div>
+      </div>
+    `;
   },
 
   // ─── HELPERS ───────────────────────────────────────────────────────────────
