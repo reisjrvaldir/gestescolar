@@ -184,38 +184,7 @@ const AdminPonto = {
               <i class="fa-solid fa-inbox" style="font-size:36px;opacity:.35;display:block;margin-bottom:10px;"></i>
               Nenhum registro encontrado.
             </div>
-          ` : (this._filtros.professor_id ? this._htmlTabelaPorDia(pontos) : `
-            <div style="overflow-x:auto;">
-              <table class="table">
-                <thead>
-                  <tr>
-                    <th>Data / Hora</th>
-                    <th>Professor</th>
-                    <th>Tipo</th>
-                    <th>Status</th>
-                    <th>Descrição</th>
-                    <th style="text-align:center;">Ação</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  ${pontos.map(p => this._linhaRegistro(p)).join('')}
-                </tbody>
-              </table>
-            </div>
-
-            <!-- Paginação -->
-            <div style="padding:12px 20px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;">
-              <button class="btn btn-sm btn-outline" onclick="AdminPonto._pagAnterior()"
-                ${this._filtros.page <= 1 ? 'disabled' : ''}>
-                <i class="fa-solid fa-chevron-left"></i> Anterior
-              </button>
-              <span style="font-size:13px;color:var(--text-muted);">Página ${this._filtros.page}</span>
-              <button class="btn btn-sm btn-outline" onclick="AdminPonto._proxPagina()"
-                ${pontos.length < 30 ? 'disabled' : ''}>
-                Próxima <i class="fa-solid fa-chevron-right"></i>
-              </button>
-            </div>
-          `)}
+          ` : this._htmlTabelaPorDia(pontos, !this._filtros.professor_id)}
         </div>
       </div>
     `;
@@ -223,20 +192,31 @@ const AdminPonto = {
 
   // ─── TABELA POR DIA (1 linha = 1 dia, 4 horários lado a lado) ──────────────
 
-  _htmlTabelaPorDia(pontos) {
-    const porDia = {};
+  _htmlTabelaPorDia(pontos, mostrarProfessor = false) {
+    // Agrupa por (professor + dia) quando mostrar professor; senão por dia
+    const grupos = {};
     pontos.forEach(p => {
-      const dia = new Date(p.timestamp).toISOString().slice(0, 10);
-      if (!porDia[dia]) porDia[dia] = [];
-      porDia[dia].push(p);
+      const dia    = new Date(p.timestamp).toISOString().slice(0, 10);
+      const profId = p.user_id || 'unknown';
+      const key    = mostrarProfessor ? `${profId}__${dia}` : dia;
+      if (!grupos[key]) grupos[key] = { dia, profId, profNome: p.user_name || '—', pontos: [] };
+      grupos[key].pontos.push(p);
     });
 
-    const dias = Object.entries(porDia).sort(([a], [b]) => b.localeCompare(a));
+    // Ordena: por professor (alfa) e dentro dele, por data desc
+    const linhasOrdenadas = Object.values(grupos).sort((a, b) => {
+      if (mostrarProfessor) {
+        const cmpProf = a.profNome.localeCompare(b.profNome);
+        if (cmpProf !== 0) return cmpProf;
+      }
+      return b.dia.localeCompare(a.dia);
+    });
 
     let saldoMes = 0;
     let totalTrab = 0;
 
-    const linhas = dias.map(([dia, pts]) => {
+    const linhas = linhasOrdenadas.map(g => {
+      const pts = g.pontos;
       const get = (tipo) => pts.find(x => x.tipo === tipo);
       const cell = (tipo, cor) => {
         const p = get(tipo);
@@ -268,10 +248,13 @@ const AdminPonto = {
       if (min !== null)   totalTrab += min;
       if (saldo !== null) saldoMes  += saldo;
 
-      const dataObj   = new Date(dia + 'T12:00:00');
+      const dataObj   = new Date(g.dia + 'T12:00:00');
       const diaSemana = ['Dom','Seg','Ter','Qua','Qui','Sex','Sáb'][dataObj.getDay()];
 
       return `<tr>
+        ${mostrarProfessor ? `
+          <td style="font-size:13px;font-weight:600;white-space:nowrap;">${Utils.escape(g.profNome)}</td>
+        ` : ''}
         <td style="font-family:monospace;font-size:12px;font-weight:600;white-space:nowrap;">
           ${dataObj.toLocaleDateString('pt-BR')}
           <div style="font-size:10px;color:var(--text-muted);font-weight:400;">${diaSemana}</div>
@@ -289,12 +272,14 @@ const AdminPonto = {
 
     const corSaldoMes = this._saldoCor(saldoMes);
     const sinalMes    = saldoMes > 0 ? '+' : '';
+    const colspanFooter = mostrarProfessor ? 6 : 5;
 
     return `
       <div style="overflow-x:auto;">
         <table class="table" style="font-size:12px;">
           <thead>
             <tr>
+              ${mostrarProfessor ? `<th>Professor</th>` : ''}
               <th>Data</th>
               <th style="text-align:center;color:#4CAF50;">Entrada</th>
               <th style="text-align:center;color:#FF9800;">Início Int.</th>
@@ -305,13 +290,15 @@ const AdminPonto = {
             </tr>
           </thead>
           <tbody>${linhas}</tbody>
-          <tfoot>
-            <tr style="background:#f5f5f5;font-weight:700;">
-              <td colspan="5" style="text-align:right;">TOTAL DO PERÍODO:</td>
-              <td style="text-align:center;">${this._formatHoras(totalTrab)}</td>
-              <td style="text-align:center;color:${corSaldoMes};">${sinalMes}${this._formatHoras(saldoMes)}</td>
-            </tr>
-          </tfoot>
+          ${!mostrarProfessor ? `
+            <tfoot>
+              <tr style="background:#f5f5f5;font-weight:700;">
+                <td colspan="${colspanFooter}" style="text-align:right;">TOTAL DO PERÍODO:</td>
+                <td style="text-align:center;">${this._formatHoras(totalTrab)}</td>
+                <td style="text-align:center;color:${corSaldoMes};">${sinalMes}${this._formatHoras(saldoMes)}</td>
+              </tr>
+            </tfoot>
+          ` : ''}
         </table>
       </div>
     `;
