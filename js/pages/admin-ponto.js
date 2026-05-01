@@ -195,12 +195,15 @@ const AdminPonto = {
       <!-- Tabela -->
       <div class="card">
         <div style="padding:8px 0;">
-          ${pontos.length === 0 && !this._filtros.professor_id ? `
-            <div style="padding:40px;text-align:center;color:var(--text-muted);">
-              <i class="fa-solid fa-inbox" style="font-size:36px;opacity:.35;display:block;margin-bottom:10px;"></i>
-              Nenhum registro encontrado.
-            </div>
-          ` : this._htmlTabelaPorDia(pontos, !this._filtros.professor_id)}
+          ${this._filtros.professor_id
+            ? this._htmlTabelaPorDia(pontos, false)
+            : pontos.length === 0
+              ? `<div style="padding:40px;text-align:center;color:var(--text-muted);">
+                  <i class="fa-solid fa-inbox" style="font-size:36px;opacity:.35;display:block;margin-bottom:10px;"></i>
+                  Nenhum registro encontrado. Selecione um professor para ver o mês completo.
+                </div>`
+              : this._htmlTabelaPorDia(pontos, true)
+          }
         </div>
       </div>
     `;
