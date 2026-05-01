@@ -222,8 +222,8 @@ const AdminPonto = {
     // Quando há professor selecionado, preenche TODOS os dias do mês (1 até último dia)
     let ausencias = 0;
     if (!mostrarProfessor && this._filtros.professor_id) {
-      const di = this._filtros.data_inicio ? new Date(this._filtros.data_inicio) : new Date(new Date().getFullYear(), new Date().getMonth(), 1);
-      const df = this._filtros.data_fim    ? new Date(this._filtros.data_fim)    : new Date();
+      const di = this._filtros.data_inicio ? new Date(this._filtros.data_inicio + 'T12:00:00') : new Date(new Date().getFullYear(), new Date().getMonth(), 1);
+      const df = this._filtros.data_fim    ? new Date(this._filtros.data_fim + 'T12:00:00')    : new Date();
       const hoje = new Date(); hoje.setHours(23,59,59,999);
       const fimReal = df > hoje ? hoje : df;
 
@@ -888,20 +888,27 @@ const AdminPonto = {
       const hoje = new Date();
       const ini  = new Date(hoje.getFullYear(), hoje.getMonth(), 1);
       const fim  = new Date(hoje.getFullYear(), hoje.getMonth() + 1, 0);
-      this._filtros.data_inicio = ini.toISOString().split('T')[0];
-      this._filtros.data_fim    = fim.toISOString().split('T')[0];
+      const fmt = d => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+      this._filtros.data_inicio = fmt(ini);
+      this._filtros.data_fim    = fmt(fim);
     }
     this._recarregar();
   },
 
   _irParaMes(delta) {
     // Se tem data_inicio, navega a partir dela; senão, a partir do mês atual
+    // IMPORTANTE: usar 'T12:00:00' para evitar bug de timezone (UTC vs local)
     const base = this._filtros.data_inicio
-      ? new Date(this._filtros.data_inicio)
+      ? new Date(this._filtros.data_inicio + 'T12:00:00')
       : new Date();
     const novoMes = new Date(base.getFullYear(), base.getMonth() + delta, 1);
     const fimMes  = new Date(novoMes.getFullYear(), novoMes.getMonth() + 1, 0);
-    const fmt = d => d.toISOString().split('T')[0];
+    const fmt = d => {
+      const y = d.getFullYear();
+      const m = String(d.getMonth() + 1).padStart(2, '0');
+      const dd = String(d.getDate()).padStart(2, '0');
+      return `${y}-${m}-${dd}`;
+    };
 
     this._filtros.data_inicio = fmt(novoMes);
     this._filtros.data_fim    = fmt(fimMes);
@@ -1329,9 +1336,17 @@ const AdminPonto = {
 
   async _getToken() {
     try {
-      const { data } = await supabaseClient.auth.getSession();
+      // Tenta pegar sessão atual; se expirada, força refresh
+      let { data } = await supabaseClient.auth.getSession();
+      if (!data?.session?.access_token) {
+        const refresh = await supabaseClient.auth.refreshSession();
+        data = refresh.data;
+      }
       return data?.session?.access_token || null;
-    } catch { return null; }
+    } catch (e) {
+      console.error('[AdminPonto] getToken erro:', e);
+      return null;
+    }
   },
 };
 
