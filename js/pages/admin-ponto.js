@@ -1325,25 +1325,45 @@ const AdminPonto = {
 
     if (!tipo) { Utils.toast('Selecione o tipo de ausência.', 'warning'); return; }
 
+    const payload = {
+      user_id: userId,
+      data,
+      tipo,
+      periodo: tipo === 'DECLARACAO_MEDICA' ? periodo : 'integral',
+      horas_abonadas: tipo === 'DECLARACAO_MEDICA' ? horas : 0,
+      observacao: obs,
+    };
+    console.log('[Ausencia] Tentando salvar:', payload);
+
     const token = await this._getToken();
-    if (!token) return Utils.toast('Sessão expirada.', 'error');
+    if (!token) {
+      console.error('[Ausencia] Sem token disponível!');
+      return Utils.toast('Sessão expirada. Faça login novamente.', 'error');
+    }
+    console.log('[Ausencia] Token obtido, enviando POST...');
 
     try {
       const resp = await fetch('/api/ausencias', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({
-          user_id: userId,
-          data,
-          tipo,
-          periodo: tipo === 'DECLARACAO_MEDICA' ? periodo : 'integral',
-          horas_abonadas: tipo === 'DECLARACAO_MEDICA' ? horas : 0,
-          observacao: obs,
-        }),
+        body: JSON.stringify(payload),
       });
-      const json = await resp.json();
-      if (!resp.ok) { Utils.toast(json.message || 'Erro ao salvar ausência.', 'error'); return; }
+      console.log('[Ausencia] Resposta status:', resp.status, resp.statusText);
 
+      const text = await resp.text();
+      console.log('[Ausencia] Resposta body:', text);
+
+      let json;
+      try { json = JSON.parse(text); } catch { json = { message: text }; }
+
+      if (!resp.ok) {
+        const msg = json.message || `HTTP ${resp.status}`;
+        console.error('[Ausencia] FALHA:', msg);
+        Utils.toast('Erro ao salvar: ' + msg, 'error');
+        return;
+      }
+
+      console.log('[Ausencia] Sucesso:', json);
       document.getElementById('modal-ausencia')?.remove();
       Utils.toast('Ausência registrada com sucesso!', 'success');
       await this._recarregar();
