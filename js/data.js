@@ -33,7 +33,7 @@ const DB = {
     schools:      ['id','name','cnpj','email','phone','address','address_number','complement','province','city','state','postal_code','plan_id','billing','pix_key','logo_url','upgraded_at','created_at','updated_at','status','owner_id','custom_student_limit','commission_rate','asaas_account_id','asaas_wallet_id','asaas_sub_api_key','plan_expires_at','plan_payment_id','plan_subscription_id','school_status','trial_started_at','asaas_person_type','asaas_documents_status','asaas_documents','asaas_verification_message','asaas_documents_submitted_at'],
     users:        ['id','auth_id','school_id','name','email','username','cpf','phone','role','active','student_id','matricula','is_demo_user','created_at','updated_at'],
     students:     ['id','school_id','name','cpf','birth_date','gender','address','matricula','class_id','status','monthly_fee','due_day','responsaveis','parent_id','parent_name','parent_email','active_since','inactivated_at','access_link','login_matricula','created_at','updated_at'],
-    classes:      ['id','school_id','name','year','shift','level','teacher_id','created_at'],
+    classes:      ['id','school_id','name','year','shift','level','teacher_id','subjects','created_at'],
     invoices:     ['id','school_id','student_id','student_name','description','amount','due_date','status','paid_at','paid_amount','payment_method','asaas_id','created_at'],
     expenses:     ['id','school_id','description','tipo','category','amount','due_date','status','paid_at','parcelado','parcelas','parcela_num','created_at','parcela_grupo'],
     transactions: ['id','school_id','type','amount','description','created_at'],

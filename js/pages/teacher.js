@@ -109,11 +109,168 @@ const TeacherAttendance = {
       </div>`;
   },
 
-  // ── TELA 2: formulário de chamada ────────────────────────
+  // ── TELA 2: calendário de chamadas da turma ────────────────
   openClass(classId) {
     this._classId = classId;
-    this._date    = new Date().toISOString().split('T')[0];
-    this._state   = {};
+    this._calMes  = new Date().getMonth();
+    this._calAno  = new Date().getFullYear();
+    this._renderCalendario();
+  },
+
+  _renderCalendario() {
+    const content = document.getElementById('page-content');
+    if (!content) return;
+
+    const cls      = DB.getClasses().find(c => c.id === this._classId);
+    const students = DB.getStudents().filter(s => s.classId === this._classId && s.status === 'ativo');
+    const records  = DB.getAttendance().filter(a => students.some(s => s.id === a.studentId));
+    const hoje     = new Date().toISOString().split('T')[0];
+
+    // ── Gera grade do mês ──
+    const ano = this._calAno, mes = this._calMes;
+    const primeiroDia   = new Date(ano, mes, 1);
+    const ultimoDia     = new Date(ano, mes + 1, 0);
+    const totalDias     = ultimoDia.getDate();
+    const diaInicialSem = primeiroDia.getDay();
+
+    // Mapa: data -> { presentes, ausentes, justificados, total, feita }
+    const mapaDia = {};
+    for (let d = 1; d <= totalDias; d++) {
+      const data = `${ano}-${String(mes + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+      const dodia = records.filter(r => r.date === data);
+      mapaDia[data] = {
+        presentes:    dodia.filter(r => r.status === 'presente').length,
+        ausentes:     dodia.filter(r => r.status === 'falta' || r.status === 'ausente').length,
+        justificados: dodia.filter(r => r.status === 'justificado').length,
+        total:        dodia.length,
+        feita:        dodia.length >= students.length && students.length > 0,
+      };
+    }
+
+    // ── Totais do mês para o gráfico ──
+    const totalPresentes    = Object.values(mapaDia).reduce((s, d) => s + d.presentes, 0);
+    const totalAusentes     = Object.values(mapaDia).reduce((s, d) => s + d.ausentes, 0);
+    const totalJustificados = Object.values(mapaDia).reduce((s, d) => s + d.justificados, 0);
+    const totalRegistros    = totalPresentes + totalAusentes + totalJustificados;
+    const pctP = totalRegistros > 0 ? Math.round((totalPresentes / totalRegistros) * 100) : 0;
+    const pctA = totalRegistros > 0 ? Math.round((totalAusentes / totalRegistros) * 100) : 0;
+    const pctJ = totalRegistros > 0 ? Math.round((totalJustificados / totalRegistros) * 100) : 0;
+
+    const nomesMes = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
+
+    // ── Células do calendário ──
+    const celulas = [];
+    for (let i = 0; i < diaInicialSem; i++) celulas.push('<div style="background:#f8f8f8;border-radius:4px;min-height:54px;"></div>');
+
+    for (let d = 1; d <= totalDias; d++) {
+      const data    = `${ano}-${String(mes + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+      const dt      = new Date(ano, mes, d);
+      const fimDeSem = dt.getDay() === 0 || dt.getDay() === 6;
+      const futuro  = data > hoje;
+      const info    = mapaDia[data];
+      const isHoje  = data === hoje;
+
+      let bg = '#fff', borda = '1px solid #e5e5e5', cor = '#333', cursor = 'pointer';
+      if (fimDeSem) { bg = '#fafafa'; cor = '#bbb'; cursor = 'default'; }
+      if (futuro && !isHoje) { cor = '#ccc'; cursor = 'default'; }
+      if (info.feita) { bg = '#e8f5e9'; borda = '2px solid #43a047'; }
+      else if (info.total > 0) { bg = '#fff8e1'; borda = '2px solid #fb8c00'; }
+      if (isHoje) borda = '3px solid #1a73e8';
+
+      const clicavel = !fimDeSem && !futuro;
+
+      celulas.push(`
+        <div style="background:${bg};border:${borda};padding:5px;min-height:54px;border-radius:4px;${clicavel ? 'cursor:pointer;' : ''}"
+          ${clicavel ? `onclick="TeacherAttendance.openDay('${data}')" title="Fazer chamada dia ${d}"` : ''}>
+          <div style="font-weight:700;font-size:12px;color:${cor}">${d}</div>
+          ${info.feita ? `<div style="font-size:9px;color:#2e7d32;font-weight:600">✅ ${info.presentes}P ${info.ausentes}F</div>` :
+            info.total > 0 ? `<div style="font-size:9px;color:#e65100;font-weight:600">⚠️ Parcial</div>` :
+            (!fimDeSem && !futuro ? `<div style="font-size:9px;color:#999">○ Pendente</div>` : '')}
+        </div>`);
+    }
+
+    content.innerHTML = `
+      <div style="margin-bottom:16px;">
+        <button class="btn btn-outline btn-sm" onclick="TeacherAttendance.backToList()">
+          <i class="fa-solid fa-arrow-left"></i> Voltar às turmas
+        </button>
+      </div>
+
+      <div class="card" style="margin-bottom:16px">
+        <h3 style="margin:0 0 16px"><i class="fa-solid fa-calendar-check"></i> Chamada — ${cls ? Utils.escape(cls.name) : '–'}</h3>
+
+        <!-- Navegação do mês -->
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
+          <button class="btn btn-outline btn-sm" onclick="TeacherAttendance._navMes(-1)"><i class="fa-solid fa-chevron-left"></i></button>
+          <strong style="font-size:16px">${nomesMes[mes]} ${ano}</strong>
+          <button class="btn btn-outline btn-sm" onclick="TeacherAttendance._navMes(1)"><i class="fa-solid fa-chevron-right"></i></button>
+        </div>
+
+        <!-- Grade do calendário -->
+        <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:3px;margin-bottom:4px;">
+          ${['Dom','Seg','Ter','Qua','Qui','Sex','Sáb'].map(d =>
+            `<div style="text-align:center;font-size:10px;font-weight:700;color:#888;text-transform:uppercase;padding:4px 0">${d}</div>`).join('')}
+        </div>
+        <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:3px;">
+          ${celulas.join('')}
+        </div>
+
+        <!-- Legenda -->
+        <div style="display:flex;gap:14px;margin-top:12px;font-size:11px;flex-wrap:wrap">
+          <span><span style="display:inline-block;width:12px;height:12px;background:#e8f5e9;border:2px solid #43a047;border-radius:2px;vertical-align:middle"></span> Chamada feita</span>
+          <span><span style="display:inline-block;width:12px;height:12px;background:#fff8e1;border:2px solid #fb8c00;border-radius:2px;vertical-align:middle"></span> Parcial</span>
+          <span><span style="display:inline-block;width:12px;height:12px;background:#fff;border:1px solid #e5e5e5;border-radius:2px;vertical-align:middle"></span> Pendente</span>
+          <span><span style="display:inline-block;width:12px;height:12px;border:3px solid #1a73e8;border-radius:2px;vertical-align:middle"></span> Hoje</span>
+        </div>
+      </div>
+
+      <!-- Gráfico de presença do mês -->
+      ${totalRegistros > 0 ? `
+      <div class="card">
+        <h3 style="margin:0 0 12px"><i class="fa-solid fa-chart-bar"></i> Resumo de ${nomesMes[mes]}</h3>
+        <div style="display:flex;gap:16px;margin-bottom:12px;flex-wrap:wrap">
+          <div style="text-align:center;flex:1;min-width:80px">
+            <div style="font-size:28px;font-weight:700;color:#43a047">${totalPresentes}</div>
+            <div style="font-size:11px;color:#888">Presenças</div>
+          </div>
+          <div style="text-align:center;flex:1;min-width:80px">
+            <div style="font-size:28px;font-weight:700;color:#e53935">${totalAusentes}</div>
+            <div style="font-size:11px;color:#888">Faltas</div>
+          </div>
+          <div style="text-align:center;flex:1;min-width:80px">
+            <div style="font-size:28px;font-weight:700;color:#fb8c00">${totalJustificados}</div>
+            <div style="font-size:11px;color:#888">Justificadas</div>
+          </div>
+        </div>
+        <!-- Barra visual -->
+        <div style="height:24px;border-radius:12px;overflow:hidden;display:flex;background:#eee;font-size:10px;font-weight:700;color:#fff">
+          ${pctP > 0 ? `<div style="width:${pctP}%;background:#43a047;display:flex;align-items:center;justify-content:center;min-width:${pctP > 5 ? '0' : '20px'}">${pctP}%</div>` : ''}
+          ${pctA > 0 ? `<div style="width:${pctA}%;background:#e53935;display:flex;align-items:center;justify-content:center;min-width:${pctA > 5 ? '0' : '20px'}">${pctA}%</div>` : ''}
+          ${pctJ > 0 ? `<div style="width:${pctJ}%;background:#fb8c00;display:flex;align-items:center;justify-content:center;min-width:${pctJ > 5 ? '0' : '20px'}">${pctJ}%</div>` : ''}
+        </div>
+        <div style="display:flex;justify-content:space-between;margin-top:4px;font-size:10px;color:#888">
+          <span>Presentes ${pctP}%</span>
+          <span>Faltas ${pctA}%</span>
+          <span>Justificadas ${pctJ}%</span>
+        </div>
+      </div>` : `
+      <div class="card" style="text-align:center;color:#888;padding:20px">
+        <i class="fa-solid fa-chart-bar" style="font-size:32px;color:#ddd;margin-bottom:8px"></i>
+        <p>Nenhuma chamada registrada neste mês.<br>Clique em um dia para fazer a chamada.</p>
+      </div>`}
+    `;
+  },
+
+  _navMes(delta) {
+    this._calMes += delta;
+    if (this._calMes > 11) { this._calMes = 0; this._calAno++; }
+    if (this._calMes < 0)  { this._calMes = 11; this._calAno--; }
+    this._renderCalendario();
+  },
+
+  openDay(data) {
+    this._date  = data;
+    this._state = {};
     this._renderForm();
   },
 
@@ -139,6 +296,16 @@ const TeacherAttendance = {
     const alreadySaved = students.length > 0 &&
       students.every(s => records.some(r => r.studentId === s.id && r.date === date));
 
+    // Identifica quem fez a chamada (para mostrar na mensagem)
+    let quemFezNome = '';
+    if (alreadySaved) {
+      const primeiroRec = records.find(r => r.date === date && students.some(s => s.id === r.studentId));
+      if (primeiroRec && primeiroRec.teacherId) {
+        const quemFez = DB.getUsers().find(u => u.id === primeiroRec.teacherId);
+        quemFezNome = quemFez ? quemFez.name : '';
+      }
+    }
+
     content.innerHTML = `
       <style>
         .att-card-list { display:none; }
@@ -157,9 +324,12 @@ const TeacherAttendance = {
           .att-card-btns .btn-present, .att-card-btns .btn-absent { width:44px; height:44px; border-radius:50%; font-size:18px; display:flex; align-items:center; justify-content:center; }
         }
       </style>
-      <div style="margin-bottom:16px;">
+      <div style="margin-bottom:16px;display:flex;gap:8px">
+        <button class="btn btn-outline btn-sm" onclick="TeacherAttendance._renderCalendario()">
+          <i class="fa-solid fa-arrow-left"></i> Voltar ao Calendário
+        </button>
         <button class="btn btn-outline btn-sm" onclick="TeacherAttendance.backToList()">
-          <i class="fa-solid fa-arrow-left"></i> Voltar às turmas
+          <i class="fa-solid fa-list"></i> Turmas
         </button>
       </div>
 
@@ -251,6 +421,11 @@ const TeacherAttendance = {
             </div>
 
             <div style="padding:16px;border-top:1px solid var(--border);display:flex;justify-content:flex-end;">
+              ${alreadySaved ? `
+              <div style="text-align:center;padding:8px 16px;background:#fff3cd;border:1px solid #ffc107;border-radius:var(--radius);color:#856404;font-size:13px;margin-bottom:10px">
+                <i class="fa-solid fa-triangle-exclamation"></i>
+                Chamada já registrada${quemFezNome ? ` por <strong>${Utils.escape(quemFezNome)}</strong>` : ''} nesta data.
+              </div>` : ''}
               <button id="btn-salvar-chamada" class="btn btn-primary"
                 onclick="TeacherAttendance.submit()"
                 style="padding:12px 32px;font-size:15px;width:100%;max-width:320px;${alreadySaved ? 'opacity:.45;cursor:not-allowed;' : ''}"
@@ -293,7 +468,7 @@ const TeacherAttendance = {
     this._renderForm();
   },
 
-  submit() {
+  async submit() {
     const user     = Auth.current();
     const students = DB.getStudents().filter(s => s.classId === this._classId && s.status === 'ativo');
     const missing  = students.filter(s => !this._state[s.id]);
@@ -301,6 +476,32 @@ const TeacherAttendance = {
     if (missing.length > 0) {
       Utils.toast(`Marque todos os alunos. Faltando: ${missing.map(s => s.name.split(' ')[0]).join(', ')}`, 'error');
       return;
+    }
+
+    // ── Verifica no Supabase se já existe chamada para esta turma/data ──
+    try {
+      if (typeof supabaseClient !== 'undefined') {
+        const studentIds = students.map(s => s.id);
+        const { data: existentes } = await supabaseClient
+          .from('attendance')
+          .select('id, teacher_id')
+          .eq('date', this._date)
+          .in('student_id', studentIds.slice(0, 10))
+          .limit(1);
+
+        if (existentes && existentes.length > 0) {
+          const quemFez = existentes[0].teacher_id;
+          if (quemFez !== user.id) {
+            const professor = DB.getUsers().find(u => u.id === quemFez);
+            const nome = professor ? professor.name : 'outro usuário';
+            Utils.toast(`Chamada já registrada por ${nome} nesta data. Não é possível fazer novamente.`, 'error');
+            this._renderForm();
+            return;
+          }
+        }
+      }
+    } catch (e) {
+      console.warn('[Chamada] Erro ao verificar duplicata:', e);
     }
 
     const records = students.map(s => ({
