@@ -57,6 +57,12 @@ const AdminPonto = {
     const anoAtual = new Date().getFullYear();
     await this._carregarFeriados(`${anoAtual}-01-01`, `${anoAtual}-12-31`);
 
+    // Carrega ausências se professor selecionado
+    if (this._filtros.professor_id && this._aba === 'registros') {
+      const base = this._filtros.data_inicio ? new Date(this._filtros.data_inicio) : new Date();
+      await this._carregarAusencias(this._filtros.professor_id, base.getMonth() + 1, base.getFullYear());
+    }
+
     const [resumo, dados] = await Promise.all([
       this._buscarResumo(),
       this._aba === 'registros' ? this._buscarRegistros() : this._aba === 'ajustes' ? this._buscarAjustes() : this._buscarRelatorio(),
@@ -148,7 +154,7 @@ const AdminPonto = {
       <div class="card" style="margin-bottom:16px;">
         <div style="padding:14px 20px;display:flex;align-items:center;flex-wrap:wrap;gap:12px;">
           <select id="filtro-professor" class="form-control" style="width:auto;min-width:200px;"
-            onchange="AdminPonto._filtros.professor_id=this.value;AdminPonto._filtros.page=1;AdminPonto._recarregar()">
+            onchange="AdminPonto._selecionarProfessor(this.value)">
             <option value="">Todos os professores</option>
             ${professores.map(p => `
               <option value="${p.id}" ${this._filtros.professor_id === p.id ? 'selected' : ''}>${Utils.escape(p.name)}</option>
@@ -213,51 +219,135 @@ const AdminPonto = {
       grupos[key].pontos.push(p);
     });
 
-    // Quando há professor selecionado, preenche dias úteis sem registro como AUSÊNCIA
+    // Quando há professor selecionado, preenche TODOS os dias do mês (1 até último dia)
     let ausencias = 0;
-    if (!mostrarProfessor && this._filtros.professor_id && (this._filtros.data_inicio || this._filtros.data_fim)) {
+    if (!mostrarProfessor && this._filtros.professor_id) {
       const di = this._filtros.data_inicio ? new Date(this._filtros.data_inicio) : new Date(new Date().getFullYear(), new Date().getMonth(), 1);
       const df = this._filtros.data_fim    ? new Date(this._filtros.data_fim)    : new Date();
       const hoje = new Date(); hoje.setHours(23,59,59,999);
       const fimReal = df > hoje ? hoje : df;
-      const diasUteis = this._diasUteisIntervalo(di, fimReal);
-      diasUteis.forEach(ymd => {
+
+      // Gera todos os dias do mês (não apenas úteis)
+      const cur = new Date(di); cur.setHours(12,0,0,0);
+      const end = new Date(fimReal); end.setHours(12,0,0,0);
+      while (cur <= end) {
+        const ymd = cur.toISOString().slice(0,10);
         if (!grupos[ymd]) {
-          grupos[ymd] = { dia: ymd, profId: this._filtros.professor_id, profNome: '', pontos: [], _ausente: true };
-          ausencias++;
+          const ehUtil = this._ehDiaUtil(ymd);
+          const ausencia = this._ausenciasCache.find(a => a.data === ymd);
+          grupos[ymd] = {
+            dia: ymd, profId: this._filtros.professor_id, profNome: '', pontos: [],
+            _ausente: ehUtil, _fimDeSem: !ehUtil, _ausenciaRegistro: ausencia || null,
+          };
+          if (ehUtil && !ausencia) ausencias++;
         }
-      });
+        cur.setDate(cur.getDate() + 1);
+      }
     }
 
-    // Ordena: por professor (alfa) e dentro dele, por data desc
+    // Ordena: professor selecionado = data CRESCENTE; "Todos" = por professor alfa + data desc
     const linhasOrdenadas = Object.values(grupos).sort((a, b) => {
       if (mostrarProfessor) {
         const cmpProf = a.profNome.localeCompare(b.profNome);
         if (cmpProf !== 0) return cmpProf;
+        return b.dia.localeCompare(a.dia);
       }
-      return b.dia.localeCompare(a.dia);
+      return a.dia.localeCompare(b.dia); // CRESCENTE quando professor selecionado
     });
 
     let saldoMes = 0;
     let totalTrab = 0;
 
     const linhas = linhasOrdenadas.map(g => {
-      // Linha de AUSÊNCIA (dia útil sem ponto)
+      // ── Fim de semana / Feriado sem ponto ──
+      if (g._fimDeSem && g.pontos.length === 0) {
+        const dataObj   = new Date(g.dia + 'T12:00:00');
+        const dow       = dataObj.getDay();
+        const diaSemana = ['Dom','Seg','Ter','Qua','Qui','Sex','Sáb'][dow];
+        const isFer     = dow !== 0 && dow !== 6; // dia de semana mas não é útil = feriado
+        const tagFds    = isFer
+          ? `<span style="background:#FFE0B2;color:#E65100;font-size:9px;padding:1px 5px;border-radius:8px;font-weight:700;">FERIADO</span>`
+          : `<span style="background:#E1BEE7;color:#4A148C;font-size:9px;padding:1px 5px;border-radius:8px;font-weight:700;">${dow===6?'SÁBADO':'DOMINGO'}</span>`;
+        return `<tr style="background:#FAFAFA;opacity:.6;">
+          <td style="font-family:monospace;font-size:12px;font-weight:600;white-space:nowrap;color:#999;">
+            ${dataObj.toLocaleDateString('pt-BR')}
+            <div style="font-size:10px;color:#999;font-weight:400;">${diaSemana} ${tagFds}</div>
+          </td>
+          <td colspan="4" style="text-align:center;color:#BDBDBD;font-size:12px;">—</td>
+          <td style="text-align:center;color:#BDBDBD;font-family:monospace;font-size:12px;">—</td>
+          <td style="text-align:center;color:#BDBDBD;font-family:monospace;font-size:12px;">—</td>
+        </tr>`;
+      }
+
+      // ── Dia útil sem ponto (AUSÊNCIA) ──
       if (g._ausente) {
         const dataObj   = new Date(g.dia + 'T12:00:00');
         const diaSemana = ['Dom','Seg','Ter','Qua','Qui','Sex','Sáb'][dataObj.getDay()];
-        saldoMes -= this.CARGA_HORARIA_DIARIA;
-        return `<tr style="background:#FFEBEE;">
-          <td style="font-family:monospace;font-size:12px;font-weight:600;white-space:nowrap;color:#C62828;">
+        const reg       = g._ausenciaRegistro;
+
+        // Cálculo de saldo conforme tipo de ausência
+        let saldoDia = -this.CARGA_HORARIA_DIARIA; // default: desconta tudo
+        if (reg) {
+          const meta = this.TIPO_AUSENCIA[reg.tipo];
+          if (meta) {
+            if (meta.desconto === false) {
+              saldoDia = 0; // ATESTADO_MEDICO / ABONADO → sem desconto
+            } else if (meta.desconto === 'parcial') {
+              // DECLARACAO_MEDICA → abona horas_abonadas, desconta o restante
+              const abonadas = parseFloat(reg.horas_abonadas || 0) * 60;
+              saldoDia = -(this.CARGA_HORARIA_DIARIA - abonadas);
+            }
+            // desconto === true → desconta tudo (FALTA_JUSTIFICADA, FALTA_INJUSTIFICADA)
+          }
+        }
+        saldoMes += saldoDia;
+
+        // Conteúdo da linha
+        let conteudoCentro;
+        if (reg) {
+          const meta = this.TIPO_AUSENCIA[reg.tipo] || { label: reg.tipo, cor: '#666', icon: 'fa-question' };
+          const obs  = reg.observacao ? ` — ${reg.observacao.slice(0,50)}` : '';
+          conteudoCentro = `
+            <td colspan="4" style="text-align:center;">
+              <div style="display:inline-flex;align-items:center;gap:6px;">
+                <span style="background:${meta.cor}22;color:${meta.cor};padding:4px 12px;border-radius:8px;font-weight:700;font-size:12px;">
+                  <i class="fa-solid ${meta.icon}"></i> ${meta.label}
+                </span>
+                ${reg.periodo !== 'integral' ? `<span style="font-size:10px;color:#666;background:#f0f0f0;padding:2px 6px;border-radius:4px;">${reg.periodo === 'manha' ? 'Manhã' : 'Tarde'}</span>` : ''}
+                <button class="btn btn-sm" style="background:none;border:1px solid ${meta.cor};color:${meta.cor};padding:2px 8px;font-size:10px;cursor:pointer;"
+                  onclick="AdminPonto.abrirModalAusencia('${g.profId}','${g.dia}')">
+                  <i class="fa-solid fa-pen"></i>
+                </button>
+                <button class="btn btn-sm" style="background:none;border:1px solid #F44336;color:#F44336;padding:2px 8px;font-size:10px;cursor:pointer;"
+                  onclick="AdminPonto._excluirAusencia('${reg.id}')" title="Remover">
+                  <i class="fa-solid fa-trash"></i>
+                </button>
+              </div>
+              ${obs ? `<div style="font-size:10px;color:#888;margin-top:2px;">${obs}</div>` : ''}
+            </td>`;
+        } else {
+          conteudoCentro = `
+            <td colspan="4" style="text-align:center;">
+              <span style="color:#C62828;font-weight:600;font-size:12px;margin-right:8px;">
+                <i class="fa-solid fa-circle-exclamation"></i> Sem registro
+              </span>
+              <button class="btn btn-sm" style="background:#FF9800;color:#fff;padding:4px 12px;font-size:11px;border:none;border-radius:6px;cursor:pointer;"
+                onclick="AdminPonto.abrirModalAusencia('${g.profId}','${g.dia}')">
+                <i class="fa-solid fa-plus"></i> Registrar Ausência
+              </button>
+            </td>`;
+        }
+
+        const bgCor = reg ? (this.TIPO_AUSENCIA[reg.tipo]?.cor || '#666') + '11' : '#FFEBEE';
+        return `<tr style="background:${bgCor};">
+          <td style="font-family:monospace;font-size:12px;font-weight:600;white-space:nowrap;color:${reg ? '#555' : '#C62828'};">
             ${dataObj.toLocaleDateString('pt-BR')}
-            <div style="font-size:10px;color:#C62828;font-weight:400;">${diaSemana}</div>
+            <div style="font-size:10px;color:${reg ? '#888' : '#C62828'};font-weight:400;">${diaSemana}</div>
           </td>
-          <td colspan="4" style="text-align:center;color:#C62828;font-weight:700;font-size:13px;">
-            <i class="fa-solid fa-circle-exclamation"></i> AUSÊNCIA — sem registro de ponto
-          </td>
-          <td style="text-align:center;font-family:monospace;font-size:12px;color:#C62828;">0h00</td>
-          <td style="text-align:center;font-family:monospace;font-size:12px;font-weight:700;color:#F44336;">
-            -${this._formatHoras(this.CARGA_HORARIA_DIARIA)}
+          ${conteudoCentro}
+          <td style="text-align:center;font-family:monospace;font-size:12px;color:${reg ? '#888' : '#C62828'};">0h00</td>
+          <td style="text-align:center;font-family:monospace;font-size:12px;font-weight:700;color:${this._saldoCor(saldoDia)};">
+            ${saldoDia === 0 ? '0h00' : (saldoDia > 0 ? '+' : '') + this._formatHoras(saldoDia)}
           </td>
         </tr>`;
       }
@@ -481,6 +571,31 @@ const AdminPonto = {
 
   CARGA_HORARIA_DIARIA: 8 * 60, // minutos (8h)
   _feriadosCache: {},           // { 'YYYY-MM-DD': true }
+  _ausenciasCache: [],          // ausências do mês carregado
+
+  TIPO_AUSENCIA: {
+    FALTA_JUSTIFICADA:   { label: 'Falta Justificada',   cor: '#FF9800', icon: 'fa-file-lines',      desconto: true  },
+    FALTA_INJUSTIFICADA: { label: 'Falta Injustificada', cor: '#F44336', icon: 'fa-circle-xmark',    desconto: true  },
+    ATESTADO_MEDICO:     { label: 'Atestado Médico',     cor: '#2196F3', icon: 'fa-file-medical',     desconto: false },
+    DECLARACAO_MEDICA:   { label: 'Declaração Médica',   cor: '#9C27B0', icon: 'fa-file-waveform',    desconto: 'parcial' },
+    ABONADO:             { label: 'Abonado',             cor: '#607D8B', icon: 'fa-calendar-check',   desconto: false },
+  },
+
+  async _carregarAusencias(userId, mes, ano) {
+    try {
+      const token = await this._getToken();
+      if (!token) return;
+      const resp = await fetch(`/api/ausencias?user_id=${userId}&mes=${mes}&ano=${ano}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!resp.ok) { this._ausenciasCache = []; return; }
+      const json = await resp.json();
+      this._ausenciasCache = json.data || [];
+    } catch (e) {
+      console.warn('[AdminPonto] ausencias:', e);
+      this._ausenciasCache = [];
+    }
+  },
 
   // Verifica se uma data (YYYY-MM-DD) é dia útil (não é fim de semana nem feriado)
   _ehDiaUtil(dataYMD) {
@@ -762,6 +877,20 @@ const AdminPonto = {
 
   _limparFiltros() {
     this._filtros = { status: '', data_inicio: '', data_fim: '', professor_id: '', page: 1 };
+    this._recarregar();
+  },
+
+  _selecionarProfessor(id) {
+    this._filtros.professor_id = id;
+    this._filtros.page = 1;
+    // Quando seleciona um professor, garante que mês está definido
+    if (id && !this._filtros.data_inicio) {
+      const hoje = new Date();
+      const ini  = new Date(hoje.getFullYear(), hoje.getMonth(), 1);
+      const fim  = new Date(hoje.getFullYear(), hoje.getMonth() + 1, 0);
+      this._filtros.data_inicio = ini.toISOString().split('T')[0];
+      this._filtros.data_fim    = fim.toISOString().split('T')[0];
+    }
     this._recarregar();
   },
 
@@ -1065,6 +1194,129 @@ const AdminPonto = {
     win.document.write(html);
     win.document.close();
     setTimeout(() => win.print(), 350);
+  },
+
+  // ─── MODAL DE AUSÊNCIA ─────────────────────────────────────────────────────
+
+  abrirModalAusencia(userId, data) {
+    const reg = this._ausenciasCache.find(a => a.data === data);
+    const dataFmt = new Date(data + 'T12:00:00').toLocaleDateString('pt-BR');
+    const tiposOpts = Object.entries(this.TIPO_AUSENCIA).map(([k, v]) =>
+      `<option value="${k}" ${reg && reg.tipo === k ? 'selected' : ''}>${v.label}</option>`
+    ).join('');
+
+    const modal = document.createElement('div');
+    modal.id = 'modal-ausencia';
+    modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.5);display:flex;align-items:center;justify-content:center;z-index:9999;';
+    modal.innerHTML = `
+      <div style="background:#fff;border-radius:12px;padding:28px;width:440px;max-width:95vw;box-shadow:0 8px 32px rgba(0,0,0,.2);">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:18px;">
+          <h3 style="margin:0;font-size:16px;"><i class="fa-solid fa-calendar-xmark" style="color:#FF9800;"></i> ${reg ? 'Editar' : 'Registrar'} Ausência</h3>
+          <button onclick="document.getElementById('modal-ausencia').remove()" style="background:none;border:none;font-size:20px;cursor:pointer;color:#999;">✕</button>
+        </div>
+        <div style="font-size:13px;color:#666;margin-bottom:16px;">
+          <strong>Data:</strong> ${dataFmt}
+        </div>
+        <div style="margin-bottom:14px;">
+          <label style="display:block;font-size:12px;font-weight:600;margin-bottom:4px;">Tipo de Ausência *</label>
+          <select id="aus-tipo" class="form-control" style="width:100%;" onchange="AdminPonto._onTipoAusenciaChange()">
+            ${tiposOpts}
+          </select>
+        </div>
+        <div id="aus-periodo-wrap" style="margin-bottom:14px;${(!reg || reg.tipo !== 'DECLARACAO_MEDICA') ? 'display:none;' : ''}">
+          <label style="display:block;font-size:12px;font-weight:600;margin-bottom:4px;">Período</label>
+          <select id="aus-periodo" class="form-control" style="width:100%;">
+            <option value="integral" ${reg && reg.periodo === 'integral' ? 'selected' : ''}>Integral (dia todo)</option>
+            <option value="manha" ${reg && reg.periodo === 'manha' ? 'selected' : ''}>Manhã</option>
+            <option value="tarde" ${reg && reg.periodo === 'tarde' ? 'selected' : ''}>Tarde</option>
+          </select>
+        </div>
+        <div id="aus-horas-wrap" style="margin-bottom:14px;${(!reg || reg.tipo !== 'DECLARACAO_MEDICA') ? 'display:none;' : ''}">
+          <label style="display:block;font-size:12px;font-weight:600;margin-bottom:4px;">Horas Abonadas (ex: 4.00)</label>
+          <input type="number" id="aus-horas" class="form-control" style="width:100%;" step="0.5" min="0" max="12" value="${reg ? reg.horas_abonadas || 0 : 0}" />
+        </div>
+        <div style="margin-bottom:18px;">
+          <label style="display:block;font-size:12px;font-weight:600;margin-bottom:4px;">Observação</label>
+          <textarea id="aus-obs" class="form-control" style="width:100%;min-height:60px;" maxlength="500" placeholder="Ex: CID informado, documento apresentado...">${reg ? (reg.observacao || '') : ''}</textarea>
+        </div>
+        <div style="display:flex;gap:10px;justify-content:flex-end;">
+          <button class="btn btn-outline" onclick="document.getElementById('modal-ausencia').remove()">Cancelar</button>
+          <button class="btn btn-primary" onclick="AdminPonto._salvarAusencia('${userId}','${data}')">
+            <i class="fa-solid fa-check"></i> Salvar
+          </button>
+        </div>
+      </div>
+    `;
+    document.body.appendChild(modal);
+    this._onTipoAusenciaChange();
+  },
+
+  _onTipoAusenciaChange() {
+    const tipo = document.getElementById('aus-tipo')?.value;
+    const periodoWrap = document.getElementById('aus-periodo-wrap');
+    const horasWrap   = document.getElementById('aus-horas-wrap');
+    if (periodoWrap) periodoWrap.style.display = tipo === 'DECLARACAO_MEDICA' ? '' : 'none';
+    if (horasWrap)   horasWrap.style.display   = tipo === 'DECLARACAO_MEDICA' ? '' : 'none';
+  },
+
+  async _salvarAusencia(userId, data) {
+    const tipo    = document.getElementById('aus-tipo')?.value;
+    const periodo = document.getElementById('aus-periodo')?.value || 'integral';
+    const horas   = parseFloat(document.getElementById('aus-horas')?.value) || 0;
+    const obs     = document.getElementById('aus-obs')?.value || '';
+
+    if (!tipo) { Utils.toast('Selecione o tipo de ausência.', 'warning'); return; }
+
+    const token = await this._getToken();
+    if (!token) return Utils.toast('Sessão expirada.', 'error');
+
+    try {
+      const resp = await fetch('/api/ausencias', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({
+          user_id: userId,
+          data,
+          tipo,
+          periodo: tipo === 'DECLARACAO_MEDICA' ? periodo : 'integral',
+          horas_abonadas: tipo === 'DECLARACAO_MEDICA' ? horas : 0,
+          observacao: obs,
+        }),
+      });
+      const json = await resp.json();
+      if (!resp.ok) { Utils.toast(json.message || 'Erro ao salvar ausência.', 'error'); return; }
+
+      document.getElementById('modal-ausencia')?.remove();
+      Utils.toast('Ausência registrada com sucesso!', 'success');
+      await this._recarregar();
+    } catch (e) {
+      console.error('[AdminPonto] salvarAusencia:', e);
+      Utils.toast('Erro de conexão.', 'error');
+    }
+  },
+
+  async _excluirAusencia(id) {
+    if (!confirm('Remover este registro de ausência?')) return;
+
+    const token = await this._getToken();
+    if (!token) return Utils.toast('Sessão expirada.', 'error');
+
+    try {
+      const resp = await fetch(`/api/ausencias?id=${id}`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!resp.ok) {
+        const json = await resp.json();
+        Utils.toast(json.message || 'Erro ao remover ausência.', 'error');
+        return;
+      }
+      Utils.toast('Ausência removida.', 'success');
+      await this._recarregar();
+    } catch (e) {
+      console.error('[AdminPonto] excluirAusencia:', e);
+      Utils.toast('Erro de conexão.', 'error');
+    }
   },
 
   async _getToken() {
