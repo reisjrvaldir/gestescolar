@@ -162,10 +162,16 @@ const AdminPonto = {
             <option value="APROVADO"      ${this._filtros.status === 'APROVADO'      ? 'selected' : ''}>Aprovado</option>
             <option value="REJEITADO"     ${this._filtros.status === 'REJEITADO'     ? 'selected' : ''}>Rejeitado</option>
           </select>
+          <button class="btn btn-sm btn-outline" onclick="AdminPonto._irParaMes(-1)" title="Mês anterior">
+            <i class="fa-solid fa-chevron-left"></i>
+          </button>
           <input type="date" id="filtro-inicio" class="form-control" style="width:auto;"
             value="${this._filtros.data_inicio}" title="Data início" />
           <input type="date" id="filtro-fim" class="form-control" style="width:auto;"
             value="${this._filtros.data_fim}" title="Data fim" />
+          <button class="btn btn-sm btn-outline" onclick="AdminPonto._irParaMes(1)" title="Próximo mês">
+            <i class="fa-solid fa-chevron-right"></i>
+          </button>
           ${temFiltro ? `
             <button class="btn btn-sm" style="background:var(--danger,#F44336);color:#fff;border:none;"
               onclick="AdminPonto._limparFiltros()">
@@ -759,6 +765,21 @@ const AdminPonto = {
     this._recarregar();
   },
 
+  _irParaMes(delta) {
+    // Se tem data_inicio, navega a partir dela; senão, a partir do mês atual
+    const base = this._filtros.data_inicio
+      ? new Date(this._filtros.data_inicio)
+      : new Date();
+    const novoMes = new Date(base.getFullYear(), base.getMonth() + delta, 1);
+    const fimMes  = new Date(novoMes.getFullYear(), novoMes.getMonth() + 1, 0);
+    const fmt = d => d.toISOString().split('T')[0];
+
+    this._filtros.data_inicio = fmt(novoMes);
+    this._filtros.data_fim    = fmt(fimMes);
+    this._filtros.page        = 1;
+    this._recarregar();
+  },
+
   _pagAnterior() {
     if (this._filtros.page > 1) {
       this._filtros.page--;
@@ -827,16 +848,25 @@ const AdminPonto = {
       const token = await this._getToken();
       if (!token) return { pontos: [], total: 0 };
 
-      // Quando há professor selecionado, busca mais registros (mês inteiro)
-      const limit = this._filtros.professor_id ? 100 : 30;
-      const params = new URLSearchParams({ limit, page: this._filtros.page });
+      // Sempre busca mais registros para cobrir o mês
+      const params = new URLSearchParams({ limit: 100, page: this._filtros.page });
       if (this._filtros.status)       params.set('status',       this._filtros.status);
       if (this._filtros.professor_id) params.set('user_id',      this._filtros.professor_id);
-      if (this._filtros.data_inicio)  params.set('data_inicio',  new Date(this._filtros.data_inicio).toISOString());
+
+      // Se sem filtro de data, usa mês atual como padrão
+      const dataInicio = this._filtros.data_inicio
+        ? new Date(this._filtros.data_inicio)
+        : new Date(new Date().getFullYear(), new Date().getMonth(), 1);
+      params.set('data_inicio', dataInicio.toISOString());
+
       if (this._filtros.data_fim) {
         const fim = new Date(this._filtros.data_fim);
         fim.setHours(23, 59, 59, 999);
         params.set('data_fim', fim.toISOString());
+      } else {
+        // Sem data_fim = até o último dia do mês da data_inicio
+        const fimMes = new Date(dataInicio.getFullYear(), dataInicio.getMonth() + 1, 0, 23, 59, 59, 999);
+        params.set('data_fim', fimMes.toISOString());
       }
 
       const resp = await fetch(`/api/pontos?${params}`, {
