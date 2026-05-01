@@ -38,6 +38,7 @@ const AdminPonto = {
   _filtrosRelatorio: {
     mes: new Date().getMonth() + 1,
     ano: new Date().getFullYear(),
+    professor_id: '',
   },
 
   // ─── RENDER ────────────────────────────────────────────────────────────────
@@ -733,10 +734,23 @@ const AdminPonto = {
     const agrupado = this._agruparPorProfDia(pontos);
     const mesLabel = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'][this._filtrosRelatorio.mes - 1];
 
+    const professores = (typeof DB !== 'undefined' ? DB.getUsers() : [])
+      .filter(u => u.role === 'professor')
+      .sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+
+    const profSelecionado = this._filtrosRelatorio.professor_id;
+
     return `
       <!-- Filtros -->
       <div class="card" style="margin-bottom:16px;">
         <div style="padding:14px 20px;display:flex;align-items:center;flex-wrap:wrap;gap:12px;">
+          <select id="rel-professor" class="form-control" style="width:auto;min-width:220px;"
+            onchange="AdminPonto._filtrosRelatorio.professor_id=this.value;AdminPonto.render('relatorio')">
+            <option value="">— Selecione um professor —</option>
+            ${professores.map(p => `
+              <option value="${p.id}" ${profSelecionado === p.id ? 'selected' : ''}>${Utils.escape(p.name)}</option>
+            `).join('')}
+          </select>
           <select id="filtro-mes" class="form-control" style="width:auto;min-width:120px;"
             onchange="AdminPonto._filtrosRelatorio.mes=this.value;AdminPonto.render('relatorio')">
             ${[...Array(12)].map((_, i) => `<option value="${i+1}" ${this._filtrosRelatorio.mes == i+1 ? 'selected' : ''}>${['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'][i]}</option>`).join('')}
@@ -749,17 +763,22 @@ const AdminPonto = {
             }).join('')}
           </select>
           <span style="margin-left:auto;font-size:13px;color:var(--text-muted);">${pontos.length} ponto(s) em ${mesLabel}/${this._filtrosRelatorio.ano}</span>
-          <button class="btn btn-sm btn-primary" onclick="AdminPonto._imprimirRelatorio()">
+          <button class="btn btn-sm btn-primary" onclick="AdminPonto._imprimirRelatorio()" ${!profSelecionado ? 'disabled style="opacity:.5;cursor:not-allowed;"' : ''}>
             <i class="fa-solid fa-print"></i> Imprimir
           </button>
         </div>
       </div>
 
       <!-- Conteúdo -->
-      ${Object.keys(agrupado).length === 0 ? `
+      ${!profSelecionado ? `
+        <div class="card" style="padding:40px;text-align:center;color:var(--text-muted);">
+          <i class="fa-solid fa-user-tie" style="font-size:36px;opacity:.35;display:block;margin-bottom:10px;"></i>
+          Selecione um professor para gerar o relatório.
+        </div>
+      ` : Object.keys(agrupado).length === 0 ? `
         <div class="card" style="padding:40px;text-align:center;color:var(--text-muted);">
           <i class="fa-solid fa-inbox" style="font-size:36px;opacity:.35;display:block;margin-bottom:10px;"></i>
-          Nenhum registro neste período.
+          Nenhum registro neste período para o professor selecionado.
         </div>
       ` : Object.entries(agrupado).map(([prof, dias]) => this._htmlBlocoProfessor(prof, dias)).join('')}
     `;
@@ -1081,16 +1100,19 @@ const AdminPonto = {
 
   async _buscarRelatorio() {
     try {
+      // Sem professor selecionado, não busca pontos
+      if (!this._filtrosRelatorio.professor_id) return { pontos: [], total: 0 };
+
       const token = await this._getToken();
       if (!token) return { pontos: [], total: 0 };
 
       const mes = String(this._filtrosRelatorio.mes).padStart(2, '0');
       const ano = this._filtrosRelatorio.ano;
-      const dataInicio = new Date(`${ano}-${mes}-01`).toISOString();
-      const proximoMes = this._filtrosRelatorio.mes === 12 ? 1 : this._filtrosRelatorio.mes + 1;
-      const anoProx = this._filtrosRelatorio.mes === 12 ? ano + 1 : ano;
+      const dataInicio = new Date(`${ano}-${mes}-01T00:00:00`).toISOString();
+      const proximoMes = this._filtrosRelatorio.mes == 12 ? 1 : Number(this._filtrosRelatorio.mes) + 1;
+      const anoProx = this._filtrosRelatorio.mes == 12 ? Number(ano) + 1 : Number(ano);
       const mesProx = String(proximoMes).padStart(2, '0');
-      const dataFim = new Date(`${anoProx}-${mesProx}-01`);
+      const dataFim = new Date(`${anoProx}-${mesProx}-01T00:00:00`);
       dataFim.setDate(dataFim.getDate() - 1);
       dataFim.setHours(23, 59, 59, 999);
 
@@ -1098,6 +1120,7 @@ const AdminPonto = {
         limit: 500,
         data_inicio: dataInicio,
         data_fim: dataFim.toISOString(),
+        user_id: this._filtrosRelatorio.professor_id,
       });
 
       const resp = await fetch(`/api/pontos?${params}`, {
@@ -1110,13 +1133,18 @@ const AdminPonto = {
   },
 
   async _imprimirRelatorio() {
+    if (!this._filtrosRelatorio.professor_id) {
+      Utils.toast('Selecione um professor antes de imprimir.', 'warning');
+      return;
+    }
+
     const ano = this._filtrosRelatorio.ano;
     const mesLabel = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'][this._filtrosRelatorio.mes - 1];
 
     const dados  = await this._buscarRelatorio();
     const pontos = dados?.pontos || [];
     if (pontos.length === 0) {
-      Utils.toast('Nenhum dado para imprimir.', 'warning');
+      Utils.toast('Nenhum dado para imprimir neste período.', 'warning');
       return;
     }
 
