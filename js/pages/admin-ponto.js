@@ -195,7 +195,7 @@ const AdminPonto = {
       <!-- Tabela -->
       <div class="card">
         <div style="padding:8px 0;">
-          ${pontos.length === 0 ? `
+          ${pontos.length === 0 && !this._filtros.professor_id ? `
             <div style="padding:40px;text-align:center;color:var(--text-muted);">
               <i class="fa-solid fa-inbox" style="font-size:36px;opacity:.35;display:block;margin-bottom:10px;"></i>
               Nenhum registro encontrado.
@@ -984,13 +984,12 @@ const AdminPonto = {
 
       // Se sem filtro de data, usa mês atual como padrão
       const dataInicio = this._filtros.data_inicio
-        ? new Date(this._filtros.data_inicio)
+        ? new Date(this._filtros.data_inicio + 'T00:00:00')
         : new Date(new Date().getFullYear(), new Date().getMonth(), 1);
       params.set('data_inicio', dataInicio.toISOString());
 
       if (this._filtros.data_fim) {
-        const fim = new Date(this._filtros.data_fim);
-        fim.setHours(23, 59, 59, 999);
+        const fim = new Date(this._filtros.data_fim + 'T23:59:59.999');
         params.set('data_fim', fim.toISOString());
       } else {
         // Sem data_fim = até o último dia do mês da data_inicio
@@ -998,13 +997,22 @@ const AdminPonto = {
         params.set('data_fim', fimMes.toISOString());
       }
 
+      console.log('[AdminPonto] buscando pontos:', params.toString());
       const resp = await fetch(`/api/pontos?${params}`, {
         headers: { 'Authorization': `Bearer ${token}` },
       });
-      if (!resp.ok) return { pontos: [], total: 0 };
+      if (!resp.ok) {
+        const errTxt = await resp.text().catch(() => '');
+        console.error('[AdminPonto] API erro:', resp.status, errTxt);
+        return { pontos: [], total: 0 };
+      }
       const json = await resp.json();
+      console.log('[AdminPonto] pontos recebidos:', json.data?.pontos?.length || 0);
       return { pontos: json.data?.pontos || [], total: json.data?.total || 0 };
-    } catch { return { pontos: [], total: 0 }; }
+    } catch (e) {
+      console.error('[AdminPonto] buscarRegistros erro:', e);
+      return { pontos: [], total: 0 };
+    }
   },
 
   async _buscarAjustes() {
