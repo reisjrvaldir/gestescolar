@@ -65,6 +65,10 @@ const AdminPonto = {
         : new Date();
       await this._carregarAusencias(this._filtros.professor_id, base.getMonth() + 1, base.getFullYear());
     }
+    // Ausências também no Relatório
+    if (this._aba === 'relatorio' && this._filtrosRelatorio.professor_id) {
+      await this._carregarAusencias(this._filtrosRelatorio.professor_id, this._filtrosRelatorio.mes, this._filtrosRelatorio.ano);
+    }
 
     const [resumo, dados] = await Promise.all([
       this._buscarResumo(),
@@ -775,12 +779,13 @@ const AdminPonto = {
           <i class="fa-solid fa-user-tie" style="font-size:36px;opacity:.35;display:block;margin-bottom:10px;"></i>
           Selecione um professor para gerar o relatório.
         </div>
-      ` : Object.keys(agrupado).length === 0 ? `
-        <div class="card" style="padding:40px;text-align:center;color:var(--text-muted);">
-          <i class="fa-solid fa-inbox" style="font-size:36px;opacity:.35;display:block;margin-bottom:10px;"></i>
-          Nenhum registro neste período para o professor selecionado.
-        </div>
-      ` : Object.entries(agrupado).map(([prof, dias]) => this._htmlBlocoProfessor(prof, dias)).join('')}
+      ` : (() => {
+        // Sempre renderiza bloco do professor (mesmo sem pontos, mostra todos os dias do mês)
+        const profObj = professores.find(p => p.id === profSelecionado);
+        const nomeProf = profObj?.name || 'Professor';
+        const dias = agrupado[nomeProf] || {};
+        return this._htmlBlocoProfessor(nomeProf, dias);
+      })()}
     `;
   },
 
@@ -788,27 +793,112 @@ const AdminPonto = {
     let saldoMes = 0;
     let totalTrabalhado = 0;
 
-    const linhas = Object.entries(dias).sort(([a], [b]) => a.localeCompare(b)).map(([dia, pts]) => {
-      const get = (tipo) => pts.find(x => x.tipo === tipo);
-      const fmt = (p) => p ? new Date(p.timestamp).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : '—';
+    // Gera TODOS os dias do mês (1 ao último dia)
+    const mesNum = parseInt(this._filtrosRelatorio.mes, 10);
+    const anoNum = parseInt(this._filtrosRelatorio.ano, 10);
+    const ultimoDia = new Date(anoNum, mesNum, 0).getDate();
+    const todosOsDias = {};
+    for (let d = 1; d <= ultimoDia; d++) {
+      const ymd = `${anoNum}-${String(mesNum).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+      todosOsDias[ymd] = dias[ymd] || [];
+    }
 
-      const min = this._minutosTrabalhados(pts);
-      const saldo = (min !== null) ? min - this.CARGA_HORARIA_DIARIA : null;
-      if (min !== null) totalTrabalhado += min;
-      if (saldo !== null) saldoMes += saldo;
+    const hoje = new Date(); hoje.setHours(23,59,59,999);
 
-      const dataObj = new Date(dia + 'T12:00:00');
+    const linhas = Object.entries(todosOsDias).sort(([a], [b]) => a.localeCompare(b)).map(([dia, pts]) => {
+      const dataObj   = new Date(dia + 'T12:00:00');
       const diaSemana = ['Dom','Seg','Ter','Qua','Qui','Sex','Sáb'][dataObj.getDay()];
+      const ehUtil    = this._ehDiaUtil(dia);
+      const dow       = dataObj.getDay();
+      const isFimSem  = dow === 0 || dow === 6;
+      const isFeriado = !ehUtil && !isFimSem;
+      const futuro    = dataObj > hoje;
+      const ausencia  = this._ausenciasCache.find(a => a.data === dia);
 
-      return `<tr>
-        <td style="font-family:monospace;font-size:12px;white-space:nowrap;">${dataObj.toLocaleDateString('pt-BR')} <span style="color:var(--text-muted);">${diaSemana}</span></td>
-        <td style="font-family:monospace;font-size:12px;color:#4CAF50;">${fmt(get('ENTRADA'))}</td>
-        <td style="font-family:monospace;font-size:12px;color:#FF9800;">${fmt(get('INTERVALO_INICIO'))}</td>
-        <td style="font-family:monospace;font-size:12px;color:#2196F3;">${fmt(get('INTERVALO_FIM'))}</td>
-        <td style="font-family:monospace;font-size:12px;color:#F44336;">${fmt(get('SAIDA'))}</td>
-        <td style="font-family:monospace;font-size:12px;font-weight:700;">${this._formatHoras(min)}</td>
-        <td style="font-family:monospace;font-size:12px;font-weight:700;color:${this._saldoCor(saldo)};">
-          ${saldo !== null ? (saldo > 0 ? '+' : '') + this._formatHoras(saldo) : '—'}
+      const tag = isFeriado
+        ? `<span style="background:#FFE0B2;color:#E65100;font-size:9px;padding:1px 5px;border-radius:6px;">FERIADO</span>`
+        : isFimSem
+          ? `<span style="background:#E1BEE7;color:#4A148C;font-size:9px;padding:1px 5px;border-radius:6px;">${dow===6?'SÁB':'DOM'}</span>`
+          : '';
+
+      // ── Tem pontos ──
+      if (pts.length > 0) {
+        const get = (tipo) => pts.find(x => x.tipo === tipo);
+        const fmt = (p) => p ? new Date(p.timestamp).toLocaleTimeString('pt-BR', { hour:'2-digit', minute:'2-digit' }) : '—';
+        const min   = this._minutosTrabalhados(pts);
+        const saldo = (min !== null) ? (ehUtil ? min - this.CARGA_HORARIA_DIARIA : min) : null;
+        if (min !== null)   totalTrabalhado += min;
+        if (saldo !== null) saldoMes        += saldo;
+
+        return `<tr ${!ehUtil && min ? 'style="background:#F1F8E9;"' : ''}>
+          <td style="font-family:monospace;font-size:12px;white-space:nowrap;">
+            ${dataObj.toLocaleDateString('pt-BR')} <span style="color:var(--text-muted);">${diaSemana}</span> ${tag}
+          </td>
+          <td style="font-family:monospace;font-size:12px;color:#4CAF50;">${fmt(get('ENTRADA'))}</td>
+          <td style="font-family:monospace;font-size:12px;color:#FF9800;">${fmt(get('INTERVALO_INICIO'))}</td>
+          <td style="font-family:monospace;font-size:12px;color:#2196F3;">${fmt(get('INTERVALO_FIM'))}</td>
+          <td style="font-family:monospace;font-size:12px;color:#F44336;">${fmt(get('SAIDA'))}</td>
+          <td style="font-family:monospace;font-size:12px;font-weight:700;">${this._formatHoras(min)}</td>
+          <td style="font-family:monospace;font-size:12px;font-weight:700;color:${this._saldoCor(saldo)};">
+            ${saldo !== null ? (saldo > 0 ? '+' : '') + this._formatHoras(saldo) : '—'}
+          </td>
+        </tr>`;
+      }
+
+      // ── Ausência registrada ──
+      if (ausencia) {
+        const meta = this.TIPO_AUSENCIA[ausencia.tipo] || { label: ausencia.tipo, cor:'#666' };
+        let saldoDia = 0;
+        if (ehUtil) {
+          if (meta.desconto === true) saldoDia = -this.CARGA_HORARIA_DIARIA;
+          else if (meta.desconto === 'parcial') saldoDia = -(this.CARGA_HORARIA_DIARIA - parseFloat(ausencia.horas_abonadas||0)*60);
+        }
+        saldoMes += saldoDia;
+
+        return `<tr style="background:${meta.cor}11;">
+          <td style="font-family:monospace;font-size:12px;white-space:nowrap;">
+            ${dataObj.toLocaleDateString('pt-BR')} <span style="color:var(--text-muted);">${diaSemana}</span> ${tag}
+          </td>
+          <td colspan="4" style="text-align:center;">
+            <span style="background:${meta.cor}22;color:${meta.cor};padding:3px 10px;border-radius:6px;font-weight:700;font-size:11px;">
+              ${meta.label}${ausencia.periodo !== 'integral' ? ` (${ausencia.periodo === 'manha' ? 'Manhã' : 'Tarde'})` : ''}
+            </span>
+          </td>
+          <td style="font-family:monospace;font-size:12px;font-weight:700;color:#888;">0h00</td>
+          <td style="font-family:monospace;font-size:12px;font-weight:700;color:${this._saldoCor(saldoDia)};">
+            ${saldoDia === 0 ? '0h00' : (saldoDia > 0 ? '+' : '') + this._formatHoras(saldoDia)}
+          </td>
+        </tr>`;
+      }
+
+      // ── Sem registro: dia útil → -8h, fds/feriado/futuro → 0 ──
+      let saldoDia = 0;
+      let labelCentro;
+      let bgRow = '';
+      let corTexto = 'var(--text-muted)';
+      if (futuro) {
+        labelCentro = `<span style="color:#BDBDBD;font-size:11px;">—</span>`;
+      } else if (!ehUtil) {
+        labelCentro = `<span style="color:#BDBDBD;font-size:11px;">—</span>`;
+      } else {
+        // Dia útil sem ponto e sem ausência → falta automática
+        saldoDia = -this.CARGA_HORARIA_DIARIA;
+        saldoMes += saldoDia;
+        bgRow = 'background:#FFEBEE;';
+        corTexto = '#C62828';
+        labelCentro = `<span style="color:#C62828;font-weight:600;font-size:11px;">
+          <i class="fa-solid fa-circle-exclamation"></i> Sem registro
+        </span>`;
+      }
+
+      return `<tr style="${bgRow}">
+        <td style="font-family:monospace;font-size:12px;white-space:nowrap;color:${corTexto};">
+          ${dataObj.toLocaleDateString('pt-BR')} <span style="color:var(--text-muted);">${diaSemana}</span> ${tag}
+        </td>
+        <td colspan="4" style="text-align:center;">${labelCentro}</td>
+        <td style="font-family:monospace;font-size:12px;color:${corTexto};">0h00</td>
+        <td style="font-family:monospace;font-size:12px;font-weight:700;color:${this._saldoCor(saldoDia)};">
+          ${saldoDia === 0 ? (futuro || !ehUtil ? '—' : '0h00') : (saldoDia > 0 ? '+' : '') + this._formatHoras(saldoDia)}
         </td>
       </tr>`;
     }).join('');
@@ -1143,12 +1233,14 @@ const AdminPonto = {
 
     const dados  = await this._buscarRelatorio();
     const pontos = dados?.pontos || [];
-    if (pontos.length === 0) {
-      Utils.toast('Nenhum dado para imprimir neste período.', 'warning');
-      return;
-    }
+
+    // Recarrega ausências do mês para o impresso
+    await this._carregarAusencias(this._filtrosRelatorio.professor_id, this._filtrosRelatorio.mes, this._filtrosRelatorio.ano);
 
     const agrupado = this._agruparPorProfDia(pontos);
+    const profObj  = DB.getUsers().find(u => u.id === this._filtrosRelatorio.professor_id);
+    const profNome = profObj?.name || 'Professor';
+    if (!agrupado[profNome]) agrupado[profNome] = {};
 
     // Dados da escola
     const user   = Auth.current();
@@ -1157,35 +1249,86 @@ const AdminPonto = {
     const escolaDoc  = school?.cnpj ? `CNPJ/CPF: ${Utils.escape(school.cnpj)}` : '';
     const logoUrl    = school?.logoUrl || '';
 
-    // Bloco por professor
+    // Gera todos os dias do mês para o impresso
+    const mesNumImp = parseInt(this._filtrosRelatorio.mes, 10);
+    const anoNumImp = parseInt(this._filtrosRelatorio.ano, 10);
+    const ultimoDiaImp = new Date(anoNumImp, mesNumImp, 0).getDate();
+    const hojeImp = new Date(); hojeImp.setHours(23,59,59,999);
+
+    // Bloco por professor (apenas o selecionado)
     const blocosHtml = Object.entries(agrupado).map(([prof, dias]) => {
       let saldoMes = 0;
       let totalTrab = 0;
 
-      const linhas = Object.entries(dias).sort(([a], [b]) => a.localeCompare(b)).map(([dia, pts]) => {
-        const get = (tipo) => pts.find(x => x.tipo === tipo);
-        const fmt = (p) => p ? new Date(p.timestamp).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : '—';
+      // Preenche TODOS os dias do mês
+      const todosOsDias = {};
+      for (let d = 1; d <= ultimoDiaImp; d++) {
+        const ymd = `${anoNumImp}-${String(mesNumImp).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+        todosOsDias[ymd] = dias[ymd] || [];
+      }
 
-        const min = this._minutosTrabalhados(pts);
-        const saldo = (min !== null) ? min - this.CARGA_HORARIA_DIARIA : null;
-        if (min !== null)   totalTrab += min;
-        if (saldo !== null) saldoMes  += saldo;
-
-        const dataObj = new Date(dia + 'T12:00:00');
+      const linhas = Object.entries(todosOsDias).sort(([a], [b]) => a.localeCompare(b)).map(([dia, pts]) => {
+        const dataObj   = new Date(dia + 'T12:00:00');
         const diaSemana = ['Dom','Seg','Ter','Qua','Qui','Sex','Sáb'][dataObj.getDay()];
-        const corSaldo  = this._saldoCor(saldo);
-        const sinal     = saldo !== null && saldo > 0 ? '+' : '';
+        const ehUtil    = this._ehDiaUtil(dia);
+        const futuro    = dataObj > hojeImp;
+        const ausencia  = this._ausenciasCache.find(a => a.data === dia);
 
-        return `<tr>
+        // Tem pontos
+        if (pts.length > 0) {
+          const get = (tipo) => pts.find(x => x.tipo === tipo);
+          const fmt = (p) => p ? new Date(p.timestamp).toLocaleTimeString('pt-BR', { hour:'2-digit', minute:'2-digit' }) : '—';
+          const min   = this._minutosTrabalhados(pts);
+          const saldo = (min !== null) ? (ehUtil ? min - this.CARGA_HORARIA_DIARIA : min) : null;
+          if (min !== null)   totalTrab += min;
+          if (saldo !== null) saldoMes  += saldo;
+          const corSaldo  = this._saldoCor(saldo);
+          const sinal     = saldo !== null && saldo > 0 ? '+' : '';
+          return `<tr>
+            <td>${dataObj.toLocaleDateString('pt-BR')} <span style="color:#999;font-size:10px;">${diaSemana}</span></td>
+            <td style="color:#4CAF50;">${fmt(get('ENTRADA'))}</td>
+            <td style="color:#FF9800;">${fmt(get('INTERVALO_INICIO'))}</td>
+            <td style="color:#2196F3;">${fmt(get('INTERVALO_FIM'))}</td>
+            <td style="color:#F44336;">${fmt(get('SAIDA'))}</td>
+            <td style="font-weight:bold;">${this._formatHoras(min)}</td>
+            <td style="color:${corSaldo};font-weight:bold;">${saldo !== null ? sinal + this._formatHoras(saldo) : '—'}</td>
+          </tr>`;
+        }
+
+        // Ausência registrada
+        if (ausencia) {
+          const meta = this.TIPO_AUSENCIA[ausencia.tipo] || { label: ausencia.tipo, cor:'#666' };
+          let saldoDia = 0;
+          if (ehUtil) {
+            if (meta.desconto === true) saldoDia = -this.CARGA_HORARIA_DIARIA;
+            else if (meta.desconto === 'parcial') saldoDia = -(this.CARGA_HORARIA_DIARIA - parseFloat(ausencia.horas_abonadas||0)*60);
+          }
+          saldoMes += saldoDia;
+          const sinalA = saldoDia > 0 ? '+' : '';
+          return `<tr style="background:${meta.cor}11;">
+            <td>${dataObj.toLocaleDateString('pt-BR')} <span style="color:#999;font-size:10px;">${diaSemana}</span></td>
+            <td colspan="4" style="text-align:center;color:${meta.cor};font-weight:bold;">${meta.label}${ausencia.periodo!=='integral'?` (${ausencia.periodo==='manha'?'Manhã':'Tarde'})`:''}</td>
+            <td>0h00</td>
+            <td style="color:${this._saldoCor(saldoDia)};font-weight:bold;">${saldoDia===0?'0h00':sinalA+this._formatHoras(saldoDia)}</td>
+          </tr>`;
+        }
+
+        // Sem registro
+        let saldoDia = 0;
+        let centro = '<span style="color:#999;">—</span>';
+        let bg = '';
+        if (!futuro && ehUtil) {
+          saldoDia = -this.CARGA_HORARIA_DIARIA;
+          saldoMes += saldoDia;
+          centro = '<span style="color:#C62828;font-weight:bold;">Sem registro</span>';
+          bg = 'background:#FFEBEE;';
+        }
+        const sinalS = saldoDia > 0 ? '+' : '';
+        return `<tr style="${bg}">
           <td>${dataObj.toLocaleDateString('pt-BR')} <span style="color:#999;font-size:10px;">${diaSemana}</span></td>
-          <td style="color:#4CAF50;">${fmt(get('ENTRADA'))}</td>
-          <td style="color:#FF9800;">${fmt(get('INTERVALO_INICIO'))}</td>
-          <td style="color:#2196F3;">${fmt(get('INTERVALO_FIM'))}</td>
-          <td style="color:#F44336;">${fmt(get('SAIDA'))}</td>
-          <td style="font-weight:bold;">${this._formatHoras(min)}</td>
-          <td style="color:${corSaldo};font-weight:bold;">
-            ${saldo !== null ? sinal + this._formatHoras(saldo) : '—'}
-          </td>
+          <td colspan="4" style="text-align:center;">${centro}</td>
+          <td style="color:#999;">0h00</td>
+          <td style="color:${this._saldoCor(saldoDia)};font-weight:bold;">${saldoDia===0?(futuro||!ehUtil?'—':'0h00'):sinalS+this._formatHoras(saldoDia)}</td>
         </tr>`;
       }).join('');
 
