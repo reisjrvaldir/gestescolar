@@ -53,6 +53,10 @@ const AdminPonto = {
 
     if (aba) this._aba = aba;
 
+    // Carrega feriados do ano corrente (cache)
+    const anoAtual = new Date().getFullYear();
+    await this._carregarFeriados(`${anoAtual}-01-01`, `${anoAtual}-12-31`);
+
     const [resumo, dados] = await Promise.all([
       this._buscarResumo(),
       this._aba === 'registros' ? this._buscarRegistros() : this._aba === 'ajustes' ? this._buscarAjustes() : this._buscarRelatorio(),
@@ -203,6 +207,22 @@ const AdminPonto = {
       grupos[key].pontos.push(p);
     });
 
+    // Quando há professor selecionado, preenche dias úteis sem registro como AUSÊNCIA
+    let ausencias = 0;
+    if (!mostrarProfessor && this._filtros.professor_id && (this._filtros.data_inicio || this._filtros.data_fim)) {
+      const di = this._filtros.data_inicio ? new Date(this._filtros.data_inicio) : new Date(new Date().getFullYear(), new Date().getMonth(), 1);
+      const df = this._filtros.data_fim    ? new Date(this._filtros.data_fim)    : new Date();
+      const hoje = new Date(); hoje.setHours(23,59,59,999);
+      const fimReal = df > hoje ? hoje : df;
+      const diasUteis = this._diasUteisIntervalo(di, fimReal);
+      diasUteis.forEach(ymd => {
+        if (!grupos[ymd]) {
+          grupos[ymd] = { dia: ymd, profId: this._filtros.professor_id, profNome: '', pontos: [], _ausente: true };
+          ausencias++;
+        }
+      });
+    }
+
     // Ordena: por professor (alfa) e dentro dele, por data desc
     const linhasOrdenadas = Object.values(grupos).sort((a, b) => {
       if (mostrarProfessor) {
@@ -216,6 +236,26 @@ const AdminPonto = {
     let totalTrab = 0;
 
     const linhas = linhasOrdenadas.map(g => {
+      // Linha de AUSÊNCIA (dia útil sem ponto)
+      if (g._ausente) {
+        const dataObj   = new Date(g.dia + 'T12:00:00');
+        const diaSemana = ['Dom','Seg','Ter','Qua','Qui','Sex','Sáb'][dataObj.getDay()];
+        saldoMes -= this.CARGA_HORARIA_DIARIA;
+        return `<tr style="background:#FFEBEE;">
+          <td style="font-family:monospace;font-size:12px;font-weight:600;white-space:nowrap;color:#C62828;">
+            ${dataObj.toLocaleDateString('pt-BR')}
+            <div style="font-size:10px;color:#C62828;font-weight:400;">${diaSemana}</div>
+          </td>
+          <td colspan="4" style="text-align:center;color:#C62828;font-weight:700;font-size:13px;">
+            <i class="fa-solid fa-circle-exclamation"></i> AUSÊNCIA — sem registro de ponto
+          </td>
+          <td style="text-align:center;font-family:monospace;font-size:12px;color:#C62828;">0h00</td>
+          <td style="text-align:center;font-family:monospace;font-size:12px;font-weight:700;color:#F44336;">
+            -${this._formatHoras(this.CARGA_HORARIA_DIARIA)}
+          </td>
+        </tr>`;
+      }
+
       const pts = g.pontos;
       const get = (tipo) => pts.find(x => x.tipo === tipo);
       const cell = (tipo, cor) => {
@@ -244,20 +284,26 @@ const AdminPonto = {
       };
 
       const min   = this._minutosTrabalhados(pts);
-      const saldo = (min !== null) ? min - this.CARGA_HORARIA_DIARIA : null;
+      // Em dia NÃO útil (sáb/dom/feriado), tudo trabalhado vira banco de horas (sem deduzir 8h)
+      const ehUtil = this._ehDiaUtil(g.dia);
+      const saldo  = (min !== null) ? (ehUtil ? min - this.CARGA_HORARIA_DIARIA : min) : null;
       if (min !== null)   totalTrab += min;
       if (saldo !== null) saldoMes  += saldo;
 
       const dataObj   = new Date(g.dia + 'T12:00:00');
       const diaSemana = ['Dom','Seg','Ter','Qua','Qui','Sex','Sáb'][dataObj.getDay()];
+      const isFimSem  = dataObj.getDay() === 0 || dataObj.getDay() === 6;
+      const isFeriado = !ehUtil && !isFimSem;
+      const tag       = isFeriado ? `<span style="background:#FFE0B2;color:#E65100;font-size:9px;padding:1px 5px;border-radius:8px;font-weight:700;">FERIADO</span>` :
+                        isFimSem  ? `<span style="background:#E1BEE7;color:#4A148C;font-size:9px;padding:1px 5px;border-radius:8px;font-weight:700;">${dataObj.getDay()===6?'SÁBADO':'DOMINGO'}</span>` : '';
 
-      return `<tr>
+      return `<tr ${!ehUtil && min ? 'style="background:#F1F8E9;"' : ''}>
         ${mostrarProfessor ? `
           <td style="font-size:13px;font-weight:600;white-space:nowrap;">${Utils.escape(g.profNome)}</td>
         ` : ''}
         <td style="font-family:monospace;font-size:12px;font-weight:600;white-space:nowrap;">
           ${dataObj.toLocaleDateString('pt-BR')}
-          <div style="font-size:10px;color:var(--text-muted);font-weight:400;">${diaSemana}</div>
+          <div style="font-size:10px;color:var(--text-muted);font-weight:400;">${diaSemana} ${tag}</div>
         </td>
         ${cell('ENTRADA',          '#4CAF50')}
         ${cell('INTERVALO_INICIO', '#FF9800')}
@@ -428,6 +474,49 @@ const AdminPonto = {
   // ─── HTML RELATÓRIO ───────────────────────────────────────────────────────
 
   CARGA_HORARIA_DIARIA: 8 * 60, // minutos (8h)
+  _feriadosCache: {},           // { 'YYYY-MM-DD': true }
+
+  // Verifica se uma data (YYYY-MM-DD) é dia útil (não é fim de semana nem feriado)
+  _ehDiaUtil(dataYMD) {
+    const dt  = new Date(dataYMD + 'T12:00:00');
+    const dow = dt.getDay(); // 0 = dom, 6 = sáb
+    if (dow === 0 || dow === 6) return false;                                  // fim de semana
+    if (typeof FeriadosNacionais !== 'undefined' && FeriadosNacionais.ehFeriado(dataYMD)) return false;
+    if (this._feriadosCache[dataYMD]) return false;                            // feriado da escola
+    return true;
+  },
+
+  // Carrega feriados da escola para um intervalo
+  async _carregarFeriados(dataInicioISO, dataFimISO) {
+    try {
+      const token = await this._getToken();
+      if (!token) return;
+      const ai = new Date(dataInicioISO).getFullYear();
+      const af = new Date(dataFimISO).getFullYear();
+      this._feriadosCache = {};
+      for (let ano = ai; ano <= af; ano++) {
+        const resp = await fetch(`/api/feriados?ano=${ano}`, { headers: { 'Authorization': `Bearer ${token}` } });
+        if (!resp.ok) continue;
+        const json = await resp.json();
+        (json.data || []).forEach(f => { this._feriadosCache[f.data] = f; });
+      }
+    } catch (e) { console.warn('[AdminPonto] feriados:', e); }
+  },
+
+  // Lista todos os dias úteis dentro de um intervalo (inclusive)
+  _diasUteisIntervalo(dataInicio, dataFim) {
+    const lista = [];
+    const cur = new Date(dataInicio);
+    cur.setHours(12, 0, 0, 0);
+    const end = new Date(dataFim);
+    end.setHours(12, 0, 0, 0);
+    while (cur <= end) {
+      const ymd = cur.toISOString().slice(0, 10);
+      if (this._ehDiaUtil(ymd)) lista.push(ymd);
+      cur.setDate(cur.getDate() + 1);
+    }
+    return lista;
+  },
 
   // Agrupa pontos por professor + dia retornando estrutura {[professor]: {[dia]: [pontos]}}
   _agruparPorProfDia(pontos) {

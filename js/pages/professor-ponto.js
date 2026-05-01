@@ -9,6 +9,29 @@ const ProfessorPonto = {
   _filtroData:  '', // Data específica (YYYY-MM-DD) ou vazio = mostra histórico geral
 
   CARGA_HORARIA_DIARIA: 8 * 60, // minutos (8h)
+  _feriadosCache: {},
+
+  _ehDiaUtil(dataYMD) {
+    const dt  = new Date(dataYMD + 'T12:00:00');
+    const dow = dt.getDay();
+    if (dow === 0 || dow === 6) return false;
+    if (typeof FeriadosNacionais !== 'undefined' && FeriadosNacionais.ehFeriado(dataYMD)) return false;
+    if (this._feriadosCache[dataYMD]) return false;
+    return true;
+  },
+
+  async _carregarFeriados() {
+    try {
+      const token = await this._getToken();
+      if (!token) return;
+      const ano = new Date().getFullYear();
+      const resp = await fetch(`/api/feriados?ano=${ano}`, { headers: { 'Authorization': `Bearer ${token}` } });
+      if (!resp.ok) return;
+      const json = await resp.json();
+      this._feriadosCache = {};
+      (json.data || []).forEach(f => { this._feriadosCache[f.data] = f; });
+    } catch (e) { /* fail silently */ }
+  },
 
   TIPOS: [
     { value: 'ENTRADA',          label: 'Entrada',          icon: 'fa-sign-in-alt',  color: '#4CAF50' },
@@ -30,6 +53,7 @@ const ProfessorPonto = {
     const user = Auth.require();
     if (!user) return;
 
+    await this._carregarFeriados();
     const [pontos, bancoMes] = await Promise.all([
       this._buscarPontos(user),
       this._buscarBancoMes(),
@@ -532,16 +556,33 @@ const ProfessorPonto = {
       let saldoTotal = 0;
       let totalTrabalhado = 0;
       let diasComputados = 0;
-      Object.values(porDia).forEach(pts => {
+      let ausencias = 0;
+
+      // Calcula saldo dos dias COM registro
+      Object.entries(porDia).forEach(([dia, pts]) => {
         const min = this._minutosTrabalhados(pts);
         if (min !== null) {
-          saldoTotal      += min - this.CARGA_HORARIA_DIARIA;
+          const ehUtil = this._ehDiaUtil(dia);
+          // Se é fim de semana ou feriado, tudo vira banco; se é útil, deduz 8h
+          saldoTotal      += ehUtil ? (min - this.CARGA_HORARIA_DIARIA) : min;
           totalTrabalhado += min;
           diasComputados++;
         }
       });
 
-      return { saldoTotal, totalTrabalhado, diasComputados, mesLabel: hoje.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' }) };
+      // Conta AUSÊNCIAS em dias úteis passados sem registro (até hoje, exclusive)
+      const hojeMs = new Date(); hojeMs.setHours(0, 0, 0, 0);
+      const cur = new Date(inicio);
+      while (cur < hojeMs) {
+        const ymd = cur.toISOString().slice(0, 10);
+        if (this._ehDiaUtil(ymd) && !porDia[ymd]) {
+          ausencias++;
+          saldoTotal -= this.CARGA_HORARIA_DIARIA;
+        }
+        cur.setDate(cur.getDate() + 1);
+      }
+
+      return { saldoTotal, totalTrabalhado, diasComputados, ausencias, mesLabel: hoje.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' }) };
     } catch { return null; }
   },
 
@@ -570,7 +611,8 @@ const ProfessorPonto = {
           <div style="text-align:right;font-size:12px;color:var(--text-muted);">
             <div>Trabalhado: <strong style="color:#333;">${this._formatHoras(banco.totalTrabalhado)}</strong></div>
             <div>Dias completos: <strong style="color:#333;">${banco.diasComputados}</strong></div>
-            <div>Meta diária: <strong style="color:#333;">8h00</strong></div>
+            ${banco.ausencias > 0 ? `<div>Ausências: <strong style="color:#F44336;">${banco.ausencias}</strong></div>` : ''}
+            <div>Meta diária: <strong style="color:#333;">8h00 (seg-sex)</strong></div>
           </div>
         </div>
       </div>

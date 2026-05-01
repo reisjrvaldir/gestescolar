@@ -295,6 +295,7 @@ const Router = {
         { id: 'admin-staff',     route: 'admin-staff',     icon: 'fa-users',            label: 'Funcionários' },
         { id: 'admin-classes',   route: 'admin-classes',   icon: 'fa-chalkboard',       label: 'Turmas' },
         { id: 'admin-ponto',     route: 'admin-ponto',     icon: 'fa-fingerprint',      label: 'Ponto' },
+        { id: 'admin-calendario',route: 'admin-calendario',icon: 'fa-calendar-days',    label: 'Ano Letivo' },
         { section: 'Sistemas' },
         { id: 'register',        route: 'register',        icon: 'fa-user-plus',        label: 'Novo Cadastro' },
         { id: 'admin-asaas-documents', route: 'admin-asaas-documents', icon: 'fa-id-card', label: 'Documentos Asaas' },
