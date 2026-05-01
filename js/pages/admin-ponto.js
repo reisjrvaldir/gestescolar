@@ -59,7 +59,9 @@ const AdminPonto = {
 
     // Carrega ausências se professor selecionado
     if (this._filtros.professor_id && this._aba === 'registros') {
-      const base = this._filtros.data_inicio ? new Date(this._filtros.data_inicio) : new Date();
+      const base = this._filtros.data_inicio
+        ? new Date(this._filtros.data_inicio + 'T12:00:00')
+        : new Date();
       await this._carregarAusencias(this._filtros.professor_id, base.getMonth() + 1, base.getFullYear());
     }
 
@@ -262,21 +264,59 @@ const AdminPonto = {
     let totalTrab = 0;
 
     const linhas = linhasOrdenadas.map(g => {
-      // ── Fim de semana / Feriado sem ponto ──
+      // ── Fim de semana / Feriado (sem ponto, mas pode ter ausência registrada) ──
       if (g._fimDeSem && g.pontos.length === 0) {
         const dataObj   = new Date(g.dia + 'T12:00:00');
         const dow       = dataObj.getDay();
         const diaSemana = ['Dom','Seg','Ter','Qua','Qui','Sex','Sáb'][dow];
-        const isFer     = dow !== 0 && dow !== 6; // dia de semana mas não é útil = feriado
+        const isFer     = dow !== 0 && dow !== 6;
         const tagFds    = isFer
           ? `<span style="background:#FFE0B2;color:#E65100;font-size:9px;padding:1px 5px;border-radius:8px;font-weight:700;">FERIADO</span>`
           : `<span style="background:#E1BEE7;color:#4A148C;font-size:9px;padding:1px 5px;border-radius:8px;font-weight:700;">${dow===6?'SÁBADO':'DOMINGO'}</span>`;
-        return `<tr style="background:#FAFAFA;opacity:.6;">
-          <td style="font-family:monospace;font-size:12px;font-weight:600;white-space:nowrap;color:#999;">
+        const reg = g._ausenciaRegistro;
+
+        // Em fim de semana / feriado, ausência NÃO afeta o banco de horas
+        // (apenas registro/documentação para eventos especiais)
+        let conteudoCentro;
+        if (reg) {
+          const meta = this.TIPO_AUSENCIA[reg.tipo] || { label: reg.tipo, cor: '#666', icon: 'fa-question' };
+          const obs  = reg.observacao ? ` — ${reg.observacao.slice(0,50)}` : '';
+          conteudoCentro = `
+            <td colspan="4" style="text-align:center;">
+              <div style="display:inline-flex;align-items:center;gap:6px;">
+                <span style="background:${meta.cor}22;color:${meta.cor};padding:4px 12px;border-radius:8px;font-weight:700;font-size:12px;">
+                  <i class="fa-solid ${meta.icon}"></i> ${meta.label}
+                </span>
+                ${reg.periodo !== 'integral' ? `<span style="font-size:10px;color:#666;background:#f0f0f0;padding:2px 6px;border-radius:4px;">${reg.periodo === 'manha' ? 'Manhã' : 'Tarde'}</span>` : ''}
+                <button class="btn btn-sm" style="background:none;border:1px solid ${meta.cor};color:${meta.cor};padding:2px 8px;font-size:10px;cursor:pointer;"
+                  onclick="AdminPonto.abrirModalAusencia('${g.profId}','${g.dia}')">
+                  <i class="fa-solid fa-pen"></i>
+                </button>
+                <button class="btn btn-sm" style="background:none;border:1px solid #F44336;color:#F44336;padding:2px 8px;font-size:10px;cursor:pointer;"
+                  onclick="AdminPonto._excluirAusencia('${reg.id}')" title="Remover">
+                  <i class="fa-solid fa-trash"></i>
+                </button>
+              </div>
+              ${obs ? `<div style="font-size:10px;color:#888;margin-top:2px;">${obs}</div>` : ''}
+            </td>`;
+        } else {
+          conteudoCentro = `
+            <td colspan="4" style="text-align:center;color:#BDBDBD;font-size:12px;">
+              <span style="margin-right:8px;">—</span>
+              <button class="btn btn-sm" style="background:none;color:#666;border:1px dashed #BDBDBD;padding:2px 10px;font-size:10px;cursor:pointer;border-radius:6px;"
+                onclick="AdminPonto.abrirModalAusencia('${g.profId}','${g.dia}')" title="Registrar evento ou ausência neste dia">
+                <i class="fa-solid fa-plus"></i> Registrar
+              </button>
+            </td>`;
+        }
+
+        const bgCor = reg ? (this.TIPO_AUSENCIA[reg.tipo]?.cor || '#666') + '11' : '#FAFAFA';
+        return `<tr style="background:${bgCor};${reg ? '' : 'opacity:.7;'}">
+          <td style="font-family:monospace;font-size:12px;font-weight:600;white-space:nowrap;color:${reg ? '#555' : '#999'};">
             ${dataObj.toLocaleDateString('pt-BR')}
-            <div style="font-size:10px;color:#999;font-weight:400;">${diaSemana} ${tagFds}</div>
+            <div style="font-size:10px;color:${reg ? '#888' : '#999'};font-weight:400;">${diaSemana} ${tagFds}</div>
           </td>
-          <td colspan="4" style="text-align:center;color:#BDBDBD;font-size:12px;">—</td>
+          ${conteudoCentro}
           <td style="text-align:center;color:#BDBDBD;font-family:monospace;font-size:12px;">—</td>
           <td style="text-align:center;color:#BDBDBD;font-family:monospace;font-size:12px;">—</td>
         </tr>`;
