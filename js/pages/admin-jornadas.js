@@ -242,12 +242,14 @@ const AdminJornadas = {
     };
 
     try {
-      const { data: { session } } = await supabaseClient.auth.getSession();
+      const token = await AdminJornadas._getToken();
+      if (!token) { Utils.toast('Sessão expirada. Faça login novamente.', 'error'); return; }
+
       const resp = await fetch('/api/jornadas', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          Authorization: `Bearer ${session?.access_token}`,
+          Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify(payload),
       });
@@ -267,10 +269,12 @@ const AdminJornadas = {
     if (!confirm('Remover jornada? O professor ficará sem permissão para bater ponto até cadastrar uma nova.')) return;
 
     try {
-      const { data: { session } } = await supabaseClient.auth.getSession();
+      const token = await AdminJornadas._getToken();
+      if (!token) { Utils.toast('Sessão expirada. Faça login novamente.', 'error'); return; }
+
       const resp = await fetch(`/api/jornadas?id=${id}`, {
         method: 'DELETE',
-        headers: { Authorization: `Bearer ${session?.access_token}` },
+        headers: { Authorization: `Bearer ${token}` },
       });
       if (!resp.ok) throw new Error('Falha ao remover');
       JornadaUtils.limparCache();
@@ -278,6 +282,20 @@ const AdminJornadas = {
       this.render();
     } catch (e) {
       Utils.toast('Erro ao remover: ' + e.message, 'error');
+    }
+  },
+
+  async _getToken() {
+    try {
+      let { data } = await supabaseClient.auth.getSession();
+      if (!data?.session?.access_token) {
+        const refresh = await supabaseClient.auth.refreshSession();
+        data = refresh.data;
+      }
+      return data?.session?.access_token || null;
+    } catch (e) {
+      console.error('[AdminJornadas] getToken erro:', e);
+      return null;
     }
   },
 };

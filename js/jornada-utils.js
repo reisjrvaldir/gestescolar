@@ -101,15 +101,30 @@ const JornadaUtils = {
     return `${sinal}${h}h ${String(m).padStart(2, '0')}min`;
   },
 
+  // Helper: pega token com refresh automático
+  async _getToken() {
+    try {
+      let { data } = await supabaseClient.auth.getSession();
+      if (!data?.session?.access_token) {
+        const refresh = await supabaseClient.auth.refreshSession();
+        data = refresh.data;
+      }
+      return data?.session?.access_token || null;
+    } catch (e) {
+      console.error('[JornadaUtils] getToken erro:', e);
+      return null;
+    }
+  },
+
   // Busca jornada de um professor (cache local + API)
   async buscarJornada(userId) {
     JornadaUtils._cache = JornadaUtils._cache || {};
     if (JornadaUtils._cache[userId]) return JornadaUtils._cache[userId];
 
     try {
-      const { data: { session } } = await supabaseClient.auth.getSession();
+      const token = await JornadaUtils._getToken();
       const resp = await fetch(`/api/jornadas?user_id=${userId}`, {
-        headers: { Authorization: `Bearer ${session?.access_token}` },
+        headers: { Authorization: `Bearer ${token}` },
       });
       const json = await resp.json();
       if (!resp.ok) return null;
@@ -124,9 +139,9 @@ const JornadaUtils = {
   // Lista todas as jornadas da escola (gestor)
   async listarJornadas() {
     try {
-      const { data: { session } } = await supabaseClient.auth.getSession();
+      const token = await JornadaUtils._getToken();
       const resp = await fetch('/api/jornadas', {
-        headers: { Authorization: `Bearer ${session?.access_token}` },
+        headers: { Authorization: `Bearer ${token}` },
       });
       const json = await resp.json();
       if (!resp.ok) return [];
