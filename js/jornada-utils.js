@@ -105,7 +105,9 @@ const JornadaUtils = {
   async _getToken() {
     try {
       let { data } = await supabaseClient.auth.getSession();
-      if (!data?.session?.access_token) {
+      const expiresAt = data?.session?.expires_at;
+      const expirado  = !expiresAt || expiresAt < (Date.now() / 1000) + 30;
+      if (!data?.session?.access_token || expirado) {
         const refresh = await supabaseClient.auth.refreshSession();
         data = refresh.data;
       }
