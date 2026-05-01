@@ -152,27 +152,25 @@ const AdminCalendario = {
 
       const podeRemover = fer && fer._origem === 'escola';
 
+      const clicavel = !fimDeSem;
       celulas.push(`
-        <div style="background:${bg};border:${borda};padding:6px;min-height:64px;position:relative;border-radius:4px;"
-          title="${Utils.escape(tooltip)}">
+        <div style="background:${bg};border:${borda};padding:6px;min-height:64px;position:relative;border-radius:4px;${clicavel ? 'cursor:pointer;' : ''}"
+          title="${Utils.escape(tooltip || (clicavel ? 'Clique para adicionar feriado' : ''))}"
+          ${clicavel ? `onclick="AdminCalendario.abrirNovoFeriado('${data}')"` : ''}>
           <div style="font-weight:700;color:${cor};font-size:13px;">${d}</div>
           ${fer ? `
             <div style="font-size:9px;color:${cor};font-weight:600;line-height:1.1;margin-top:2px;overflow:hidden;text-overflow:ellipsis;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;">
               ${Utils.escape(fer.descricao)}
             </div>
             ${podeRemover ? `
-              <button onclick="AdminCalendario.removerFeriado('${fer.id}', '${Utils.escape(fer.descricao)}')"
+              <button onclick="event.stopPropagation();AdminCalendario.removerFeriado('${fer.id}', '${Utils.escape(fer.descricao)}')"
                 style="position:absolute;top:2px;right:2px;background:none;border:none;color:#F44336;cursor:pointer;font-size:11px;padding:2px;"
                 title="Remover">
                 <i class="fa-solid fa-xmark"></i>
               </button>
             ` : ''}
           ` : (!fimDeSem ? `
-            <button onclick="AdminCalendario.abrirNovoFeriado('${data}')"
-              style="position:absolute;bottom:2px;right:2px;background:none;border:none;color:#999;cursor:pointer;font-size:11px;padding:2px;"
-              title="Adicionar feriado">
-              <i class="fa-solid fa-plus"></i>
-            </button>
+            <div style="position:absolute;bottom:4px;right:6px;color:#bbb;font-size:16px;line-height:1;">+</div>
           ` : '')}
         </div>
       `);
