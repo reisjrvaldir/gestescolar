@@ -44,11 +44,15 @@ module.exports = async (req, res) => {
       if (req.query.user_id) query = query.eq('user_id', req.query.user_id);
 
       if (req.query.mes && req.query.ano) {
-        const mes = String(req.query.mes).padStart(2, '0');
-        const ano = req.query.ano;
+        const mesNum = parseInt(req.query.mes, 10);
+        const anoNum = parseInt(req.query.ano, 10);
+        const mes    = String(mesNum).padStart(2, '0');
+        // Último dia real do mês (evita "2026-04-31" que é inválido no PostgreSQL)
+        const ultimoDia = new Date(anoNum, mesNum, 0).getDate();
+        const dia       = String(ultimoDia).padStart(2, '0');
         query = query
-          .gte('data', `${ano}-${mes}-01`)
-          .lte('data', `${ano}-${mes}-31`);
+          .gte('data', `${anoNum}-${mes}-01`)
+          .lte('data', `${anoNum}-${mes}-${dia}`);
       }
 
       query = query.order('data', { ascending: true });
