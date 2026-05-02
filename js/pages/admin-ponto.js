@@ -689,7 +689,10 @@ const AdminPonto = {
       for (const resp of resps) {
         if (!resp.ok) continue;
         const json = await resp.json();
-        (json.data || []).forEach(f => { this._feriadosCache[f.data] = f; });
+        (json.data || []).forEach(f => {
+          const dataYMD = (f.data || '').slice(0, 10); // normaliza "2026-04-21T00:00:00Z" → "2026-04-21"
+          this._feriadosCache[dataYMD] = f;
+        });
       }
       this._feriadosCacheAno = `${ai}-${af}`;
     } catch (e) { console.warn('[AdminPonto] feriados:', e); }
