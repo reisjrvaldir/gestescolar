@@ -1336,10 +1336,16 @@ const AdminPonto = {
       const sinalMes    = saldoMes > 0 ? '+' : '';
 
       return `
-        <div style="page-break-inside:avoid;margin-bottom:24px;">
-          <div style="background:#f0f7ff;padding:8px 12px;border-left:4px solid #2196F3;margin-bottom:8px;">
-            <strong style="font-size:14px;">Colaborador:</strong> ${Utils.escape(prof)}
+        <div class="page-prof">
+          <div class="header">
+            ${logoUrl ? `<img src="${logoUrl}" alt="Logo" />` : ''}
+            <div class="info">
+              <h1>${escolaNome}</h1>
+              ${escolaDoc ? `<div class="doc">${escolaDoc}</div>` : ''}
+              <div class="periodo">Relatório de Ponto Docente — ${mesLabel}/${ano}</div>
+            </div>
           </div>
+          <div class="prof-name">${Utils.escape(prof)}</div>
           <table>
             <thead>
               <tr>
@@ -1361,6 +1367,10 @@ const AdminPonto = {
               </tr>
             </tfoot>
           </table>
+          <div class="assinatura">
+            <div class="assinatura-linha"></div>
+            <div class="assinatura-label">${Utils.escape(prof)}</div>
+          </div>
         </div>
       `;
     }).join('');
@@ -1372,49 +1382,52 @@ const AdminPonto = {
         <meta charset="UTF-8">
         <title>Relatório de Ponto - ${mesLabel} ${ano}</title>
         <style>
-          @page { size: A4 landscape; margin: 12mm; }
+          @page { size: A4 landscape; margin: 10mm; }
+          * { box-sizing: border-box; }
           body { font-family: Arial, sans-serif; margin: 0; color: #222; }
-          .header { display:flex; align-items:center; gap:14px; border-bottom:2px solid #2196F3; padding-bottom:10px; margin-bottom:14px; }
-          .header img { max-height:60px; max-width:80px; object-fit:contain; }
+          .page-prof {
+            page-break-after: always;
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+            padding: 0;
+          }
+          .page-prof:last-child { page-break-after: auto; }
+          .header { display:flex; align-items:center; gap:10px; border-bottom:2px solid #2196F3; padding-bottom:6px; margin-bottom:4px; flex-shrink:0; }
+          .header img { max-height:45px; max-width:60px; object-fit:contain; }
           .header .info { flex:1; }
-          .header h1 { margin:0; font-size:18px; color:#333; }
-          .header .doc { font-size:11px; color:#666; margin-top:2px; }
-          .header .periodo { font-size:12px; color:#2196F3; font-weight:bold; margin-top:4px; }
-          table { width: 100%; border-collapse: collapse; font-size: 11px; }
-          th, td { border: 1px solid #ddd; padding: 4px 6px; text-align: left; }
-          th { background-color: #2196F3; color: white; font-weight: bold; font-size:11px; }
+          .header h1 { margin:0; font-size:15px; color:#333; }
+          .header .doc { font-size:10px; color:#666; margin-top:1px; }
+          .header .periodo { font-size:11px; color:#2196F3; font-weight:bold; margin-top:2px; }
+          .prof-name {
+            background:#f0f7ff; padding:5px 10px; border-left:4px solid #2196F3;
+            margin-bottom:4px; font-size:13px; font-weight:bold; flex-shrink:0;
+          }
+          table { width: 100%; border-collapse: collapse; font-size: 10px; flex:1; }
+          th, td { border: 1px solid #ddd; padding: 2px 4px; text-align: left; }
+          th { background-color: #2196F3; color: white; font-weight: bold; font-size:10px; }
           tr:nth-child(even) { background-color: #f9f9f9; }
           tfoot td { background:#fafafa; }
-          .footer { margin-top:18px; text-align:center; font-size:10px; color:#666; border-top:1px solid #ddd; padding-top:6px; }
-          .legenda { font-size:10px; color:#666; margin:6px 0 12px; }
-          .legenda span { margin-right:14px; }
+          .assinatura {
+            flex-shrink: 0;
+            margin-top: 10px;
+            padding-top: 4px;
+            text-align: center;
+          }
+          .assinatura-linha {
+            width: 300px;
+            margin: 0 auto;
+            border-top: 1px solid #333;
+          }
+          .assinatura-label {
+            font-size: 11px;
+            color: #333;
+            margin-top: 2px;
+          }
         </style>
       </head>
       <body>
-        <div class="header">
-          ${logoUrl ? `<img src="${logoUrl}" alt="Logo" />` : ''}
-          <div class="info">
-            <h1>${escolaNome}</h1>
-            ${escolaDoc ? `<div class="doc">${escolaDoc}</div>` : ''}
-            <div class="periodo">Relatório de Ponto Docente — ${mesLabel}/${ano}</div>
-          </div>
-        </div>
-
-        <div class="legenda">
-          <span><strong style="color:#4CAF50;">●</strong> Entrada</span>
-          <span><strong style="color:#FF9800;">●</strong> Início Intervalo</span>
-          <span><strong style="color:#2196F3;">●</strong> Fim Intervalo</span>
-          <span><strong style="color:#F44336;">●</strong> Saída</span>
-          <span><strong style="color:#4CAF50;">+saldo</strong> excedente</span>
-          <span><strong style="color:#F44336;">-saldo</strong> faltante</span>
-          <span>Carga diária: 8h00</span>
-        </div>
-
         ${blocosHtml}
-
-        <div class="footer">
-          Relatório gerado em ${new Date().toLocaleDateString('pt-BR')} às ${new Date().toLocaleTimeString('pt-BR')}
-        </div>
       </body>
       </html>
     `;
