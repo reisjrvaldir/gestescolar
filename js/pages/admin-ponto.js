@@ -54,26 +54,41 @@ const AdminPonto = {
 
     if (aba) this._aba = aba;
 
-    // Carrega feriados do ano corrente (cache)
+    // Carrega feriados (com cache), ausências e dados principais em paralelo
     const anoAtual = new Date().getFullYear();
-    await this._carregarFeriados(`${anoAtual}-01-01`, `${anoAtual}-12-31`);
 
-    // Carrega ausências se professor selecionado
-    if (this._filtros.professor_id && this._aba === 'registros') {
-      const base = this._filtros.data_inicio
-        ? new Date(this._filtros.data_inicio + 'T12:00:00')
-        : new Date();
-      await this._carregarAusencias(this._filtros.professor_id, base.getMonth() + 1, base.getFullYear());
-    }
-    // Ausências também no Relatório
-    if (this._aba === 'relatorio' && this._filtrosRelatorio.professor_id) {
-      await this._carregarAusencias(this._filtrosRelatorio.professor_id, this._filtrosRelatorio.mes, this._filtrosRelatorio.ano);
-    }
+    const ausenciasPromise = (() => {
+      if (this._filtros.professor_id && this._aba === 'registros') {
+        const base = this._filtros.data_inicio
+          ? new Date(this._filtros.data_inicio + 'T12:00:00')
+          : new Date();
+        return this._carregarAusencias(this._filtros.professor_id, base.getMonth() + 1, base.getFullYear());
+      }
+      if (this._aba === 'relatorio' && this._filtrosRelatorio.professor_id) {
+        return this._carregarAusencias(this._filtrosRelatorio.professor_id, this._filtrosRelatorio.mes, this._filtrosRelatorio.ano);
+      }
+      return Promise.resolve();
+    })();
 
-    const [resumo, dados] = await Promise.all([
-      this._buscarResumo(),
-      this._aba === 'registros' ? this._buscarRegistros() : this._aba === 'ajustes' ? this._buscarAjustes() : this._buscarRelatorio(),
+    const dadosPromise = this._aba === 'registros' ? this._buscarRegistros()
+      : this._aba === 'ajustes' ? this._buscarAjustes()
+      : this._buscarRelatorio();
+
+    // Ajustes pendentes: reutiliza dados se já estamos na aba, senão busca em paralelo
+    const ajustesPromise = this._aba === 'ajustes'
+      ? dadosPromise
+      : this._buscarAjustesPendentes();
+
+    const [, dados, ajustesPendentes] = await Promise.all([
+      Promise.all([
+        this._carregarFeriados(`${anoAtual}-01-01`, `${anoAtual}-12-31`),
+        ausenciasPromise,
+      ]),
+      dadosPromise,
+      ajustesPromise,
     ]);
+
+    const resumo = this._calcularResumo(dados, ajustesPendentes);
 
     const hoje = new Date().toLocaleDateString('pt-BR', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
 
@@ -619,6 +634,7 @@ const AdminPonto = {
 
   CARGA_HORARIA_DIARIA: 8 * 60, // minutos (8h)
   _feriadosCache: {},           // { 'YYYY-MM-DD': true }
+  _feriadosCacheAno: null,      // ano já carregado no cache
   _ausenciasCache: [],          // ausências do mês carregado
 
   TIPO_AUSENCIA: {
@@ -658,17 +674,24 @@ const AdminPonto = {
   // Carrega feriados da escola para um intervalo
   async _carregarFeriados(dataInicioISO, dataFimISO) {
     try {
-      const token = await this._getToken();
-      if (!token) return;
       const ai = new Date(dataInicioISO).getFullYear();
       const af = new Date(dataFimISO).getFullYear();
+      // Só recarrega se o ano mudou ou o cache está vazio
+      if (this._feriadosCacheAno === `${ai}-${af}` && Object.keys(this._feriadosCache).length > 0) return;
+      const token = await this._getToken();
+      if (!token) return;
       this._feriadosCache = {};
+      const fetches = [];
       for (let ano = ai; ano <= af; ano++) {
-        const resp = await fetch(`/api/feriados?ano=${ano}`, { headers: { 'Authorization': `Bearer ${token}` } });
+        fetches.push(fetch(`/api/feriados?ano=${ano}`, { headers: { 'Authorization': `Bearer ${token}` } }));
+      }
+      const resps = await Promise.all(fetches);
+      for (const resp of resps) {
         if (!resp.ok) continue;
         const json = await resp.json();
         (json.data || []).forEach(f => { this._feriadosCache[f.data] = f; });
       }
+      this._feriadosCacheAno = `${ai}-${af}`;
     } catch (e) { console.warn('[AdminPonto] feriados:', e); }
   },
 
@@ -1080,55 +1103,42 @@ const AdminPonto = {
     this._recarregar();
   },
 
-  async _buscarResumo() {
+  // Deriva os cards de resumo a partir dos dados já buscados (sem fetch adicional)
+  _calcularResumo(dados, ajustesOuCount) {
     try {
-      const token = await this._getToken();
-      if (!token) return {};
-
-      // Se há filtro de período aplicado, usa-o; senão usa o dia atual
-      let inicioISO, fimISO, labelPeriodo;
+      const pontos = Array.isArray(dados) ? dados : (dados?.pontos || []);
+      let labelPeriodo;
       if (this._filtros.data_inicio || this._filtros.data_fim) {
         const di = this._filtros.data_inicio ? new Date(this._filtros.data_inicio) : new Date();
         const df = this._filtros.data_fim    ? new Date(this._filtros.data_fim)    : new Date();
-        di.setHours(0, 0, 0, 0);
-        df.setHours(23, 59, 59, 999);
-        inicioISO    = di.toISOString();
-        fimISO       = df.toISOString();
         labelPeriodo = `Total ${di.toLocaleDateString('pt-BR')} a ${df.toLocaleDateString('pt-BR')}`;
       } else {
-        const hoje = new Date();
-        inicioISO    = new Date(hoje.setHours(0, 0, 0, 0)).toISOString();
-        fimISO       = new Date(hoje.setHours(23, 59, 59, 999)).toISOString();
-        labelPeriodo = 'Total hoje';
+        labelPeriodo = 'Total do mês';
       }
-
-      const params = new URLSearchParams({ limit: 500, data_inicio: inicioISO, data_fim: fimISO });
-      if (this._filtros.status) params.set('status', this._filtros.status);
-
-      // Busca registros do período + ajustes pendentes em paralelo
-      const [respPontos, respAjustes] = await Promise.all([
-        fetch(`/api/pontos?${params}`, {
-          headers: { 'Authorization': `Bearer ${token}` },
-        }),
-        fetch(`/api/pontos-ajuste?status=PENDENTE&limit=200`, {
-          headers: { 'Authorization': `Bearer ${token}` },
-        }),
-      ]);
-
-      const pontosJson  = respPontos.ok  ? await respPontos.json()  : {};
-      const ajustesJson = respAjustes.ok ? await respAjustes.json() : {};
-
-      const pontos  = pontosJson.data?.pontos  || [];
-      const ajustes = ajustesJson.data         || [];
-
       const contagem = { total: pontos.length, pendente: 0, auto_validado: 0, aprovado: 0, rejeitado: 0 };
       pontos.forEach(p => {
         const k = p.status?.toLowerCase();
         if (contagem[k] !== undefined) contagem[k]++;
       });
+      // ajustesOuCount pode ser número (fetch paralelo) ou array (aba ajustes)
+      const ajustesPendentes = typeof ajustesOuCount === 'number'
+        ? ajustesOuCount
+        : (Array.isArray(ajustesOuCount) ? ajustesOuCount.filter(a => a.status === 'PENDENTE').length : 0);
+      return { ...contagem, ajustesPendentes, labelPeriodo };
+    } catch { return { total: 0, pendente: 0, auto_validado: 0, aprovado: 0, rejeitado: 0, ajustesPendentes: 0, labelPeriodo: 'Total do mês' }; }
+  },
 
-      return { ...contagem, ajustesPendentes: Array.isArray(ajustes) ? ajustes.length : 0, labelPeriodo };
-    } catch { return { total: 0, pendente: 0, auto_validado: 0, aprovado: 0, rejeitado: 0, ajustesPendentes: 0, labelPeriodo: 'Total hoje' }; }
+  async _buscarAjustesPendentes() {
+    try {
+      const token = await this._getToken();
+      if (!token) return 0;
+      const resp = await fetch(`/api/pontos-ajuste?status=PENDENTE&limit=50`, {
+        headers: { 'Authorization': `Bearer ${token}` },
+      });
+      if (!resp.ok) return 0;
+      const json = await resp.json();
+      return Array.isArray(json.data) ? json.data.length : 0;
+    } catch { return 0; }
   },
 
   async _buscarRegistros() {
