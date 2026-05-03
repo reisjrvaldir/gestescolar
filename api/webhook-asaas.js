@@ -27,9 +27,9 @@ module.exports = async function handler(req, res) {
     return res.status(500).json({ error: 'Configuração do servidor incompleta.' });
   }
 
-  // Validar token do webhook
-  const token = req.headers['asaas-access-token'] || req.query.token;
-  if (token !== WEBHOOK_TOKEN) {
+  // Validar token do webhook (apenas via header — query string fica em logs/proxies)
+  const token = req.headers['asaas-access-token'];
+  if (!token || token !== WEBHOOK_TOKEN) {
     return res.status(403).json({ error: 'Token inválido.' });
   }
 
@@ -86,7 +86,14 @@ module.exports = async function handler(req, res) {
 
     // Valor real pago (pode ser maior que invoice.amount se houve multa/juros)
     // payment.value = valor bruto cobrado do pagador (já inclui fines/interest que setamos)
-    const actualPaidAmount = Number(payment.value) || invoice.amount;
+    const parsedPayment = parseFloat(payment.value);
+    const parsedInvoice = parseFloat(invoice.amount);
+    const actualPaidAmount = Number.isFinite(parsedPayment) && parsedPayment > 0
+      ? parsedPayment
+      : (Number.isFinite(parsedInvoice) && parsedInvoice > 0 ? parsedInvoice : 0);
+    if (actualPaidAmount === 0 && newStatus === 'pago') {
+      console.error('[Webhook] Valor pago indeterminado para payment', payment.id, 'invoice', invoice.id);
+    }
 
     // Atualizar invoice
     const updateData = { status: newStatus };
@@ -155,7 +162,7 @@ module.exports = async function handler(req, res) {
         } else {
           console.log(`[Webhook] Plano renovado para escola ${invoice.school_id}: vence em ${expiresAt}`);
 
-          // 📧 Enviar email de confirmação (fire-and-forget)
+          // 📧 Enviar email de confirmação (com retry e fallback em audit_log)
           if (userData?.email) {
             const emailPayload = {
               to: userData.email,
@@ -163,20 +170,44 @@ module.exports = async function handler(req, res) {
               template: 'payment_confirmed',
               data: {
                 schoolName: schoolData?.name || 'Sua Escola',
-                value: invoice.amount,
+                value: actualPaidAmount,
                 daysRemaining: 30,
                 loginUrl: `${VERCEL_URL}/app/dashboard`,
               },
             };
 
-            fetch(`${VERCEL_URL}/api/send-email`, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify(emailPayload),
-            })
-              .then(r => r.json())
-              .then(d => console.log(`[Webhook] Email enviado: ${d.emailId || 'queued'}`))
-              .catch(e => console.error('[Webhook] Erro ao enviar email:', e.message));
+            const enviarEmail = async () => {
+              for (let attempt = 1; attempt <= 3; attempt++) {
+                try {
+                  const r = await fetch(`${VERCEL_URL}/api/send-email`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(emailPayload),
+                  });
+                  if (r.ok) {
+                    const d = await r.json().catch(() => ({}));
+                    console.log(`[Webhook] Email enviado (tentativa ${attempt}): ${d.emailId || 'queued'}`);
+                    return true;
+                  }
+                  console.warn(`[Webhook] Email falhou tentativa ${attempt}: HTTP ${r.status}`);
+                } catch (e) {
+                  console.warn(`[Webhook] Email erro tentativa ${attempt}:`, e.message);
+                }
+                if (attempt < 3) await new Promise(r => setTimeout(r, 500 * attempt));
+              }
+              return false;
+            };
+
+            enviarEmail().then(ok => {
+              if (!ok) {
+                // Falha após 3 tentativas — registra para alerta posterior
+                supabase.from('audit_log').insert({
+                  school_id: invoice.school_id,
+                  action: 'EMAIL_PAYMENT_CONFIRMATION_FAILED',
+                  details: JSON.stringify({ to: userData.email, paymentId: payment.id, invoiceId: invoice.id }),
+                }).catch(e => console.error('[Webhook] Erro ao logar falha de email:', e));
+              }
+            });
           }
         }
 
