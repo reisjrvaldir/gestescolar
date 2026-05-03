@@ -163,6 +163,16 @@ Router.register('register', (params = {}) => {
 const RegisterPage = {
   _roles: [],
 
+  // Gera senha aleatória usando crypto.getRandomValues (sem caracteres ambíguos: 0/O, 1/l/I)
+  _gerarSenhaAleatoria(tamanho = 10) {
+    const alfabeto = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789';
+    const buf = new Uint32Array(tamanho);
+    (window.crypto || window.msCrypto).getRandomValues(buf);
+    let out = '';
+    for (let i = 0; i < tamanho; i++) out += alfabeto[buf[i] % alfabeto.length];
+    return out;
+  },
+
   toggleRole(el) {
     const role = el.dataset.role;
     const idx  = this._roles.indexOf(role);
@@ -242,14 +252,10 @@ const RegisterPage = {
     const cpfDigits = (cpfRaw || '').replace(/\D/g, '');
     const isProfessor = this._roles.includes('professor');
 
-    // Professor: senha automatica = 6 primeiros digitos do CPF
+    // Professor: senha automática aleatória (10 chars: letras + dígitos)
     let password;
     if (isProfessor) {
-      if (cpfDigits.length < 6) {
-        alertEl.innerHTML = `<div class="alert alert-danger"><i class="fa-solid fa-circle-exclamation"></i> CPF deve ter pelo menos 6 digitos para gerar a senha do professor.</div>`;
-        return;
-      }
-      password = cpfDigits.substring(0, 6);
+      password = this._gerarSenhaAleatoria(10);
     } else {
       password = document.getElementById('regPassword').value;
       const confirm = document.getElementById('regPasswordConfirm').value;
@@ -308,9 +314,10 @@ const RegisterPage = {
     if (isProfessor) {
       alertEl.innerHTML = `<div class="alert alert-success">
         <i class="fa-solid fa-check-circle"></i> Professor(a) cadastrado(a) com sucesso!<br>
-        <strong>Matrícula:</strong> ${userData.matricula}<br>
-        <strong>Login:</strong> ${userData.email}<br>
-        <strong>Senha:</strong> primeiros 6 dígitos do CPF
+        <strong>Matrícula:</strong> ${Utils.escape(userData.matricula || '')}<br>
+        <strong>Login:</strong> ${Utils.escape(userData.email)}<br>
+        <strong>Senha provisória:</strong> <code style="background:#fff;padding:2px 6px;border:1px solid #ccc;border-radius:4px;font-size:14px;">${Utils.escape(password)}</code><br>
+        <small style="color:#b71c1c;"><i class="fa-solid fa-triangle-exclamation"></i> Anote esta senha agora — ela não será exibida novamente. Repasse ao professor de forma segura.</small>
       </div>`;
     } else {
       alertEl.innerHTML = `<div class="alert alert-success"><i class="fa-solid fa-check-circle"></i> Funcionário cadastrado com sucesso!</div>`;

@@ -921,6 +921,7 @@ const LoginPage = {
     if (resetToken && resetEmail) {
       console.log('[Login] Reset token encontrado na URL:', resetToken.slice(0, 8) + '...');
       this._showResetPasswordForm(resetToken, resetEmail);
+      // _showResetPasswordForm move para sessionStorage e limpa a URL
       return true;
     }
 
@@ -943,14 +944,19 @@ const LoginPage = {
   },
 
   _showResetPasswordForm(resetToken, resetEmail) {
-    // Armazenar token e email em URL fragment apenas (não em sessionStorage para evitar XSS)
-    // O URL fragment (#) não é enviado ao servidor, protegendo contra logs
+    // Armazenar token/email em sessionStorage (escopo da aba, não persiste e não fica em
+    // logs/histórico do navegador). Limpa a URL para remover token de history/referer.
     if (resetToken && resetEmail) {
-      window.history.replaceState({}, '', `#reset_token=${encodeURIComponent(resetToken)}&reset_email=${encodeURIComponent(resetEmail)}`);
+      try {
+        sessionStorage.setItem('resetToken', resetToken);
+        sessionStorage.setItem('resetEmail', resetEmail);
+      } catch (_) {}
+      window.history.replaceState({}, '', window.location.pathname);
     }
 
     const app = document.getElementById('app');
-    const emailDisplay = resetEmail ? `<p style="text-align:center;font-size:12px;color:var(--text-muted);margin-bottom:16px;">E-mail: <strong>${resetEmail}</strong></p>` : '';
+    const emailSafe = resetEmail ? (typeof Utils !== 'undefined' && Utils.escape ? Utils.escape(resetEmail) : String(resetEmail).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))) : '';
+    const emailDisplay = emailSafe ? `<p style="text-align:center;font-size:12px;color:var(--text-muted);margin-bottom:16px;">E-mail: <strong>${emailSafe}</strong></p>` : '';
 
     app.innerHTML = `
       <div class="login-wrap">
@@ -1009,8 +1015,8 @@ const LoginPage = {
     if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Salvando...'; }
 
     try {
-      // Buscar token do URL fragment (seguro contra XSS e logging)
-      const { resetToken, resetEmail } = getHashParams();
+      // Buscar token preferencialmente em sessionStorage (não fica em URL/history)
+      const { resetToken, resetEmail } = getResetParams();
 
       // Se temos um token customizado (vindo do email), usar o backend para validar
       if (resetToken && resetEmail) {
@@ -1035,8 +1041,9 @@ const LoginPage = {
           return;
         }
 
-        // Limpar URL fragment (remove parâmetros de reset)
-        window.history.replaceState({}, '', window.location.pathname + window.location.search);
+        // Limpar URL fragment e tokens de sessionStorage
+        window.history.replaceState({}, '', window.location.pathname);
+        try { sessionStorage.removeItem('resetToken'); sessionStorage.removeItem('resetEmail'); } catch (_) {}
 
         // Fazer signOut global do Supabase para invalidar qualquer JWT em cache
         try {

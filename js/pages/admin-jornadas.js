@@ -97,7 +97,7 @@ const AdminJornadas = {
 
     return `
       <tr>
-        <td><strong>${p.name}</strong><br><small style="color:#888">${p.email || p.username || ''}</small></td>
+        <td><strong>${Utils.escape(p.name || '')}</strong><br><small style="color:#888">${Utils.escape(p.email || p.username || '')}</small></td>
         <td>${status}</td>
         <td>${carga}</td>
         <td style="text-align:right;white-space:nowrap">${btnEditar}${btnRemover}</td>
@@ -117,7 +117,7 @@ const AdminJornadas = {
       <div class="card" style="max-width:640px;width:92%;max-height:92vh;overflow-y:auto;padding:20px">
         <h2 style="margin-top:0">
           <i class="fa-solid fa-user-clock"></i>
-          Jornada de ${prof.name}
+          Jornada de ${Utils.escape(prof.name || '')}
         </h2>
 
         <div style="display:flex;flex-direction:column;gap:14px">
