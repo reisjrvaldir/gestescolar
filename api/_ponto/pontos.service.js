@@ -74,6 +74,11 @@ async function listarPontos(filtros, user) {
   if (user.role === 'professor') {
     filtros.user_id = user.id;
   }
+  // Isolamento multi-tenant: gestor/admin só vê pontos da própria escola.
+  // Superadmin pode ver tudo (school_id ausente).
+  if (user.role !== 'superadmin' && user.school_id) {
+    filtros.school_id = user.school_id;
+  }
   return repo.listarPontos(filtros);
 }
 
@@ -82,6 +87,10 @@ async function listarPontos(filtros, user) {
 async function executarAcao(pontoId, dto, gestor) {
   const ponto = await repo.buscarPontoPorId(pontoId);
   if (!ponto) throw new NaoEncontradoError('Ponto');
+
+  // Isolamento multi-tenant
+  if (gestor.role !== 'superadmin' && gestor.school_id && ponto.school_id !== gestor.school_id)
+    throw new ForbiddenError('Sem permissão para alterar ponto de outra escola.');
 
   if (![StatusPonto.PENDENTE, StatusPonto.AUTO_VALIDADO].includes(ponto.status))
     throw new ForbiddenError(`Ponto com status "${ponto.status}" não pode ser alterado.`);

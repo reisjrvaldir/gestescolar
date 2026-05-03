@@ -25,8 +25,13 @@ module.exports = async (req, res) => {
         limit:  Math.min(parseInt(req.query.limit  || '50', 10), 100),
         page:   Math.max(parseInt(req.query.page   || '1',  10), 1),
       };
-      const resultado = await ajustesService.listarAjustes(filtros);
-      return sucesso(res, resultado.ajustes);
+      const resultado = await ajustesService.listarAjustes(filtros, usuario);
+      return sucesso(res, {
+        ajustes: resultado.ajustes,
+        total:   resultado.total,
+        page:    filtros.page,
+        limit:   filtros.limit,
+      });
     } catch (err) {
       return erro(res, err);
     }

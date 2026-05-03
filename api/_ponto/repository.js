@@ -27,11 +27,12 @@ async function buscarPontoPorId(id) {
   const sb = getSupabase();
   const { data, error } = await sb
     .from('pontos_docente')
-    .select('*')
+    .select('*, users!user_id(school_id)')
     .eq('id', id)
     .single();
   if (error && error.code !== 'PGRST116') throw new Error(`DB buscarPontoPorId: ${error.message}`);
-  return data || null;
+  if (!data) return null;
+  return { ...data, school_id: data.users?.school_id || null, users: undefined };
 }
 
 async function buscarUltimoPonto(user_id, janela_segundos = 60) {
@@ -52,12 +53,14 @@ async function listarPontos(filtros) {
   const sb = getSupabase();
   let query = sb
     .from('pontos_docente')
-    .select('*, users!user_id(name), ajustes_ponto(*)', { count: 'exact' });
+    .select('*, users!user_id!inner(name, school_id), ajustes_ponto(*)', { count: 'exact' });
 
   if (filtros.user_id)     query = query.eq('user_id', filtros.user_id);
   if (filtros.status)      query = query.eq('status', filtros.status);
   if (filtros.data_inicio) query = query.gte('timestamp', filtros.data_inicio);
   if (filtros.data_fim)    query = query.lte('timestamp', filtros.data_fim);
+  // Isolamento multi-tenant: filtra pontos cujo user pertence à mesma escola
+  if (filtros.school_id)   query = query.eq('users.school_id', filtros.school_id);
 
   const offset = (filtros.page - 1) * filtros.limit;
   query = query
@@ -80,9 +83,11 @@ async function listarAjustes(filtros = {}) {
   const sb = getSupabase();
   let query = sb
     .from('ajustes_ponto')
-    .select('*, pontos_docente!ponto_id(user_id, tipo, timestamp, users!user_id(name))', { count: 'exact' });
+    .select('*, pontos_docente!ponto_id!inner(user_id, tipo, timestamp, users!user_id!inner(name, school_id))', { count: 'exact' });
 
-  if (filtros.status) query = query.eq('status', filtros.status);
+  if (filtros.status)    query = query.eq('status', filtros.status);
+  // Isolamento multi-tenant
+  if (filtros.school_id) query = query.eq('pontos_docente.users.school_id', filtros.school_id);
 
   const limit  = filtros.limit  || 50;
   const page   = filtros.page   || 1;
@@ -133,11 +138,16 @@ async function buscarAjustePorId(id) {
   const sb = getSupabase();
   const { data, error } = await sb
     .from('ajustes_ponto')
-    .select('*')
+    .select('*, pontos_docente!ponto_id(users!user_id(school_id))')
     .eq('id', id)
     .single();
   if (error && error.code !== 'PGRST116') throw new Error(`DB buscarAjustePorId: ${error.message}`);
-  return data || null;
+  if (!data) return null;
+  return {
+    ...data,
+    school_id: data.pontos_docente?.users?.school_id || null,
+    pontos_docente: undefined,
+  };
 }
 
 async function atualizarAjuste(id, dados) {

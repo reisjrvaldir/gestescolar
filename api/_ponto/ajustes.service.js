@@ -41,6 +41,10 @@ async function executarAcaoAjuste(ajusteId, dto, gestor) {
   const ajuste = await repo.buscarAjustePorId(ajusteId);
   if (!ajuste) throw new NaoEncontradoError('Ajuste');
 
+  // Isolamento multi-tenant
+  if (gestor.role !== 'superadmin' && gestor.school_id && ajuste.school_id !== gestor.school_id)
+    throw new ForbiddenError('Sem permissão para alterar ajuste de outra escola.');
+
   if (ajuste.status !== StatusAjuste.PENDENTE)
     throw new ForbiddenError(`Ajuste com status "${ajuste.status}" não pode ser alterado.`);
 
@@ -72,7 +76,11 @@ async function executarAcaoAjuste(ajusteId, dto, gestor) {
 
 // ─── LISTAR AJUSTES ───────────────────────────────────────────────────────────
 
-async function listarAjustes(filtros) {
+async function listarAjustes(filtros, user) {
+  // Isolamento multi-tenant: gestor/admin só vê ajustes da própria escola.
+  if (user && user.role !== 'superadmin' && user.school_id) {
+    filtros.school_id = user.school_id;
+  }
   return repo.listarAjustes(filtros);
 }
 

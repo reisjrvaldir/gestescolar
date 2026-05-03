@@ -1140,7 +1140,10 @@ const AdminPonto = {
       });
       if (!resp.ok) return 0;
       const json = await resp.json();
-      return Array.isArray(json.data) ? json.data.length : 0;
+      const data = json.data || {};
+      if (typeof data.total === 'number') return data.total;
+      const ajustes = Array.isArray(data) ? data : (data.ajustes || []);
+      return ajustes.length;
     } catch { return 0; }
   },
 
@@ -1197,7 +1200,9 @@ const AdminPonto = {
       });
       if (!resp.ok) return [];
       const json = await resp.json();
-      return json.data || [];
+      // API agora retorna { ajustes, total, page, limit } ou array (compat)
+      const data = json.data || {};
+      return Array.isArray(data) ? data : (data.ajustes || []);
     } catch { return []; }
   },
 

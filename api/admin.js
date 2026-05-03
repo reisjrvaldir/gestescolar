@@ -94,12 +94,16 @@ module.exports = async function handler(req, res) {
         `${SUPABASE_URL}/rest/v1/users?auth_id=eq.${authId}&select=school_id&limit=1`,
         { headers: { apikey: SUPABASE_SERVICE_KEY, Authorization: `Bearer ${SUPABASE_SERVICE_KEY}` } }
       );
-      if (targetRes.ok) {
-        const targets = await targetRes.json();
-        const targetSchoolId = targets?.[0]?.school_id;
-        if (targetSchoolId && targetSchoolId !== caller.school_id) {
-          return res.status(403).json({ error: 'Sem permissão para alterar senha de usuário de outra escola.' });
-        }
+      if (!targetRes.ok) {
+        return res.status(500).json({ error: 'Falha ao validar usuário-alvo.' });
+      }
+      const targets = await targetRes.json().catch(() => []);
+      if (!Array.isArray(targets) || targets.length === 0) {
+        return res.status(404).json({ error: 'Usuário não encontrado.' });
+      }
+      const targetSchoolId = targets[0].school_id;
+      if (!targetSchoolId || targetSchoolId !== caller.school_id) {
+        return res.status(403).json({ error: 'Sem permissão para alterar senha de usuário de outra escola.' });
       }
     }
 
