@@ -249,8 +249,11 @@ const ProfessorPonto = {
 
     for (const item of horarios) {
       try {
-        // Monta timestamp local: data + hora
-        const timestamp_manual = new Date(`${data}T${item.hora}:00`).toISOString();
+        // Monta timestamp em fuso LOCAL explicitamente (evita ambiguidade entre
+        // browsers/specs que tratam strings sem timezone como UTC ou local)
+        const [y, mo, d] = data.split('-').map(Number);
+        const [h, mi]    = item.hora.split(':').map(Number);
+        const timestamp_manual = new Date(y, mo - 1, d, h, mi, 0, 0).toISOString();
 
         const resp = await fetch('/api/pontos', {
           method:  'POST',
@@ -352,9 +355,12 @@ const ProfessorPonto = {
   // ─── MODAL DE AJUSTE ───────────────────────────────────────────────────────
 
   abrirAjuste(pontoId, timestampOriginal) {
-    const dt = new Date(timestampOriginal);
-    const dtLocal = new Date(dt.getTime() - dt.getTimezoneOffset() * 60000)
-      .toISOString().slice(0, 16);
+    const dt  = new Date(timestampOriginal);
+    const pad = n => String(n).padStart(2, '0');
+    // Formata em fuso LOCAL para <input type="datetime-local"> (sem aritmética com offset)
+    const dtLocal = `${dt.getFullYear()}-${pad(dt.getMonth()+1)}-${pad(dt.getDate())}T${pad(dt.getHours())}:${pad(dt.getMinutes())}`;
+    const agora   = new Date();
+    const maxLocal = `${agora.getFullYear()}-${pad(agora.getMonth()+1)}-${pad(agora.getDate())}T${pad(agora.getHours())}:${pad(agora.getMinutes())}`;
 
     Utils.modal('Solicitar Ajuste Manual',`
       <p style="font-size:13px;color:var(--text-muted);margin-bottom:16px;">
@@ -364,7 +370,7 @@ const ProfessorPonto = {
       <div class="form-group">
         <label class="form-label">Novo horário *</label>
         <input type="datetime-local" id="aj-timestamp" class="form-control"
-          value="${dtLocal}" max="${new Date().toISOString().slice(0,16)}" />
+          value="${dtLocal}" max="${maxLocal}" />
       </div>
       <div class="form-group">
         <label class="form-label">Justificativa * (mínimo 10 caracteres)</label>
@@ -390,13 +396,19 @@ const ProfessorPonto = {
     if (!token) return Utils.toast('Sessão expirada.', 'error');
 
     try {
+      // Converte datetime-local (YYYY-MM-DDTHH:MM) para UTC ISO usando fuso LOCAL explícito
+      const [datePart, timePart] = timestamp_ajustado.split('T');
+      const [y, mo, d] = datePart.split('-').map(Number);
+      const [h, mi]    = (timePart || '00:00').split(':').map(Number);
+      const isoUtc     = new Date(y, mo - 1, d, h, mi, 0, 0).toISOString();
+
       const resp = await fetch('/api/pontos-ajuste', {
         method:  'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
         body:    JSON.stringify({
           ponto_id:           pontoId,
           justificativa,
-          timestamp_ajustado: new Date(timestamp_ajustado).toISOString(),
+          timestamp_ajustado: isoUtc,
         }),
       });
       const json = await resp.json();
