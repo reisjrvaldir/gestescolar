@@ -312,13 +312,41 @@ const RegisterPage = {
     }
 
     if (isProfessor) {
-      alertEl.innerHTML = `<div class="alert alert-success">
-        <i class="fa-solid fa-check-circle"></i> Professor(a) cadastrado(a) com sucesso!<br>
-        <strong>Matrícula:</strong> ${Utils.escape(userData.matricula || '')}<br>
-        <strong>Login:</strong> ${Utils.escape(userData.email)}<br>
-        <strong>Senha provisória:</strong> <code style="background:#fff;padding:2px 6px;border:1px solid #ccc;border-radius:4px;font-size:14px;">${Utils.escape(password)}</code><br>
-        <small style="color:#b71c1c;"><i class="fa-solid fa-triangle-exclamation"></i> Anote esta senha agora — ela não será exibida novamente. Repasse ao professor de forma segura.</small>
-      </div>`;
+      // Modal bloqueante exibe a senha — gestor precisa confirmar manualmente que anotou
+      const senhaEsc      = Utils.escape(password);
+      const matriculaEsc  = Utils.escape(userData.matricula || '');
+      const emailEsc      = Utils.escape(userData.email);
+      const nomeEsc       = Utils.escape(userData.name);
+      const overlay = document.createElement('div');
+      overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.6);display:flex;align-items:center;justify-content:center;z-index:99999;';
+      overlay.innerHTML = `
+        <div style="background:#fff;border-radius:12px;padding:28px;max-width:480px;width:92%;box-shadow:0 12px 40px rgba(0,0,0,.3);">
+          <h3 style="margin:0 0 12px;color:#2e7d32;"><i class="fa-solid fa-circle-check"></i> Professor cadastrado</h3>
+          <p style="margin:0 0 14px;font-size:14px;color:#333;">Anote a senha provisória abaixo e repasse a <strong>${nomeEsc}</strong> de forma segura. Ela <u>não será exibida novamente</u>.</p>
+          <div style="background:#f7f7f9;border:1px solid #e0e0e0;border-radius:8px;padding:14px;font-size:14px;line-height:1.7;">
+            <div><strong>Matrícula:</strong> ${matriculaEsc}</div>
+            <div><strong>Login (e-mail):</strong> ${emailEsc}</div>
+            <div><strong>Senha provisória:</strong> <code style="background:#fff;padding:3px 8px;border:1px solid #ccc;border-radius:4px;font-size:15px;font-weight:bold;letter-spacing:1px;">${senhaEsc}</code>
+              <button type="button" id="copySenhaBtn" style="margin-left:8px;padding:3px 10px;border:1px solid #2196F3;background:#fff;color:#2196F3;border-radius:4px;cursor:pointer;font-size:12px;"><i class="fa-solid fa-copy"></i> Copiar</button>
+            </div>
+          </div>
+          <div style="background:#fff3cd;border-left:3px solid #ff9800;padding:8px 12px;margin-top:14px;font-size:12px;color:#7a4f00;">
+            <i class="fa-solid fa-triangle-exclamation"></i> Após fechar este aviso, a senha não pode ser recuperada — apenas redefinida.
+          </div>
+          <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:18px;">
+            <button type="button" id="confirmSenhaBtn" class="btn btn-primary"><i class="fa-solid fa-check"></i> Já anotei, continuar</button>
+          </div>
+        </div>`;
+      document.body.appendChild(overlay);
+      overlay.querySelector('#copySenhaBtn').onclick = async () => {
+        try { await navigator.clipboard.writeText(password); Utils.toast('Senha copiada para a área de transferência.', 'success'); }
+        catch { Utils.toast('Falha ao copiar — selecione e copie manualmente.', 'warning'); }
+      };
+      overlay.querySelector('#confirmSenhaBtn').onclick = () => {
+        overlay.remove();
+        const cur = Auth.current();
+        if (cur && ['administrativo','gestor'].includes(cur.role)) Router.go('admin-staff');
+      };
     } else {
       alertEl.innerHTML = `<div class="alert alert-success"><i class="fa-solid fa-check-circle"></i> Funcionário cadastrado com sucesso!</div>`;
     }
@@ -334,9 +362,12 @@ const RegisterPage = {
     this._roles = [];
     document.getElementById('regRole').value = '';
 
-    setTimeout(() => {
-      const cur = Auth.current();
-      if (cur && ['administrativo','gestor'].includes(cur.role)) Router.go('admin-staff');
-    }, 1500);
+    // Para não-professor: redireciona após breve toast
+    if (!isProfessor) {
+      setTimeout(() => {
+        const cur = Auth.current();
+        if (cur && ['administrativo','gestor'].includes(cur.role)) Router.go('admin-staff');
+      }, 1500);
+    }
   }
 };
