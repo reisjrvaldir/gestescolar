@@ -7,7 +7,7 @@
 Router.register('admin-asaas-documents', () => {
   const user = Auth.require();
   if (!user) return;
-  if (user.role !== 'admin' && user.role !== 'gestor') {
+  if (!['gestor', 'administrativo', 'superadmin'].includes(user.role)) {
     Utils.toast('Acesso restrito ao gestor da escola.', 'error');
     Router.go('admin');
     return;

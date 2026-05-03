@@ -10,7 +10,7 @@ const AdminJornadas = {
   async render() {
     const user = Auth.require();
     if (!user) return;
-    if (!['gestor','admin','administrativo','superadmin'].includes(user.role)) {
+    if (!['gestor','administrativo','superadmin'].includes(user.role)) {
       Utils.toast('Acesso restrito ao gestor.', 'error');
       Router.go('admin-dashboard');
       return;

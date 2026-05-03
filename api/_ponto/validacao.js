@@ -87,15 +87,24 @@ function validarFiltros(query) {
   if (user_id)    filtros.user_id    = user_id;
   if (status)     filtros.status     = status;
 
+  let di = null, df = null;
   if (data_inicio) {
-    const d = new Date(data_inicio);
-    if (isNaN(d.getTime())) throw new AppError('"data_inicio" inválida.');
-    filtros.data_inicio = d.toISOString();
+    di = new Date(data_inicio);
+    if (isNaN(di.getTime())) throw new AppError('"data_inicio" inválida.');
+    filtros.data_inicio = di.toISOString();
   }
   if (data_fim) {
-    const d = new Date(data_fim);
-    if (isNaN(d.getTime())) throw new AppError('"data_fim" inválida.');
-    filtros.data_fim = d.toISOString();
+    df = new Date(data_fim);
+    if (isNaN(df.getTime())) throw new AppError('"data_fim" inválida.');
+    filtros.data_fim = df.toISOString();
+  }
+
+  // Sanidade de range: data_fim >= data_inicio e janela máxima de 366 dias
+  if (di && df) {
+    if (df < di) throw new AppError('"data_fim" deve ser maior ou igual a "data_inicio".');
+    const MAX_DIAS = 366;
+    const diffDias = (df.getTime() - di.getTime()) / (24 * 60 * 60 * 1000);
+    if (diffDias > MAX_DIAS) throw new AppError(`Intervalo máximo permitido é de ${MAX_DIAS} dias.`);
   }
 
   filtros.page  = Math.max(1, parseInt(page)  || 1);

@@ -37,7 +37,7 @@ module.exports = async (req, res) => {
     // ── POST /api/pontos ────────────────────────────────────────────────────
     if (req.method === 'POST') {
       // Professores, gestores e admin podem registrar ponto
-      const rolesPermitidas = ['professor', 'gestor', 'administrativo', 'admin', 'superadmin'];
+      const rolesPermitidas = ['professor', 'gestor', 'administrativo', 'superadmin'];
       if (!rolesPermitidas.includes(usuario.role))
         return erro(res, { statusCode: 403, code: 'FORBIDDEN', message: 'Acesso negado.' });
 

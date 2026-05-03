@@ -71,20 +71,26 @@ const Auth = {
       }
 
       // 2. Recarregar dados com sessao Auth ativa (RLS agora permite)
-      // Pequena pausa para garantir que o token JWT foi propagado internamente
-      await new Promise(r => setTimeout(r, 300));
-      const { data: sessionCheck } = await supabaseClient.auth.getSession();
-      console.log('[Auth] Sessão ativa após login:', sessionCheck?.session?.access_token ? 'SIM' : 'NÃO');
+      // Polling até o JWT propagar (vs sleep fixo de 300ms que falhava em rede lenta).
+      // Tenta a cada 100ms, máximo 3s.
+      let sessionOk = false;
+      for (let i = 0; i < 30; i++) {
+        const { data } = await supabaseClient.auth.getSession();
+        if (data?.session?.access_token) { sessionOk = true; break; }
+        await new Promise(r => setTimeout(r, 100));
+      }
+      console.log('[Auth] Sessão ativa após login:', sessionOk ? `SIM (após ~${(Date.now() % 100000)/1000}s)` : 'NÃO (timeout 3s)');
 
       await DB.init();
 
-      // Retry se DB voltou vazio (timing ou lentidão pontual do Supabase)
-      if (DB.getSchools().length === 0) {
-        console.warn('[Auth] DB vazio após primeiro init — retry em 2s...');
-        await new Promise(r => setTimeout(r, 2000));
+      // Retry com backoff se DB voltou vazio (até 3 tentativas)
+      for (let attempt = 1; DB.getSchools().length === 0 && attempt <= 3; attempt++) {
+        const wait = 500 * attempt;
+        console.warn(`[Auth] DB vazio após init — retry ${attempt}/3 em ${wait}ms...`);
+        await new Promise(r => setTimeout(r, wait));
         await DB.init();
-        console.log('[Auth] DB após retry:', DB.getSchools().length, 'escola(s)');
       }
+      console.log('[Auth] DB final:', DB.getSchools().length, 'escola(s)');
     }
 
     // 3. Buscar usuario na cache (agora populada)
