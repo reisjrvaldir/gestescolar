@@ -24,7 +24,7 @@ async function extrairUsuario(req) {
   // Busca dados do usuário no banco (role, escola, etc.)
   const { data: perfil, error: perfilError } = await sbSvc
     .from('users')
-    .select('id, name, role, school_id')
+    .select('id, name, role, school_id, data_admissao')
     .eq('auth_id', user.id)
     .single();
 
@@ -32,11 +32,12 @@ async function extrairUsuario(req) {
   if (!perfil) throw new NaoAutorizadoError('Usuário não encontrado no sistema.');
 
   return {
-    id:        perfil.id,
-    authId:    user.id,
-    name:      perfil.name,
-    role:      perfil.role,
-    school_id: perfil.school_id,
+    id:             perfil.id,
+    authId:         user.id,
+    name:           perfil.name,
+    role:           perfil.role,
+    school_id:      perfil.school_id,
+    data_admissao:  perfil.data_admissao || null,
   };
 }
 

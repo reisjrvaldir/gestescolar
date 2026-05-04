@@ -162,6 +162,19 @@ async function atualizarAjuste(id, dados) {
   return data;
 }
 
+// ─── USUÁRIOS ─────────────────────────────────────────────────────────────────
+
+async function buscarUsuarioPorId(userId) {
+  const sb = getSupabase();
+  const { data, error } = await sb
+    .from('users')
+    .select('id, data_admissao, role, school_id')
+    .eq('id', userId)
+    .single();
+  if (error && error.code !== 'PGRST116') console.error(`DB buscarUsuarioPorId: ${error.message}`);
+  return data || null;
+}
+
 // ─── AUDITORIA ────────────────────────────────────────────────────────────────
 
 async function inserirAuditoria(dados) {
@@ -174,5 +187,6 @@ async function inserirAuditoria(dados) {
 module.exports = {
   inserirPonto, buscarPontoPorId, buscarUltimoPonto, listarPontos, atualizarPonto,
   inserirAjuste, buscarAjustePorId, atualizarAjuste, listarAjustes,
+  buscarUsuarioPorId,
   inserirAuditoria,
 };

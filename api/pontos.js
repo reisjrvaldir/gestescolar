@@ -42,7 +42,7 @@ module.exports = async (req, res) => {
         return erro(res, { statusCode: 403, code: 'FORBIDDEN', message: 'Acesso negado.' });
 
       const dto   = validarCriarPonto(req.body);
-      const ponto = await pontosService.criarPonto(dto, usuario.id);
+      const ponto = await pontosService.criarPonto(dto, usuario.id, usuario);
       return criado(res, ponto);
     }
 

@@ -7,8 +7,20 @@ const { ConflitoPontoError, NaoEncontradoError, ForbiddenError } = require('./er
 
 // ─── CRIAR PONTO ──────────────────────────────────────────────────────────────
 
-async function criarPonto(dto, userId) {
+async function criarPonto(dto, userId, usuario) {
   const agora = new Date().toISOString();
+
+  // ── Bloquear ponto antes da data de admissão ────────────────────────────
+  const dataAdmissao = usuario?.data_admissao;
+  if (dataAdmissao) {
+    const hoje     = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
+    const admissao = dataAdmissao.slice(0, 10);
+    if (hoje < admissao) {
+      throw new ForbiddenError(
+        `Registro de ponto não permitido antes da data de admissão (${admissao.split('-').reverse().join('/')}).`
+      );
+    }
+  }
 
   // ── Registro RETROATIVO (manual com timestamp passado + justificativa) ───
   if (dto.timestamp_manual) {

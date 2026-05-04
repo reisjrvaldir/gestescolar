@@ -8,6 +8,9 @@ const ProfessorPonto = {
   _ajusteModal: null,
   _filtroData:  '', // Data específica (YYYY-MM-DD) ou vazio = mostra histórico geral
 
+  // ═══ BANCO DE HORAS: desativado por padrão. Para reativar, mudar para true. ═══
+  EXIBIR_BANCO_HORAS: false,
+
   CARGA_HORARIA_DIARIA: 8 * 60, // minutos (8h)
   _feriadosCache: {},
 
@@ -72,8 +75,8 @@ const ProfessorPonto = {
           <div id="relogio" style="font-size:28px;font-weight:800;font-family:monospace;color:var(--primary);"></div>
         </div>
 
-        <!-- Banco de Horas (mês atual) -->
-        ${this._htmlBancoHoras(bancoMes)}
+        <!-- Banco de Horas (mês atual) — oculto por padrão -->
+        ${this.EXIBIR_BANCO_HORAS ? this._htmlBancoHoras(bancoMes) : ''}
 
         <!-- Botões de registro -->
         <div class="card" style="margin-bottom:20px;">
@@ -477,9 +480,9 @@ const ProfessorPonto = {
         ${cell('INTERVALO_FIM',    '#2196F3')}
         ${cell('SAIDA',            '#F44336')}
         <td style="font-family:monospace;font-size:12px;text-align:center;font-weight:700;">${this._formatHoras(min)}</td>
-        <td style="font-family:monospace;font-size:12px;text-align:center;font-weight:700;color:${this._saldoCor(saldo)};">
+        ${this.EXIBIR_BANCO_HORAS ? `<td style="font-family:monospace;font-size:12px;text-align:center;font-weight:700;color:${this._saldoCor(saldo)};">
           ${saldo !== null ? (saldo > 0 ? '+' : '') + this._formatHoras(saldo) : '—'}
-        </td>
+        </td>` : ''}
       </tr>`;
     }).join('');
 
@@ -494,7 +497,7 @@ const ProfessorPonto = {
               <th style="text-align:center;color:#2196F3;">Fim Int.</th>
               <th style="text-align:center;color:#F44336;">Saída</th>
               <th style="text-align:center;">Trabalhado</th>
-              <th style="text-align:center;">Saldo</th>
+              ${this.EXIBIR_BANCO_HORAS ? '<th style="text-align:center;">Saldo</th>' : ''}
             </tr>
           </thead>
           <tbody>${linhas}</tbody>
