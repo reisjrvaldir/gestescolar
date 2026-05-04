@@ -333,7 +333,7 @@ Router.register('admin-students', () => {
 
 const AdminStudents = {
   showAccessModal(name, matricula, senha, url) {
-    const senhaLimpa = senha.replace(/\D/g, '').substring(0, 6);
+    const senhaLimpa = senha || '';
     const credenciais = `Olá, você já consegue acompanhar a evolução do seu filho através do nosso portal.
 
 Link
@@ -358,14 +358,15 @@ Em breve estaremos disponibilizando apps Nativos Android e iOS`;
             <div style="font-weight:700;font-family:monospace;font-size:15px;">${Utils.escape(matricula)}</div>
           </div>
           <div>
-            <div style="color:var(--text-muted);font-size:11px;margin-bottom:3px;">Senha (6 primeiros dígitos do CPF)</div>
+            <div style="color:var(--text-muted);font-size:11px;margin-bottom:3px;">Senha provisória</div>
             <div style="font-weight:700;font-family:monospace;font-size:15px;">${Utils.escape(senhaLimpa)}</div>
           </div>
         </div>
       </div>
-      <div style="background:#e8f5e9;border:1px solid #a5d6a7;border-radius:var(--radius);padding:12px;font-size:12px;color:#2e7d32;margin-bottom:12px;">
-        <i class="fa-solid fa-info-circle"></i>
-        O responsável acessa com a <strong>matrícula do aluno</strong> como login e os <strong>6 primeiros dígitos do CPF</strong> como senha.
+      <div style="background:#fff3e0;border:1px solid #ffb74d;border-radius:var(--radius);padding:12px;font-size:12px;color:#b71c1c;margin-bottom:12px;">
+        <i class="fa-solid fa-triangle-exclamation"></i>
+        <strong>Anote esta senha agora — ela não será exibida novamente.</strong> Repasse ao responsável de forma segura.
+        O responsável acessa com a <strong>matrícula do aluno</strong> como login e a senha acima.
       </div>
       <textarea id="credenciaisText" class="form-control" rows="8" readonly
         style="font-size:12px;resize:none;">${Utils.escape(credenciais)}</textarea>`,
@@ -1043,7 +1044,7 @@ function _renderStudentForm(user, student) {
             </div>
             <div>
               <div style="font-size:11px;font-weight:700;color:#388e3c;text-transform:uppercase;margin-bottom:2px;">Senha</div>
-              <div style="font-size:15px;font-weight:700;color:#1b5e20;">${s.loginSenha || '(6 primeiros dígitos do CPF)'}</div>
+              <div style="font-size:13px;font-weight:600;color:#1b5e20;">Exibida apenas no momento do cadastro. Use "Redefinir senha" se necessário.</div>
             </div>
           </div>
           <div style="display:flex;gap:8px;align-items:center;">
@@ -1055,7 +1056,7 @@ ${window.location.origin}
 
 Matricula - ${s.loginMatricula || s.matricula || ''}
 
-Senha - ${(s.loginSenha || '').replace(/\D/g, '').substring(0, 6) || '(6 primeiros dígitos do CPF)'}
+Senha - (use "Redefinir senha" se o responsável não tiver mais a senha provisória)
 
 Em breve estaremos disponibilizando apps Nativos Android e iOS</textarea>
             <button type="button" onclick="AdminStudents.copyText('fichaCredenciais')"
@@ -1240,18 +1241,10 @@ const StudentForm = {
       }
 
       // ── Salvar link de acesso na ficha do aluno ─────────────────────────
-      // A senha sempre existe agora (DB.addStudent gera fallback usando matricula)
-      const loginUrl  = window.location.origin + window.location.pathname;
-      const parentUsr = DB.getUsers().find(u => u.studentId === created.id && u.role === 'pai');
-      const senha     = parentUsr?.password || String(created.matricula).slice(-6);
-      const origem    = created.parentLoginPasswordOrigin || 'desconhecida';
-      DB.updateStudent(created.id, { accessLink: loginUrl, loginMatricula: created.matricula, loginSenha: senha });
-      if (origem !== 'cpf-responsavel') {
-        const aviso = origem === 'cpf-aluno'
-          ? '⚠️ CPF do responsável ausente — senha gerada a partir do CPF do aluno.'
-          : '⚠️ Nenhum CPF informado — senha gerada a partir da matrícula. Recomenda-se atualizar o cadastro.';
-        Utils.toast(aviso, 'warning');
-      }
+      // Senha aleatória gerada por DB.addStudent — exibida apenas neste momento.
+      const loginUrl = window.location.origin + window.location.pathname;
+      const senha    = created.parentPlainPassword || '';
+      DB.updateStudent(created.id, { accessLink: loginUrl, loginMatricula: created.matricula });
       AdminStudents.showAccessModal(created.name, created.matricula, senha, loginUrl);
     }
   }

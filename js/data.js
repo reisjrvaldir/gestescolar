@@ -31,7 +31,7 @@ const DB = {
   // Colunas validas por tabela (para filtrar campos extras antes de enviar ao Supabase)
   _cols: {
     schools:      ['id','name','cnpj','email','phone','address','address_number','complement','province','city','state','postal_code','plan_id','billing','pix_key','logo_url','upgraded_at','created_at','updated_at','status','owner_id','custom_student_limit','commission_rate','asaas_account_id','asaas_wallet_id','asaas_sub_api_key','plan_expires_at','plan_payment_id','plan_subscription_id','school_status','trial_started_at','asaas_person_type','asaas_documents_status','asaas_documents','asaas_verification_message','asaas_documents_submitted_at'],
-    users:        ['id','auth_id','school_id','name','email','username','cpf','phone','role','active','student_id','matricula','is_demo_user','created_at','updated_at'],
+    users:        ['id','auth_id','school_id','name','email','username','cpf','phone','role','active','student_id','matricula','is_demo_user','data_admissao','carga_horaria','created_at','updated_at'],
     students:     ['id','school_id','name','cpf','birth_date','gender','address','matricula','class_id','status','monthly_fee','due_day','responsaveis','parent_id','parent_name','parent_email','active_since','inactivated_at','access_link','login_matricula','created_at','updated_at'],
     classes:      ['id','school_id','name','year','shift','level','teacher_id','subjects','created_at'],
     invoices:     ['id','school_id','student_id','student_name','description','amount','due_date','status','paid_at','paid_amount','payment_method','asaas_id','created_at'],
@@ -418,6 +418,16 @@ const DB = {
     return this._cache.students.filter(s => s.schoolId === this._schoolId);
   },
 
+  // Gera senha aleatória forte (sem caracteres ambíguos: 0/O, 1/l/I)
+  _gerarSenhaAleatoria(tamanho = 10) {
+    const alfabeto = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789';
+    const buf = new Uint32Array(tamanho);
+    (window.crypto || window.msCrypto).getRandomValues(buf);
+    let out = '';
+    for (let i = 0; i < tamanho; i++) out += alfabeto[buf[i] % alfabeto.length];
+    return out;
+  },
+
   async addStudent(s) {
     s.id          = crypto.randomUUID();
     s.createdAt   = new Date().toISOString();
@@ -453,22 +463,15 @@ const DB = {
     // Criar conta do responsavel automaticamente e vincular parentId
     if (s.responsaveis.length > 0) {
       const resp = s.responsaveis[0];
-      const respEmailRaw = (resp.email || '').trim().toLowerCase();
-      // Senha: 6 primeiros digitos do CPF do responsavel, depois aluno,
-      // e como ultimo recurso usa a propria matricula (garante login sempre criado)
-      const cpfResp  = (resp.cpf || '').replace(/\D/g, '');
-      const cpfAluno = (s.cpf || '').replace(/\D/g, '');
-      let senha;
-      let senhaOrigem;
-      if (cpfResp.length >= 6)       { senha = cpfResp.substring(0,6);  senhaOrigem = 'cpf-responsavel'; }
-      else if (cpfAluno.length >= 6) { senha = cpfAluno.substring(0,6); senhaOrigem = 'cpf-aluno'; }
-      else                           { senha = String(s.matricula).slice(-6); senhaOrigem = 'matricula'; }
+      // Senha aleatória forte: CPF é dado público no Brasil e não pode ser
+      // usado como segredo. A senha é exibida ao gestor uma única vez.
+      const senha = this._gerarSenhaAleatoria(10);
 
-      // Sempre usa placeholder baseado na matrícula para garantir login
-      // por matrícula + CPF sem conflito com contas Google/OAuth.
-      // O email real do responsável é salvo em parentEmail do aluno.
+      // Placeholder de e-mail baseado na matrícula para garantir login por
+      // matrícula sem conflito com contas Google/OAuth. O e-mail real do
+      // responsável é salvo em parentEmail do aluno.
       const emailFinal = `${s.matricula}@gestescolar.app`;
-      s.parentLoginPasswordOrigin = senhaOrigem;
+      s.parentPlainPassword = senha;
 
       if (!this.getUsers().find(u => u.studentId === s.id && u.role === 'pai')) {
         const parentUser = await this.addUser({

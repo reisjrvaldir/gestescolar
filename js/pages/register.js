@@ -163,6 +163,14 @@ Router.register('register', (params = {}) => {
 const RegisterPage = {
   _roles: [],
 
+  // Alterna exibição dos campos do Período 2 conforme carga horária
+  _togglePeriodos() {
+    const sel = document.getElementById('regCargaHoraria');
+    const p2  = document.getElementById('regPeriodo2Fields');
+    if (!sel || !p2) return;
+    p2.style.display = sel.value === 'integral' ? '' : 'none';
+  },
+
   // Gera senha aleatória usando crypto.getRandomValues (sem caracteres ambíguos: 0/O, 1/l/I)
   _gerarSenhaAleatoria(tamanho = 10) {
     const alfabeto = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789';
@@ -231,6 +239,44 @@ const RegisterPage = {
           <label class="form-label">Formação acadêmica</label>
           <input type="text" class="form-control" id="regEducation" placeholder="Ex: Licenciatura em Matemática – USP" />
         </div>
+
+        <div class="form-section-title" style="margin-top:18px;">Admissão e Jornada</div>
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label">Data de admissão *</label>
+            <input type="date" class="form-control" id="regAdmissao" required />
+          </div>
+          <div class="form-group">
+            <label class="form-label">Carga horária *</label>
+            <select class="form-control" id="regCargaHoraria" onchange="RegisterPage._togglePeriodos()">
+              <option value="manha">Manhã</option>
+              <option value="tarde">Tarde</option>
+              <option value="integral">Integral</option>
+            </select>
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label">Entrada (Período 1) *</label>
+            <input type="time" class="form-control" id="regP1Entrada" value="07:30" required />
+          </div>
+          <div class="form-group">
+            <label class="form-label">Saída (Período 1) *</label>
+            <input type="time" class="form-control" id="regP1Saida" value="12:30" required />
+          </div>
+        </div>
+        <div id="regPeriodo2Fields" style="display:none;">
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label">Entrada (Período 2)</label>
+              <input type="time" class="form-control" id="regP2Entrada" value="13:30" />
+            </div>
+            <div class="form-group">
+              <label class="form-label">Saída (Período 2)</label>
+              <input type="time" class="form-control" id="regP2Saida" value="17:30" />
+            </div>
+          </div>
+        </div>
       `;
     } else {
       container.innerHTML = '';
@@ -294,6 +340,21 @@ const RegisterPage = {
       userData.subject   = document.getElementById('regSubject')?.value || '';
       userData.classId   = document.getElementById('regClassId')?.value || '';
       userData.education = document.getElementById('regEducation')?.value || '';
+
+      // Admissão e jornada (obrigatórios para professor)
+      const admissao = document.getElementById('regAdmissao')?.value;
+      if (!demo && !admissao) {
+        alertEl.innerHTML = `<div class="alert alert-danger"><i class="fa-solid fa-circle-exclamation"></i> Data de admissão é obrigatória para professor.</div>`;
+        return;
+      }
+      userData.dataAdmissao    = admissao || '';
+      userData.cargaHoraria    = document.getElementById('regCargaHoraria')?.value || 'manha';
+      userData.p1Entrada       = document.getElementById('regP1Entrada')?.value || '07:30';
+      userData.p1Saida         = document.getElementById('regP1Saida')?.value || '12:30';
+      if (userData.cargaHoraria === 'integral') {
+        userData.p2Entrada = document.getElementById('regP2Entrada')?.value || '';
+        userData.p2Saida   = document.getElementById('regP2Saida')?.value || '';
+      }
     }
 
     // Verificar limites do plano
@@ -309,6 +370,35 @@ const RegisterPage = {
     if (!saved) {
       alertEl.innerHTML = `<div class="alert alert-danger"><i class="fa-solid fa-circle-exclamation"></i> Erro ao salvar no banco de dados. Tente novamente.</div>`;
       return;
+    }
+
+    // Criar jornada automaticamente ao cadastrar professor
+    if (isProfessor && saved.id && userData.p1Entrada && userData.p1Saida) {
+      try {
+        const jornadaPayload = {
+          user_id: saved.id,
+          trabalha_seg: true, trabalha_ter: true, trabalha_qua: true,
+          trabalha_qui: true, trabalha_sex: true, trabalha_sab: false, trabalha_dom: false,
+          periodo1_entrada: userData.p1Entrada,
+          periodo1_saida:   userData.p1Saida,
+          periodo2_entrada: userData.p2Entrada || null,
+          periodo2_saida:   userData.p2Saida || null,
+          intervalo_minutos: 0,
+          carga_horaria_semanal: userData.cargaHoraria === 'integral' ? 44 : 20,
+          tolerancia_minutos: 15,
+        };
+        const { data: sessao } = await supabaseClient.auth.getSession();
+        const token = sessao?.session?.access_token;
+        if (token) {
+          await fetch('/api/jornadas', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+            body: JSON.stringify(jornadaPayload),
+          });
+        }
+      } catch (e) {
+        console.warn('[Register] Erro ao criar jornada automaticamente:', e);
+      }
     }
 
     if (isProfessor) {

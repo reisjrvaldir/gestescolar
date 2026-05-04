@@ -5,6 +5,10 @@
 
 const AdminPonto = {
 
+  // ═══ BANCO DE HORAS: desativado por padrão. ═══════════════════════════════
+  // Para reativar no futuro, basta mudar para true.
+  EXIBIR_BANCO_HORAS: false,
+
   _aba: 'registros', // 'registros' | 'ajustes' | 'relatorio'
 
   TIPOS: [
@@ -338,7 +342,7 @@ const AdminPonto = {
           </td>
           ${conteudoCentro}
           <td style="text-align:center;color:#BDBDBD;font-family:monospace;font-size:12px;">—</td>
-          <td style="text-align:center;color:#BDBDBD;font-family:monospace;font-size:12px;">—</td>
+          ${this.EXIBIR_BANCO_HORAS ? '<td style="text-align:center;color:#BDBDBD;font-family:monospace;font-size:12px;">—</td>' : ''}
         </tr>`;
       }
 
@@ -409,9 +413,9 @@ const AdminPonto = {
           </td>
           ${conteudoCentro}
           <td style="text-align:center;font-family:monospace;font-size:12px;color:${reg ? '#888' : '#C62828'};">0h00</td>
-          <td style="text-align:center;font-family:monospace;font-size:12px;font-weight:700;color:${this._saldoCor(saldoDia)};">
+          ${this.EXIBIR_BANCO_HORAS ? `<td style="text-align:center;font-family:monospace;font-size:12px;font-weight:700;color:${this._saldoCor(saldoDia)};">
             ${saldoDia === 0 ? '0h00' : (saldoDia > 0 ? '+' : '') + this._formatHoras(saldoDia)}
-          </td>
+          </td>` : ''}
         </tr>`;
       }
 
@@ -469,9 +473,9 @@ const AdminPonto = {
         ${cell('INTERVALO_FIM',    '#2196F3')}
         ${cell('SAIDA',            '#F44336')}
         <td style="font-family:monospace;font-size:12px;text-align:center;font-weight:700;">${this._formatHoras(min)}</td>
-        <td style="font-family:monospace;font-size:12px;text-align:center;font-weight:700;color:${this._saldoCor(saldo)};">
+        ${this.EXIBIR_BANCO_HORAS ? `<td style="font-family:monospace;font-size:12px;text-align:center;font-weight:700;color:${this._saldoCor(saldo)};">
           ${saldo !== null ? (saldo > 0 ? '+' : '') + this._formatHoras(saldo) : '—'}
-        </td>
+        </td>` : ''}
       </tr>`;
     }).join('');
 
@@ -491,7 +495,7 @@ const AdminPonto = {
               <th style="text-align:center;color:#2196F3;">Fim Int.</th>
               <th style="text-align:center;color:#F44336;">Saída</th>
               <th style="text-align:center;">Trabalhado</th>
-              <th style="text-align:center;">Saldo</th>
+              ${this.EXIBIR_BANCO_HORAS ? '<th style="text-align:center;">Saldo</th>' : ''}
             </tr>
           </thead>
           <tbody>${linhas}</tbody>
@@ -500,7 +504,7 @@ const AdminPonto = {
               <tr style="background:#f5f5f5;font-weight:700;">
                 <td colspan="${colspanFooter}" style="text-align:right;">TOTAL DO PERÍODO:</td>
                 <td style="text-align:center;">${this._formatHoras(totalTrab)}</td>
-                <td style="text-align:center;color:${corSaldoMes};">${sinalMes}${this._formatHoras(saldoMes)}</td>
+                ${this.EXIBIR_BANCO_HORAS ? `<td style="text-align:center;color:${corSaldoMes};">${sinalMes}${this._formatHoras(saldoMes)}</td>` : ''}
               </tr>
             </tfoot>
           ` : ''}
@@ -865,9 +869,9 @@ const AdminPonto = {
           <td style="font-family:monospace;font-size:12px;color:#2196F3;">${fmt(get('INTERVALO_FIM'))}</td>
           <td style="font-family:monospace;font-size:12px;color:#F44336;">${fmt(get('SAIDA'))}</td>
           <td style="font-family:monospace;font-size:12px;font-weight:700;">${this._formatHoras(min)}</td>
-          <td style="font-family:monospace;font-size:12px;font-weight:700;color:${this._saldoCor(saldo)};">
+          ${this.EXIBIR_BANCO_HORAS ? `<td style="font-family:monospace;font-size:12px;font-weight:700;color:${this._saldoCor(saldo)};">
             ${saldo !== null ? (saldo > 0 ? '+' : '') + this._formatHoras(saldo) : '—'}
-          </td>
+          </td>` : ''}
         </tr>`;
       }
 
@@ -891,9 +895,9 @@ const AdminPonto = {
             </span>
           </td>
           <td style="font-family:monospace;font-size:12px;font-weight:700;color:#888;">0h00</td>
-          <td style="font-family:monospace;font-size:12px;font-weight:700;color:${this._saldoCor(saldoDia)};">
+          ${this.EXIBIR_BANCO_HORAS ? `<td style="font-family:monospace;font-size:12px;font-weight:700;color:${this._saldoCor(saldoDia)};">
             ${saldoDia === 0 ? '0h00' : (saldoDia > 0 ? '+' : '') + this._formatHoras(saldoDia)}
-          </td>
+          </td>` : ''}
         </tr>`;
       }
 
@@ -923,9 +927,9 @@ const AdminPonto = {
         </td>
         <td colspan="4" style="text-align:center;">${labelCentro}</td>
         <td style="font-family:monospace;font-size:12px;color:${corTexto};">0h00</td>
-        <td style="font-family:monospace;font-size:12px;font-weight:700;color:${this._saldoCor(saldoDia)};">
+        ${this.EXIBIR_BANCO_HORAS ? `<td style="font-family:monospace;font-size:12px;font-weight:700;color:${this._saldoCor(saldoDia)};">
           ${saldoDia === 0 ? (futuro || !ehUtil ? '—' : '0h00') : (saldoDia > 0 ? '+' : '') + this._formatHoras(saldoDia)}
-        </td>
+        </td>` : ''}
       </tr>`;
     }).join('');
 
@@ -935,11 +939,11 @@ const AdminPonto = {
           <span class="card-title"><i class="fa-solid fa-user-tie"></i> ${Utils.escape(prof)}</span>
           <div style="display:flex;gap:14px;align-items:center;">
             <span style="font-size:12px;color:var(--text-muted);">Trabalhado: <strong style="color:#333;">${this._formatHoras(totalTrabalhado)}</strong></span>
-            <span style="font-size:12px;color:var(--text-muted);">Banco de Horas:
+            ${this.EXIBIR_BANCO_HORAS ? `<span style="font-size:12px;color:var(--text-muted);">Banco de Horas:
               <strong style="color:${this._saldoCor(saldoMes)};font-size:14px;">
                 ${saldoMes > 0 ? '+' : ''}${this._formatHoras(saldoMes)}
               </strong>
-            </span>
+            </span>` : ''}
           </div>
         </div>
         <div style="overflow-x:auto;">
@@ -952,7 +956,7 @@ const AdminPonto = {
                 <th style="color:#2196F3;">Fim Int.</th>
                 <th style="color:#F44336;">Saída</th>
                 <th>Trabalhado</th>
-                <th>Saldo</th>
+                ${this.EXIBIR_BANCO_HORAS ? '<th>Saldo</th>' : ''}
               </tr>
             </thead>
             <tbody>${linhas}</tbody>
@@ -1309,7 +1313,7 @@ const AdminPonto = {
             <td style="color:#2196F3;">${fmt(get('INTERVALO_FIM'))}</td>
             <td style="color:#F44336;">${fmt(get('SAIDA'))}</td>
             <td style="font-weight:bold;">${this._formatHoras(min)}</td>
-            <td style="color:${corSaldo};font-weight:bold;">${saldo !== null ? sinal + this._formatHoras(saldo) : '—'}</td>
+            ${this.EXIBIR_BANCO_HORAS ? `<td style="color:${corSaldo};font-weight:bold;">${saldo !== null ? sinal + this._formatHoras(saldo) : '—'}</td>` : ''}
           </tr>`;
         }
 
@@ -1327,7 +1331,7 @@ const AdminPonto = {
             <td>${dataObj.toLocaleDateString('pt-BR')} <span style="color:#999;font-size:10px;">${diaSemana}</span></td>
             <td colspan="4" style="text-align:center;color:${meta.cor};font-weight:bold;">${meta.label}${ausencia.periodo!=='integral'?` (${ausencia.periodo==='manha'?'Manhã':'Tarde'})`:''}</td>
             <td>0h00</td>
-            <td style="color:${this._saldoCor(saldoDia)};font-weight:bold;">${saldoDia===0?'0h00':sinalA+this._formatHoras(saldoDia)}</td>
+            ${this.EXIBIR_BANCO_HORAS ? `<td style="color:${this._saldoCor(saldoDia)};font-weight:bold;">${saldoDia===0?'0h00':sinalA+this._formatHoras(saldoDia)}</td>` : ''}
           </tr>`;
         }
 
@@ -1346,7 +1350,7 @@ const AdminPonto = {
           <td>${dataObj.toLocaleDateString('pt-BR')} <span style="color:#999;font-size:10px;">${diaSemana}</span></td>
           <td colspan="4" style="text-align:center;">${centro}</td>
           <td style="color:#999;">0h00</td>
-          <td style="color:${this._saldoCor(saldoDia)};font-weight:bold;">${saldoDia===0?(futuro||!ehUtil?'—':'0h00'):sinalS+this._formatHoras(saldoDia)}</td>
+          ${this.EXIBIR_BANCO_HORAS ? `<td style="color:${this._saldoCor(saldoDia)};font-weight:bold;">${saldoDia===0?(futuro||!ehUtil?'—':'0h00'):sinalS+this._formatHoras(saldoDia)}</td>` : ''}
         </tr>`;
       }).join('');
 
@@ -1373,7 +1377,7 @@ const AdminPonto = {
                 <th>Fim Int.</th>
                 <th>Saída</th>
                 <th>Trabalhado</th>
-                <th>Saldo</th>
+                ${this.EXIBIR_BANCO_HORAS ? '<th>Saldo</th>' : ''}
               </tr>
             </thead>
             <tbody>${linhas}</tbody>
@@ -1381,7 +1385,7 @@ const AdminPonto = {
               <tr style="background:#fafafa;font-weight:bold;">
                 <td colspan="5" style="text-align:right;">TOTAL DO PERÍODO:</td>
                 <td>${this._formatHoras(totalTrab)}</td>
-                <td style="color:${corSaldoMes};">${sinalMes}${this._formatHoras(saldoMes)}</td>
+                ${this.EXIBIR_BANCO_HORAS ? `<td style="color:${corSaldoMes};">${sinalMes}${this._formatHoras(saldoMes)}</td>` : ''}
               </tr>
             </tfoot>
           </table>
