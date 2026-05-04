@@ -1386,10 +1386,16 @@ WITH CHECK (EXISTS (SELECT 1 FROM users WHERE auth_id = auth.uid() AND role = 's
       const jwt = sess?.session?.access_token;
       if (!jwt) {
         alertEl.innerHTML = '<div class="alert alert-danger" style="font-size:13px;"><i class="fa-solid fa-circle-exclamation"></i><div style="flex:1;min-width:0;">Sess\u00e3o expirada. Fa\u00e7a login novamente.</div></div>';
+        if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fa-solid fa-key"></i> Aplicar nova senha'; }
         return;
       }
 
       const fnUrl = `${SUPABASE_URL}/functions/v1/admin-reset-password`;
+
+      // Timeout defensivo (10s) para evitar ficar pendurado quando a fun\u00e7\u00e3o n\u00e3o responde
+      const ctrl = new AbortController();
+      const tmo  = setTimeout(() => ctrl.abort(), 10000);
+
       const resp = await fetch(fnUrl, {
         method:  'POST',
         headers: {
@@ -1397,23 +1403,29 @@ WITH CHECK (EXISTS (SELECT 1 FROM users WHERE auth_id = auth.uid() AND role = 's
           'Content-Type':  'application/json',
           'apikey':        SUPABASE_KEY,
         },
-        body: JSON.stringify({ userEmail: email, newPassword: newPwd }),
+        body:   JSON.stringify({ userEmail: email, newPassword: newPwd }),
+        signal: ctrl.signal,
       });
+      clearTimeout(tmo);
       const data = await resp.json().catch(() => ({}));
 
       if (!resp.ok) {
-        // Fallback: se a Edge Function n\u00e3o foi deployada, oferecer envio de e-mail
-        if (resp.status === 404 || (data.error || '').includes('Function not found')) {
+        // Fallback: se a Edge Function n\u00e3o foi deployada (404/503), oferecer envio de e-mail
+        if (resp.status === 404 || resp.status === 503 || (data.error || '').toLowerCase().includes('function not found')) {
           alertEl.innerHTML = `<div class="alert alert-warning" style="font-size:13px;">
-            <i class="fa-solid fa-circle-exclamation"></i>
-            <div style="flex:1;min-width:0;">Edge Function <code>admin-reset-password</code> n\u00e3o est\u00e1 deployada. Veja <code>supabase/functions/admin-reset-password/index.ts</code>.<br>
-            Como alternativa, posso enviar o e-mail de recupera\u00e7\u00e3o oficial:</div>
-          </div>
-          <button class="btn btn-outline btn-sm" style="margin-top:8px;" onclick="SuperAdmin._sendResetEmailFallback('${email}')"><i class="fa-solid fa-paper-plane"></i> Enviar e-mail de recupera\u00e7\u00e3o</button>`;
-          if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fa-solid fa-key"></i> Aplicar nova senha'; }
+              <i class="fa-solid fa-circle-exclamation"></i>
+              <div style="flex:1;min-width:0;">
+                <strong>Edge Function n\u00e3o deployada</strong> (HTTP ${resp.status}). Para habilitar o reset direto:<br>
+                <code style="display:block;background:#f5f5f5;padding:6px;border-radius:4px;margin:6px 0;font-size:11px;line-height:1.5;">supabase functions deploy admin-reset-password --no-verify-jwt
+supabase secrets set SUPABASE_SERVICE_ROLE_KEY=&lt;service-role-key&gt;</code>
+                Como alternativa, envie o e-mail oficial de recupera\u00e7\u00e3o:
+              </div>
+            </div>
+            <button class="btn btn-sm" style="background:#1976d2;color:#fff;margin-top:8px;" onclick="SuperAdmin._sendResetEmailFallback('${email}')"><i class="fa-solid fa-paper-plane"></i> Enviar e-mail de recupera\u00e7\u00e3o agora</button>`;
+          if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fa-solid fa-key"></i> Tentar novamente'; }
           return;
         }
-        alertEl.innerHTML = `<div class="alert alert-danger" style="font-size:13px;"><i class="fa-solid fa-circle-exclamation"></i><div style="flex:1;min-width:0;">Erro: ${data.error || resp.statusText}</div></div>`;
+        alertEl.innerHTML = `<div class="alert alert-danger" style="font-size:13px;"><i class="fa-solid fa-circle-exclamation"></i><div style="flex:1;min-width:0;">Erro: ${Utils.escape(data.error || resp.statusText || ('HTTP ' + resp.status))}</div></div>`;
         if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fa-solid fa-key"></i> Aplicar nova senha'; }
         return;
       }
@@ -1442,8 +1454,19 @@ WITH CHECK (EXISTS (SELECT 1 FROM users WHERE auth_id = auth.uid() AND role = 's
       Utils.toast('Senha do gestor redefinida.', 'success');
     } catch (e) {
       console.error('[applyDirectReset]', e);
-      alertEl.innerHTML = '<div class="alert alert-danger" style="font-size:13px;"><i class="fa-solid fa-circle-exclamation"></i><div style="flex:1;min-width:0;">Falha de rede. Tente novamente.</div></div>';
-      if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fa-solid fa-key"></i> Aplicar nova senha'; }
+      // Fallback amigável quando a Edge Function não está deployada / há erro de rede
+      alertEl.innerHTML = `<div class="alert alert-warning" style="font-size:13px;">
+          <i class="fa-solid fa-circle-exclamation"></i>
+          <div style="flex:1;min-width:0;">
+            <strong>Reset direto indisponível</strong> (${Utils.escape(e?.message || 'falha de rede')}).<br>
+            A Edge Function <code>admin-reset-password</code> não respondeu. Para habilitá-la:<br>
+            <code style="display:block;background:#f5f5f5;padding:6px;border-radius:4px;margin:6px 0;font-size:11px;line-height:1.5;">supabase functions deploy admin-reset-password --no-verify-jwt
+supabase secrets set SUPABASE_SERVICE_ROLE_KEY=&lt;service-role-key&gt;</code>
+            Como alternativa imediata, envie o e-mail oficial de recuperação ao gestor:
+          </div>
+        </div>
+        <button class="btn btn-sm" style="background:#1976d2;color:#fff;margin-top:8px;" onclick="SuperAdmin._sendResetEmailFallback('${email}')"><i class="fa-solid fa-paper-plane"></i> Enviar e-mail de recuperação agora</button>`;
+      if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fa-solid fa-key"></i> Tentar novamente'; }
     }
   },
 
