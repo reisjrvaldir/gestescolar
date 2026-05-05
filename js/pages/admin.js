@@ -1562,17 +1562,20 @@ Router.register('admin-classes', () => {
           </button>
         </div>
         <div class="table-wrap"><table>
-          <thead><tr><th>Turma</th><th>Ano</th><th>Turno</th><th>Professor(a)</th><th>Alunos</th><th>Ações</th></tr></thead>
+          <thead><tr><th>Turma</th><th>Ano</th><th>Turno</th><th>Professor(a)</th><th>Matérias</th><th>Alunos</th><th>Ações</th></tr></thead>
           <tbody>
             ${classes.length === 0
-              ? `<tr><td colspan="6"><div class="empty-state"><i class="fa-solid fa-chalkboard"></i><p>Nenhuma turma</p></div></td></tr>`
+              ? `<tr><td colspan="7"><div class="empty-state"><i class="fa-solid fa-chalkboard"></i><p>Nenhuma turma</p></div></td></tr>`
               : classes.map(c => {
                   const teacher = teachers.find(t => t.id === c.teacherId);
                   const count   = students.filter(s => s.classId === c.id && s.status === 'ativo').length;
+                  const subjs   = Array.isArray(c.subjects) ? c.subjects : [];
+                  const subjsTitle = subjs.length ? Utils.escape(subjs.join(', ')) : 'Nenhuma matéria selecionada';
                   return `<tr>
                     <td><strong>${Utils.escape(c.name)}</strong></td>
                     <td>${c.year}</td><td>${Utils.escape(c.shift||'–')}</td>
                     <td>${teacher ? Utils.escape(teacher.name) : '<span class="text-muted">Sem professor</span>'}</td>
+                    <td title="${subjsTitle}">${subjs.length ? `<span class="badge" style="background:#e8f5e9;color:#2e7d32;">${subjs.length} matéria(s)</span>` : '<span class="text-muted" style="font-size:12px;">–</span>'}</td>
                     <td><span class="badge badge-blue">${count} alunos</span></td>
                     <td style="display:flex;gap:8px;flex-wrap:wrap;">
                       <button class="btn btn-outline btn-sm" onclick="AdminClasses.viewStudents('${c.id}','${Utils.escape(c.name)}')">
@@ -1662,13 +1665,21 @@ const AdminClasses = {
         </div>
         <div class="form-group">
           <label class="form-label">Selecione as Matérias da turma *</label>
+          <div style="display:flex;gap:8px;align-items:center;margin-bottom:6px;flex-wrap:wrap;">
+            <input type="text" id="materias-search" class="form-control" placeholder="🔍 Filtrar matérias..." style="flex:1;min-width:180px;font-size:13px;padding:6px 10px;">
+            <button type="button" class="btn btn-outline btn-sm" onclick="AdminClasses._toggleAllMaterias(true)"><i class="fa-solid fa-check-double"></i> Marcar todas</button>
+            <button type="button" class="btn btn-outline btn-sm" onclick="AdminClasses._toggleAllMaterias(false)"><i class="fa-solid fa-eraser"></i> Limpar</button>
+          </div>
           <div id="materias-wrap" style="border:1.5px solid var(--border);border-radius:var(--radius);padding:12px;max-height:260px;overflow-y:auto;background:#fafafa;">
             ${Object.entries(MATERIAS_MEC).map(([nivel, materias]) => `
-              <div style="margin-bottom:12px;">
-                <div style="font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px;border-bottom:1px solid var(--border);padding-bottom:4px;">${nivel}</div>
+              <div class="nivel-group" data-nivel="${Utils.escape(nivel)}" style="margin-bottom:12px;">
+                <div style="display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--border);padding-bottom:4px;margin-bottom:6px;">
+                  <div style="font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.5px;">${Utils.escape(nivel)}</div>
+                  <button type="button" class="btn-link" style="background:none;border:none;color:var(--primary);font-size:11px;cursor:pointer;padding:2px 6px;" onclick="AdminClasses._toggleNivel('${Utils.escape(nivel)}')"><i class="fa-solid fa-square-check"></i> Marcar nível</button>
+                </div>
                 <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:4px;">
                   ${materias.map(m => `
-                    <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer;padding:3px 2px;">
+                    <label class="materia-item" data-name="${Utils.escape(m).toLowerCase()}" style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer;padding:3px 2px;">
                       <input type="checkbox" name="materia" value="${Utils.escape(m)}"
                         style="width:15px;height:15px;accent-color:var(--primary);cursor:pointer;">
                       ${Utils.escape(m)}
@@ -1676,27 +1687,77 @@ const AdminClasses = {
                 </div>
               </div>`).join('')}
           </div>
-          <div style="font-size:12px;color:var(--text-muted);margin-top:6px;">
-            <span id="materias-count">0</span> matéria(s) selecionada(s)
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-top:6px;font-size:12px;color:var(--text-muted);">
+            <span><strong id="materias-count">0</strong> matéria(s) selecionada(s)</span>
+            <span id="materias-preview" style="font-style:italic;max-width:60%;text-align:right;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"></span>
           </div>
         </div>
       </form>`,
       `<button class="btn btn-outline" onclick="this.closest('.modal-overlay').remove()">Cancelar</button>
-       <button class="btn btn-primary" onclick="AdminClasses.save()">Salvar Turma</button>`
+       <button class="btn btn-primary" id="btnSaveTurma" onclick="AdminClasses.save()">Salvar Turma</button>`
     );
 
-    // Contador dinâmico de seleção
-    document.getElementById('materias-wrap').addEventListener('change', () => {
-      const count = document.querySelectorAll('input[name="materia"]:checked').length;
-      document.getElementById('materias-count').textContent = count;
-    });
+    AdminClasses._wireMateriasUI();
   },
 
-  save() {
+  // ---- Helpers do seletor de matérias ----
+  _wireMateriasUI() {
+    const wrap   = document.getElementById('materias-wrap');
+    if (!wrap) return;
+
+    const refresh = () => {
+      const checked = Array.from(document.querySelectorAll('input[name="materia"]:checked'));
+      document.getElementById('materias-count').textContent = checked.length;
+      const preview = document.getElementById('materias-preview');
+      if (preview) {
+        preview.textContent = checked.length === 0 ? '' : checked.slice(0, 5).map(c => c.value).join(', ') + (checked.length > 5 ? `, +${checked.length - 5}` : '');
+      }
+    };
+
+    wrap.addEventListener('change', refresh);
+
+    const search = document.getElementById('materias-search');
+    if (search) {
+      search.addEventListener('input', (e) => {
+        const q = e.target.value.toLowerCase().trim();
+        document.querySelectorAll('.materia-item').forEach(el => {
+          el.style.display = (!q || el.dataset.name.includes(q)) ? '' : 'none';
+        });
+        // esconde grupos de nível sem itens visíveis
+        document.querySelectorAll('.nivel-group').forEach(g => {
+          const anyVisible = Array.from(g.querySelectorAll('.materia-item')).some(it => it.style.display !== 'none');
+          g.style.display = anyVisible ? '' : 'none';
+        });
+      });
+    }
+
+    refresh();
+  },
+
+  _toggleAllMaterias(check) {
+    document.querySelectorAll('.materia-item').forEach(el => {
+      if (el.style.display === 'none') return; // respeita filtro de busca
+      const cb = el.querySelector('input[name="materia"]');
+      if (cb) cb.checked = check;
+    });
+    document.getElementById('materias-wrap').dispatchEvent(new Event('change', { bubbles: true }));
+  },
+
+  _toggleNivel(nivel) {
+    const group = document.querySelector(`.nivel-group[data-nivel="${CSS.escape(nivel)}"]`);
+    if (!group) return;
+    const cbs = group.querySelectorAll('input[name="materia"]');
+    const allChecked = Array.from(cbs).every(c => c.checked);
+    cbs.forEach(c => { c.checked = !allChecked; });
+    document.getElementById('materias-wrap').dispatchEvent(new Event('change', { bubbles: true }));
+  },
+
+  async save() {
     const name    = document.getElementById('clName').value.trim();
     const year    = document.getElementById('clYear').value.trim();
     const shift   = document.getElementById('clShift').value;
     const teacher = document.getElementById('clTeacher').value;
+    const btn     = document.getElementById('btnSaveTurma');
 
     if (!name)    { Utils.toast('Informe o nome da turma.', 'error'); return; }
     if (!year)    { Utils.toast('Informe o ano letivo.', 'error'); return; }
@@ -1708,16 +1769,28 @@ const AdminClasses = {
 
     if (subjects.length === 0) { Utils.toast('Selecione ao menos uma matéria.', 'error'); return; }
 
-    DB.addClass({
-      name,
-      year:      document.getElementById('clYear').value,
-      shift:     document.getElementById('clShift').value,
-      teacherId: document.getElementById('clTeacher').value,
-      subjects
-    });
-    Utils.toast('Turma criada!', 'success');
-    document.querySelector('.modal-overlay')?.remove();
-    window._reloadClasses?.();
+    if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Salvando...'; }
+    try {
+      const created = await DB.addClass({
+        name,
+        year:      Number(year),
+        shift,
+        teacherId: teacher,
+        subjects,
+      });
+      if (!created) {
+        // erro já foi exibido pelo _insert; mantém modal aberto para o usuário corrigir
+        if (btn) { btn.disabled = false; btn.innerHTML = 'Salvar Turma'; }
+        return;
+      }
+      Utils.toast(`Turma criada com ${subjects.length} matéria(s)!`, 'success');
+      document.querySelector('.modal-overlay')?.remove();
+      window._reloadClasses?.();
+    } catch (e) {
+      console.error('[AdminClasses.save]', e);
+      Utils.toast('Erro inesperado ao salvar turma.', 'error');
+      if (btn) { btn.disabled = false; btn.innerHTML = 'Salvar Turma'; }
+    }
   },
 
   editTurma(classId) {
@@ -1760,13 +1833,21 @@ const AdminClasses = {
         </div>
         <div class="form-group">
           <label class="form-label">Selecione as Matérias da turma *</label>
+          <div style="display:flex;gap:8px;align-items:center;margin-bottom:6px;flex-wrap:wrap;">
+            <input type="text" id="materias-search" class="form-control" placeholder="🔍 Filtrar matérias..." style="flex:1;min-width:180px;font-size:13px;padding:6px 10px;">
+            <button type="button" class="btn btn-outline btn-sm" onclick="AdminClasses._toggleAllMaterias(true)"><i class="fa-solid fa-check-double"></i> Marcar todas</button>
+            <button type="button" class="btn btn-outline btn-sm" onclick="AdminClasses._toggleAllMaterias(false)"><i class="fa-solid fa-eraser"></i> Limpar</button>
+          </div>
           <div id="materias-wrap" style="border:1.5px solid var(--border);border-radius:var(--radius);padding:12px;max-height:260px;overflow-y:auto;background:#fafafa;">
             ${Object.entries(MATERIAS_MEC).map(([nivel, materias]) => `
-              <div style="margin-bottom:12px;">
-                <div style="font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px;border-bottom:1px solid var(--border);padding-bottom:4px;">${nivel}</div>
+              <div class="nivel-group" data-nivel="${Utils.escape(nivel)}" style="margin-bottom:12px;">
+                <div style="display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--border);padding-bottom:4px;margin-bottom:6px;">
+                  <div style="font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.5px;">${Utils.escape(nivel)}</div>
+                  <button type="button" class="btn-link" style="background:none;border:none;color:var(--primary);font-size:11px;cursor:pointer;padding:2px 6px;" onclick="AdminClasses._toggleNivel('${Utils.escape(nivel)}')"><i class="fa-solid fa-square-check"></i> Marcar nível</button>
+                </div>
                 <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:4px;">
                   ${materias.map(m => `
-                    <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer;padding:3px 2px;">
+                    <label class="materia-item" data-name="${Utils.escape(m).toLowerCase()}" style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer;padding:3px 2px;">
                       <input type="checkbox" name="materia" value="${Utils.escape(m)}" ${currentSubjects.has(m) ? 'checked' : ''}
                         style="width:15px;height:15px;accent-color:var(--primary);cursor:pointer;">
                       ${Utils.escape(m)}
@@ -1774,27 +1855,25 @@ const AdminClasses = {
                 </div>
               </div>`).join('')}
           </div>
-          <div style="font-size:12px;color:var(--text-muted);margin-top:6px;">
-            <span id="materias-count">${currentSubjects.size}</span> matéria(s) selecionada(s)
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-top:6px;font-size:12px;color:var(--text-muted);">
+            <span><strong id="materias-count">${currentSubjects.size}</strong> matéria(s) selecionada(s)</span>
+            <span id="materias-preview" style="font-style:italic;max-width:60%;text-align:right;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"></span>
           </div>
         </div>
       </form>`,
       `<button class="btn btn-outline" onclick="this.closest('.modal-overlay').remove()">Cancelar</button>
-       <button class="btn btn-primary" onclick="AdminClasses.saveEdit('${classId}')">Salvar Turma</button>`
+       <button class="btn btn-primary" id="btnSaveTurma" onclick="AdminClasses.saveEdit('${classId}')">Salvar Turma</button>`
     );
 
-    // Contador dinâmico de seleção
-    document.getElementById('materias-wrap').addEventListener('change', () => {
-      const count = document.querySelectorAll('input[name="materia"]:checked').length;
-      document.getElementById('materias-count').textContent = count;
-    });
+    AdminClasses._wireMateriasUI();
   },
 
-  saveEdit(classId) {
+  async saveEdit(classId) {
     const name    = document.getElementById('clName').value.trim();
     const year    = document.getElementById('clYear').value.trim();
     const shift   = document.getElementById('clShift').value;
     const teacher = document.getElementById('clTeacher').value;
+    const btn     = document.getElementById('btnSaveTurma');
 
     if (!name)    { Utils.toast('Informe o nome da turma.', 'error'); return; }
     if (!year)    { Utils.toast('Informe o ano letivo.', 'error'); return; }
@@ -1806,16 +1885,27 @@ const AdminClasses = {
 
     if (subjects.length === 0) { Utils.toast('Selecione ao menos uma matéria.', 'error'); return; }
 
-    DB.updateClass(classId, {
-      name,
-      year:      Number(year),
-      shift,
-      teacherId: teacher,
-      subjects
-    });
-    Utils.toast('Turma atualizada com sucesso!', 'success');
-    document.querySelector('.modal-overlay')?.remove();
-    window._reloadClasses?.();
+    if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Salvando...'; }
+    try {
+      const ok = await DB.updateClass(classId, {
+        name,
+        year: Number(year),
+        shift,
+        teacherId: teacher,
+        subjects,
+      });
+      if (!ok) {
+        if (btn) { btn.disabled = false; btn.innerHTML = 'Salvar Turma'; }
+        return;
+      }
+      Utils.toast(`Turma atualizada com ${subjects.length} matéria(s)!`, 'success');
+      document.querySelector('.modal-overlay')?.remove();
+      window._reloadClasses?.();
+    } catch (e) {
+      console.error('[AdminClasses.saveEdit]', e);
+      Utils.toast('Erro inesperado ao atualizar turma.', 'error');
+      if (btn) { btn.disabled = false; btn.innerHTML = 'Salvar Turma'; }
+    }
   },
 
   viewStudents(classId, className) {

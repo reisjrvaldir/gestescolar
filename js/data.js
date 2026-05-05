@@ -110,15 +110,20 @@ const DB = {
   },
 
   async _update(table, id, data) {
-    if (!supabaseClient) return;
+    if (!supabaseClient) return true;
     try {
       const payload = this._filterCols(table, this._toSnake(data));
       delete payload.id;
       const { error } = await supabaseClient.from(table).update(payload).eq('id', id);
       if (error) {
         console.error(`[DB] Update ${table} ERRO:`, error.message, error.details, error.hint);
+        if (typeof Utils !== 'undefined' && Utils.toast) {
+          Utils.toast(`Erro ao atualizar ${table}: ${error.message}`, 'error');
+        }
+        return false;
       }
-    } catch (e) { console.error(`[DB] Update ${table}:`, e); }
+      return true;
+    } catch (e) { console.error(`[DB] Update ${table}:`, e); return false; }
   },
 
   async _remove(table, id) {
@@ -557,23 +562,35 @@ const DB = {
     return this._cache.classes.filter(c => c.schoolId === this._schoolId);
   },
 
-  addClass(c) {
+  async addClass(c) {
     c.id        = crypto.randomUUID();
     c.schoolId  = this._schoolId;
     c.createdAt = new Date().toISOString();
+    // Garante que subjects é sempre um array (JSONB aceita array JS direto)
+    if (c.subjects !== undefined && !Array.isArray(c.subjects)) c.subjects = [];
     this._cache.classes.push(c);
-    this._insert('classes', c);
+    const ok = await this._insert('classes', c);
+    if (!ok) {
+      // rollback do cache local para não exibir turma fantasma após erro
+      this._cache.classes = this._cache.classes.filter(x => x.id !== c.id);
+      return null;
+    }
     return c;
   },
 
-  updateClass(id, d) {
+  async updateClass(id, d) {
     const idx = this._cache.classes.findIndex(c => c.id === id);
-    if (idx >= 0) {
-      const c = this._cache.classes[idx];
-      const updated = { ...c, ...d };
-      this._cache.classes[idx] = updated;
-      this._update('classes', id, d);
+    if (idx < 0) return false;
+    const prev = this._cache.classes[idx];
+    if (d.subjects !== undefined && !Array.isArray(d.subjects)) d.subjects = [];
+    this._cache.classes[idx] = { ...prev, ...d };
+    const ok = await this._update('classes', id, d);
+    if (!ok) {
+      // rollback se o Supabase recusou (coluna inexistente, RLS, etc.)
+      this._cache.classes[idx] = prev;
+      return false;
     }
+    return true;
   },
 
   removeClass(id) {
