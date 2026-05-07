@@ -35,16 +35,62 @@ module.exports = async function handler(req, res) {
 
   try {
     const body = typeof req.body === 'string' ? JSON.parse(req.body) : req.body;
-    const { event, payment } = body;
+    const { event, payment, account } = body;
 
-    console.log(`[Webhook Asaas] Evento: ${event}, Payment ID: ${payment?.id}`);
-
-    if (!payment || !payment.id) {
-      return res.status(200).json({ received: true, message: 'Sem dados de pagamento.' });
-    }
+    console.log(`[Webhook Asaas] Evento: ${event}`);
 
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
     const VERCEL_URL = process.env.VERCEL_URL || 'https://gestescolar.app';
+
+    // ───────────────────────────────────────────────────────────
+    //  EVENTOS DE STATUS DA SUBCONTA (KYC)
+    //  ACCOUNT_STATUS_GENERAL_APPROVAL_APPROVED  → conta verificada ✅
+    //  ACCOUNT_STATUS_GENERAL_APPROVAL_REJECTED  → reprovada
+    //  ACCOUNT_STATUS_GENERAL_APPROVAL_AWAITING  → em análise
+    // ───────────────────────────────────────────────────────────
+    if (event && event.startsWith('ACCOUNT_STATUS_')) {
+      const accountId = account?.id || body?.id;
+      if (!accountId) {
+        return res.status(200).json({ received: true, message: 'Sem ID da subconta.' });
+      }
+
+      let docStatus = 'pending_verification';
+      let message = '';
+      if (event.includes('APPROVED'))      docStatus = 'verified';
+      else if (event.includes('REJECTED')) {
+        docStatus = 'rejected';
+        message = account?.rejectReason || account?.rejectReasonDescriptions?.join('; ') || 'Documentos reprovados pelo Asaas.';
+      }
+
+      const { data: schools } = await supabase
+        .from('schools')
+        .select('id, name')
+        .eq('asaas_account_id', accountId)
+        .limit(1);
+
+      if (schools && schools.length > 0) {
+        await supabase
+          .from('schools')
+          .update({
+            asaas_documents_status: docStatus,
+            asaas_verification_message: message,
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', schools[0].id);
+
+        console.log(`[Webhook] Subconta ${accountId} (escola ${schools[0].name}) → status: ${docStatus}`);
+      } else {
+        console.warn(`[Webhook] Subconta ${accountId} não encontrada no banco.`);
+      }
+      return res.status(200).json({ received: true, status: docStatus });
+    }
+
+    // ───────────────────────────────────────────────────────────
+    //  EVENTOS DE PAGAMENTO
+    // ───────────────────────────────────────────────────────────
+    if (!payment || !payment.id) {
+      return res.status(200).json({ received: true, message: 'Sem dados de pagamento.' });
+    }
 
     // Buscar invoice pelo asaas_id (incluindo payment_method para não sobrescrever espécie)
     const { data: invoices, error: findErr } = await supabase

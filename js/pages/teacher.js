@@ -29,6 +29,7 @@ Router.register('teacher-dashboard', () => {
         <button class="btn btn-primary" onclick="Router.go('teacher-attendance')"><i class="fa-solid fa-clipboard-check"></i> Fazer Chamada</button>
         <button class="btn btn-secondary" onclick="Router.go('teacher-grades')"><i class="fa-solid fa-star"></i> Lançar Notas</button>
         <button class="btn btn-outline" onclick="Router.go('teacher-messages')"><i class="fa-solid fa-envelope"></i> Mensagens</button>
+        <button class="btn btn-outline" onclick="Router.go('teacher-calendario')"><i class="fa-solid fa-calendar-days"></i> Calendário</button>
       </div>
     </div>
   `);
@@ -948,6 +949,242 @@ const TeacherGrades = {
     if (content) content.innerHTML = this.renderClassList();
   }
 };
+
+// ---------- CALENDÁRIO DO ANO LETIVO (CONSULTA) ----------
+Router.register('teacher-calendario', () => {
+  const user = Auth.require(); if (!user) return;
+  TeacherCalendario._renderCalendario(user);
+});
+
+const TeacherCalendario = {
+  _ano: new Date().getFullYear(),
+  _mes: new Date().getMonth(), // 0-11
+  _feriadosEscola: [],
+
+  TIPO_META: {
+    NACIONAL:   { label: 'Nacional',    color: '#1976D2', icon: 'fa-flag' },
+    ESTADUAL:   { label: 'Estadual',    color: '#7B1FA2', icon: 'fa-landmark' },
+    MUNICIPAL:  { label: 'Municipal',   color: '#388E3C', icon: 'fa-city' },
+    IMPRENSADO: { label: 'Imprensado',  color: '#F57C00', icon: 'fa-link' },
+    RECESSO:    { label: 'Recesso',     color: '#5E35B1', icon: 'fa-umbrella-beach' },
+  },
+
+  MESES: ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'],
+
+  async _renderCalendario(user) {
+    this._feriadosEscola = await this._buscarFeriados(this._ano);
+    const nacionais = FeriadosNacionais.doAno(this._ano);
+
+    // Mescla nacionais + escola por data
+    const todos = [
+      ...nacionais.map(f => ({ ...f, _origem: 'nacional' })),
+      ...this._feriadosEscola.map(f => ({ ...f, _origem: 'escola' })),
+    ];
+
+    Router.renderLayout(user, 'teacher-calendario', `
+      <div style="max-width:1100px;margin:0 auto;">
+        <!-- Cabeçalho -->
+        <div style="margin-bottom:20px;">
+          <button class="btn btn-outline btn-sm" onclick="Router.go('teacher-dashboard')" style="margin-bottom:12px;">
+            <i class="fa-solid fa-arrow-left"></i> Voltar
+          </button>
+          <h2 style="margin:0;"><i class="fa-solid fa-calendar-days" style="color:var(--primary);"></i> Calendário do Ano Letivo</h2>
+          <div style="font-size:13px;color:var(--text-muted);margin-top:4px;">
+            Consulte os feriados e datas importantes do ano letivo.
+          </div>
+        </div>
+
+        <!-- Navegação de mês/ano -->
+        <div class="card" style="margin-bottom:16px;">
+          <div style="padding:14px 20px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;">
+            <div style="display:flex;align-items:center;gap:8px;">
+              <button class="btn btn-sm btn-outline" onclick="TeacherCalendario._navegar(-1)">
+                <i class="fa-solid fa-chevron-left"></i>
+              </button>
+              <h3 style="margin:0;font-size:18px;min-width:200px;text-align:center;">
+                ${this.MESES[this._mes]} / ${this._ano}
+              </h3>
+              <button class="btn btn-sm btn-outline" onclick="TeacherCalendario._navegar(1)">
+                <i class="fa-solid fa-chevron-right"></i>
+              </button>
+            </div>
+            <select id="ano-select-teacher" class="form-control" style="width:auto;"
+              onchange="TeacherCalendario._ano=parseInt(this.value);TeacherCalendario._renderCalendario(Auth.current())">
+              ${[...Array(7)].map((_, i) => {
+                const y = new Date().getFullYear() - 2 + i;
+                return `<option value="${y}" ${this._ano === y ? 'selected' : ''}>${y}</option>`;
+              }).join('')}
+            </select>
+          </div>
+        </div>
+
+        <!-- Calendário -->
+        <div class="card" style="margin-bottom:20px;">
+          ${this._htmlCalendarioReadOnly(todos)}
+        </div>
+
+        <!-- Lista de feriados do ano -->
+        <div class="card">
+          <div class="card-header"><span class="card-title"><i class="fa-solid fa-list"></i> Feriados em ${this._ano}</span></div>
+          <div style="padding:8px 0;">
+            ${this._htmlListaFeriadosReadOnly(todos)}
+          </div>
+        </div>
+
+        <!-- Legenda -->
+        <div class="card" style="margin-top:16px;">
+          <div style="padding:14px 20px;display:flex;flex-wrap:wrap;gap:18px;align-items:center;font-size:12px;">
+            <strong style="color:var(--text-muted);">Legenda:</strong>
+            ${Object.entries(this.TIPO_META).map(([k, v]) => `
+              <span style="display:inline-flex;align-items:center;gap:6px;">
+                <i class="fa-solid ${v.icon}" style="color:${v.color};"></i>
+                <span>${v.label}</span>
+              </span>
+            `).join('')}
+          </div>
+        </div>
+      </div>
+    `);
+  },
+
+  _navegar(direcao) {
+    this._mes += direcao;
+    if (this._mes < 0) { this._mes = 11; this._ano--; }
+    if (this._mes > 11) { this._mes = 0; this._ano++; }
+    this._renderCalendario(Auth.current());
+  },
+
+  _htmlCalendarioReadOnly(feriados) {
+    const ano = this._ano, mes = this._mes;
+    const primeiroDia    = new Date(ano, mes, 1);
+    const ultimoDia      = new Date(ano, mes + 1, 0);
+    const totalDias      = ultimoDia.getDate();
+    const diaInicialSem  = primeiroDia.getDay();
+
+    // Mapa: data YYYY-MM-DD => feriado
+    const mapa = {};
+    feriados.forEach(f => { mapa[f.data] = f; });
+
+    const celulas = [];
+    // Espaços em branco antes do dia 1
+    for (let i = 0; i < diaInicialSem; i++) celulas.push(`<div style="background:#f8f8f8;"></div>`);
+
+    for (let d = 1; d <= totalDias; d++) {
+      const data    = `${ano}-${String(mes + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+      const dt      = new Date(ano, mes, d);
+      const fimDeSem = dt.getDay() === 0 || dt.getDay() === 6;
+      const fer     = mapa[data];
+      const meta    = fer ? this.TIPO_META[fer.tipo] : null;
+      const isHoje  = data === FeriadosNacionais._fmt(new Date());
+
+      let bg     = '#fff';
+      let borda  = '1px solid #e0e0e0';
+      let cor    = '#333';
+      let tooltip = '';
+      if (fimDeSem)  { bg = '#fafafa'; cor = '#aaa'; borda = '1px dashed #ccc'; }
+      if (fer && meta) {
+        bg = meta.color + '22';
+        borda = `2px solid ${meta.color}`;
+        cor = meta.color;
+        tooltip = `${meta.label}: ${fer.descricao}`;
+      }
+      if (isHoje) borda = `3px solid #2196F3`;
+
+      celulas.push(`
+        <div style="background:${bg};border:${borda};padding:6px;min-height:64px;position:relative;border-radius:4px;"
+          title="${Utils.escape(tooltip || '')}">
+          <div style="font-weight:700;color:${cor};font-size:13px;">${d}</div>
+          ${fer ? `
+            <div style="font-size:9px;color:${cor};font-weight:600;line-height:1.1;margin-top:2px;overflow:hidden;text-overflow:ellipsis;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;">
+              ${Utils.escape(fer.descricao)}
+            </div>
+          ` : ''}
+        </div>
+      `);
+    }
+
+    const diasSem = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
+    return `
+      <div style="padding:14px 20px;">
+        <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:4px;margin-bottom:6px;">
+          ${diasSem.map(d => `
+            <div style="text-align:center;font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;padding:6px 0;">${d}</div>
+          `).join('')}
+        </div>
+        <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:4px;">
+          ${celulas.join('')}
+        </div>
+      </div>
+    `;
+  },
+
+  _htmlListaFeriadosReadOnly(todos) {
+    if (todos.length === 0) {
+      return `<div style="padding:32px;text-align:center;color:var(--text-muted);">Nenhum feriado cadastrado.</div>`;
+    }
+
+    const ordenado = [...todos].sort((a, b) => a.data.localeCompare(b.data));
+
+    return `
+      <div style="overflow-x:auto;">
+        <table class="table">
+          <thead>
+            <tr>
+              <th>Data</th>
+              <th>Dia da semana</th>
+              <th>Descrição</th>
+              <th>Tipo</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${ordenado.map(f => {
+              const dt = new Date(f.data + 'T00:00:00');
+              const dias = ['Domingo', 'Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado'];
+              const diaSemana = dias[dt.getDay()];
+              const tipo = this.TIPO_META[f.tipo];
+              const [y, m, d] = f.data.split('-');
+              const dataBr = `${d}/${m}/${y}`;
+              return `
+                <tr>
+                  <td><strong>${dataBr}</strong></td>
+                  <td>${diaSemana}</td>
+                  <td>${Utils.escape(f.descricao)}</td>
+                  <td>
+                    <span style="display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:700;padding:2px 8px;border-radius:12px;background:${tipo?.color}22;color:${tipo?.color};">
+                      <i class="fa-solid ${tipo?.icon}"></i> ${tipo?.label}
+                    </span>
+                  </td>
+                </tr>
+              `;
+            }).join('')}
+          </tbody>
+        </table>
+      </div>
+    `;
+  },
+
+  async _buscarFeriados(ano) {
+    try {
+      const token = await this._getToken();
+      if (!token) return [];
+      const resp = await fetch(\`/api/feriados?ano=\${ano}\`, {
+        headers: { 'Authorization': \`Bearer \${token}\` },
+      });
+      if (!resp.ok) return [];
+      const json = await resp.json();
+      return Array.isArray(json.data) ? json.data : [];
+    } catch { return []; }
+  },
+
+  async _getToken() {
+    try {
+      const { data } = await supabaseClient.auth.getSession();
+      return data?.session?.access_token || null;
+    } catch { return null; }
+  },
+};
+
+window.TeacherCalendario = TeacherCalendario;
 
 // ---------- MENSAGENS ----------
 Router.register('teacher-messages', () => {

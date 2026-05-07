@@ -13,6 +13,24 @@ const Plans = {
       features: ['Cadastro de alunos', 'Cadastro automático de responsáveis'],
       newFeatures: ['Cadastro de alunos', 'Cadastro automático de responsáveis'],
       highlight: false,
+      hidden: false,  // visível na tela de planos
+    },
+    piloto: {
+      id: 'piloto', name: 'Plano Piloto', price: 0, order: -1,
+      desc: 'Parceiro piloto — acesso completo sem mensalidade de plataforma',
+      limits: { students: Infinity, teachers: Infinity, gestors: Infinity },
+      features: [
+        'Acesso completo a todos os módulos',
+        'Cadastro ilimitado de alunos, professores e turmas',
+        'Sistema financeiro com cobranças PIX',
+        'Chat interno', 'Documentos', 'Declarações',
+        'Controle de ponto docente', 'Calendário letivo',
+        'Boletim e controle de frequência',
+        'Suporte via ticket',
+      ],
+      newFeatures: [],
+      highlight: false,
+      hidden: true,  // NÃO aparece na tela de planos para o gestor
     },
     gestao_100: {
       id: 'gestao_100', name: 'Plano 100 Alunos', price: 149.90, order: 1,
@@ -68,7 +86,8 @@ const Plans = {
   },
 
   get(id)  { return this.defs[id] || this.defs.free; },
-  getAll() { return Object.values(this.defs).sort((a,b) => a.order - b.order); },
+  // getAll: apenas planos visíveis (exclui piloto e outros hidden)
+  getAll() { return Object.values(this.defs).filter(p => !p.hidden).sort((a,b) => a.order - b.order); },
 
   hasFeature(planId, feat) {
     const p = this.get(planId);
@@ -906,6 +925,9 @@ const Plans = {
 
   // Verifica se pode gerar pagamento (bloqueado durante teste)
   canGeneratePayment(school) {
+    // Plano piloto: cobranças sempre liberadas
+    const planId = this._f(school, 'planId', 'plan_id');
+    if (planId === 'piloto') return true;
     // Bloqueia se está em teste, com plano expirado ou escola bloqueada
     if (this.isOnTrial(school)) return false;
     if (this.isPlanExpired(school)) return false;
@@ -918,6 +940,10 @@ const Plans = {
   // ───────────────────────────────────────────────────────────
   isSchoolBlocked(school) {
     if (!school) return false;
+
+    // Plano piloto nunca bloqueia
+    const planId = this._f(school, 'planId', 'plan_id');
+    if (planId === 'piloto') return false;
 
     // 1. Trial expirado (>7 dias) sem ter ativado plano
     if (this._f(school, 'schoolStatus', 'school_status') === 'trial') {

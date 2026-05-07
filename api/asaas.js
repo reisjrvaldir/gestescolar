@@ -12,6 +12,10 @@ const ASAAS_BASE = process.env.ASAAS_ENV === 'production'
 
 const ASAAS_API_KEY = process.env.ASAAS_API_KEY;
 
+// Wallet ID da conta PRINCIPAL do GestEscolar no Asaas
+// (usado para receber a comissão de 3% sobre cobranças das subcontas)
+const GESTESCOLAR_WALLET_ID = process.env.ASAAS_PLATFORM_WALLET_ID || null;
+
 // Supabase server-side para validar sessão
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY;
@@ -1036,6 +1040,49 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;color:#3
         // Asaas rejeita dueDate no passado — normaliza para hoje se necessário
         const hojeProxy = new Date().toISOString().slice(0, 10);
         const dueDateProxy = data.dueDate && data.dueDate >= hojeProxy ? data.dueDate : hojeProxy;
+
+        // ── SPLIT CALCULADO NO SERVIDOR (nunca confiar no frontend) ──────────
+        // Buscar commission_rate e asaas_wallet_id da escola no banco
+        let serverSplit = undefined;
+        if (userSchoolId && SUPABASE_SERVICE_KEY) {
+          try {
+            const schoolInfoRes = await fetch(
+              `${SUPABASE_URL}/rest/v1/schools?id=eq.${userSchoolId}&select=commission_rate,asaas_wallet_id&limit=1`,
+              { headers: { apikey: SUPABASE_SERVICE_KEY, Authorization: `Bearer ${SUPABASE_SERVICE_KEY}` } }
+            );
+            if (schoolInfoRes.ok) {
+              const schoolInfo = await schoolInfoRes.json();
+              const sc = schoolInfo?.[0];
+              const grossValue   = Number(data.value) || 0;
+              const ASAAS_FEE    = 1.99;
+              const commRate     = Number(sc?.commission_rate ?? 3) / 100;
+              const netAfterFee  = grossValue - ASAAS_FEE;
+              const commission   = Number((netAfterFee * commRate).toFixed(2));
+              const schoolGets   = Number((netAfterFee - commission).toFixed(2));
+
+              if (schoolApiKey && GESTESCOLAR_WALLET_ID) {
+                // Cobrança criada pela subconta da escola → GestEscolar recebe comissão via split
+                if (commission > 0) {
+                  serverSplit = [{ walletId: GESTESCOLAR_WALLET_ID, fixedValue: commission }];
+                }
+              } else if (!schoolApiKey && sc?.asaas_wallet_id) {
+                // Cobrança criada pela conta mestre GestEscolar → escola recebe via split
+                if (schoolGets > 0) {
+                  serverSplit = [{ walletId: sc.asaas_wallet_id, fixedValue: schoolGets }];
+                }
+              }
+            }
+          } catch (splitErr) {
+            console.warn('[createPixCharge] Erro ao calcular split no servidor:', splitErr.message);
+            // fallback: usa split enviado pelo frontend
+            serverSplit = data.split ? [(() => {
+              const s = { walletId: data.split.walletId };
+              if (data.split.fixedValue != null) s.fixedValue = data.split.fixedValue;
+              return s;
+            })()] : undefined;
+          }
+        }
+
         asaasPath = '/payments';
         body = {
           customer: data.customerId,
@@ -1046,14 +1093,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;color:#3
           externalReference: data.externalReference,
           fine:     data.fine     ? { value: data.fine.value }     : undefined,
           interest: data.interest ? { value: data.interest.value } : undefined,
-          split: data.split ? [
-            (() => {
-              const s = { walletId: data.split.walletId };
-              if (data.split.percentualValue != null) s.percentualValue = data.split.percentualValue;
-              else if (data.split.fixedValue != null) s.fixedValue = data.split.fixedValue;
-              return s;
-            })()
-          ] : undefined,
+          split: serverSplit,
         };
         break;
       }
