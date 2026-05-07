@@ -53,7 +53,7 @@ Router.register('landing', () => {
             <span class="lp-grad">inteligência</span> e
             <span class="lp-grad2">eficiência</span>
           </h1>
-          <p>Matrículas, financeiro, notas, frequência e comunicação em um único lugar. 100% online, seguro e fácil de usar.</p>
+          <p>Matrículas, financeiro, notas, frequência, ponto docente, calendário letivo e comunicação em um único lugar. 100% online, seguro e fácil de usar.</p>
           <div class="lp-hero-btns">
             <button class="lp-btn lp-btn-accent lp-btn-hero" onclick="LandingPage.goRegister()">
               <i class="fa-solid fa-rocket"></i> Teste Grátis — 7 dias
@@ -193,13 +193,13 @@ Router.register('landing', () => {
         <div style="text-align:center;">
           <div class="lp-section-eyebrow lp-fade-up">Funcionalidades</div>
           <div class="lp-section-title lp-fade-up">Tudo que sua escola precisa,<br><span class="lp-grad">em um só lugar</span></div>
-          <div class="lp-section-sub lp-fade-up">Uma plataforma completa para gestão escolar, do administrativo ao acadêmico.</div>
+          <div class="lp-section-sub lp-fade-up">13 módulos funcionando agora — do administrativo ao controle de ponto docente.</div>
         </div>
         <div class="lp-features">
           <div class="lp-feature-card lp-fade-up lp-tilt" style="--card-color:#1a73e8;">
             <div class="lp-feature-icon" style="background:linear-gradient(135deg,#1a73e8,#0d47a1);"><i class="fa-solid fa-school"></i></div>
             <h3>Gestão Escolar</h3>
-            <p>Cadastro de turmas, alunos, professores e equipe administrativa em um painel intuitivo e organizado.</p>
+            <p>Cadastro de turmas com matérias por disciplina, alunos, professores e equipe em painel intuitivo.</p>
           </div>
           <div class="lp-feature-card lp-fade-up lp-tilt" style="--card-color:#00b894;">
             <div class="lp-feature-icon" style="background:linear-gradient(135deg,#00b894,#00838f);"><i class="fa-solid fa-file-invoice-dollar"></i></div>
@@ -208,8 +208,23 @@ Router.register('landing', () => {
           </div>
           <div class="lp-feature-card lp-fade-up lp-tilt" style="--card-color:#6c5ce7;">
             <div class="lp-feature-icon" style="background:linear-gradient(135deg,#6c5ce7,#4a3dbb);"><i class="fa-solid fa-chart-bar"></i></div>
-            <h3>Acadêmico</h3>
-            <p>Lançamento de notas por disciplina, controle de frequência diária, boletim e desempenho por turma.</p>
+            <h3>Acadêmico Completo</h3>
+            <p>Notas por disciplina e turma, frequência diária, boletim digital e relatórios de desempenho por aluno.</p>
+          </div>
+          <div class="lp-feature-card lp-fade-up lp-tilt" style="--card-color:#5e35b1;">
+            <div class="lp-feature-icon" style="background:linear-gradient(135deg,#5e35b1,#311b92);"><i class="fa-solid fa-fingerprint"></i></div>
+            <h3>Ponto Docente Digital</h3>
+            <p>Registro de ponto do professor com jornada configurável, entradas, saídas, intervalos e relatório mensal completo.</p>
+          </div>
+          <div class="lp-feature-card lp-fade-up lp-tilt" style="--card-color:#0097a7;">
+            <div class="lp-feature-icon" style="background:linear-gradient(135deg,#0097a7,#006064);"><i class="fa-solid fa-calendar-days"></i></div>
+            <h3>Calendário do Ano Letivo</h3>
+            <p>Visualização de feriados nacionais, municipais, estaduais e recessos. Integrado ao controle de ponto automaticamente.</p>
+          </div>
+          <div class="lp-feature-card lp-fade-up lp-tilt" style="--card-color:#2e7d32;">
+            <div class="lp-feature-icon" style="background:linear-gradient(135deg,#2e7d32,#1b5e20);"><i class="fa-solid fa-clock-rotate-left"></i></div>
+            <h3>Jornadas de Trabalho</h3>
+            <p>Configure dias, turnos, horários de entrada/saída e carga horária semanal individual por professor.</p>
           </div>
           <div class="lp-feature-card lp-fade-up lp-tilt" style="--card-color:#ff6f00;">
             <div class="lp-feature-icon" style="background:linear-gradient(135deg,#ff6f00,#e65100);"><i class="fa-solid fa-comments"></i></div>
@@ -240,6 +255,11 @@ Router.register('landing', () => {
             <div class="lp-feature-icon" style="background:linear-gradient(135deg,#f57c00,#e65100);"><i class="fa-solid fa-folder-open"></i></div>
             <h3>Documentos Digitais</h3>
             <p>Declarações, atestados, histórico escolar e matrícula digital — tudo acessível pelo portal.</p>
+          </div>
+          <div class="lp-feature-card lp-fade-up lp-tilt" style="--card-color:#c62828;">
+            <div class="lp-feature-icon" style="background:linear-gradient(135deg,#c62828,#7f0000);"><i class="fa-solid fa-headset"></i></div>
+            <h3>Suporte via Ticket</h3>
+            <p>Abra chamados diretamente pelo sistema. Acompanhe o status e histórico de atendimento em tempo real.</p>
           </div>
         </div>
       </div>
@@ -440,14 +460,6 @@ Router.register('landing', () => {
         </div>
         <div class="lp-coming">
           <div class="lp-coming-card lp-fade-up">
-            <div class="lp-coming-icon" style="background:linear-gradient(135deg,#7c4dff,#6200ea);"><i class="fa-solid fa-fingerprint"></i></div>
-            <div>
-              <div class="lp-coming-badge">EM BREVE</div>
-              <h3>Registro de Ponto Online</h3>
-              <p>Controle de ponto digital para colaboradores, com relatórios automáticos e integração com a folha de pagamento.</p>
-            </div>
-          </div>
-          <div class="lp-coming-card lp-fade-up">
             <div class="lp-coming-icon" style="background:linear-gradient(135deg,#00b894,#00838f);"><i class="fa-solid fa-spell-check"></i></div>
             <div>
               <div class="lp-coming-badge">EM BREVE</div>
@@ -467,15 +479,23 @@ Router.register('landing', () => {
             <div class="lp-coming-icon" style="background:linear-gradient(135deg,#e84393,#c2185b);"><i class="fa-solid fa-paperclip"></i></div>
             <div>
               <div class="lp-coming-badge">EM BREVE</div>
-              <h3>Envio de Arquivos no Chat</h3>
+              <h3>Arquivos no Chat</h3>
               <p>Compartilhe documentos, imagens e atividades diretamente pelo chat entre escola e família.</p>
+            </div>
+          </div>
+          <div class="lp-coming-card lp-fade-up">
+            <div class="lp-coming-icon" style="background:linear-gradient(135deg,#1565c0,#0d47a1);"><i class="fa-solid fa-chalkboard-user"></i></div>
+            <div>
+              <div class="lp-coming-badge">EM BREVE</div>
+              <h3>Plano de Aula Digital</h3>
+              <p>Professor cria e compartilha planos de aula digitais vinculados às disciplinas e turmas da escola.</p>
             </div>
           </div>
           <div class="lp-coming-card lp-fade-up">
             <div class="lp-coming-icon" style="background:linear-gradient(135deg,#3ddc84,#1f6e3f);"><i class="fa-brands fa-android"></i></div>
             <div>
               <div class="lp-coming-badge">EM BREVE</div>
-              <h3>Aplicativo Nativo Android</h3>
+              <h3>Aplicativo Android</h3>
               <p>App nativo para Android com acesso offline, notificações push e integração perfeita com o sistema.</p>
             </div>
           </div>
@@ -483,7 +503,7 @@ Router.register('landing', () => {
             <div class="lp-coming-icon" style="background:linear-gradient(135deg,#555555,#000000);"><i class="fa-brands fa-apple"></i></div>
             <div>
               <div class="lp-coming-badge">EM BREVE</div>
-              <h3>Aplicativo Nativo iOS</h3>
+              <h3>Aplicativo iOS</h3>
               <p>App nativo para iPhone com design elegante, acesso offline e sincronização contínua com a plataforma.</p>
             </div>
           </div>
