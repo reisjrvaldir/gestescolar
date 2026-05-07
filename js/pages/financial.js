@@ -2403,6 +2403,27 @@ const FinWithdraw = {
     );
   },
 
+  // Detecta automaticamente o tipo da chave PIX
+  // Retorna: 'CPF' | 'CNPJ' | 'EMAIL' | 'PHONE' | 'EVP'
+  _detectPixKeyType(key) {
+    if (!key) return 'EVP';
+    const trimmed = String(key).trim();
+    const digits = trimmed.replace(/\D/g, '');
+
+    // E-mail
+    if (/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmed)) return 'EMAIL';
+    // CPF (11 dígitos)
+    if (digits.length === 11 && /^\d+$/.test(digits)) return 'CPF';
+    // CNPJ (14 dígitos)
+    if (digits.length === 14 && /^\d+$/.test(digits)) return 'CNPJ';
+    // Telefone (10-13 dígitos, geralmente 11-13 com +55)
+    if (digits.length >= 10 && digits.length <= 13 && /^\d+$/.test(digits)) return 'PHONE';
+    // UUID v4 (chave aleatória do BACEN)
+    if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(trimmed)) return 'EVP';
+    // Default
+    return 'EVP';
+  },
+
   async confirm(maxValue, pixKey) {
     const value = parseFloat(document.getElementById('withdrawValue').value);
     if (!value || value < 1) { Utils.toast('Valor mínimo: R$ 1,00', 'error'); return; }
@@ -2412,9 +2433,16 @@ const FinWithdraw = {
     if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Processando...'; }
 
     const school = DB.getSchool(DB._schoolId);
+    const pixKeyType = this._detectPixKeyType(pixKey);
+    // Asaas espera CPF/CNPJ/telefone sem máscara
+    const cleanPixKey = (pixKeyType === 'CPF' || pixKeyType === 'CNPJ' || pixKeyType === 'PHONE')
+      ? pixKey.replace(/\D/g, '')
+      : pixKey;
+
     const result = await AsaasClient.requestWithdraw({
       value,
-      pixKey,
+      pixKey: cleanPixKey,
+      pixKeyType,
       description: `Resgate GestEscolar – ${school?.name || ''}`,
     });
 
