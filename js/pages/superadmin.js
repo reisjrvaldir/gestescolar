@@ -296,7 +296,11 @@ Router.register('superadmin-dashboard', () => {
                       <br><span style="font-size:11px;color:var(--text-muted);">${Utils.escape(s.email||'')}</span>
                       ${isExpiring ? '<br><span class="badge" style="background:#fff3e0;color:#e65100;font-size:10px;margin-top:2px;">⚠ Vence em breve</span>' : ''}
                     </td>
-                    <td><span class="badge badge-blue">${Utils.escape(plan.name)}</span></td>
+                    <td>
+                      ${s.planId === 'piloto'
+                        ? `<span class="badge" style="background:#e8f5e9;color:#1b5e20;"><i class="fa-solid fa-seedling"></i> Piloto</span>`
+                        : `<span class="badge badge-blue">${Utils.escape(plan.name)}</span>`}
+                    </td>
                     <td>${stCount} / ${s.customStudentLimit ? s.customStudentLimit + ' <i class="fa-solid fa-star" style="color:#f39c12;font-size:10px;" title="Limite personalizado"></i>' : (plan.limits?.students===Infinity?'∞':plan.limits?.students??'--')}</td>
                     <td><span class="badge badge-blue">${s.commissionRate != null ? s.commissionRate : 3}%</span></td>
                     <td>${s.asaasWalletId
@@ -309,6 +313,9 @@ Router.register('superadmin-dashboard', () => {
                       <button class="btn btn-outline btn-sm" onclick="SuperAdmin.viewSchool('${s.id}')" title="Ver detalhes"><i class="fa-solid fa-eye"></i></button>
                       <button class="btn btn-outline btn-sm" onclick="SuperAdmin.editSchool('${s.id}')" title="Editar"><i class="fa-solid fa-pen"></i></button>
                       <button class="btn btn-sm" style="background:#fff3e0;color:#e65100;border:1px solid #ffb74d;" onclick="SuperAdmin.resetSchoolPassword('${s.id}')" title="Resetar senha do gestor"><i class="fa-solid fa-key"></i></button>
+                      ${s.planId !== 'piloto'
+                        ? `<button class="btn btn-sm" style="background:#e8f5e9;color:#1b5e20;border:1px solid #a5d6a7;" onclick="SuperAdmin.ativarPlanoPiloto('${s.id}')" title="Ativar Plano Piloto (gratuito)"><i class="fa-solid fa-seedling"></i></button>`
+                        : `<span class="badge" style="background:#e8f5e9;color:#1b5e20;font-size:10px;padding:3px 7px;border-radius:8px;"><i class="fa-solid fa-seedling"></i> Piloto</span>`}
                       <button class="btn btn-sm" style="background:#f3e5f5;color:#6a1b9a;border:1px solid #ce93d8;" onclick="SuperAdmin.simulateExpiration('${s.id}')" title="Simular vencimento (teste)"><i class="fa-solid fa-flask"></i></button>
                       <button class="btn btn-sm" style="background:#e1f5fe;color:#01579b;border:1px solid #81d4fa;" onclick="SuperAdmin.simulatePayment('${s.id}')" title="Simular pagamento confirmado"><i class="fa-solid fa-envelope-circle-check"></i></button>
                       ${s.trialEndsAt || s.planExpiresAt ? `<button class="btn btn-sm" style="background:#fff9c4;color:#f57f17;border:1px solid #fff176;" onclick="SuperAdmin.sendExpiryWarning('${s.id}')" title="Enviar aviso de vencimento"><i class="fa-solid fa-bell"></i></button>` : ''}
@@ -1291,6 +1298,66 @@ WITH CHECK (EXISTS (SELECT 1 FROM users WHERE auth_id = auth.uid() AND role = 's
       );
     } catch (e) {
       Utils.toast('Erro na simulação: ' + (e.message || e), 'error');
+    }
+  },
+
+  async ativarPlanoPiloto(schoolId) {
+    const school = DB.getSchool(schoolId);
+    if (!school) return;
+
+    if (school.planId === 'piloto') {
+      Utils.toast('Esta escola já está no Plano Piloto.', 'info');
+      return;
+    }
+
+    Utils.modal(
+      '<i class="fa-solid fa-seedling" style="color:#1b5e20;"></i> Ativar Plano Piloto',
+      `<div style="padding:8px 0;">
+        <p style="margin-bottom:12px;">
+          Ativar o <strong>Plano Piloto</strong> para a escola
+          <strong>${Utils.escape(school.name)}</strong>?
+        </p>
+        <div style="background:#e8f5e9;border-radius:8px;padding:14px;font-size:13px;color:#1b5e20;margin-bottom:8px;">
+          <i class="fa-solid fa-check" style="margin-right:6px;"></i><strong>O que muda:</strong><br>
+          <ul style="margin:8px 0 0 16px;padding:0;">
+            <li>Acesso completo a todos os módulos</li>
+            <li>Alunos, professores e turmas ilimitados</li>
+            <li>Sistema financeiro (PIX/Asaas) ativo</li>
+            <li>Sem mensalidade de plataforma</li>
+            <li>Sem data de vencimento</li>
+          </ul>
+        </div>
+        <div style="background:#fff8e1;border-radius:8px;padding:10px;font-size:12px;color:#f57f17;">
+          <i class="fa-solid fa-circle-info" style="margin-right:4px;"></i>
+          A receita operacional vem das cobranças de mensalidades dos alunos via Asaas.
+        </div>
+      </div>`,
+      `<button class="btn btn-outline" onclick="this.closest('.modal-overlay').remove()">Cancelar</button>
+       <button class="btn btn-primary" style="background:#1b5e20;" onclick="SuperAdmin._confirmarPiloto('${schoolId}')">
+         <i class="fa-solid fa-seedling"></i> Confirmar Ativação
+       </button>`
+    );
+  },
+
+  async _confirmarPiloto(schoolId) {
+    document.querySelector('.modal-overlay')?.remove();
+    const prev = DB._schoolId;
+    DB.setTenant(schoolId);
+    const ok = await DB.updateSchool(schoolId, {
+      planId:            'piloto',
+      schoolStatus:      'active',
+      planExpiresAt:     null,
+      planPaymentId:     null,
+      planSubscriptionId: null,
+      billing:           'piloto',
+      upgradedAt:        new Date().toISOString(),
+    });
+    DB.setTenant(prev);
+    if (ok) {
+      Utils.toast('✅ Plano Piloto ativado com sucesso!', 'success');
+      Router.go('superadmin-dashboard');
+    } else {
+      Utils.toast('Erro ao ativar plano piloto.', 'error');
     }
   },
 
