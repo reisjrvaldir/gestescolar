@@ -1167,8 +1167,8 @@ const TeacherCalendario = {
     try {
       const token = await this._getToken();
       if (!token) return [];
-      const resp = await fetch(\`/api/feriados?ano=\${ano}\`, {
-        headers: { 'Authorization': \`Bearer \${token}\` },
+      const resp = await fetch(`/api/feriados?ano=${ano}`, {
+        headers: { 'Authorization': `Bearer ${token}` },
       });
       if (!resp.ok) return [];
       const json = await resp.json();
