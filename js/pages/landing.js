@@ -193,7 +193,7 @@ Router.register('landing', () => {
         <div style="text-align:center;">
           <div class="lp-section-eyebrow lp-fade-up">Funcionalidades</div>
           <div class="lp-section-title lp-fade-up">Tudo que sua escola precisa,<br><span class="lp-grad">em um só lugar</span></div>
-          <div class="lp-section-sub lp-fade-up">13 módulos funcionando agora — do administrativo ao controle de ponto docente.</div>
+          <div class="lp-section-sub lp-fade-up">12 módulos funcionando agora — do administrativo ao controle de ponto docente.</div>
         </div>
         <div class="lp-features">
           <div class="lp-feature-card lp-fade-up lp-tilt" style="--card-color:#1a73e8;">
@@ -250,11 +250,6 @@ Router.register('landing', () => {
             <div class="lp-feature-icon" style="background:linear-gradient(135deg,#43a047,#2e7d32);"><i class="fa-solid fa-wallet"></i></div>
             <h3>Financeiro do Responsável</h3>
             <p>Mensalidades pendentes, histórico de pagamentos, 2ª via e pagamento online via PIX.</p>
-          </div>
-          <div class="lp-feature-card lp-fade-up lp-tilt" style="--card-color:#f57c00;">
-            <div class="lp-feature-icon" style="background:linear-gradient(135deg,#f57c00,#e65100);"><i class="fa-solid fa-folder-open"></i></div>
-            <h3>Documentos Digitais</h3>
-            <p>Declarações, atestados, histórico escolar e matrícula digital — tudo acessível pelo portal.</p>
           </div>
           <div class="lp-feature-card lp-fade-up lp-tilt" style="--card-color:#c62828;">
             <div class="lp-feature-icon" style="background:linear-gradient(135deg,#c62828,#7f0000);"><i class="fa-solid fa-headset"></i></div>
