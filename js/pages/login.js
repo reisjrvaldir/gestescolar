@@ -703,7 +703,8 @@ const LoginPage = {
       }
 
       // PASSO 2: Criar escola (agora com sess\u00e3o Auth ativa)
-      const school = DB.addSchool({
+      // CR\u00cdTICO: await garante escola no Supabase ANTES de inserir usu\u00e1rio (FK school_id)
+      const school = await DB.addSchool({
         name: schoolName, cnpj, phone, email, planId: 'free',
         postalCode, address, addressNumber: addressNum, complement, province, city, state,
         asaasPersonType: personType,

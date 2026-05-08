@@ -798,8 +798,8 @@ const SuperAdmin = {
       Utils.toast('CNPJ inválido. Informe os 14 dígitos.', 'error'); return;
     }
 
-    // Criar escola no banco — Asaas (subconta + KYC) será feito posteriormente pelo gestor
-    const school = DB.addSchool({
+    // Criar escola no banco — CRÍTICO: await garante persistência antes de operações subsequentes
+    const school = await DB.addSchool({
       name, cnpj, email, phone, planId: plan, ownerId: null,
       postalCode, address, addressNumber, complement, province, city, state,
       asaasPersonType: personType,
