@@ -258,7 +258,7 @@ const DB = {
   getSchools()  { return this._cache.schools; },
   getSchool(id) { return this._cache.schools.find(s => s.id === id); },
 
-  addSchool(s) {
+  async addSchool(s) {
     s.id        = crypto.randomUUID();
     s.createdAt = new Date().toISOString();
     s.status    = s.status || 'active';
@@ -267,7 +267,9 @@ const DB = {
     s.school_status = 'trial';
     s.trial_started_at = s.createdAt;
     this._cache.schools.push(s);
-    this._insert('schools', s);
+    // CRÍTICO: await garante que a escola existe no Supabase antes de
+    // inserir registros com FK school_id (usuários, audit_log, etc.)
+    await this._insert('schools', s);
     return s;
   },
 
