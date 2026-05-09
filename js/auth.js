@@ -67,7 +67,14 @@ const Auth = {
       });
       if (authErr) {
         console.warn('[Auth] Supabase Auth:', authErr.message);
-        return { ok: false, msg: 'Matrícula/e-mail ou senha incorretos.' };
+        // Distinguir "e-mail não existe" de "senha errada"
+        try {
+          const { data: exists } = await supabaseClient.rpc('check_email_exists', { p_email: authEmail });
+          if (exists === false) {
+            return { ok: false, msg: 'E-mail não cadastrado no sistema.' };
+          }
+        } catch (_) { /* se RPC falhar, cai na mensagem genérica */ }
+        return { ok: false, msg: 'Senha incorreta. Tente novamente.' };
       }
 
       // 2. Recarregar dados com sessao Auth ativa (RLS agora permite)
