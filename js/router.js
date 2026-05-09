@@ -182,7 +182,7 @@ const Router = {
             <div style="color:rgba(255,255,255,.85);font-size:10px;margin-top:2px;">Desbloqueie todos os recursos!</div>
           </div>` : ''}` : ''}
           <div class="sidebar-footer">
-            <div class="sidebar-user">
+            <div class="sidebar-user" onclick="Auth.logout()" title="Sair — clique para sair">
               <div class="avatar">${Utils.initials(user.name)}</div>
               <div class="user-info">
                 <div class="user-name">${Utils.escape(user.name)}</div>
@@ -196,9 +196,9 @@ const Router = {
                   </div>`;
                 })()}
               </div>
-              <button class="btn-logout" onclick="Auth.logout()" title="Sair">
+              <span class="btn-logout" style="pointer-events:none;">
                 <i class="fa-solid fa-right-from-bracket"></i>
-              </button>
+              </span>
             </div>
           </div>
         </aside>
