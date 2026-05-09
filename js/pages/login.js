@@ -818,11 +818,12 @@ const LoginPage = {
       const recoveryData = await recoveryRes.json();
       if (!recoveryRes.ok || !recoveryData.success) {
         console.warn('[Recovery] API error:', recoveryData.error || recoveryData.message);
+        const errMsg = recoveryData.error || 'Erro ao enviar e-mail. Tente novamente.';
         alertEl.innerHTML = `<div class="alert alert-danger" style="font-size:13px;">
           <i class="fa-solid fa-circle-exclamation"></i>
-          <div style="flex:1;min-width:0;">Erro ao enviar</div>
+          <div style="flex:1;min-width:0;">${errMsg}</div>
         </div>`;
-        if (btn) { btn.disabled = false; btn.innerHTML = 'Enviar'; }
+        if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fa-solid fa-paper-plane"></i> Enviar'; }
         return;
       }
       localStorage.setItem(key, String(now));

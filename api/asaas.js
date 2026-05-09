@@ -84,12 +84,11 @@ module.exports = async function handler(req, res) {
           auth: { autoRefreshToken: false, persistSession: false },
         });
 
-        // 1. Verificar se e-mail existe no Auth (resposta genérica para não vazar info)
+        // 1. Verificar se e-mail existe no Auth
         const { data: usersData } = await supabaseAdmin.auth.admin.listUsers({ perPage: 1000 });
         const userExists = usersData?.users?.some(u => u.email?.toLowerCase() === email);
         if (!userExists) {
-          // Resposta genérica — não revela se e-mail existe ou não
-          return res.status(200).json({ success: true, message: 'Se este e-mail estiver cadastrado, você receberá as instruções.' });
+          return res.status(404).json({ error: 'E-mail não encontrado. Verifique se você usou o e-mail correto ao se cadastrar.' });
         }
 
         // 2. Gerar link de recovery pelo Supabase Auth (token seguro, 1h validade)
