@@ -20,6 +20,7 @@ const RATE_LIMITS = {
   // Password Recovery — muito restritivo para evitar brute force
   sendPasswordRecovery:      { max: 5,   windowMs: 3600000 }, // 5/hora por IP
   resetPasswordWithToken:    { max: 10,  windowMs: 3600000 }, // 10/hora por IP
+  checkEmailExists:          { max: 30,  windowMs: 60000   }, // 30/min por IP (chamado em login falho)
   // Default para ações não listadas
   default:                  { max: 60,  windowMs: 60000  }, // 60/min
 };

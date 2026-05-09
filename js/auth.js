@@ -68,12 +68,18 @@ const Auth = {
       if (authErr) {
         console.warn('[Auth] Supabase Auth:', authErr.message);
         // Distinguir "e-mail não existe" de "senha errada"
+        // Usa API com service role (bypassa RLS, não exige RPC no banco)
         try {
-          const { data: exists } = await supabaseClient.rpc('check_email_exists', { p_email: authEmail });
-          if (exists === false) {
+          const checkRes = await fetch('/api/asaas', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: 'checkEmailExists', data: { email: authEmail } }),
+          });
+          const checkData = await checkRes.json();
+          if (checkRes.ok && checkData.exists === false) {
             return { ok: false, msg: 'E-mail não cadastrado no sistema.' };
           }
-        } catch (_) { /* se RPC falhar, cai na mensagem genérica */ }
+        } catch (_) { /* fallback para mensagem genérica */ }
         return { ok: false, msg: 'Senha incorreta. Tente novamente.' };
       }
 
