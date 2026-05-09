@@ -56,7 +56,36 @@ module.exports = async function handler(req, res) {
     // Parse body primeiro — algumas ações (signupAndBootstrap) não exigem token
     const bodyParsed = typeof req.body === 'string' ? JSON.parse(req.body) : (req.body || {});
     const earlyAction = bodyParsed.action;
-    const PUBLIC_ACTIONS = new Set(['signupAndBootstrap', 'sendPasswordRecovery', 'resetPasswordWithToken']);
+    const PUBLIC_ACTIONS = new Set(['signupAndBootstrap', 'sendPasswordRecovery', 'resetPasswordWithToken', 'checkEmailExists']);
+
+    // ── VERIFICAR SE E-MAIL EXISTE (para distinguir email/senha no login) ─
+    if (earlyAction === 'checkEmailExists') {
+      if (!SUPABASE_SERVICE_KEY) {
+        return res.status(500).json({ error: 'Servidor não configurado' });
+      }
+      const ip = req.headers['x-forwarded-for']?.split(',')[0] || req.socket?.remoteAddress || 'unknown';
+      const rl = checkRateLimit(`checkemail:${ip}`, 'checkEmailExists');
+      if (!rl.ok) {
+        res.setHeader('Retry-After', rl.retryAfter);
+        return res.status(429).json({ error: `Muitas tentativas. Aguarde ${rl.retryAfter}s.` });
+      }
+      const email = (bodyParsed.data?.email || '').trim().toLowerCase();
+      if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+        return res.status(400).json({ error: 'Email inválido' });
+      }
+      try {
+        const { createClient } = require('@supabase/supabase-js');
+        const supabaseAdmin = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY, {
+          auth: { autoRefreshToken: false, persistSession: false },
+        });
+        const { data: usersData } = await supabaseAdmin.auth.admin.listUsers({ perPage: 1000 });
+        const exists = !!usersData?.users?.some(u => u.email?.toLowerCase() === email);
+        return res.status(200).json({ success: true, exists });
+      } catch (e) {
+        console.error('[checkEmailExists]', e);
+        return res.status(500).json({ error: 'Erro ao verificar e-mail' });
+      }
+    }
 
     // ── RECUPERAÇÃO DE SENHA PÚBLICA (login page) ─────────
     // Usa generateLink do Supabase Admin para gerar token confiável,
