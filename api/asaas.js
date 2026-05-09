@@ -59,7 +59,8 @@ module.exports = async function handler(req, res) {
     const PUBLIC_ACTIONS = new Set(['signupAndBootstrap', 'sendPasswordRecovery', 'resetPasswordWithToken']);
 
     // ── RECUPERAÇÃO DE SENHA PÚBLICA (login page) ─────────
-    // Gera um link de reset via Supabase Admin e envia via Resend
+    // Usa generateLink do Supabase Admin para gerar token confiável,
+    // depois envia e-mail branded via Resend. Sem tabela customizada.
     if (earlyAction === 'sendPasswordRecovery') {
       if (!SUPABASE_SERVICE_KEY || !process.env.RESEND_API_KEY) {
         return res.status(500).json({ error: 'Serviço de email não configurado' });
@@ -75,120 +76,105 @@ module.exports = async function handler(req, res) {
         return res.status(400).json({ error: 'Email inválido' });
       }
 
-      // Gerar token de reset customizado (UUID)
-      const cryptoNode = require('crypto');
-      const resetToken = cryptoNode.randomUUID();
-      const expiresAt = new Date(Date.now() + 3600000).toISOString(); // 1 hora
+      const origin = process.env.ALLOWED_ORIGIN || 'https://gestescolar.com.br';
 
-      // Hashear token antes de armazenar (segurança)
-      const tokenHash = cryptoNode.createHash('sha256').update(resetToken).digest('hex');
+      try {
+        const { createClient } = require('@supabase/supabase-js');
+        const supabaseAdmin = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY, {
+          auth: { autoRefreshToken: false, persistSession: false },
+        });
 
-      console.log('[Password Recovery] Gerando token de reset para:', email);
+        // 1. Verificar se e-mail existe no Auth (resposta genérica para não vazar info)
+        const { data: usersData } = await supabaseAdmin.auth.admin.listUsers({ perPage: 1000 });
+        const userExists = usersData?.users?.some(u => u.email?.toLowerCase() === email);
+        if (!userExists) {
+          // Resposta genérica — não revela se e-mail existe ou não
+          return res.status(200).json({ success: true, message: 'Se este e-mail estiver cadastrado, você receberá as instruções.' });
+        }
 
-      // Construir link com token no fragment (#) para não enviar ao servidor
-      // Frontend extrai parâmetros de getHashParams() que procura no fragment
-      const resetLink = `${process.env.ALLOWED_ORIGIN || 'https://gestescolar.com.br'}/login#reset_token=${resetToken}&reset_email=${encodeURIComponent(email)}`;
+        // 2. Gerar link de recovery pelo Supabase Auth (token seguro, 1h validade)
+        const { data: linkData, error: linkErr } = await supabaseAdmin.auth.admin.generateLink({
+          type: 'recovery',
+          email,
+          options: { redirectTo: `${origin}/login` },
+        });
 
-      console.log('[Password Recovery] Link de reset gerado:', resetLink.slice(0, 100) + '...');
+        if (linkErr || !linkData?.properties?.action_link) {
+          console.error('[Password Recovery] Erro ao gerar link:', linkErr);
+          return res.status(500).json({ error: 'Erro ao gerar link de recuperação.' });
+        }
 
-      // Enviar via Resend
-      console.log('[Password Recovery] Enviando email via Resend para:', email);
-      const emailRes = await fetch('https://api.resend.com/emails', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${process.env.RESEND_API_KEY}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          from: 'suporte@gestescolar.com.br',
-          to: email,
-          subject: 'Recuperação de Senha - GestEscolar 🔐',
-          html: `
+        const resetLink = linkData.properties.action_link;
+        console.log('[Password Recovery] Link Supabase gerado para:', email);
+
+        // 3. Enviar e-mail branded via Resend
+        const emailRes = await fetch('https://api.resend.com/emails', {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${process.env.RESEND_API_KEY}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            from: 'suporte@gestescolar.com.br',
+            to: email,
+            subject: 'Recuperação de Senha — GestEscolar 🔐',
+            html: `
 <html>
 <head><meta charset="UTF-8"><style>
-body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;color:#333;}
-.container{max-width:600px;margin:0 auto;padding:20px;background:#f9f9f9;}
-.header{background:linear-gradient(135deg,#1976d2,#1565c0);color:#fff;padding:30px;border-radius:8px 8px 0 0;text-align:center;}
-.content{background:#fff;padding:30px;border-radius:0 0 8px 8px;box-shadow:0 2px 8px rgba(0,0,0,0.1);}
-.warning{background:#fff3cd;border-left:4px solid #ffc107;padding:15px;margin:20px 0;border-radius:4px;}
-.button{display:inline-block;background:#1976d2;color:#fff;padding:12px 30px;text-decoration:none;border-radius:6px;margin:20px 0;font-weight:600;}
-.footer{margin-top:30px;padding-top:20px;border-top:1px solid #eee;font-size:12px;color:#666;text-align:center;}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;color:#333;margin:0;padding:0;}
+.container{max-width:600px;margin:0 auto;padding:20px;background:#f4f6f9;}
+.header{background:linear-gradient(135deg,#1976d2,#1565c0);color:#fff;padding:32px 30px;border-radius:10px 10px 0 0;text-align:center;}
+.header h1{margin:0 0 6px;font-size:24px;}
+.header p{margin:0;opacity:.85;font-size:14px;}
+.content{background:#fff;padding:32px 30px;border-radius:0 0 10px 10px;box-shadow:0 2px 12px rgba(0,0,0,.08);}
+.warning{background:#fff8e1;border-left:4px solid #ffc107;padding:14px 16px;margin:20px 0;border-radius:4px;font-size:13px;}
+.btn-wrap{text-align:center;margin:28px 0;}
+.button{display:inline-block;background:#1976d2;color:#fff!important;padding:14px 36px;text-decoration:none;border-radius:8px;font-weight:700;font-size:15px;letter-spacing:.3px;}
+.link-copy{background:#f4f6f9;border-radius:6px;padding:10px 14px;font-size:11px;word-break:break-all;color:#555;margin-top:16px;}
+.footer{margin-top:24px;font-size:12px;color:#999;text-align:center;}
 </style></head>
 <body>
 <div class="container">
-<div class="header"><h1>🎓 GestEscolar</h1><p>Recuperação de Senha</p></div>
-<div class="content">
-<p>Recebemos uma solicitação para recuperar sua senha.</p>
-<div class="warning"><strong>⏰ Link válido por 1 hora</strong><br>Se você não solicitou, ignore este email.</div>
-<p>Clique no botão para criar uma nova senha:</p>
-<a href="${resetLink}" class="button">Recuperar Senha</a>
-<p style="font-size:13px;color:#666;">Ou copie: <span style="word-break:break-all;font-size:12px;">${resetLink}</span></p>
-<div class="footer"><p>Dúvidas? suporte@gestescolar.com.br</p></div>
-</div>
+  <div class="header">
+    <h1>🎓 GestEscolar</h1>
+    <p>Recuperação de Senha</p>
+  </div>
+  <div class="content">
+    <p style="font-size:15px;">Olá!</p>
+    <p>Recebemos uma solicitação para redefinir a senha da conta associada a este e-mail.</p>
+    <div class="warning">
+      ⏰ <strong>Este link é válido por 1 hora.</strong><br>
+      Se você não solicitou, ignore este e-mail — sua senha não será alterada.
+    </div>
+    <div class="btn-wrap">
+      <a href="${resetLink}" class="button">🔑 Criar Nova Senha</a>
+    </div>
+    <p style="font-size:13px;color:#777;text-align:center;">Ou copie o link abaixo no navegador:</p>
+    <div class="link-copy">${resetLink}</div>
+    <div class="footer">
+      Dúvidas? <a href="mailto:suporte@gestescolar.com.br" style="color:#1976d2;">suporte@gestescolar.com.br</a>
+    </div>
+  </div>
 </div>
 </body>
 </html>`,
-          replyTo: 'suporte@gestescolar.com.br',
-        }),
-      });
-
-      const emailData = await emailRes.json();
-      console.log('[Password Recovery] Resend response:', emailRes.status, JSON.stringify(emailData).slice(0, 200));
-      if (!emailRes.ok) {
-        console.error('[Resend] Error enviando email:', emailRes.status, emailData);
-        // Email falhou, retorna o erro
-        return res.status(500).json({ error: `Erro ao enviar email: ${emailData.message || emailData.error || 'desconhecido'}` });
-      }
-
-      console.log('[Password Recovery] ✅ Email enviado com sucesso para', email, 'ID:', emailData.id);
-
-      // Armazenar token HASHEADO para validação posterior (segurança)
-      try {
-        const supabaseAdmin = require('@supabase/supabase-js').createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
-
-        // Verificar se tabela existe antes de inserir
-        const { error: checkError } = await supabaseAdmin
-          .from('password_reset_tokens')
-          .select('id')
-          .limit(1);
-
-        if (checkError?.code === 'PGRST116') {
-          console.error('[Password Recovery] ❌ ERRO CRÍTICO: Tabela password_reset_tokens não existe. Crie a tabela no Supabase:');
-          console.error('CREATE TABLE password_reset_tokens (id UUID DEFAULT gen_random_uuid() PRIMARY KEY, email TEXT NOT NULL, token_hash TEXT NOT NULL, expires_at TIMESTAMP NOT NULL, created_at TIMESTAMP DEFAULT now());');
-          return res.status(500).json({ error: 'Serviço de recuperação de senha indisponível. Contate o administrador.' });
-        }
-
-        // Tentar armazenar com novo schema (token_hash) primeiro
-        let insertResult = await supabaseAdmin.from('password_reset_tokens').insert({
-          email: email,
-          token_hash: tokenHash,
-          expires_at: expiresAt,
-          created_at: new Date().toISOString(),
+            replyTo: 'suporte@gestescolar.com.br',
+          }),
         });
 
-        // Se falhar porque coluna token_hash não existe, usar schema legado (token)
-        if (insertResult.error && (insertResult.error.code === 'PGRST204' || insertResult.error.message?.includes('token_hash'))) {
-          console.warn('[Password Recovery] Coluna token_hash não existe, usando schema legado (token plain)');
-          insertResult = await supabaseAdmin.from('password_reset_tokens').insert({
-            email: email,
-            token: resetToken,  // Schema antigo: armazena em plain text
-            expires_at: expiresAt,
-            created_at: new Date().toISOString(),
-          });
+        const emailData = await emailRes.json();
+        if (!emailRes.ok) {
+          console.error('[Resend] Erro:', emailRes.status, emailData);
+          return res.status(500).json({ error: 'Erro ao enviar e-mail. Tente novamente.' });
         }
 
-        if (insertResult.error) {
-          console.error('[Password Recovery] Erro ao inserir token:', insertResult.error);
-          return res.status(500).json({ error: 'Erro ao processar recuperação de senha. Tente novamente em alguns minutos.' });
-        }
+        console.log('[Password Recovery] ✅ E-mail enviado via Resend, ID:', emailData.id);
+        return res.status(200).json({ success: true, message: 'E-mail de recuperação enviado.' });
 
-        console.log('[Password Recovery] ✅ Token armazenado com segurança em password_reset_tokens');
       } catch (e) {
-        console.error('[Password Recovery] ❌ Falha ao armazenar token:', e.message);
-        return res.status(500).json({ error: 'Erro ao processar recuperação de senha. Tente novamente em alguns minutos.' });
+        console.error('[Password Recovery] Exceção:', e.message);
+        return res.status(500).json({ error: 'Erro interno. Tente novamente.' });
       }
-
-      return res.status(200).json({ success: true, message: 'Email de recuperação enviado' });
     }
 
     // ── SIGNUP + BOOTSTRAP PÚBLICO (checkout landing) ─────────
