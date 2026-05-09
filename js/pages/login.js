@@ -914,34 +914,59 @@ const LoginPage = {
 
   // Verifica se URL contém token de reset de senha (vindo do email)
   async checkPasswordResetToken() {
-    // 1. Verificar query params (?reset_token=...&email=...)
-    const params = new URLSearchParams(window.location.search);
-    const resetToken = params.get('reset_token');
-    const resetEmail = params.get('email');
+    // Verifica hash do Supabase (type=recovery ou access_token)
+    // Gerado por supabaseAdmin.auth.admin.generateLink({ type: 'recovery' })
+    const hash = window.location.hash;
+    if (!hash || (!hash.includes('type=recovery') && !hash.includes('access_token'))) return false;
+    if (!supabaseClient) return false;
 
-    if (resetToken && resetEmail) {
-      console.log('[Login] Reset token encontrado na URL:', resetToken.slice(0, 8) + '...');
-      this._showResetPasswordForm(resetToken, resetEmail);
-      // _showResetPasswordForm move para sessionStorage e limpa a URL
+    // Mostrar loader enquanto processa
+    const app = document.getElementById('app');
+    if (app) {
+      app.innerHTML = `
+        <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;
+                    height:100vh;gap:16px;color:#555;">
+          <i class="fa-solid fa-lock-open fa-2x" style="color:#1976d2;"></i>
+          <div style="font-size:16px;font-weight:600;">Verificando link de recuperação...</div>
+          <i class="fa-solid fa-spinner fa-spin" style="font-size:24px;color:#1976d2;"></i>
+        </div>`;
+    }
+
+    // Aguardar Supabase JS processar o access_token da hash e criar sessão
+    // (o cliente JS faz isso automaticamente ao detectar o hash)
+    let session = null;
+    for (let i = 0; i < 10; i++) {
+      const { data } = await supabaseClient.auth.getSession();
+      if (data?.session) { session = data.session; break; }
+      await new Promise(r => setTimeout(r, 400));
+    }
+
+    // Limpar hash da URL (não vazar token no histórico/referer)
+    window.history.replaceState({}, '', window.location.pathname);
+
+    if (session) {
+      console.log('[Login] Sessão de recovery confirmada — exibindo form de nova senha');
+      this._showResetPasswordForm();
       return true;
     }
 
-    // 2. Verificar hash (Supabase recovery links)
-    const hash = window.location.hash;
-    if (!hash.includes('type=recovery') && !hash.includes('access_token')) return false;
-
-    if (!supabaseClient) return false;
-
-    // Aguardar o Supabase JS processar os tokens da hash
-    for (let i = 0; i < 3; i++) {
-      const { data } = await supabaseClient.auth.getSession();
-      if (data?.session) {
-        this._showResetPasswordForm();
-        return true;
-      }
-      await new Promise(r => setTimeout(r, 500));
+    // Token inválido ou expirado
+    if (app) {
+      app.innerHTML = `
+        <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;
+                    height:100vh;gap:16px;color:#555;padding:24px;text-align:center;">
+          <i class="fa-solid fa-circle-exclamation fa-2x" style="color:#e53935;"></i>
+          <div style="font-size:18px;font-weight:700;color:#e53935;">Link expirado ou inválido</div>
+          <p style="max-width:360px;font-size:14px;color:#777;">
+            Este link de recuperação expirou ou já foi utilizado.<br>
+            Solicite um novo link de recuperação de senha.
+          </p>
+          <button class="btn btn-primary" onclick="Router.go('login')">
+            <i class="fa-solid fa-arrow-left"></i> Voltar ao Login
+          </button>
+        </div>`;
     }
-    return false;
+    return true; // retorna true para não continuar o fluxo normal de app.js
   },
 
   _showResetPasswordForm(resetToken, resetEmail) {
@@ -1003,89 +1028,64 @@ const LoginPage = {
 
   async submitResetPassword() {
     const alertEl = document.getElementById('reset-alert');
-    const pass    = document.getElementById('resetNewPass').value;
-    const confirm = document.getElementById('resetNewPassConfirm').value;
-    const btn = document.querySelector('.btn-primary[onclick*="submitResetPassword"]');
+    const pass    = document.getElementById('resetNewPass')?.value || '';
+    const confirm = document.getElementById('resetNewPassConfirm')?.value || '';
+    const btn     = document.querySelector('.btn-primary[onclick*="submitResetPassword"]');
 
     const v = this._validatePassword(pass, confirm);
     if (!v.ok) {
-      alertEl.innerHTML = `<div class="alert alert-danger" style="font-size:13px;">${v.msg}</div>`;
+      alertEl.innerHTML = `<div class="alert alert-danger" style="font-size:13px;">
+        <i class="fa-solid fa-circle-exclamation"></i> ${v.msg}
+      </div>`;
+      return;
+    }
+
+    if (!supabaseClient) {
+      alertEl.innerHTML = '<div class="alert alert-danger" style="font-size:13px;">Serviço indisponível.</div>';
       return;
     }
 
     if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Salvando...'; }
 
     try {
-      // Buscar token preferencialmente em sessionStorage (não fica em URL/history)
-      const { resetToken, resetEmail } = getResetParams();
+      // Usuário já autenticado via token Supabase (processado em checkPasswordResetToken)
+      // Basta chamar updateUser para atualizar a senha na conta autenticada
+      const { error } = await supabaseClient.auth.updateUser({ password: pass });
 
-      // Se temos um token customizado (vindo do email), usar o backend para validar
-      if (resetToken && resetEmail) {
-        console.log('[Reset Password] Enviando request ao backend com token');
-        const apiRes = await fetch('/api/asaas', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            action: 'resetPasswordWithToken',
-            data: {
-              email: resetEmail,
-              resetToken: resetToken,
-              newPassword: pass,
-            },
-          }),
-        });
-
-        const apiData = await apiRes.json();
-        if (!apiRes.ok) {
-          console.error('[Reset Password] Erro do backend:', apiData);
-          alertEl.innerHTML = `<div class="alert alert-danger" style="font-size:13px;"><i class="fa-solid fa-circle-exclamation"></i> ${apiData.error || 'Erro ao resetar senha.'}</div>`;
-          return;
-        }
-
-        // Limpar URL fragment e tokens de sessionStorage
-        window.history.replaceState({}, '', window.location.pathname);
-        try { sessionStorage.removeItem('resetToken'); sessionStorage.removeItem('resetEmail'); } catch (_) {}
-
-        // Fazer signOut global do Supabase para invalidar qualquer JWT em cache
-        try {
-          if (supabaseClient) {
-            await supabaseClient.auth.signOut({ scope: 'global' });
-          }
-        } catch (_) {}
-
-        // Limpar sess\u00e3o local tamb\u00e9m
-        try { localStorage.removeItem('ges_session'); } catch (_) {}
-        try { sessionStorage.removeItem('ges_session'); } catch (_) {}
-
-        // Limpar tokens do Supabase no localStorage (chaves come\u00e7am com sb-)
-        try {
-          const keys = Object.keys(localStorage);
-          keys.forEach(k => { if (k.startsWith('sb-')) localStorage.removeItem(k); });
-        } catch (_) {}
-
-        alertEl.innerHTML = `<div class="alert alert-success" style="font-size:13px;">
-          <i class="fa-solid fa-check-circle"></i> Senha alterada com sucesso! Redirecionando para login...
+      if (error) {
+        console.error('[Reset Password] Erro updateUser:', error.message);
+        const expired = error.message?.toLowerCase().includes('expired') ||
+                        error.message?.toLowerCase().includes('invalid') ||
+                        error.status === 401 || error.status === 403;
+        alertEl.innerHTML = `<div class="alert alert-danger" style="font-size:13px;">
+          <i class="fa-solid fa-circle-exclamation"></i>
+          ${expired
+            ? 'Link expirado. <a href="/login" onclick="Router.go(\'login\');return false;">Solicite um novo link</a> de recuperação.'
+            : (error.message || 'Erro ao salvar senha. Tente novamente.')}
         </div>`;
-        // Reload completo para reinicializar DB e sess\u00e3o limpa
-        setTimeout(() => { window.location.href = '/login'; }, 1500);
-      } else {
-        // Fluxo padr\u00e3o Supabase (hash recovery)
-        console.log('[Reset Password] Usando fluxo Supabase padr\u00e3o');
-        const { error } = await supabaseClient.auth.updateUser({ password: pass });
-        if (error) {
-          alertEl.innerHTML = `<div class="alert alert-danger" style="font-size:13px;">${error.message}</div>`;
-          return;
-        }
-        alertEl.innerHTML = `<div class="alert alert-success" style="font-size:13px;">
-          <i class="fa-solid fa-check-circle"></i> Senha alterada com sucesso! Por seguran\u00e7a, todas as sess\u00f5es foram encerradas. Fa\u00e7a login novamente...
-        </div>`;
-        try { await supabaseClient.auth.signOut({ scope: 'global' }); } catch (_) {}
-        window.location.hash = '';
-        setTimeout(() => Router.go('login'), 2500);
+        return;
       }
+
+      // Sucesso — encerrar sessão global e redirecionar para login
+      alertEl.innerHTML = `<div class="alert alert-success" style="font-size:13px;">
+        <i class="fa-solid fa-check-circle"></i>
+        <strong>Senha alterada com sucesso!</strong><br>
+        Por segurança, todas as sessões foram encerradas. Faça login com a nova senha.
+      </div>`;
+
+      // Limpar todos os dados de sessão locais
+      try { await supabaseClient.auth.signOut({ scope: 'global' }); } catch (_) {}
+      try { localStorage.removeItem('ges_session'); sessionStorage.removeItem('ges_session'); } catch (_) {}
+      try { sessionStorage.removeItem('resetToken'); sessionStorage.removeItem('resetEmail'); } catch (_) {}
+      try {
+        Object.keys(localStorage).filter(k => k.startsWith('sb-')).forEach(k => localStorage.removeItem(k));
+      } catch (_) {}
+
+      setTimeout(() => { window.location.href = '/login'; }, 2000);
+
     } catch (e) {
-      console.error('[Reset Password] Erro:', e);
-      alertEl.innerHTML = '<div class="alert alert-danger" style="font-size:13px;">Erro ao salvar senha. Tente novamente.</div>';
+      console.error('[Reset Password] Exceção:', e);
+      alertEl.innerHTML = '<div class="alert alert-danger" style="font-size:13px;">Erro inesperado. Tente novamente.</div>';
     } finally {
       if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fa-solid fa-floppy-disk"></i> Salvar Nova Senha'; }
     }
