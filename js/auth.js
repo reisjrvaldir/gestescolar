@@ -197,6 +197,7 @@ const Auth = {
   },
 
   async logout() {
+    this._stopIdleTimer();
     this._remove();
     DB.setTenant(null);
     // Aguardar logout do Supabase antes de redirecionar
@@ -205,6 +206,95 @@ const Auth = {
       try { await supabaseClient.auth.signOut(); } catch (e) { /* ignora */ }
     }
     Router.go('login');
+  },
+
+  // ── AUTO-LOGOUT POR INATIVIDADE ─────────────────────────────────────────────
+  // Desconecta automaticamente após 30 min sem interação.
+  // Exibe aviso 2 min antes com opção "Continuar conectado".
+
+  startIdleTimer() {
+    this._stopIdleTimer();
+
+    const IDLE_MS  = 30 * 60 * 1000; // 30 minutos
+    const WARN_MS  =  2 * 60 * 1000; //  2 minutos de aviso antes
+
+    const reset = () => {
+      clearTimeout(this._idleWarnTimeout);
+      clearTimeout(this._idleOutTimeout);
+      // Remove aviso se o usuário voltou a interagir
+      const existing = document.getElementById('idle-warning-modal');
+      if (existing) { clearInterval(existing._interval); existing.remove(); }
+
+      this._idleWarnTimeout = setTimeout(() => this._showIdleWarning(WARN_MS), IDLE_MS - WARN_MS);
+      this._idleOutTimeout  = setTimeout(() => this.logout(), IDLE_MS);
+    };
+
+    const EVENTS = ['mousemove','mousedown','keydown','scroll','touchstart','click','wheel'];
+    this._idleReset = reset;
+    EVENTS.forEach(ev => window.addEventListener(ev, reset, { passive: true }));
+    reset();
+  },
+
+  _stopIdleTimer() {
+    clearTimeout(this._idleWarnTimeout);
+    clearTimeout(this._idleOutTimeout);
+    if (this._idleReset) {
+      const EVENTS = ['mousemove','mousedown','keydown','scroll','touchstart','click','wheel'];
+      EVENTS.forEach(ev => window.removeEventListener(ev, this._idleReset));
+      this._idleReset = null;
+    }
+    const modal = document.getElementById('idle-warning-modal');
+    if (modal) { clearInterval(modal._interval); modal.remove(); }
+  },
+
+  _showIdleWarning(msLeft) {
+    if (document.getElementById('idle-warning-modal')) return;
+
+    const modal = document.createElement('div');
+    modal.id = 'idle-warning-modal';
+    modal.style.cssText = [
+      'position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:99999;',
+      'display:flex;align-items:center;justify-content:center;',
+      'font-family:inherit;',
+    ].join('');
+
+    const fmt = s => `${Math.floor(s/60)}:${String(s%60).padStart(2,'0')}`;
+    let secs = Math.floor(msLeft / 1000);
+
+    modal.innerHTML = `
+      <div style="background:#fff;border-radius:14px;padding:36px 32px;max-width:380px;
+                  width:90%;text-align:center;box-shadow:0 12px 40px rgba(0,0,0,.25);">
+        <i class="fa-solid fa-clock" style="font-size:44px;color:#f59e0b;margin-bottom:14px;display:block;"></i>
+        <div style="font-size:17px;font-weight:700;color:#1a1a1a;margin-bottom:8px;">Sessão expirando por inatividade</div>
+        <p style="margin:0 0 20px;color:#666;font-size:14px;line-height:1.5;">
+          Você será desconectado em<br>
+          <span id="idle-countdown" style="font-size:26px;font-weight:800;color:#e53935;">
+            ${fmt(secs)}
+          </span>
+        </p>
+        <button onclick="Auth._keepAlive()"
+          style="width:100%;padding:13px;background:var(--primary,#1a73e8);color:#fff;
+                 border:none;border-radius:9px;font-size:15px;font-weight:700;cursor:pointer;">
+          <i class="fa-solid fa-rotate-right"></i> Continuar conectado
+        </button>
+      </div>`;
+
+    const countEl = () => modal.querySelector('#idle-countdown');
+    modal._interval = setInterval(() => {
+      secs--;
+      if (secs <= 0) { clearInterval(modal._interval); return; }
+      const el = countEl();
+      if (el) el.textContent = fmt(secs);
+    }, 1000);
+
+    document.body.appendChild(modal);
+  },
+
+  _keepAlive() {
+    const modal = document.getElementById('idle-warning-modal');
+    if (modal) { clearInterval(modal._interval); modal.remove(); }
+    // Simula atividade para resetar o timer
+    if (this._idleReset) this._idleReset();
   },
 
   require() {

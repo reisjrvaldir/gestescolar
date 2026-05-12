@@ -80,6 +80,7 @@
       gestor:         'admin-dashboard',
     };
     Router.go(map[user.role] || 'login');
+    Auth.startIdleTimer(); // Auto-logout após 30 min de inatividade
   } else {
     Router.go('landing');
   }

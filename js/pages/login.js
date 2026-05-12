@@ -542,6 +542,7 @@ const LoginPage = {
       document.getElementById('newpass-overlay').style.display = 'flex';
       return;
     }
+    Auth.startIdleTimer(); // Auto-logout após 30 min de inatividade
     this.redirect(result.user.role, result.user.roles);
   },
 
