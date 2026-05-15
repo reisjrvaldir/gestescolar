@@ -415,7 +415,8 @@ const LoginPage = {
         if (d.erro) {
           input.style.borderColor = '#f44336';
           input.style.opacity = '1';
-          alert('CEP não encontrado');
+          if (typeof Utils !== 'undefined' && Utils.toast) Utils.toast('CEP não encontrado', 'error');
+          else console.warn('[CEP] CEP não encontrado');
           return;
         }
         const set = function (id, val) {
@@ -438,7 +439,7 @@ const LoginPage = {
         console.error('[CEP] Erro ao buscar:', err);
         input.style.borderColor = '#f44336';
         input.style.opacity = '1';
-        alert('Erro ao buscar CEP: ' + err.message);
+        if (typeof Utils !== 'undefined' && Utils.toast) Utils.toast('Erro ao buscar CEP. Preencha o endereço manualmente.', 'error');
       });
   },
 

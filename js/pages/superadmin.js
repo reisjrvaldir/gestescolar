@@ -938,9 +938,9 @@ const SuperAdmin = {
         </div>
         <div class="form-group">
           <label class="form-label">Asaas API Key da Subconta</label>
-          <input class="form-control" id="esSubApiKey" value="${Utils.escape(school.asaasSubApiKey||'')}" placeholder="$aact_... (preenchida automaticamente)" readonly style="background:#f0f0f0;" />
+          <input class="form-control" id="esSubApiKey" value="${school.asaasSubApiKey ? '•••••••••• (chave configurada)' : ''}" placeholder="Ainda não configurada" readonly style="background:#f0f0f0;" />
           <small style="color:var(--text-muted);font-size:11px;">
-            Chave da subconta usada para consultar saldo e solicitar resgates. Preenchida automaticamente ao criar subconta. Se ausente, clique em "Recriar Subconta Asaas" acima.
+            Chave da subconta (armazenada apenas no servidor por segurança). Preenchida automaticamente ao criar subconta. Se ausente, clique em "Recriar Subconta Asaas" acima.
           </small>
         </div>
         <div class="form-group"><label class="form-label">Status</label>
@@ -976,7 +976,8 @@ const SuperAdmin = {
       commissionRate: commission,
       pixKey: document.getElementById('esPixKey').value.trim(),
       asaasWalletId:  document.getElementById('esWalletId').value.trim()    || null,
-      asaasSubApiKey: document.getElementById('esSubApiKey').value.trim()   || null,
+      // NÃO sobrescrever asaasSubApiKey daqui — campo é apenas leitura/máscara.
+      // Para regenerar a chave, usar o botão "Recriar Subconta Asaas".
     });
     document.querySelector('.modal-overlay')?.remove();
     Utils.toast('Escola atualizada!', 'success');

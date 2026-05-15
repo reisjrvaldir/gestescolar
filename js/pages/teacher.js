@@ -480,14 +480,14 @@ const TeacherAttendance = {
     }
 
     // ── Verifica no Supabase se já existe chamada para esta turma/data ──
+    // Checa por class_id (mais barato que listar studentIds e funciona para turmas grandes)
     try {
       if (typeof supabaseClient !== 'undefined') {
-        const studentIds = students.map(s => s.id);
         const { data: existentes } = await supabaseClient
           .from('attendance')
           .select('id, teacher_id')
           .eq('date', this._date)
-          .in('student_id', studentIds.slice(0, 10))
+          .eq('class_id', this._classId)
           .limit(1);
 
         if (existentes && existentes.length > 0) {
