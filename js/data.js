@@ -228,6 +228,12 @@ const DB = {
         } else {
           this._cache[t] = (results[i].data || []).map(row => {
             const camel = this._toCamel(row);
+            // SEGURANÇA: nunca expor o valor real da API key do Asaas no cache do browser.
+            // Converter para boolean preserva todas as verificações de truthy/falsy existentes
+            // (ex.: if (school.asaasSubApiKey), if (!school.asaasSubApiKey)) sem vazar o segredo.
+            if (t === 'schools' && Object.prototype.hasOwnProperty.call(camel, 'asaasSubApiKey')) {
+              camel.asaasSubApiKey = !!camel.asaasSubApiKey;
+            }
             // Aliases de compatibilidade para grades
             if (t === 'grades') {
               camel.unit = camel.period;
@@ -276,8 +282,13 @@ const DB = {
   updateSchool(id, d) {
     const idx = this._cache.schools.findIndex(s => s.id === id);
     if (idx >= 0) {
-      this._cache.schools[idx] = { ...this._cache.schools[idx], ...d };
+      // _update persiste o valor real no Supabase; cache armazena apenas boolean por segurança
       this._update('schools', id, d);
+      const cacheSafe = { ...d };
+      if (Object.prototype.hasOwnProperty.call(cacheSafe, 'asaasSubApiKey')) {
+        cacheSafe.asaasSubApiKey = !!cacheSafe.asaasSubApiKey;
+      }
+      this._cache.schools[idx] = { ...this._cache.schools[idx], ...cacheSafe };
     }
   },
 

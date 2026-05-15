@@ -586,7 +586,10 @@ const ProfessorPonto = {
       }
 
       return { saldoTotal, totalTrabalhado, diasComputados, ausencias, mesLabel: hoje.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' }) };
-    } catch { return null; }
+    } catch (e) {
+      console.warn('[ProfessorPonto] _buscarBancoMes falhou:', e);
+      return null;
+    }
   },
 
   _htmlBancoHoras(banco) {

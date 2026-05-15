@@ -78,9 +78,18 @@ module.exports = async function handler(req, res) {
         const supabaseAdmin = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY, {
           auth: { autoRefreshToken: false, persistSession: false },
         });
-        const { data: usersData } = await supabaseAdmin.auth.admin.listUsers({ perPage: 1000 });
-        const exists = !!usersData?.users?.some(u => u.email?.toLowerCase() === email);
-        return res.status(200).json({ success: true, exists });
+        // Lookup direto em public.users (service role bypassa RLS) — O(1), sem limite de 1000
+        const { data: userRow, error: lookupErr } = await supabaseAdmin
+          .from('users')
+          .select('id')
+          .ilike('email', email)
+          .limit(1)
+          .maybeSingle();
+        if (lookupErr) {
+          console.error('[checkEmailExists] lookup err:', lookupErr.message);
+          return res.status(500).json({ error: 'Erro ao verificar e-mail' });
+        }
+        return res.status(200).json({ success: true, exists: !!userRow });
       } catch (e) {
         console.error('[checkEmailExists]', e);
         return res.status(500).json({ error: 'Erro ao verificar e-mail' });
@@ -113,10 +122,18 @@ module.exports = async function handler(req, res) {
           auth: { autoRefreshToken: false, persistSession: false },
         });
 
-        // 1. Verificar se e-mail existe no Auth
-        const { data: usersData } = await supabaseAdmin.auth.admin.listUsers({ perPage: 1000 });
-        const userExists = usersData?.users?.some(u => u.email?.toLowerCase() === email);
-        if (!userExists) {
+        // 1. Verificar se e-mail existe em public.users (lookup O(1) via service role, sem limite)
+        const { data: userRow, error: lookupErr } = await supabaseAdmin
+          .from('users')
+          .select('id')
+          .ilike('email', email)
+          .limit(1)
+          .maybeSingle();
+        if (lookupErr) {
+          console.error('[sendPasswordRecovery] lookup err:', lookupErr.message);
+          return res.status(500).json({ error: 'Erro ao verificar e-mail' });
+        }
+        if (!userRow) {
           return res.status(404).json({ error: 'E-mail não encontrado. Verifique se você usou o e-mail correto ao se cadastrar.' });
         }
 

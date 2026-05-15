@@ -380,9 +380,29 @@ Em breve estaremos disponibilizando apps Nativos Android e iOS`;
   copyText(elId) {
     const el = document.getElementById(elId);
     if (!el) return;
-    el.select();
-    document.execCommand('copy');
-    Utils.toast('Copiado para a área de transferência!', 'success');
+    const text = el.value !== undefined ? el.value : el.textContent;
+    if (navigator.clipboard && window.isSecureContext) {
+      navigator.clipboard.writeText(text)
+        .then(() => Utils.toast('Copiado para a área de transferência!', 'success'))
+        .catch(() => {
+          // Fallback para Safari iOS / contextos não seguros
+          try {
+            el.select();
+            const ok = document.execCommand('copy');
+            Utils.toast(ok ? 'Copiado!' : 'Não foi possível copiar', ok ? 'success' : 'error');
+          } catch (e) {
+            Utils.toast('Não foi possível copiar', 'error');
+          }
+        });
+    } else {
+      try {
+        el.select();
+        const ok = document.execCommand('copy');
+        Utils.toast(ok ? 'Copiado!' : 'Não foi possível copiar', ok ? 'success' : 'error');
+      } catch (e) {
+        Utils.toast('Não foi possível copiar', 'error');
+      }
+    }
   },
 
   shareWhatsApp(encoded) {
