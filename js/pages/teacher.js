@@ -19,7 +19,7 @@ Router.register('teacher-dashboard', () => {
       <div class="stat-card"><div class="stat-icon green"><i class="fa-solid fa-clipboard-check"></i></div>
         <div><div class="stat-value">${todayAtt.filter(a=>a.status==='presente').length}</div><div class="stat-label">Presentes hoje</div></div></div>
       <div class="stat-card"><div class="stat-icon red"><i class="fa-solid fa-user-xmark"></i></div>
-        <div><div class="stat-value">${todayAtt.filter(a=>a.status==='falta').length}</div><div class="stat-label">Faltas hoje</div></div></div>
+        <div><div class="stat-value">${todayAtt.filter(a=>a.status==='ausente'||a.status==='falta').length}</div><div class="stat-label">Faltas hoje</div></div></div>
       <div class="stat-card"><div class="stat-icon yellow"><i class="fa-solid fa-envelope"></i></div>
         <div><div class="stat-value">${messages.length}</div><div class="stat-label">Mensagens enviadas</div></div></div>
     </div>
@@ -317,6 +317,7 @@ const TeacherAttendance = {
             padding:12px 14px; border:1.5px solid var(--border); border-radius:var(--radius);
             background:var(--card); }
           .att-card.presente { border-color:var(--secondary); background:#f0faf3; }
+          .att-card.ausente  { border-color:var(--danger);    background:#fdecea; }
           .att-card.falta    { border-color:var(--danger);    background:#fdecea; }
           .att-card-info { flex:1; min-width:0; }
           .att-card-name { font-weight:700; font-size:14px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
@@ -386,8 +387,8 @@ const TeacherAttendance = {
                         </button>
                       </td>
                       <td style="text-align:center;">
-                        <button class="btn btn-sm btn-absent ${st === 'falta' ? 'active' : ''}"
-                          id="btn-a-${s.id}" onclick="TeacherAttendance.mark('${s.id}','falta')">
+                        <button class="btn btn-sm btn-absent ${(st === 'ausente' || st === 'falta') ? 'active' : ''}"
+                          id="btn-a-${s.id}" onclick="TeacherAttendance.mark('${s.id}','ausente')">
                           <i class="fa-solid fa-xmark"></i>
                         </button>
                       </td>
@@ -412,8 +413,8 @@ const TeacherAttendance = {
                       id="btn-p-${s.id}" onclick="TeacherAttendance.mark('${s.id}','presente')">
                       <i class="fa-solid fa-check"></i>
                     </button>
-                    <button class="btn btn-sm btn-absent ${st === 'falta' ? 'active' : ''}"
-                      id="btn-a-${s.id}" onclick="TeacherAttendance.mark('${s.id}','falta')">
+                    <button class="btn btn-sm btn-absent ${(st === 'ausente' || st === 'falta') ? 'active' : ''}"
+                      id="btn-a-${s.id}" onclick="TeacherAttendance.mark('${s.id}','ausente')">
                       <i class="fa-solid fa-xmark"></i>
                     </button>
                   </div>
@@ -442,7 +443,7 @@ const TeacherAttendance = {
     this._state[studentId] = status;
     // Atualiza todos os pares de botões (tabela desktop + card mobile)
     document.querySelectorAll(`[id="btn-p-${studentId}"]`).forEach(b => b.classList.toggle('active', status === 'presente'));
-    document.querySelectorAll(`[id="btn-a-${studentId}"]`).forEach(b => b.classList.toggle('active', status === 'falta'));
+    document.querySelectorAll(`[id="btn-a-${studentId}"]`).forEach(b => b.classList.toggle('active', status === 'ausente' || status === 'falta'));
 
     // Cor do card mobile
     const card = document.getElementById(`att-card-${studentId}`);
