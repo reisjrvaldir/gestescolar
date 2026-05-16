@@ -29,7 +29,16 @@ const Router = {
           return;
         }
       }
-    } catch (e) { /* fail-open */ }
+    } catch (e) {
+      // fail-closed: em caso de erro no guard, logar e bloquear acesso por segurança
+      console.error('[Router] Erro no guard de plano:', e);
+      if (Auth.current()?.schoolId) {
+        // Redireciona para school-plans como proteção conservadora
+        this._currentRoute = 'school-plans';
+        this.routes['school-plans']?.({});
+        return;
+      }
+    }
 
     // Cancela subscrições Realtime da página anterior
     if (typeof Realtime !== 'undefined') Realtime.unsubscribeAll();
@@ -182,7 +191,7 @@ const Router = {
             <div style="color:rgba(255,255,255,.85);font-size:10px;margin-top:2px;">Desbloqueie todos os recursos!</div>
           </div>` : ''}` : ''}
           <div class="sidebar-footer">
-            <div class="sidebar-user" onclick="Auth.logout()" title="Sair — clique para sair">
+            <div class="sidebar-user" onclick="Auth.logoutConfirm()" title="Sair">
               <div class="avatar">${Utils.initials(user.name)}</div>
               <div class="user-info">
                 <div class="user-name">${Utils.escape(user.name)}</div>

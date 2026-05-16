@@ -378,17 +378,11 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;color:#3
           console.log('[Password Reset] Tokens encontrados para', email, ':', tokens?.length || 0);
 
           if (!tokenErr && tokens && tokens.length > 0) {
-            // Procurar token matching - tenta novo schema (token_hash) E schema antigo (token)
+            // Apenas token_hash (SHA256) — comparação plain text removida por segurança.
+            // Tokens legados sem hash são tratados como inválidos.
             for (const t of tokens) {
-              // Schema novo: token_hash (SHA256)
               if (t.token_hash && t.token_hash === tokenHash) {
-                console.log('[Password Reset] Token encontrado via token_hash (schema novo)');
-                tokenData = t;
-                break;
-              }
-              // Schema antigo: token (plain text)
-              if (t.token && t.token === resetToken) {
-                console.log('[Password Reset] Token encontrado via token plain (schema legado)');
+                console.log('[Password Reset] Token encontrado via token_hash');
                 tokenData = t;
                 break;
               }
