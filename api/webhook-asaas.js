@@ -166,13 +166,66 @@ module.exports = async function handler(req, res) {
       return res.status(500).json({ error: 'Erro ao atualizar invoice.' });
     }
 
+    // ═══════════════════════════════════════════════════════════════════
+    // ESTORNO/CANCELAMENTO: se a invoice estava 'pago' e foi cancelada,
+    // precisamos criar transação de DÉBITO para reverter o crédito
+    // anterior. Sem isso, o saldo local fica inflado indefinidamente.
+    // ═══════════════════════════════════════════════════════════════════
+    if (newStatus === 'cancelado' && invoice.status === 'pago') {
+      const refundDescription = `Estorno PIX (Asaas: ${payment.id} | evento: ${event})`;
+      const { data: existingRefund } = await supabase
+        .from('transactions')
+        .select('id')
+        .eq('school_id', invoice.school_id)
+        .eq('description', refundDescription)
+        .limit(1);
+
+      if (!existingRefund || existingRefund.length === 0) {
+        const refundAmount = Number(invoice.paid_amount) || Number(payment.value) || Number(invoice.amount) || 0;
+        if (refundAmount > 0) {
+          await supabase.from('transactions').insert({
+            school_id: invoice.school_id,
+            type: 'debit',
+            amount: refundAmount,
+            description: refundDescription,
+          });
+          console.log(`[Webhook] Estorno registrado: -R$ ${refundAmount.toFixed(2)} para invoice ${invoice.id}`);
+        }
+      } else {
+        console.log(`[Webhook] Estorno para ${payment.id} já registrado — pulando.`);
+      }
+      // Limpa paid_amount da invoice (o dinheiro foi devolvido)
+      await supabase.from('invoices')
+        .update({ paid_at: null, paid_amount: 0 })
+        .eq('id', invoice.id);
+    }
+
     // Se pago, criar transação de crédito + RENOVAR PLANO DA ESCOLA (CRÍTICO)
     if (newStatus === 'pago') {
+      // ═══════════════════════════════════════════════════════════════════
+      // IDEMPOTÊNCIA: Asaas dispara PAYMENT_CONFIRMED e PAYMENT_RECEIVED
+      // para o mesmo pagamento. Sem este check, transactions duplicam e o
+      // saldo local fica em dobro. Buscamos por description contendo o
+      // payment.id para detectar duplicata.
+      // ═══════════════════════════════════════════════════════════════════
+      const txDescription = `Pagamento PIX confirmado (Asaas: ${payment.id})`;
+      const { data: existingTx } = await supabase
+        .from('transactions')
+        .select('id')
+        .eq('school_id', invoice.school_id)
+        .eq('description', txDescription)
+        .limit(1);
+
+      if (existingTx && existingTx.length > 0) {
+        console.log(`[Webhook] Transação para ${payment.id} já existe — pulando inserção (idempotência).`);
+        return res.status(200).json({ received: true, duplicate: true, event });
+      }
+
       await supabase.from('transactions').insert({
         school_id: invoice.school_id,
         type: 'credit',
         amount: actualPaidAmount, // valor real pago (com juros/multa)
-        description: `Pagamento PIX confirmado (Asaas: ${payment.id})`,
+        description: txDescription,
       });
 
       // ⚠️ CRÍTICO: Atualizar plan_expires_at da escola se for pagamento de renovação

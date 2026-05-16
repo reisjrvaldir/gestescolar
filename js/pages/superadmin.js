@@ -483,18 +483,23 @@ Router.register('superadmin-payments', () => {
   const allInv   = DB._cache.invoices;
   const pagas    = allInv.filter(i => i.status === 'pago' || i.status === 'paid');
 
-  // ── Movimentacoes: bruto de todas as mensalidades pagas ──
-  const bruto = pagas.reduce((acc, i) => acc + (parseFloat(i.amount) || 0), 0);
+  // ── Movimentacoes: bruto real das mensalidades pagas (usa paidAmount se houver) ──
+  // paidAmount reflete o que foi efetivamente cobrado (com multa/juros); amount é o nominal
+  const ASAAS_PIX_FEE = 1.99;
+  const valorReal = i => parseFloat(i.paidAmount ?? i.paid_amount ?? i.amount) || 0;
+  const bruto = pagas.reduce((acc, i) => acc + valorReal(i), 0);
 
   // ── Mapa de comissao por escola (usa commissionRate individual, padrao 3%) ──
   const schoolMap = {};
   schools.forEach(s => { schoolMap[s.id] = s; });
 
-  // ── % de Servico: taxa individual por escola sobre cada boleto pago ──
+  // ── Comissão real: (bruto - taxa Asaas) × rate (mesma fórmula do split server-side) ──
   const taxaServico = pagas.reduce((acc, i) => {
     const sc   = schoolMap[i.schoolId];
     const rate = (sc && sc.commissionRate != null ? parseFloat(sc.commissionRate) : 3) / 100;
-    return acc + ((parseFloat(i.amount) || 0) * rate);
+    const valor = valorReal(i);
+    const liquido = Math.max(0, valor - ASAAS_PIX_FEE);
+    return acc + (liquido * rate);
   }, 0);
 
   // ── Mensalidades: soma das contratacoes dos planos das escolas ativas ──
@@ -511,9 +516,14 @@ Router.register('superadmin-payments', () => {
     const inv   = allInv.filter(i => i.schoolId === s.id);
     const pg    = inv.filter(i => i.status === 'pago' || i.status === 'paid');
     const pend  = inv.filter(i => i.status === 'pendente');
-    const brutoE = pg.reduce((a, i) => a + (parseFloat(i.amount) || 0), 0);
+    const brutoE = pg.reduce((a, i) => a + valorReal(i), 0);
+    // Comissão líquida: (bruto - taxa Asaas por cobrança) × rate
+    const taxaE = pg.reduce((a, i) => {
+      const liquido = Math.max(0, valorReal(i) - ASAAS_PIX_FEE);
+      return a + (liquido * (rate / 100));
+    }, 0);
     const plan   = Plans.get(s.planId || 'free');
-    return { school: s, plan, rate, totalInv: inv.length, pagas: pg.length, pendentes: pend.length, bruto: brutoE, taxa: brutoE * (rate / 100) };
+    return { school: s, plan, rate, totalInv: inv.length, pagas: pg.length, pendentes: pend.length, bruto: brutoE, taxa: taxaE };
   }).sort((a, b) => b.bruto - a.bruto);
 
   // ── Pagamentos SaaS (historico) ──
@@ -531,8 +541,11 @@ Router.register('superadmin-payments', () => {
         <div class="stat-icon blue"><i class="fa-solid fa-percent"></i></div>
         <div>
           <div class="stat-value" style="color:var(--primary);">${Utils.currency(taxaServico)}</div>
-          <div class="stat-label">% de Servico (Comissao)</div>
-          <div style="font-size:11px;color:var(--text-muted);margin-top:2px;">Taxa individual sobre ${pagas.length} boleto(s) pago(s)</div>
+          <div class="stat-label">Comissão Estimada (Split 3%)</div>
+          <div style="font-size:11px;color:var(--text-muted);margin-top:2px;">
+            (bruto − R$ 1,99 taxa Asaas) × 3% sobre ${pagas.length} cobrança(s).
+            <span title="Valor real está na wallet da plataforma no painel Asaas" style="border-bottom:1px dotted #888;cursor:help;">Valor real ↗</span>
+          </div>
         </div>
       </div>
       <div class="stat-card" style="border-left:4px solid var(--secondary);">

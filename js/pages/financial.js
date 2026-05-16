@@ -1428,10 +1428,10 @@ const FinEntradas = {
         const finePercent = Number(school?.finePercent ?? 2.0);
         const interestDayPercent = Number(school?.interestDayPercent ?? 0.033);
 
-        // Multa fixa (uma vez)
+        // Multa fixa (uma vez) sobre o principal
         const multa = valorFinal * (finePercent / 100);
-        // Juros compostos diários
-        const juros = valorFinal * Math.pow(1 + (interestDayPercent / 100), diasAtraso) - valorFinal;
+        // Juros SIMPLES por dia (padrão de mensalidade escolar — não composto)
+        const juros = valorFinal * (interestDayPercent / 100) * diasAtraso;
 
         valorFinal = valorFinal + multa + juros;
       }

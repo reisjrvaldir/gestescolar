@@ -1115,6 +1115,15 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;color:#3
 
       // ── COBRANÇAS PIX ──────────────────────────
       case 'createPixCharge': {
+        // CRÍTICO: cobranças PIX SEMPRE devem ser criadas pela subconta da escola.
+        // Sem schoolApiKey, a cobrança cairia na conta master GestEscolar — mistura
+        // caixa e quebra conciliação contábil. Recomendamos KYC antes de cobrar.
+        if (!schoolApiKey) {
+          return res.status(403).json({
+            error: 'Subconta Asaas não configurada. Envie os documentos KYC em Configurações → Documentos antes de gerar cobranças PIX.',
+            code: 'SUBACCOUNT_NOT_CONFIGURED',
+          });
+        }
         // Asaas rejeita dueDate no passado — normaliza para hoje se necessário
         const hojeProxy = new Date().toISOString().slice(0, 10);
         const dueDateProxy = data.dueDate && data.dueDate >= hojeProxy ? data.dueDate : hojeProxy;
@@ -1138,12 +1147,21 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;color:#3
               const commission   = Number((netAfterFee * commRate).toFixed(2));
               const schoolGets   = Number((netAfterFee - commission).toFixed(2));
 
-              if (schoolApiKey && GESTESCOLAR_WALLET_ID) {
+              if (schoolApiKey) {
                 // Cobrança criada pela subconta da escola → GestEscolar recebe comissão via split
+                // CRÍTICO: se GESTESCOLAR_WALLET_ID não estiver configurado, ABORTAMOS.
+                // Sem isso, a comissão de 3% é silenciosamente perdida.
+                if (!GESTESCOLAR_WALLET_ID) {
+                  console.error('[createPixCharge] FATAL: ASAAS_PLATFORM_WALLET_ID não configurado!');
+                  return res.status(500).json({
+                    error: 'Wallet da plataforma não configurada. Contate o suporte do GestEscolar.',
+                    code: 'PLATFORM_WALLET_MISSING',
+                  });
+                }
                 if (commission > 0) {
                   serverSplit = [{ walletId: GESTESCOLAR_WALLET_ID, fixedValue: commission }];
                 }
-              } else if (!schoolApiKey && sc?.asaas_wallet_id) {
+              } else if (sc?.asaas_wallet_id) {
                 // Cobrança criada pela conta mestre GestEscolar → escola recebe via split
                 if (schoolGets > 0) {
                   serverSplit = [{ walletId: sc.asaas_wallet_id, fixedValue: schoolGets }];
@@ -1151,13 +1169,14 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;color:#3
               }
             }
           } catch (splitErr) {
-            console.warn('[createPixCharge] Erro ao calcular split no servidor:', splitErr.message);
-            // fallback: usa split enviado pelo frontend
-            serverSplit = data.split ? [(() => {
-              const s = { walletId: data.split.walletId };
-              if (data.split.fixedValue != null) s.fixedValue = data.split.fixedValue;
-              return s;
-            })()] : undefined;
+            console.error('[createPixCharge] Erro ao calcular split no servidor:', splitErr.message);
+            // CRÍTICO: NÃO aceitar split do cliente em caso de exceção.
+            // Atacante poderia forçar exceção e enviar split=0 para zerar a comissão.
+            // Se não conseguimos calcular o split confiavelmente, abortamos.
+            return res.status(500).json({
+              error: 'Erro ao calcular comissão. Tente novamente em instantes.',
+              code: 'SPLIT_CALC_FAILED',
+            });
           }
         }
 
