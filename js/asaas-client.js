@@ -16,10 +16,13 @@ const AsaasClient = {
 
   async _call(action, data = {}, opts = {}) {
     const silent = !!opts.silent;
+    // returnError: se true, em erro retorna { __error: true, code, error } em vez de null.
+    // Permite que callers detectem erros específicos (ex: SUBACCOUNT_NOT_CONFIGURED).
+    const returnError = !!opts.returnError;
     const token = await this._getToken();
     if (!token) {
       if (!silent) Utils.toast('Sessão expirada. Faça login novamente.', 'error');
-      return null;
+      return returnError ? { __error: true, code: 'NO_SESSION', error: 'Sessão expirada' } : null;
     }
     try {
       const res = await fetch(this._baseUrl, {
@@ -34,13 +37,13 @@ const AsaasClient = {
       if (!res.ok) {
         console.error(`[Asaas] ${action} erro:`, json);
         if (!silent) Utils.toast(json.error || 'Erro na API de pagamentos.', 'error');
-        return null;
+        return returnError ? { __error: true, status: res.status, code: json.code, error: json.error } : null;
       }
       return json;
     } catch (err) {
       console.error(`[Asaas] ${action} falha:`, err);
       if (!silent) Utils.toast('Erro de conexão com o servidor de pagamentos.', 'error');
-      return null;
+      return returnError ? { __error: true, code: 'NETWORK', error: err.message } : null;
     }
   },
 
@@ -68,13 +71,14 @@ const AsaasClient = {
 
   // ── SALDO ────────────────────────────────────
   // walletId opcional: se fornecido, busca saldo da subconta; senão, saldo da conta principal
+  // Retorna estrutura de erro se subconta não configurada (para UI mostrar fluxo de KYC)
   async getBalance(walletId = null) {
-    return this._call('getBalance', { walletId });
+    return this._call('getBalance', { walletId }, { returnError: true, silent: true });
   },
 
   // ── SOLICITAR SAQUE ──────────────────────────
   async requestWithdraw({ value, pixKey, pixKeyType, description }) {
-    return this._call('requestWithdraw', { value, pixKey, pixKeyType, description });
+    return this._call('requestWithdraw', { value, pixKey, pixKeyType, description }, { returnError: true });
   },
 
   // ── LISTAR TRANSFERÊNCIAS ────────────────────

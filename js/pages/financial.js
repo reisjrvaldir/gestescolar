@@ -2101,7 +2101,33 @@ const FinBalance = {
         return;
       }
 
-      // Se o proxy retornou warning (sem API key configurada), mostrar UI de configuração
+      // Caso especial: subconta não configurada — redirecionar para envio de documentos
+      if (result.__error && result.code === 'SUBACCOUNT_NOT_CONFIGURED') {
+        area.innerHTML = `
+          <div style="background:#fff3e0;border:1px solid #ffb74d;border-radius:10px;padding:18px;">
+            <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;">
+              <i class="fa-solid fa-id-card" style="color:#e65100;font-size:22px;"></i>
+              <strong style="color:#e65100;font-size:15px;">Subconta Asaas pendente</strong>
+            </div>
+            <p style="margin:0 0 14px;font-size:13px;color:#555;line-height:1.5;">
+              Para receber pagamentos PIX e fazer resgates, sua escola precisa de uma subconta no Asaas. Envie os documentos KYC pelo próprio painel — nenhum dado sai do GestEscolar.
+            </p>
+            <button class="btn btn-primary" onclick="Router.go('admin-asaas-documents')" style="font-size:13px;padding:10px 18px;">
+              <i class="fa-solid fa-upload"></i> Enviar Documentos Agora
+            </button>
+          </div>`;
+        return;
+      }
+
+      // Erro genérico estruturado
+      if (result.__error) {
+        area.innerHTML = `<div style="color:var(--danger);font-size:13px;">
+          <i class="fa-solid fa-triangle-exclamation"></i> ${Utils.escape(result.error || 'Erro ao consultar saldo.')}
+        </div>`;
+        return;
+      }
+
+      // Compatibilidade com retorno antigo de warning
       if (result.warning) {
         this._renderConfigApiKeyUI(area, school, result.warning);
         return;
@@ -2446,12 +2472,26 @@ const FinWithdraw = {
       description: `Resgate GestEscolar – ${school?.name || ''}`,
     });
 
-    if (!result) {
-      if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fa-solid fa-paper-plane"></i> Confirmar Resgate'; }
+    if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fa-solid fa-paper-plane"></i> Confirmar Resgate'; }
+
+    if (!result) return;
+
+    // Tratamento de erro estruturado vindo do proxy
+    if (result.__error) {
+      if (result.code === 'SUBACCOUNT_NOT_CONFIGURED') {
+        document.querySelector('.modal-overlay')?.remove();
+        Utils.modal('Subconta Asaas Pendente',
+          `<div style="text-align:center;">
+            <i class="fa-solid fa-id-card" style="font-size:48px;color:#e65100;"></i>
+            <p style="font-size:15px;margin:12px 0;">Para fazer resgates, sua escola precisa de uma subconta Asaas ativa. Envie os documentos KYC pelo próprio painel.</p>
+          </div>`,
+          `<button class="btn btn-primary" onclick="this.closest('.modal-overlay').remove();Router.go('admin-asaas-documents');">Enviar Documentos</button>`
+        );
+      }
       return;
     }
 
-    // Registrar transação de débito
+    // CRÍTICO: registrar transação de débito SOMENTE após confirmação real do Asaas
     DB.addTransaction('debit', value, `Resgate PIX – ${pixKey}`);
 
     document.querySelector('.modal-overlay')?.remove();
