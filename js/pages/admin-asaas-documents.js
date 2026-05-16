@@ -279,13 +279,31 @@ const AdminAsaasDocs = {
         }
       }
 
-      // Chamar backend
+      // Chamar backend com error structurado para detectar falhas específicas
       const result = await AsaasClient._call('uploadAndVerifySchoolDocuments', {
         schoolId: school.id,
         files: filesPayload,
-      });
+      }, { returnError: true, silent: true });
 
-      if (!result) return; // toast já mostrado pelo _call
+      // Em caso de erro estruturado, mostrar mensagem clara e específica
+      if (!result || result.__error) {
+        const msg = result?.error || 'Não foi possível enviar os documentos. Tente novamente.';
+        // Se o servidor criou a subconta mas falhou ao salvar (resposta tem accountId),
+        // damos instrução específica ao gestor para reabrir o suporte.
+        if (result?.accountId) {
+          Utils.modal('Atenção: subconta criada parcialmente',
+            `<div style="font-size:13px;line-height:1.5;">
+              <p>A subconta foi criada no Asaas mas houve falha ao salvar no GestEscolar.</p>
+              <p style="margin:10px 0;"><strong>ID da subconta:</strong> ${Utils.escape(result.accountId)}</p>
+              <p style="color:var(--danger);"><i class="fa-solid fa-triangle-exclamation"></i> Contate o suporte com este ID para regularizar.</p>
+            </div>`,
+            `<button class="btn btn-primary" onclick="this.closest('.modal-overlay').remove()">Entendi</button>`
+          );
+        } else {
+          Utils.toast(msg, 'error');
+        }
+        return;
+      }
 
       // Atualizar local
       DB.updateSchool(school.id, {

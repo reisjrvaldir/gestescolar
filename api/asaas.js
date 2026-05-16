@@ -852,6 +852,41 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;color:#3
         asaasAccountId = subData.id || '';
         asaasWalletId  = subData.walletId || '';
         asaasApiKey    = subData.apiKey || '';
+
+        // CRÍTICO: o Asaas DEVE retornar a apiKey ao criar a subconta.
+        // Se não retornou, tentamos recuperar imediatamente via endpoint dedicado.
+        // Sem isso, a escola fica sem acesso à própria subconta (não consegue
+        // consultar saldo nem sacar). Tentamos antes de aceitar o cadastro.
+        if (!asaasApiKey && asaasAccountId) {
+          console.warn('[uploadDocs] Asaas não retornou apiKey na criação — tentando recuperar...');
+          try {
+            const recoverRes = await fetch(`${ASAAS_BASE}/accounts/api_key/${asaasAccountId}`, {
+              method: 'POST',
+              headers: masterHeaders,
+            });
+            const recoverText = await recoverRes.text();
+            let recoverData = {};
+            try { recoverData = JSON.parse(recoverText); } catch (_) {}
+            if (recoverRes.ok && recoverData.apiKey) {
+              asaasApiKey = recoverData.apiKey;
+              console.log('[uploadDocs] apiKey recuperada com sucesso após criação');
+            } else {
+              console.error('[uploadDocs] Recuperação de apiKey falhou:', recoverRes.status, recoverText.slice(0, 200));
+            }
+          } catch (e) {
+            console.error('[uploadDocs] Erro ao recuperar apiKey:', e.message);
+          }
+        }
+
+        // Se ainda assim não temos a apiKey, abortamos com erro claro
+        // (em vez de deixar a escola em estado inconsistente).
+        if (!asaasApiKey) {
+          return res.status(502).json({
+            error: 'Subconta criada no Asaas mas a chave de acesso não foi retornada. Entre em contato com o suporte do GestEscolar.',
+            accountId: asaasAccountId,
+            walletId: asaasWalletId,
+          });
+        }
       }
 
       // 6. Enviar documentos ao Asaas para verificação KYC
@@ -934,8 +969,11 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;color:#3
         asaas_sub_api_key: asaasApiKey,
         updated_at: nowIso,
       };
+      // CRÍTICO: validar que o save no Supabase persistiu de fato.
+      // Sem isso, a apiKey pode ficar perdida e a escola fica sem acesso à subconta.
+      let saveOk = false;
       try {
-        await fetch(`${SUPABASE_URL}/rest/v1/schools?id=eq.${targetSchoolId}`, {
+        const saveRes = await fetch(`${SUPABASE_URL}/rest/v1/schools?id=eq.${targetSchoolId}`, {
           method: 'PATCH',
           headers: {
             apikey: SUPABASE_SERVICE_KEY,
@@ -945,8 +983,23 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;color:#3
           },
           body: JSON.stringify(updatePayload),
         });
+        saveOk = saveRes.ok;
+        if (!saveOk) {
+          const errText = await saveRes.text();
+          console.error('[uploadDocs] Supabase PATCH falhou:', saveRes.status, errText.slice(0, 300));
+        }
       } catch (saveErr) {
         console.error('[uploadDocs] Erro ao salvar no Supabase:', saveErr.message);
+      }
+      if (!saveOk) {
+        // Subconta foi criada no Asaas mas não conseguimos persistir os dados.
+        // Retornamos os dados ao cliente para tentar novamente / contato suporte.
+        return res.status(500).json({
+          error: 'Subconta criada no Asaas mas não foi possível salvar no banco. Anote os dados e contate o suporte.',
+          accountId: asaasAccountId,
+          walletId:  asaasWalletId,
+          apiKey:    asaasApiKey, // só retornamos para fallback manual de suporte
+        });
       }
 
       return res.status(200).json({
@@ -1149,16 +1202,8 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;color:#3
 
       // ── CONSULTAR SALDO DA SUBCONTA ────────────
       // CRÍTICO: getBalance DEVE usar a API key da subconta da escola.
-      // Sem schoolApiKey, retornaria o saldo da conta principal (master) — proibido.
+      // O guard SUBACCOUNT_ONLY_ACTIONS abaixo bloqueia se schoolApiKey for null.
       case 'getBalance':
-        if (!schoolApiKey) {
-          console.warn(`[getBalance] Escola ${userSchoolId} sem asaas_sub_api_key — retornando saldo zero.`);
-          return res.status(200).json({
-            balance: 0,
-            totalBalance: 0,
-            warning: 'Subconta Asaas não configurada para esta escola. Crie a subconta no painel ou contate o suporte.',
-          });
-        }
         asaasPath = '/finance/balance';
         method = 'GET';
         break;
@@ -1289,11 +1334,26 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;color:#3
     // Determinar qual API key usar:
     // - Planos SaaS: sempre chave master
     // - refreshSubaccountApiKey: SEMPRE chave master (operação administrativa)
-    // - Outras ações: chave da subconta buscada do servidor (nunca do cliente)
+    // - Outras ações de subconta: chave da subconta buscada do servidor
     // Se o cliente sinalizar data.plan=true em getPixQrCode/getPayment, usa master key
     // (pagamentos de plano são criados com ASAAS_API_KEY master)
     const isPlanLookup = (action === 'getPixQrCode' || action === 'getPayment') && data?.plan === true;
     const isMasterAction = PLAN_ACTIONS.has(action) || isPlanLookup || action === 'refreshSubaccountApiKey';
+
+    // CRÍTICO: ações que movimentam dinheiro da subconta NUNCA podem cair para a master key.
+    // Sem isso, um saque com schoolApiKey=null sairia da conta da plataforma GestEscolar!
+    const SUBACCOUNT_ONLY_ACTIONS = new Set([
+      'requestWithdraw',
+      'getBalance',
+      'listTransfers',
+    ]);
+    if (SUBACCOUNT_ONLY_ACTIONS.has(action) && !schoolApiKey) {
+      return res.status(403).json({
+        error: 'Subconta Asaas não configurada para esta escola. Acesse Configurações → Documentos e envie os documentos KYC para ativar a subconta.',
+        code: 'SUBACCOUNT_NOT_CONFIGURED',
+      });
+    }
+
     const apiKeyToUse = isMasterAction
       ? ASAAS_API_KEY
       : (schoolApiKey || ASAAS_API_KEY);
