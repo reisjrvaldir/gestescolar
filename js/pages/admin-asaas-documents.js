@@ -98,16 +98,57 @@ Router.register('admin-asaas-documents', () => {
       </div>
 
       <!-- BOTÕES DE AÇÃO -->
-      <div style="display:flex;gap:12px;justify-content:flex-end;margin-top:8px;">
-        ${lockedForEdit ? `
-          <button class="btn btn-outline" onclick="AdminAsaasDocs.refreshStatus()">
+      <div style="display:flex;gap:12px;justify-content:flex-end;margin-top:8px;flex-wrap:wrap;">
+        ${school.asaasAccountId ? `
+          <button class="btn btn-outline" onclick="AdminAsaasDocs.refreshStatus()" title="Buscar o status atual no Asaas (útil após validar manualmente lá)">
             <i class="fa-solid fa-rotate"></i> Atualizar Status
           </button>
-        ` : `
+        ` : ''}
+        ${!lockedForEdit ? `
           <button class="btn btn-primary" onclick="AdminAsaasDocs.submitForVerification()">
             <i class="fa-solid fa-paper-plane"></i> Enviar para Verificação
           </button>
-        `}
+        ` : ''}
+      </div>
+
+      <!-- PLANO B: VALIDAR DIRETAMENTE NO ASAAS -->
+      <div class="card" style="margin-top:24px;border-left:4px solid var(--warning);">
+        <div class="card-header" style="background:#fff8e1;">
+          <span class="card-title" style="color:#8b6914;">
+            <i class="fa-solid fa-life-ring"></i> Está com problemas? Valide direto no Asaas
+          </span>
+        </div>
+        <div style="padding:18px 20px;font-size:13px;line-height:1.6;color:#555;">
+          <p style="margin:0 0 12px;">
+            Se o envio pelo painel falhar repetidamente, sua subconta pode já existir no Asaas. Você pode validar os documentos diretamente lá:
+          </p>
+          <ol style="margin:0 0 14px 18px;padding:0;">
+            <li><strong>Verifique seu e-mail</strong> (<code style="background:#eef;padding:1px 6px;border-radius:4px;font-size:12px;">${Utils.escape(school.email || '')}</code>). Procure por mensagens do remetente <code style="background:#eef;padding:1px 6px;border-radius:4px;font-size:12px;">noreply@asaas.com</code> — incluindo a pasta de spam.</li>
+            <li>Acesse <a href="https://www.asaas.com/login" target="_blank" rel="noopener" style="color:var(--primary);font-weight:600;">www.asaas.com/login</a> e clique em <strong>"Esqueci minha senha"</strong>.</li>
+            <li>Digite o e-mail acima e defina uma nova senha pelo link recebido.</li>
+            <li>Logado no Asaas, vá em <strong>"Minha Conta → Documentos"</strong> e envie os arquivos diretamente.</li>
+            <li>Aguarde a aprovação (até 48h úteis). O GestEscolar receberá o status automaticamente via webhook.</li>
+          </ol>
+          <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;">
+            <a href="https://www.asaas.com/login" target="_blank" rel="noopener" class="btn btn-outline" style="font-size:12px;padding:8px 14px;">
+              <i class="fa-solid fa-arrow-up-right-from-square"></i> Acessar Painel Asaas
+            </a>
+            ${school.asaasAccountId ? `
+              <span style="font-size:11px;color:#888;">
+                <strong>ID da subconta:</strong>
+                <code style="background:#eef;padding:1px 6px;border-radius:4px;cursor:pointer;" onclick="navigator.clipboard.writeText('${Utils.escape(school.asaasAccountId)}');Utils.toast('ID copiado','success');" title="Clique para copiar">${Utils.escape(school.asaasAccountId)}</code>
+              </span>
+            ` : `
+              <span style="font-size:11px;color:#888;">
+                <i class="fa-solid fa-circle-info"></i> Subconta ainda não foi criada — tente o envio acima primeiro.
+              </span>
+            `}
+          </div>
+          <p style="margin:14px 0 0;padding-top:12px;border-top:1px solid #eee;font-size:12px;color:#888;">
+            <i class="fa-solid fa-circle-info"></i>
+            Após a aprovação no Asaas, clique em <strong>"Atualizar Status"</strong> nesta tela para sincronizar com o GestEscolar.
+          </p>
+        </div>
       </div>
 
       <!-- AVISO LEGAL -->
