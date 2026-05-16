@@ -663,18 +663,48 @@ const DB = {
     return this._cache.grades.filter(g => g.schoolId === this._schoolId);
   },
 
-  setGrade(studentId, subject, unit, grade, teacherId) {
+  async setGrade(studentId, subject, unit, grade, teacherId) {
+    const student = this._cache.students.find(s => s.id === studentId);
+    const classId = student?.classId || null;
+    const user    = typeof Auth !== 'undefined' ? Auth.current() : null;
+    const isGestor = user && ['gestor','administrativo','superadmin'].includes(user.role);
+
+    // ── Verificação server-side do lock ───────────────────────────────────────
+    // Bloqueia escrita no banco mesmo que o JS client-side seja burlado.
+    if (!isGestor && supabaseClient && classId) {
+      try {
+        const { data: lockRow } = await supabaseClient
+          .from('grade_locks')
+          .select('locked_by_name')
+          .eq('class_id', classId)
+          .eq('unit', unit)
+          .eq('subject', subject)
+          .eq('school_id', this._schoolId)
+          .maybeSingle();
+        if (lockRow) {
+          const quem = lockRow.locked_by_name || 'Professor';
+          if (typeof Utils !== 'undefined' && Utils.toast) {
+            Utils.toast(`Avaliação bloqueada por ${quem}. Apenas o gestor pode editar.`, 'error');
+          }
+          console.warn('[GradeLock] Escrita bloqueada server-side:', { classId, unit, subject });
+          return; // Rejeita a escrita
+        }
+      } catch (e) {
+        console.warn('[GradeLock] Erro ao verificar lock (fail-open):', e);
+        // fail-open aqui é intencional: erro de rede não deve bloquear o professor
+      }
+    }
+
     const idx = this._cache.grades.findIndex(g =>
       g.studentId === studentId && g.subject === subject && (g.unit === unit || g.period === unit)
     );
-    const student = this._cache.students.find(s => s.id === studentId);
     const rec = {
       studentId, subject,
       period: unit, unit: unit,           // DB usa period, JS usa unit
       gradeValue: grade, grade: grade,    // DB usa grade_value, JS usa grade
       teacherId,
       schoolId: this._schoolId,
-      classId:  student?.classId || null,
+      classId,
     };
 
     if (idx >= 0) {

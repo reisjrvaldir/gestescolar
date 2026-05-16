@@ -644,13 +644,77 @@ const TeacherGrades = {
     this._renderGrades();
   },
 
-  // ── Lock de avaliações ───────────────────────────────────
-  _lockKey(classId, unit, subject) { return `ges_glock_${classId}_${unit}_${subject}`; },
-  _isLocked(classId, unit, subject) { return !!localStorage.getItem(this._lockKey(classId, unit, subject)); },
-  _lock(classId, unit, subject)   { localStorage.setItem(this._lockKey(classId, unit, subject), new Date().toISOString()); },
-  _unlock(classId, unit, subject) { localStorage.removeItem(this._lockKey(classId, unit, subject)); },
+  // ── Lock de avaliações (SERVER-SIDE via Supabase) ────────
+  // Estado em memória carregado do banco a cada renderização.
+  // Não pode ser burlado via localStorage ou console — o estado
+  // real está na tabela grade_locks com RLS por escola.
+  _lockCache: {}, // { 'classId|unit|subject': { lockedByName, lockedAt } }
 
-  _renderGrades() {
+  async _loadLocks(classId) {
+    if (!supabaseClient || !classId) return;
+    try {
+      const { data } = await supabaseClient
+        .from('grade_locks')
+        .select('class_id, unit, subject, locked_by_name, locked_at')
+        .eq('class_id', classId);
+      this._lockCache = {};
+      for (const row of (data || [])) {
+        this._lockCache[`${row.class_id}|${row.unit}|${row.subject}`] = {
+          lockedByName: row.locked_by_name || 'Professor',
+          lockedAt: row.locked_at,
+        };
+      }
+    } catch (e) {
+      console.warn('[GradeLock] Erro ao carregar locks:', e);
+    }
+  },
+
+  _isLocked(classId, unit, subject) {
+    return !!this._lockCache[`${classId}|${unit}|${subject}`];
+  },
+
+  async _lock(classId, unit, subject) {
+    const user = Auth.current();
+    // Atualiza cache imediatamente (otimismo)
+    this._lockCache[`${classId}|${unit}|${subject}`] = {
+      lockedByName: user?.name || 'Professor',
+      lockedAt: new Date().toISOString(),
+    };
+    if (!supabaseClient) return;
+    try {
+      await supabaseClient.from('grade_locks').upsert({
+        school_id:       DB._schoolId,
+        class_id:        classId,
+        unit,
+        subject,
+        locked_by:       user?.id       || null,
+        locked_by_name:  user?.name     || null,
+        locked_at:       new Date().toISOString(),
+      }, { onConflict: 'school_id,class_id,unit,subject' });
+    } catch (e) {
+      console.error('[GradeLock] Erro ao salvar lock:', e);
+    }
+  },
+
+  async _unlock(classId, unit, subject) {
+    // Atualiza cache imediatamente
+    delete this._lockCache[`${classId}|${unit}|${subject}`];
+    if (!supabaseClient) return;
+    try {
+      await supabaseClient.from('grade_locks')
+        .delete()
+        .eq('class_id', classId)
+        .eq('unit', unit)
+        .eq('subject', subject)
+        .eq('school_id', DB._schoolId);
+    } catch (e) {
+      console.error('[GradeLock] Erro ao remover lock:', e);
+    }
+  },
+
+  async _renderGrades() {
+    // Carrega locks do servidor antes de renderizar (garante estado real)
+    await this._loadLocks(this._classId);
     const content = document.getElementById('page-content');
     if (!content) return;
 
@@ -878,21 +942,22 @@ const TeacherGrades = {
       return;
     }
 
-    this._lock(this._classId, unit, subject);
+    await this._lock(this._classId, unit, subject);
     Utils.toast('Avaliações salvas e bloqueadas para edição!', 'success');
-    this._renderGrades();
+    await this._renderGrades();
   },
 
-  unlockGrades() {
-    this._unlock(this._classId, this._unit, this._subject);
+  async unlockGrades() {
+    await this._unlock(this._classId, this._unit, this._subject);
     Utils.toast('Edição liberada pelo gestor.', 'info');
-    this._renderGrades();
+    await this._renderGrades();
   },
 
-  saveInline(input) {
+  async saveInline(input) {
     const user    = Auth.current();
     const isGestor = user && (user.role === 'gestor' || user.role === 'administrativo');
 
+    // Verificação rápida no cache local (UX imediata)
     if (!isGestor && this._isLocked(this._classId, this._unit, this._subject)) {
       Utils.toast('Avaliação bloqueada. Apenas o gestor pode editar.', 'error');
       return;
@@ -912,7 +977,8 @@ const TeacherGrades = {
     }
     input.style.borderColor = 'var(--secondary)';
 
-    DB.setGrade(sid, subject, this._key(unit, av), value, user.id);
+    // setGrade agora é async e verifica lock no servidor antes de gravar
+    await DB.setGrade(sid, subject, this._key(unit, av), value, user.id);
 
     const grades   = DB.getGrades();
     const mediaU   = this._unitAvg(grades, sid, subject, unit);
