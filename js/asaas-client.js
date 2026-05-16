@@ -158,8 +158,13 @@ const AsaasClient = {
       const due  = new Date(invoice.dueDate + 'T00:00:00');
       if (!isNaN(due.getTime()) && due < hoje) {
         const diasAtraso = Math.floor((hoje - due) / (1000 * 60 * 60 * 24));
+        // Multa: % único sobre o principal (padrão de mensalidade)
         const multa = chargeAmount * (finePercent / 100);
-        const juros = chargeAmount * Math.pow(1 + (interestDayPercent / 100), diasAtraso) - chargeAmount;
+        // Juros SIMPLES por dia (padrão regulatório para mensalidade escolar):
+        //   juros = principal × taxa_diária × dias
+        // Antes era composto (Math.pow), o que sobrecobra ao longo do tempo
+        // e contradiz a prática usual de boletos/mensalidades.
+        const juros = chargeAmount * (interestDayPercent / 100) * diasAtraso;
         chargeAmount = Number((chargeAmount + multa + juros).toFixed(2));
         chargeDueDate = hojeStr; // Asaas exige data >= hoje
       }
