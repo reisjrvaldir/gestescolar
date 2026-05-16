@@ -202,6 +202,38 @@ const Auth = {
     }
   },
 
+  // Logout com confirmação de duplo clique (evita saída acidental)
+  // Primeiro clique: mostra toast de confirmação por 3s
+  // Segundo clique dentro de 3s: executa o logout
+  logoutConfirm() {
+    if (this._logoutPending) {
+      clearTimeout(this._logoutPending);
+      this._logoutPending = null;
+      // Remove toast de confirmação se existir
+      document.getElementById('logout-confirm-toast')?.remove();
+      this.logout();
+      return;
+    }
+    // Mostrar toast de confirmação
+    const toast = document.createElement('div');
+    toast.id = 'logout-confirm-toast';
+    toast.style.cssText = [
+      'position:fixed;bottom:24px;left:50%;transform:translateX(-50%);',
+      'background:#323232;color:#fff;border-radius:8px;padding:12px 20px;',
+      'font-size:14px;font-weight:500;z-index:99998;',
+      'display:flex;align-items:center;gap:10px;box-shadow:0 4px 16px rgba(0,0,0,.3);',
+      'cursor:pointer;white-space:nowrap;',
+    ].join('');
+    toast.innerHTML = '<i class="fa-solid fa-right-from-bracket" style="color:#ff9800;"></i> Clique novamente para sair';
+    toast.onclick = () => this.logoutConfirm();
+    document.body.appendChild(toast);
+
+    this._logoutPending = setTimeout(() => {
+      document.getElementById('logout-confirm-toast')?.remove();
+      this._logoutPending = null;
+    }, 3000);
+  },
+
   async logout() {
     this._stopIdleTimer();
     this._remove();

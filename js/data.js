@@ -488,7 +488,9 @@ const DB = {
       // Placeholder de e-mail baseado na matrícula para garantir login por
       // matrícula sem conflito com contas Google/OAuth. O e-mail real do
       // responsável é salvo em parentEmail do aluno.
-      const emailFinal = `${s.matricula}@gestescolar.app`;
+      // Usa @noreply.gestescolar.com.br (domínio controlado pela empresa)
+      // para evitar interceptação de e-mails de confirmação do Supabase.
+      const emailFinal = `${s.matricula}@noreply.gestescolar.com.br`;
       s.parentPlainPassword = senha;
 
       if (!this.getUsers().find(u => u.studentId === s.id && u.role === 'pai')) {
@@ -619,12 +621,16 @@ const DB = {
   },
 
   markAttendance(studentId, date, status, teacherId) {
-    const idx = this._cache.attendance.findIndex(a => a.studentId === studentId && a.date === date);
     const student = this._cache.students.find(s => s.id === studentId);
+    const classId = student?.classId || null;
+    // Inclui classId na chave para evitar conflito quando aluno muda de turma
+    const idx = this._cache.attendance.findIndex(
+      a => a.studentId === studentId && a.date === date && a.classId === classId
+    );
     const rec = {
       studentId, date, status, teacherId,
       schoolId: this._schoolId,
-      classId:  student?.classId || null,
+      classId,
       updatedAt: new Date().toISOString(),
     };
 

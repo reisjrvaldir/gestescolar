@@ -135,7 +135,7 @@ const AsaasClient = {
     const customer = await this.createCustomer({
       name: customerName,
       cpfCnpj: customerCpf,
-      email: customerEmail || `${student.matricula || student.id}@gestescolar.app`,
+      email: customerEmail || `${student.matricula || student.id}@noreply.gestescolar.com.br`,
       externalReference: student.id,
     });
     if (!customer) return null;
