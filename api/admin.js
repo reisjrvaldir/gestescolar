@@ -179,5 +179,73 @@ module.exports = async function handler(req, res) {
     });
   }
 
+  // ── deleteSchool: apenas superadmin ─────────────────────────────
+  // Usa service key para bypass de RLS — seguro pois valida role server-side
+  if (action === 'deleteSchool') {
+    const caller = await getCallerInfo(authUserId);
+    if (!caller || caller.role !== 'superadmin') {
+      return res.status(403).json({ error: 'Apenas superadmin pode excluir escolas.' });
+    }
+
+    const { schoolId } = data || {};
+    if (!schoolId || typeof schoolId !== 'string' || schoolId.length < 10) {
+      return res.status(400).json({ error: 'schoolId inválido.' });
+    }
+
+    // Verificar que a escola existe antes de excluir
+    const checkRes = await fetch(
+      `${SUPABASE_URL}/rest/v1/schools?id=eq.${schoolId}&select=id,name&limit=1`,
+      { headers: { apikey: SUPABASE_SERVICE_KEY, Authorization: `Bearer ${SUPABASE_SERVICE_KEY}` } }
+    );
+    const schools = await checkRes.json().catch(() => []);
+    if (!Array.isArray(schools) || schools.length === 0) {
+      return res.status(404).json({ error: 'Escola não encontrada.' });
+    }
+    const schoolName = schools[0].name;
+
+    // Excluir via service key — CASCADE apaga users, students, classes, invoices, etc.
+    const delRes = await fetch(
+      `${SUPABASE_URL}/rest/v1/schools?id=eq.${schoolId}`,
+      {
+        method: 'DELETE',
+        headers: {
+          apikey: SUPABASE_SERVICE_KEY,
+          Authorization: `Bearer ${SUPABASE_SERVICE_KEY}`,
+          Prefer: 'return=minimal',
+        },
+      }
+    );
+
+    if (!delRes.ok) {
+      const err = await delRes.json().catch(() => ({}));
+      console.error('[Admin] deleteSchool erro:', err);
+      return res.status(delRes.status).json({ error: err.message || 'Erro ao excluir escola.' });
+    }
+
+    // Audit log da exclusão
+    await fetch(`${SUPABASE_URL}/rest/v1/audit_log`, {
+      method: 'POST',
+      headers: {
+        apikey: SUPABASE_SERVICE_KEY,
+        Authorization: `Bearer ${SUPABASE_SERVICE_KEY}`,
+        'Content-Type': 'application/json',
+        Prefer: 'return=minimal',
+      },
+      body: JSON.stringify({
+        school_id: null, // escola foi deletada
+        action: 'SCHOOL_DELETED',
+        details: JSON.stringify({
+          deletedSchoolId: schoolId,
+          deletedSchoolName: schoolName,
+          deletedByAuthId: authUserId,
+          deletedAt: new Date().toISOString(),
+        }),
+      }),
+    }).catch(e => console.error('[Admin] Audit log deleteSchool:', e.message));
+
+    console.log(`[Admin] Escola "${schoolName}" (${schoolId}) excluída por ${authUserId}`);
+    return res.status(200).json({ ok: true, schoolName });
+  }
+
   return res.status(400).json({ error: 'Ação desconhecida.' });
 };
