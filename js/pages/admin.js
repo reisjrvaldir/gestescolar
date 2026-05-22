@@ -1262,7 +1262,7 @@ const StudentForm = {
 
       // ── Salvar link de acesso na ficha do aluno ─────────────────────────
       // Senha aleatória gerada por DB.addStudent — exibida apenas neste momento.
-      const loginUrl = window.location.origin + window.location.pathname;
+      const loginUrl = window.location.origin;
       const senha    = created.parentPlainPassword || '';
       DB.updateStudent(created.id, { accessLink: loginUrl, loginMatricula: created.matricula });
       AdminStudents.showAccessModal(created.name, created.matricula, senha, loginUrl);
