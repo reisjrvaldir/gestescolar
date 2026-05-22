@@ -135,47 +135,42 @@ const DB = {
   },
 
   // Cria usuario no Supabase Auth e retorna o auth_id (UUID)
+  // Usa /api/admin (service key) em vez de supabaseClient.auth.signUp para:
+  //   1. Confirmar email automaticamente (email_confirm: true) — sem bloqueio de confirmação
+  //   2. Não alterar a sessão do gestor logado (signUp do client-side troca a sessão)
+  //   3. Garantir criação mesmo com RLS ativa
   async _createAuthUser(email, password, name, role) {
     if (!supabaseClient) return null;
-    // Pular para emails invalidos ou senhas curtas
+    // Pular para emails inválidos ou senhas curtas
     const validEmail = /^[^\s@]+@[^\s@]+\.[a-zA-Z]{2,}$/.test(email) && !email.endsWith('.local');
     if (!validEmail || password.length < 6) return null;
     try {
-      // Salvar sessao atual para restaurar depois (evitar logout ao criar usuario)
+      // Obter token do gestor/superadmin logado para autenticar no proxy
       const { data: sessionData } = await supabaseClient.auth.getSession();
-      const currentSession = sessionData?.session;
-
-      const { data, error } = await supabaseClient.auth.signUp({
-        email,
-        password,
-        options: { data: { name, role } },
-      });
-
-      if (error) {
-        // Se usuario ja existe no Auth, tentar fazer login para pegar o ID
-        if (error.message.includes('already registered')) {
-          const { data: loginData } = await supabaseClient.auth.signInWithPassword({ email, password });
-          if (loginData?.user) {
-            // Restaurar sessao anterior
-            if (currentSession) await supabaseClient.auth.setSession(currentSession);
-            return loginData.user.id;
-          }
-        }
-        console.warn(`[DB] Auth signUp falhou para ${email}:`, error.message);
+      const token = sessionData?.session?.access_token;
+      if (!token) {
+        console.warn('[DB] _createAuthUser: sem sessão ativa, pulando criação Auth');
         return null;
       }
 
-      const authId = data?.user?.id || null;
-      if (authId) console.log('[DB] Auth user criado no Supabase Auth');
+      // Chamar proxy admin que usa service key → email confirmado automaticamente
+      const res = await fetch('/api/admin', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ action: 'createAuthUser', data: { email, password, name, role } }),
+      });
+      const body = await res.json().catch(() => ({}));
 
-      // Restaurar sessao anterior (signUp pode mudar a sessao)
-      if (currentSession) {
-        await supabaseClient.auth.setSession(currentSession);
+      if (!res.ok) {
+        console.warn(`[DB] _createAuthUser falhou (${res.status}):`, body.error);
+        return null;
       }
 
+      const authId = body.authId || null;
+      if (authId) console.log('[DB] Auth user criado via /api/admin (email confirmado)');
       return authId;
     } catch (e) {
-      console.warn(`[DB] Erro ao criar auth user ${email}:`, e);
+      console.warn('[DB] Erro ao criar auth user via proxy:', e);
       return null;
     }
   },

@@ -67,6 +67,10 @@ const Auth = {
       });
       if (authErr) {
         console.warn('[Auth] Supabase Auth:', authErr.message);
+        // E-mail não confirmado: conta criada mas professor ainda não pode logar
+        if (authErr.message?.toLowerCase().includes('email not confirmed')) {
+          return { ok: false, msg: 'E-mail não confirmado. Contate o administrador para reativar o acesso.' };
+        }
         // Distinguir "e-mail não existe" de "senha errada"
         // Usa API com service role (bypassa RLS, não exige RPC no banco)
         try {

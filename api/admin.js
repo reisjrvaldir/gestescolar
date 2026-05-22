@@ -72,7 +72,27 @@ module.exports = async function handler(req, res) {
       body: JSON.stringify({ email, password, email_confirm: true, user_metadata: { name, role } }),
     });
     const body = await r.json().catch(() => ({}));
-    if (!r.ok) return res.status(r.status).json({ error: body.message || 'Erro ao criar usuário.' });
+    if (!r.ok) {
+      // Se já existe, buscar o authId existente para vinculação
+      if (body.message?.includes('already registered') || body.code === 'email_exists') {
+        const listRes = await fetch(
+          `${SUPABASE_URL}/auth/v1/admin/users?email=${encodeURIComponent(email)}`,
+          { headers: { apikey: SUPABASE_SERVICE_KEY, Authorization: `Bearer ${SUPABASE_SERVICE_KEY}` } }
+        );
+        const listBody = await listRes.json().catch(() => ({}));
+        const existing = listBody?.users?.[0];
+        if (existing) {
+          // Atualizar senha e confirmar e-mail do usuário existente
+          await fetch(`${SUPABASE_URL}/auth/v1/admin/users/${existing.id}`, {
+            method: 'PUT',
+            headers: { apikey: SUPABASE_SERVICE_KEY, Authorization: `Bearer ${SUPABASE_SERVICE_KEY}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ password, email_confirm: true }),
+          });
+          return res.status(200).json({ ok: true, authId: existing.id, reused: true });
+        }
+      }
+      return res.status(r.status).json({ error: body.message || 'Erro ao criar usuário.' });
+    }
     return res.status(200).json({ ok: true, authId: body.id });
   }
 
