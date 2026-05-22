@@ -516,6 +516,7 @@ const LoginPage = {
     alertEl.innerHTML = '';
 
     let result;
+    let jsError = null;
     try {
       result = await Promise.race([
         Auth.login(email, password),
@@ -523,19 +524,21 @@ const LoginPage = {
       ]);
     } catch (err) {
       const isTimeout = err.message === 'timeout';
+      jsError = err;
       result = {
         ok: false,
         msg: isTimeout
           ? 'Tempo esgotado. Verifique sua conexão e tente novamente.'
-          : 'Erro de conexão. Verifique sua internet e tente novamente.',
+          : `Erro: ${err.message || 'falha de conexão'}`,
       };
     }
 
     if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fa-solid fa-right-to-bracket"></i> Entrar'; }
 
     if (!result.ok) {
+      const detail = jsError && jsError.stack ? `<details style="margin-top:8px;font-size:11px;"><summary>Detalhes técnicos</summary><pre style="white-space:pre-wrap;font-size:10px;">${Utils.escape(jsError.stack)}</pre></details>` : '';
       alertEl.innerHTML =
-        `<div class="alert alert-danger"><i class="fa-solid fa-circle-exclamation"></i> ${result.msg}</div>`;
+        `<div class="alert alert-danger"><i class="fa-solid fa-circle-exclamation"></i> ${result.msg}${detail}</div>`;
       return;
     }
     if (result.user.needsPasswordChange) {
@@ -543,8 +546,20 @@ const LoginPage = {
       document.getElementById('newpass-overlay').style.display = 'flex';
       return;
     }
+
+    // Feedback de sucesso ANTES de redirecionar (caso o redirect falhe)
+    alertEl.innerHTML = `<div class="alert" style="background:#e8f5e9;color:#1b5e20;border:1px solid #a5d6a7;">
+      <i class="fa-solid fa-circle-check"></i> Login OK como <strong>${Utils.escape(result.user.name)}</strong> (${Utils.escape(result.user.role)}). Redirecionando...
+    </div>`;
+
     Auth.startIdleTimer(); // Auto-logout após 30 min de inatividade
-    this.redirect(result.user.role, result.user.roles);
+    try {
+      this.redirect(result.user.role, result.user.roles);
+    } catch (err) {
+      alertEl.innerHTML = `<div class="alert alert-danger">
+        <i class="fa-solid fa-circle-exclamation"></i> Login OK, mas erro ao redirecionar: ${Utils.escape(err.message)}
+      </div>`;
+    }
   },
 
   redirect(role, roles) {

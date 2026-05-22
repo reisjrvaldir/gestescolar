@@ -60,6 +60,18 @@ const Auth = {
       }
     }
 
+    // 0.5. Limpar QUALQUER sessão anterior antes de tentar nova autenticação.
+    //      Se o gestor estiver logado e abrir /login para testar credenciais
+    //      do professor, a sessão antiga pode interferir com signInWithPassword.
+    //      Forçar signOut garante estado limpo.
+    if (supabaseClient) {
+      try {
+        await supabaseClient.auth.signOut();
+      } catch (_) { /* ignorar erros de signOut */ }
+      // Limpar também a sessão local do app (ges_session em localStorage)
+      this._remove();
+    }
+
     // 1. Autenticar no Supabase Auth PRIMEIRO (funciona sem cache/RLS)
     if (supabaseClient) {
       const { data: authData, error: authErr } = await supabaseClient.auth.signInWithPassword({
