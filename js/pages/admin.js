@@ -1470,9 +1470,11 @@ const AdminStaff = {
       const crData = await cr.json();
       if (!cr.ok) throw new Error(crData.error || 'Erro ao reativar conta de acesso.');
 
-      // SEMPRE ressincroniza auth_id: pode estar null OU desalinhado com auth.users
-      if (crData.authId && crData.authId !== u.authId) {
-        DB.updateUser(id, { authId: crData.authId });
+      // Backend já gravou auth_id em public.users via service key.
+      // Atualiza só a cache local (sem disparar _update redundante).
+      if (crData.authId) {
+        const idx = DB._cache.users.findIndex(x => x.id === id);
+        if (idx >= 0) DB._cache.users[idx].authId = crData.authId;
       }
     } catch (err) {
       Utils.toast(`Erro: ${err.message}`, 'error');
@@ -1600,9 +1602,11 @@ const AdminStaff = {
         const crResult = await cr.json();
         if (!cr.ok) throw new Error(crResult.error || 'Erro ao atualizar conta de acesso.');
 
-        // Sempre ressincroniza auth_id em public.users
-        if (crResult.authId && crResult.authId !== u.authId) {
-          DB.updateUser(id, { authId: crResult.authId });
+        // Backend já gravou auth_id em public.users via service key.
+        // Atualiza só a cache local.
+        if (crResult.authId) {
+          const idx = DB._cache.users.findIndex(x => x.id === id);
+          if (idx >= 0) DB._cache.users[idx].authId = crResult.authId;
         }
 
         Utils.toast('Funcionário e senha atualizados com sucesso!', 'success');
