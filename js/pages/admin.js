@@ -1446,7 +1446,9 @@ const AdminStaff = {
     window._reloadStaff('inativos');
   },
 
-  // Gera nova senha e cria/atualiza conta Supabase Auth (corrige auth_id null)
+  // Gera nova senha + cria/atualiza conta Supabase Auth + ressincroniza auth_id
+  // Idempotente: createAuthUser do backend trata existente e novo identicamente,
+  // garantindo que public.users.auth_id sempre bata com a real auth.users.id
   async resetPassword(id) {
     const u = DB.getUsers().find(x => x.id === id);
     if (!u) return;
@@ -1459,28 +1461,18 @@ const AdminStaff = {
 
     Utils.toast('Aguarde...', 'info');
 
-    let authId = u.authId;
     try {
-      if (!authId) {
-        // Criar conta Auth (professor sem auth_id — cadastrado antes da correção)
-        const cr = await fetch('/api/admin', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-          body: JSON.stringify({ action: 'createAuthUser', data: { email: u.email, password: novaSenha, name: u.name, role: u.role } }),
-        });
-        const crData = await cr.json();
-        if (!cr.ok) throw new Error(crData.error || 'Erro ao criar conta de acesso.');
-        authId = crData.authId;
-        DB.updateUser(id, { authId });
-      } else {
-        // Atualizar senha da conta existente
-        const ur = await fetch('/api/admin', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-          body: JSON.stringify({ action: 'updateUserPassword', data: { authId, password: novaSenha } }),
-        });
-        const urData = await ur.json();
-        if (!ur.ok) throw new Error(urData.error || 'Erro ao atualizar senha.');
+      const cr = await fetch('/api/admin', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ action: 'createAuthUser', data: { email: u.email, password: novaSenha, name: u.name, role: u.role } }),
+      });
+      const crData = await cr.json();
+      if (!cr.ok) throw new Error(crData.error || 'Erro ao reativar conta de acesso.');
+
+      // SEMPRE ressincroniza auth_id: pode estar null OU desalinhado com auth.users
+      if (crData.authId && crData.authId !== u.authId) {
+        DB.updateUser(id, { authId: crData.authId });
       }
     } catch (err) {
       Utils.toast(`Erro: ${err.message}`, 'error');
@@ -1591,6 +1583,8 @@ const AdminStaff = {
     DB.updateUser(id, updateData);
 
     // Se há nova senha, atualiza no Supabase Auth via API admin
+    // Usa createAuthUser (idempotente) — backend trata novo OU existente
+    // e ressincroniza auth_id local se estiver desalinhado.
     if (newPass) {
       try {
         const session = await supabaseClient.auth.getSession();
@@ -1598,28 +1592,17 @@ const AdminStaff = {
         if (!token) throw new Error('Sessão expirada. Faça login novamente.');
 
         const u = DB.getUsers().find(x => x.id === id);
-        let authId = u?.authId;
+        const cr = await fetch('/api/admin', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+          body: JSON.stringify({ action: 'createAuthUser', data: { email: u.email, password: newPass, name: u.name, role: u.role } }),
+        });
+        const crResult = await cr.json();
+        if (!cr.ok) throw new Error(crResult.error || 'Erro ao atualizar conta de acesso.');
 
-        // Se não tem authId, cria o usuário no Supabase Auth primeiro
-        if (!authId) {
-          const cr = await fetch('/api/admin', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-            body: JSON.stringify({ action: 'createAuthUser', data: { email: u.email, password: newPass, name: u.name, role: u.role } }),
-          });
-          const crResult = await cr.json();
-          if (!cr.ok) throw new Error(crResult.error || 'Erro ao criar conta Auth.');
-          authId = crResult.authId;
-          DB.updateUser(id, { authId });
-        } else {
-          // Usuário já existe — apenas atualiza a senha
-          const r = await fetch('/api/admin', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-            body: JSON.stringify({ action: 'updateUserPassword', data: { authId, password: newPass } }),
-          });
-          const result = await r.json();
-          if (!r.ok) throw new Error(result.error || 'Erro na API.');
+        // Sempre ressincroniza auth_id em public.users
+        if (crResult.authId && crResult.authId !== u.authId) {
+          DB.updateUser(id, { authId: crResult.authId });
         }
 
         Utils.toast('Funcionário e senha atualizados com sucesso!', 'success');
