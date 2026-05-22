@@ -116,36 +116,78 @@ module.exports = async function handler(req, res) {
     }
 
     // 3. Sincronizar public.users.auth_id via service key (bypassa RLS)
-    //    Localiza pelo email e atualiza auth_id para o REAL id do auth.users.
+    let publicUserSynced = false;
+    let publicUserId = null;
     try {
       const findRes = await fetch(
-        `${SUPABASE_URL}/rest/v1/users?email=eq.${encodeURIComponent(emailLower)}&select=id,auth_id&limit=1`,
+        `${SUPABASE_URL}/rest/v1/users?email=eq.${encodeURIComponent(emailLower)}&select=id,auth_id,active,school_id&limit=1`,
         { headers: { apikey: SUPABASE_SERVICE_KEY, Authorization: `Bearer ${SUPABASE_SERVICE_KEY}` } }
       );
       const users = await findRes.json().catch(() => []);
       const publicUser = Array.isArray(users) && users[0];
-      if (publicUser && publicUser.auth_id !== authId) {
-        await fetch(
-          `${SUPABASE_URL}/rest/v1/users?id=eq.${publicUser.id}`,
-          {
-            method: 'PATCH',
-            headers: {
-              apikey: SUPABASE_SERVICE_KEY,
-              Authorization: `Bearer ${SUPABASE_SERVICE_KEY}`,
-              'Content-Type': 'application/json',
-              Prefer: 'return=minimal',
-            },
-            body: JSON.stringify({ auth_id: authId }),
+      if (publicUser) {
+        publicUserId = publicUser.id;
+        // Sempre força sync, mesmo que já bata (atualiza updated_at)
+        if (publicUser.auth_id !== authId) {
+          const syncRes = await fetch(
+            `${SUPABASE_URL}/rest/v1/users?id=eq.${publicUser.id}`,
+            {
+              method: 'PATCH',
+              headers: {
+                apikey: SUPABASE_SERVICE_KEY,
+                Authorization: `Bearer ${SUPABASE_SERVICE_KEY}`,
+                'Content-Type': 'application/json',
+                Prefer: 'return=minimal',
+              },
+              body: JSON.stringify({ auth_id: authId, active: true }),
+            }
+          );
+          publicUserSynced = syncRes.ok;
+          if (!syncRes.ok) {
+            const errBody = await syncRes.json().catch(() => ({}));
+            console.error('[Admin] PATCH public.users falhou:', syncRes.status, errBody);
+          } else {
+            console.log(`[Admin] auth_id sincronizado: ${publicUser.id} → ${authId}`);
           }
-        );
-        console.log(`[Admin] auth_id ressincronizado em public.users (${publicUser.id} → ${authId})`);
+        } else {
+          publicUserSynced = true; // já estava certo
+        }
       }
     } catch (e) {
       console.error('[Admin] Falha ao sincronizar auth_id:', e.message);
-      // Não bloqueia o retorno — frontend ainda pode atualizar via cache
     }
 
-    return res.status(200).json({ ok: true, authId });
+    // 4. Validação final: testa o login com a senha que acabou de ser setada
+    //    Isso confirma que (a) a senha foi aplicada e (b) o e-mail está confirmado
+    let loginVerified = false;
+    let loginError = null;
+    try {
+      const testRes = await fetch(`${SUPABASE_URL}/auth/v1/token?grant_type=password`, {
+        method: 'POST',
+        headers: { apikey: SUPABASE_SERVICE_KEY, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: emailLower, password }),
+      });
+      if (testRes.ok) {
+        loginVerified = true;
+      } else {
+        const testBody = await testRes.json().catch(() => ({}));
+        loginError = testBody.error_description || testBody.msg || `HTTP ${testRes.status}`;
+      }
+    } catch (e) {
+      loginError = e.message;
+    }
+
+    return res.status(200).json({
+      ok: true,
+      authId,
+      diagnostics: {
+        emailLower,
+        publicUserId,
+        publicUserSynced,
+        loginVerified,
+        loginError,
+      },
+    });
   }
 
   // ── updateUserPassword: apenas gestor (mesma escola) ou superadmin ──
