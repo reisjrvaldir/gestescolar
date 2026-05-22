@@ -400,16 +400,19 @@ const Onboarding = {
   _current: 0,
   _steps_list: [],
   _userId: null,
+  _running: false,   // true enquanto o tutorial está aberto (evita reinício por navegação)
 
   // ── Verificar se deve mostrar ──────────────────────────────────
   shouldShow(user) {
     if (!user || !user.id) return false;
+    if (this._running) return false;  // Tutorial já aberto — não reinicia por re-render
     return !localStorage.getItem('ges_onboarding_done_' + user.id);
   },
 
   // ── Iniciar tutorial ──────────────────────────────────────────
   start(user) {
     if (!this.shouldShow(user)) return;
+    this._running = true;
     const role = user.role || 'gestor';
     this._steps_list = this._steps[role] || this._steps.gestor;
     this._current = 0;
@@ -637,6 +640,7 @@ const Onboarding = {
 
   // ── Concluir tutorial ─────────────────────────────────────────
   finish() {
+    this._running = false;
     this._removeOverlay();
     if (this._userId) {
       localStorage.setItem('ges_onboarding_done_' + this._userId, '1');
@@ -646,6 +650,7 @@ const Onboarding = {
   // ── Ver tutorial novamente (acessível via configurações) ──────
   restart(user) {
     if (!user || !user.id) return;
+    this._running = false;
     localStorage.removeItem('ges_onboarding_done_' + user.id);
     this.start(user);
   },
