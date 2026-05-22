@@ -17,27 +17,34 @@ const Router = {
 
     // GUARD: escola bloqueada (plano vencido / trial expirado) só pode
     // acessar school-plans, login e landing. Qualquer outra rota redireciona.
+    // EXCEÇÃO: professor/pai NÃO são bloqueados — só roles que decidem sobre
+    // plano (gestor/administrativo/financeiro) precisam ver tela de assinatura.
     try {
       const allowed = new Set(['school-plans','login','landing','recover','fin-balance']);
+      const adminRoles = new Set(['gestor','administrativo','financeiro']);
       if (typeof Auth !== 'undefined' && typeof Plans !== 'undefined' && !allowed.has(name)) {
         const sess = Auth.current();
-        const school = sess && DB.getSchool(sess.schoolId);
-        if (school && Plans.isSchoolBlocked(school)) {
-          this._currentRoute = 'school-plans';
-          this.routes['school-plans']?.({});
-          setTimeout(() => Plans.showBlockedModal(school), 100);
-          return;
+        if (sess && adminRoles.has(sess.role)) {
+          const school = DB.getSchool(sess.schoolId);
+          if (school && Plans.isSchoolBlocked(school)) {
+            this._currentRoute = 'school-plans';
+            this.routes['school-plans']?.({});
+            setTimeout(() => Plans.showBlockedModal(school), 100);
+            return;
+          }
         }
       }
     } catch (e) {
-      // fail-closed: em caso de erro no guard, logar e bloquear acesso por segurança
+      // fail-closed apenas para roles administrativos
       console.error('[Router] Erro no guard de plano:', e);
-      if (Auth.current()?.schoolId) {
-        // Redireciona para school-plans como proteção conservadora
+      const adminRoles = new Set(['gestor','administrativo','financeiro']);
+      const sess = Auth.current();
+      if (sess && adminRoles.has(sess.role) && sess.schoolId) {
         this._currentRoute = 'school-plans';
         this.routes['school-plans']?.({});
         return;
       }
+      // Para professor/pai, deixa passar — não bloqueia silenciosamente
     }
 
     // Cancela subscrições Realtime da página anterior
