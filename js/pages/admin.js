@@ -1306,6 +1306,11 @@ Router.register('admin-staff', () => {
           <button class="btn btn-sm btn-outline" onclick="AdminStaff.openEdit('${u.id}')" style="white-space:nowrap;">
             <i class="fa-solid fa-pen"></i> Editar
           </button>
+          <button class="btn btn-sm" title="Gerar nova senha de acesso"
+            onclick="AdminStaff.resetPassword('${u.id}')"
+            style="background:#fff3e0;color:#e65100;border:1px solid #ffb74d;white-space:nowrap;">
+            <i class="fa-solid fa-key"></i>
+          </button>
           ${u.active
             ? `<button class="btn btn-sm btn-danger" onclick="AdminStaff.confirmDesligar('${u.id}','${Utils.escape(u.name)}')"
                 style="white-space:nowrap;">
@@ -1439,6 +1444,70 @@ const AdminStaff = {
     DB.updateUser(id, { active: true });
     Utils.toast(`${nome} foi reativado(a) com sucesso!`, 'success');
     window._reloadStaff('inativos');
+  },
+
+  // Gera nova senha e cria/atualiza conta Supabase Auth (corrige auth_id null)
+  async resetPassword(id) {
+    const u = DB.getUsers().find(x => x.id === id);
+    if (!u) return;
+
+    const novaSenha = DB._gerarSenhaAleatoria(10);
+
+    const session = await supabaseClient.auth.getSession().catch(() => ({ data: null }));
+    const token = session?.data?.session?.access_token;
+    if (!token) { Utils.toast('Sessão expirada. Faça login novamente.', 'error'); return; }
+
+    Utils.toast('Aguarde...', 'info');
+
+    let authId = u.authId;
+    try {
+      if (!authId) {
+        // Criar conta Auth (professor sem auth_id — cadastrado antes da correção)
+        const cr = await fetch('/api/admin', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+          body: JSON.stringify({ action: 'createAuthUser', data: { email: u.email, password: novaSenha, name: u.name, role: u.role } }),
+        });
+        const crData = await cr.json();
+        if (!cr.ok) throw new Error(crData.error || 'Erro ao criar conta de acesso.');
+        authId = crData.authId;
+        DB.updateUser(id, { authId });
+      } else {
+        // Atualizar senha da conta existente
+        const ur = await fetch('/api/admin', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+          body: JSON.stringify({ action: 'updateUserPassword', data: { authId, password: novaSenha } }),
+        });
+        const urData = await ur.json();
+        if (!ur.ok) throw new Error(urData.error || 'Erro ao atualizar senha.');
+      }
+    } catch (err) {
+      Utils.toast(`Erro: ${err.message}`, 'error');
+      return;
+    }
+
+    // Mostrar nova senha para o gestor copiar
+    Utils.modal(
+      '<i class="fa-solid fa-key" style="color:#e65100;"></i> Nova Senha Gerada',
+      `<div style="text-align:center;padding:12px 0;">
+        <p style="font-size:14px;color:var(--text-muted);margin-bottom:16px;">
+          Nova senha de acesso para <strong>${Utils.escape(u.name)}</strong>:
+        </p>
+        <div style="background:var(--bg);border:1.5px solid var(--border);border-radius:8px;
+          padding:14px 20px;font-family:monospace;font-size:22px;font-weight:700;letter-spacing:2px;
+          margin-bottom:12px;">${Utils.escape(novaSenha)}</div>
+        <div style="background:#fff3e0;border-radius:8px;padding:10px;font-size:12px;color:#b71c1c;">
+          <i class="fa-solid fa-triangle-exclamation"></i>
+          <strong>Anote agora — não será exibida novamente.</strong>
+          Repasse ao funcionário de forma segura.
+        </div>
+      </div>`,
+      `<button class="btn btn-outline" onclick="this.closest('.modal-overlay').remove()">Fechar</button>
+       <button class="btn btn-primary" onclick="navigator.clipboard?.writeText('${Utils.escape(novaSenha)}');Utils.toast('Copiado!','success');">
+         <i class="fa-solid fa-copy"></i> Copiar
+       </button>`
+    );
   },
 
   openEdit(id) {
