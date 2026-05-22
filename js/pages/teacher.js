@@ -925,7 +925,7 @@ const TeacherGrades = {
       </div>`;
   },
 
-  submitGrades() {
+  async submitGrades() {
     const grades   = DB.getGrades();
     const students = DB.getStudents().filter(s => s.classId === this._classId && s.status === 'ativo');
     const unit     = this._unit;
