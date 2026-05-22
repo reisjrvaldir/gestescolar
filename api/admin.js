@@ -52,9 +52,11 @@ module.exports = async function handler(req, res) {
     : (req.body || {});
 
   // ── createAuthUser: apenas gestor ou superadmin ──────────────────
-  // Fluxo idempotente: SEMPRE consulta por email primeiro. Se já existe,
-  // reseta senha + confirma e-mail. Se não existe, cria. Garante que o
-  // authId retornado seja o REAL da tabela auth.users (sincronizado).
+  // Fluxo TOTALMENTE idempotente com service key (bypassa RLS).
+  // Faz TUDO no backend para garantir consistência:
+  //   1. Cria ou atualiza usuário no auth.users (com email_confirm:true)
+  //   2. Sincroniza public.users.auth_id para bater com o real auth.users.id
+  // Sem race condition entre operações no cliente.
   if (action === 'createAuthUser') {
     const caller = await getCallerInfo(authUserId);
     if (!caller || (caller.role !== 'gestor' && caller.role !== 'superadmin')) {
@@ -65,18 +67,43 @@ module.exports = async function handler(req, res) {
     if (!email || !password || password.length < 6) {
       return res.status(400).json({ error: 'email e senha (mín. 6 chars) obrigatórios.' });
     }
+    const emailLower = email.toLowerCase();
 
-    // 1. Buscar usuário existente por e-mail (lista admin do Supabase)
-    const listRes = await fetch(
-      `${SUPABASE_URL}/auth/v1/admin/users?filter=email.eq.${encodeURIComponent(email)}`,
-      { headers: { apikey: SUPABASE_SERVICE_KEY, Authorization: `Bearer ${SUPABASE_SERVICE_KEY}` } }
-    );
-    const listBody = await listRes.json().catch(() => ({}));
-    const existing = (listBody?.users || []).find(u => u.email?.toLowerCase() === email.toLowerCase());
+    // 1. Tentar criar primeiro (caminho mais comum)
+    let authId = null;
+    const createRes = await fetch(`${SUPABASE_URL}/auth/v1/admin/users`, {
+      method: 'POST',
+      headers: { apikey: SUPABASE_SERVICE_KEY, Authorization: `Bearer ${SUPABASE_SERVICE_KEY}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: emailLower, password, email_confirm: true, user_metadata: { name, role } }),
+    });
+    const createBody = await createRes.json().catch(() => ({}));
 
-    if (existing) {
-      // Já existe — apenas resetar senha + confirmar e-mail
-      const updRes = await fetch(`${SUPABASE_URL}/auth/v1/admin/users/${existing.id}`, {
+    if (createRes.ok && createBody.id) {
+      authId = createBody.id;
+    } else {
+      // 2. Falhou — provavelmente já existe. Listar e localizar por email.
+      //    Lista até 1000 usuários (mais que suficiente para o caso de uso).
+      let foundUser = null;
+      let page = 1;
+      while (!foundUser && page <= 10) {
+        const listRes = await fetch(
+          `${SUPABASE_URL}/auth/v1/admin/users?page=${page}&per_page=200`,
+          { headers: { apikey: SUPABASE_SERVICE_KEY, Authorization: `Bearer ${SUPABASE_SERVICE_KEY}` } }
+        );
+        const listBody = await listRes.json().catch(() => ({}));
+        const users = listBody?.users || [];
+        foundUser = users.find(u => u.email?.toLowerCase() === emailLower);
+        if (users.length < 200) break; // última página
+        page++;
+      }
+
+      if (!foundUser) {
+        console.error('[Admin] createAuthUser: criação falhou e usuário não encontrado:', createBody);
+        return res.status(500).json({ error: createBody.message || createBody.msg || 'Erro ao criar/localizar conta.' });
+      }
+
+      // Atualizar senha + confirmar e-mail
+      const updRes = await fetch(`${SUPABASE_URL}/auth/v1/admin/users/${foundUser.id}`, {
         method: 'PUT',
         headers: { apikey: SUPABASE_SERVICE_KEY, Authorization: `Bearer ${SUPABASE_SERVICE_KEY}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({ password, email_confirm: true }),
@@ -85,22 +112,40 @@ module.exports = async function handler(req, res) {
         const err = await updRes.json().catch(() => ({}));
         return res.status(updRes.status).json({ error: err.message || 'Erro ao atualizar conta existente.' });
       }
-      return res.status(200).json({ ok: true, authId: existing.id, reused: true });
+      authId = foundUser.id;
     }
 
-    // 2. Não existe — criar novo
-    const r = await fetch(`${SUPABASE_URL}/auth/v1/admin/users`, {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${SUPABASE_SERVICE_KEY}`,
-        apikey: SUPABASE_SERVICE_KEY,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ email, password, email_confirm: true, user_metadata: { name, role } }),
-    });
-    const body = await r.json().catch(() => ({}));
-    if (!r.ok) return res.status(r.status).json({ error: body.message || 'Erro ao criar usuário.' });
-    return res.status(200).json({ ok: true, authId: body.id });
+    // 3. Sincronizar public.users.auth_id via service key (bypassa RLS)
+    //    Localiza pelo email e atualiza auth_id para o REAL id do auth.users.
+    try {
+      const findRes = await fetch(
+        `${SUPABASE_URL}/rest/v1/users?email=eq.${encodeURIComponent(emailLower)}&select=id,auth_id&limit=1`,
+        { headers: { apikey: SUPABASE_SERVICE_KEY, Authorization: `Bearer ${SUPABASE_SERVICE_KEY}` } }
+      );
+      const users = await findRes.json().catch(() => []);
+      const publicUser = Array.isArray(users) && users[0];
+      if (publicUser && publicUser.auth_id !== authId) {
+        await fetch(
+          `${SUPABASE_URL}/rest/v1/users?id=eq.${publicUser.id}`,
+          {
+            method: 'PATCH',
+            headers: {
+              apikey: SUPABASE_SERVICE_KEY,
+              Authorization: `Bearer ${SUPABASE_SERVICE_KEY}`,
+              'Content-Type': 'application/json',
+              Prefer: 'return=minimal',
+            },
+            body: JSON.stringify({ auth_id: authId }),
+          }
+        );
+        console.log(`[Admin] auth_id ressincronizado em public.users (${publicUser.id} → ${authId})`);
+      }
+    } catch (e) {
+      console.error('[Admin] Falha ao sincronizar auth_id:', e.message);
+      // Não bloqueia o retorno — frontend ainda pode atualizar via cache
+    }
+
+    return res.status(200).json({ ok: true, authId });
   }
 
   // ── updateUserPassword: apenas gestor (mesma escola) ou superadmin ──
