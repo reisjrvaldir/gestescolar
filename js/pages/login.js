@@ -547,18 +547,83 @@ const LoginPage = {
       return;
     }
 
-    // Feedback de sucesso ANTES de redirecionar (caso o redirect falhe)
-    alertEl.innerHTML = `<div class="alert" style="background:#e8f5e9;color:#1b5e20;border:1px solid #a5d6a7;">
-      <i class="fa-solid fa-circle-check"></i> Login OK como <strong>${Utils.escape(result.user.name)}</strong> (${Utils.escape(result.user.role)}). Redirecionando...
-    </div>`;
-
-    Auth.startIdleTimer(); // Auto-logout após 30 min de inatividade
-    try {
-      this.redirect(result.user.role, result.user.roles);
-    } catch (err) {
-      alertEl.innerHTML = `<div class="alert alert-danger">
-        <i class="fa-solid fa-circle-exclamation"></i> Login OK, mas erro ao redirecionar: ${Utils.escape(err.message)}
+    // Diagnóstico passo a passo — escreve cada etapa para identificar onde trava
+    const log = [];
+    const updateLog = (step, ok = true) => {
+      log.push(`${ok ? '✅' : '❌'} ${step}`);
+      alertEl.innerHTML = `<div class="alert" style="background:#e8f5e9;color:#1b5e20;border:1px solid #a5d6a7;text-align:left;font-size:11px;font-family:monospace;">
+        ${log.map(l => `<div>${l}</div>`).join('')}
       </div>`;
+    };
+
+    updateLog(`Login OK: ${result.user.name} (${result.user.role})`);
+    updateLog(`schoolId: ${result.user.schoolId || '(null)'}`);
+
+    try {
+      Auth.startIdleTimer();
+      updateLog('startIdleTimer OK');
+
+      const role = result.user.role;
+      const roles = result.user.roles;
+      const primary = (roles && roles[0]) || role;
+      const map = {
+        administrativo: 'admin-dashboard', financeiro: 'fin-dashboard',
+        professor: 'teacher-dashboard',   pai:        'parent-dashboard',
+        gestor:    'admin-dashboard',     superadmin: 'superadmin-dashboard',
+      };
+      const targetRoute = map[primary] || 'admin-dashboard';
+      updateLog(`Rota destino: ${targetRoute}`);
+
+      const fn = Router.routes[targetRoute];
+      if (!fn) { updateLog(`Rota não registrada: ${targetRoute}`, false); return; }
+      updateLog(`Rota registrada OK`);
+
+      // Verificar sessão antes do render
+      const sess = Auth.current();
+      if (!sess) { updateLog('Auth.current() retornou null APÓS save!', false); return; }
+      updateLog(`Auth.current OK: ${sess.email}`);
+
+      // Verificar cache
+      const userCacheCount = DB._cache.users.filter(u => u.id === sess.id).length;
+      updateLog(`Cache users (próprio id): ${userCacheCount}`);
+      updateLog(`Cache schools total: ${DB._cache.schools.length}`);
+
+      DB.setTenant(sess.schoolId);
+      updateLog(`setTenant(${sess.schoolId})`);
+
+      // Tentar renderizar diretamente
+      try {
+        fn({});
+        updateLog('fn({}) executou sem erro');
+      } catch (renderErr) {
+        updateLog(`fn({}) THROW: ${renderErr.message}`, false);
+        alertEl.innerHTML += `<pre style="font-size:9px;white-space:pre-wrap;background:#ffebee;padding:6px;">${Utils.escape(renderErr.stack || '')}</pre>`;
+        return;
+      }
+
+      // Verificar se o DOM mudou
+      setTimeout(() => {
+        const appHTML = document.getElementById('app')?.innerHTML || '';
+        const stillLogin = appHTML.includes('loginForm') || appHTML.includes('login-wrap');
+        if (stillLogin) {
+          updateLog('DOM ainda mostra login após fn({})!', false);
+          alertEl.innerHTML += `<div style="background:#fff3e0;padding:6px;font-size:10px;">
+            app.innerHTML primeiros 200 chars:<br>
+            <code>${Utils.escape(appHTML.substring(0, 200))}</code>
+          </div>`;
+        } else {
+          updateLog('DOM atualizado para nova rota ✓');
+        }
+      }, 300);
+
+      // Atualizar URL
+      const newUrl = `${window.location.origin}/${targetRoute}`;
+      window.history.pushState({ route: targetRoute, params: {} }, '', newUrl);
+      Router._currentRoute = targetRoute;
+      updateLog(`URL atualizada para ${targetRoute}`);
+    } catch (err) {
+      updateLog(`Exception: ${err.message}`, false);
+      alertEl.innerHTML += `<pre style="font-size:9px;white-space:pre-wrap;background:#ffebee;padding:6px;">${Utils.escape(err.stack || '')}</pre>`;
     }
   },
 
