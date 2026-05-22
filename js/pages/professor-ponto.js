@@ -303,11 +303,11 @@ const ProfessorPonto = {
         </div>
       </div>
       <div class="form-group">
-        <label class="form-label">Descrição / Justificativa <span style="color:var(--text-muted);font-weight:400;">(opcional)</span></label>
+        <label class="form-label">Descrição / Justificativa <span style="color:var(--danger);font-weight:600;">*</span></label>
         <textarea id="ponto-descricao" class="form-control" rows="3" maxlength="500"
-          placeholder="Ex: Atrasado por trânsito, saindo mais cedo para consulta médica..."></textarea>
+          placeholder="Ex: Inicio da jornada, atrasado por trânsito, saindo para consulta médica..."></textarea>
         <div style="font-size:11px;color:var(--text-muted);margin-top:4px;">
-          <i class="fa-solid fa-info-circle"></i> Descreva o motivo se houver alguma observação importante.
+          <i class="fa-solid fa-info-circle"></i> Campo obrigatório — descreva o motivo do registro.
         </div>
       </div>
     `, `
@@ -322,7 +322,17 @@ const ProfessorPonto = {
 
   async _confirmarRegistro(tipo) {
     const tipoMeta  = this.TIPOS.find(t => t.value === tipo);
-    const descricao = document.getElementById('ponto-descricao')?.value?.trim() || null;
+    const descricao = document.getElementById('ponto-descricao')?.value?.trim() || '';
+
+    if (!descricao) {
+      const textarea = document.getElementById('ponto-descricao');
+      if (textarea) {
+        textarea.style.borderColor = 'var(--danger)';
+        textarea.focus();
+      }
+      Utils.toast('Descrição é obrigatória.', 'error');
+      return;
+    }
 
     const token = await this._getToken();
     if (!token) return Utils.toast('Sessão expirada. Faça login novamente.', 'error');
