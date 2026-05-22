@@ -1568,8 +1568,12 @@ supabase secrets set SUPABASE_SERVICE_ROLE_KEY=&lt;service-role-key&gt;</code>
 
   async _confirmDelete(schoolId) {
     const school = DB.getSchool(schoolId);
-    const name = school?.name || 'Escola';
+    if (!school) { Utils.toast('Escola não encontrada.', 'error'); return; }
+    const name = school.name;
     document.querySelector('.modal-overlay')?.remove();
+
+    // Feedback imediato de carregamento
+    Utils.toast('Excluindo escola...', 'info');
 
     // Audit log ANTES de excluir (depois os dados somem)
     const user = Auth.current();
@@ -1584,7 +1588,33 @@ supabase secrets set SUPABASE_SERVICE_ROLE_KEY=&lt;service-role-key&gt;</code>
       }),
     }).catch(e => console.error('[Audit] deleteSchool:', e));
 
-    DB.removeSchool(schoolId);
+    // Excluir do Supabase com await explícito + verificação de erro
+    // CASCADE apaga automaticamente: users, students, classes, invoices, grades, etc.
+    const { error } = await supabaseClient
+      .from('schools')
+      .delete()
+      .eq('id', schoolId);
+
+    if (error) {
+      console.error('[SuperAdmin] Erro ao excluir escola:', error);
+      Utils.toast(`Erro ao excluir escola: ${error.message || 'Permissão negada ou restrição no banco.'}`, 'error');
+      return;
+    }
+
+    // Só remove da cache LOCAL após confirmação do Supabase
+    DB._cache.students        = DB._cache.students.filter(s => s.schoolId !== schoolId);
+    DB._cache.users           = DB._cache.users.filter(u => u.schoolId !== schoolId);
+    DB._cache.classes         = DB._cache.classes.filter(c => c.schoolId !== schoolId);
+    DB._cache.grades          = DB._cache.grades.filter(g => g.schoolId !== schoolId);
+    DB._cache.attendance      = DB._cache.attendance.filter(a => a.schoolId !== schoolId);
+    DB._cache.invoices        = DB._cache.invoices.filter(i => i.schoolId !== schoolId);
+    DB._cache.expenses        = DB._cache.expenses.filter(e => e.schoolId !== schoolId);
+    DB._cache.messages        = DB._cache.messages.filter(m => m.schoolId !== schoolId);
+    DB._cache.transactions    = DB._cache.transactions.filter(t => t.schoolId !== schoolId);
+    DB._cache.tickets         = DB._cache.tickets.filter(t => t.schoolId !== schoolId);
+    DB._cache.audit_log       = DB._cache.audit_log.filter(l => l.schoolId !== schoolId);
+    DB._cache.schools         = DB._cache.schools.filter(s => s.id !== schoolId);
+
     Utils.toast(`Escola "${name}" excluída permanentemente.`, 'success');
     Router.go('superadmin-dashboard');
   },
