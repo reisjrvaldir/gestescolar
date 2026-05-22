@@ -1461,6 +1461,7 @@ const AdminStaff = {
 
     Utils.toast('Aguarde...', 'info');
 
+    let diagnostics = null;
     try {
       const cr = await fetch('/api/admin', {
         method: 'POST',
@@ -1470,11 +1471,36 @@ const AdminStaff = {
       const crData = await cr.json();
       if (!cr.ok) throw new Error(crData.error || 'Erro ao reativar conta de acesso.');
 
+      diagnostics = crData.diagnostics || null;
+
       // Backend já gravou auth_id em public.users via service key.
       // Atualiza só a cache local (sem disparar _update redundante).
       if (crData.authId) {
         const idx = DB._cache.users.findIndex(x => x.id === id);
         if (idx >= 0) DB._cache.users[idx].authId = crData.authId;
+      }
+
+      // Se o backend confirmou que o login NÃO funciona, alerta o gestor agora
+      if (diagnostics && diagnostics.loginVerified === false) {
+        Utils.modal(
+          '<i class="fa-solid fa-triangle-exclamation" style="color:#c62828;"></i> Falha no Reset',
+          `<div style="padding:8px 0;">
+            <p style="margin-bottom:12px;">O reset foi aplicado, mas o teste automático de login falhou:</p>
+            <div style="background:#ffebee;border:1px solid #ef9a9a;border-radius:8px;padding:10px;
+              font-family:monospace;font-size:12px;color:#b71c1c;margin-bottom:12px;">
+              ${Utils.escape(diagnostics.loginError || 'erro desconhecido')}
+            </div>
+            <p style="font-size:12px;color:var(--text-muted);">
+              <strong>Diagnóstico:</strong><br>
+              • Email: ${Utils.escape(diagnostics.emailLower || u.email)}<br>
+              • Conta em public.users: ${diagnostics.publicUserId ? '✅ encontrada' : '❌ NÃO encontrada'}<br>
+              • auth_id sincronizado: ${diagnostics.publicUserSynced ? '✅' : '❌'}<br>
+              • Login teste: ❌ falhou
+            </p>
+          </div>`,
+          `<button class="btn btn-primary" onclick="this.closest('.modal-overlay').remove()">OK</button>`
+        );
+        return;
       }
     } catch (err) {
       Utils.toast(`Erro: ${err.message}`, 'error');
@@ -1482,6 +1508,12 @@ const AdminStaff = {
     }
 
     // Mostrar nova senha para o gestor copiar
+    const validatedBadge = diagnostics?.loginVerified
+      ? `<div style="background:#e8f5e9;border:1px solid #a5d6a7;border-radius:6px;padding:8px;
+          font-size:11px;color:#1b5e20;margin-bottom:12px;">
+          <i class="fa-solid fa-circle-check"></i> Login testado e validado no servidor.
+        </div>`
+      : '';
     Utils.modal(
       '<i class="fa-solid fa-key" style="color:#e65100;"></i> Nova Senha Gerada',
       `<div style="text-align:center;padding:12px 0;">
@@ -1491,6 +1523,7 @@ const AdminStaff = {
         <div style="background:var(--bg);border:1.5px solid var(--border);border-radius:8px;
           padding:14px 20px;font-family:monospace;font-size:22px;font-weight:700;letter-spacing:2px;
           margin-bottom:12px;">${Utils.escape(novaSenha)}</div>
+        ${validatedBadge}
         <div style="background:#fff3e0;border-radius:8px;padding:10px;font-size:12px;color:#b71c1c;">
           <i class="fa-solid fa-triangle-exclamation"></i>
           <strong>Anote agora — não será exibida novamente.</strong>
