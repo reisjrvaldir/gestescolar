@@ -127,6 +127,8 @@ module.exports = async function handler(req, res) {
       }
     }
 
+    // Reset de senha SEMPRE confirma o e-mail também — corrige contas legadas
+    // criadas via signUp client-side que ficaram com email_confirmed_at=null
     const r = await fetch(`${SUPABASE_URL}/auth/v1/admin/users/${authId}`, {
       method: 'PUT',
       headers: {
@@ -134,7 +136,7 @@ module.exports = async function handler(req, res) {
         apikey: SUPABASE_SERVICE_KEY,
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({ password }),
+      body: JSON.stringify({ password, email_confirm: true }),
     });
 
     if (!r.ok) {
