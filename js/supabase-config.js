@@ -21,13 +21,19 @@ const _safeStorage = (() => {
 })();
 
 // Inicializar cliente Supabase com storage resistente ao ITP do Safari iOS
+// PERSIST SESSION = FALSE: tokens ficam só em memória. Ao recarregar/fechar a aba,
+// a sessão Supabase morre e o usuário é obrigado a logar de novo. Combinado com
+// o check em app.js (ges_session validado contra getSession), garante que nunca
+// haja "entrada fantasma" sem credenciais.
+// detectSessionInUrl segue true: necessário para fluxo de recuperação de senha
+// (link de e-mail injeta access_token no hash da URL).
 const supabaseClient = window.supabase
   ? window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY, {
       auth: {
         storage: _safeStorage,
         storageKey: 'ges_sb_auth',
         autoRefreshToken: true,
-        persistSession: true,
+        persistSession: false,
         detectSessionInUrl: true,
       },
     })
