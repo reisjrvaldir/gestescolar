@@ -4,12 +4,21 @@
 
 (async function () {
   // 1. Listener para detectar token de recovery (link de e-mail)
+  //    e para limpar ges_session se a sessão Supabase for invalidada externamente
+  //    (token expirado, signOut em outra aba, refresh falhou).
   if (supabaseClient) {
     supabaseClient.auth.onAuthStateChange((event, session) => {
       if (event === 'PASSWORD_RECOVERY') {
-        // Usuario clicou no link de recuperacao de senha
         if (typeof LoginPage !== 'undefined') {
           LoginPage._showResetPasswordForm();
+        }
+        return;
+      }
+      if (event === 'SIGNED_OUT' || (event === 'TOKEN_REFRESHED' && !session)) {
+        // Sessão Supabase morta — não deixar ges_session órfão dando "acesso fantasma"
+        try { Auth._remove(); } catch (_) {}
+        if (location.pathname !== '/login' && location.pathname !== '/') {
+          if (typeof Router !== 'undefined') Router.go('login');
         }
       }
     });
@@ -61,8 +70,26 @@
   // 2.75. Inicializar browser history routes (trata /checkout, /login, etc na URL)
   Router.initBrowserHistory();
 
-  // 3. Verificar sess\u00e3o e restaurar tenant
-  const user = Auth.current();
+  // 3. Verificar sess\u00e3o local + validar contra Supabase Auth
+  //    ges_session sozinho N\u00c3O \u00e9 prova de autentica\u00e7\u00e3o: o JWT do Supabase pode
+  //    ter expirado/sido revogado. Sem essa checagem, o app entra no dashboard
+  //    com cache antigo e o usu\u00e1rio v\u00ea "sem permiss\u00e3o" em todas as queries RLS.
+  let user = Auth.current();
+
+  if (user && supabaseClient) {
+    try {
+      const { data } = await supabaseClient.auth.getSession();
+      if (!data?.session) {
+        console.warn('[App] ges_session presente mas Supabase sem sess\u00e3o ativa \u2014 limpando cache local');
+        Auth._remove();
+        user = null;
+      }
+    } catch (e) {
+      console.warn('[App] Falha ao validar sess\u00e3o Supabase:', e);
+      Auth._remove();
+      user = null;
+    }
+  }
 
   // 4. Só carrega DB se já tem sessão ativa (evita timeout com RLS anônimo)
   if (user) {
