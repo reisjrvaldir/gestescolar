@@ -334,6 +334,7 @@ const Router = {
         { id: 'teacher-dashboard',route: 'teacher-dashboard',icon: 'fa-chart-line',    label: 'Dashboard' },
         { id: 'teacher-attendance',route:'teacher-attendance',icon: 'fa-clipboard-check',label: 'Chamada' },
         { id: 'teacher-grades',  route: 'teacher-grades',  icon: 'fa-star',             label: 'Avaliações' },
+        { id: 'teacher-calendario',route:'teacher-calendario',icon:'fa-calendar-days',  label: 'Calendário' },
         { id: 'teacher-messages',route: 'teacher-messages',icon: 'fa-envelope',         label: 'Mensagens' },
         { section: 'Ponto' },
         { id: 'professor-ponto', route: 'professor-ponto', icon: 'fa-fingerprint',      label: 'Meu Ponto' },
