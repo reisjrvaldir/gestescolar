@@ -4,12 +4,22 @@
 //  Atualiza status no Supabase automaticamente
 // =============================================
 
+/**
+ * @typedef {import('../types/models').AsaasWebhookEvent} AsaasWebhookEvent
+ * @typedef {import('../types/models').School} School
+ */
+
 const { createClient } = require('@supabase/supabase-js');
 
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY;
 const WEBHOOK_TOKEN = process.env.ASAAS_WEBHOOK_TOKEN;
 
+/**
+ * Handler do webhook do Asaas.
+ * @param {import('http').IncomingMessage & { body?: AsaasWebhookEvent, query?: any, method?: string, headers: any }} req
+ * @param {import('http').ServerResponse & { status: (code: number) => any, json: (data: any) => any, setHeader: Function }} res
+ */
 module.exports = async function handler(req, res) {
   // Anti-cache
   res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0');

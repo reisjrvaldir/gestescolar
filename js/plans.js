@@ -2,6 +2,13 @@
 //  GESTESCOLAR SaaS – SISTEMA DE PLANOS
 // =============================================
 
+/**
+ * @typedef {import('../types/models').School} School
+ * @typedef {import('../types/models').PlanDefinition} PlanDefinition
+ * @typedef {import('../types/models').PlanId} PlanId
+ * @typedef {import('../types/models').BillingCycle} BillingCycle
+ */
+
 const Plans = {
   _billing: 'mensal', // 'mensal' ou 'anual'
 
@@ -85,6 +92,7 @@ const Plans = {
     }
   },
 
+  /** @param {string | null | undefined} id @returns {PlanDefinition} */
   get(id)  { return this.defs[id] || this.defs.free; },
   // getAll: apenas planos visíveis (exclui piloto e outros hidden)
   getAll() { return Object.values(this.defs).filter(p => !p.hidden).sort((a,b) => a.order - b.order); },
@@ -302,8 +310,12 @@ const Plans = {
     this._showCardForm(planId, { mandatory: true, schoolName, email });
   },
 
-  // Formulário de cartão com preview visual + botão PIX no topo
-  _showCardForm(planId) {
+  /**
+   * Formulário de cartão com preview visual + botão PIX no topo.
+   * @param {string} planId
+   * @param {{ mandatory?: boolean, schoolName?: string, email?: string }} [opts] - opções de pré-preenchimento
+   */
+  _showCardForm(planId, opts) {
     const plan    = this.get(planId);
     const price   = this.getPrice(plan);
     const isAnual = this._billing === 'anual';
@@ -899,13 +911,23 @@ const Plans = {
     return res.json();
   },
 
-  // Helper: lê campo aceitando tanto camelCase quanto snake_case
+  /**
+   * Helper: lê campo aceitando tanto camelCase quanto snake_case.
+   * @param {School | null | undefined} school
+   * @param {string} camel - nome em camelCase (ex: 'planId')
+   * @param {string} snake - nome em snake_case (ex: 'plan_id')
+   * @returns {any}
+   */
   _f(school, camel, snake) {
     if (!school) return null;
     return school[camel] !== undefined ? school[camel] : school[snake];
   },
 
-  // ── SISTEMA DE TESTE: Verifica se está em período de 7 dias de teste ──
+  /**
+   * Verifica se a escola está em período de teste de 7 dias.
+   * @param {School | null | undefined} school
+   * @returns {boolean}
+   */
   isOnTrial(school) {
     if (!school) return false;
     const planId = this._f(school, 'planId', 'plan_id');
@@ -946,7 +968,11 @@ const Plans = {
     return Math.max(0, daysLeft);
   },
 
-  // Verifica se pode gerar pagamento (bloqueado durante teste)
+  /**
+   * Verifica se pode gerar pagamento (bloqueado durante teste).
+   * @param {School | null | undefined} school
+   * @returns {boolean}
+   */
   canGeneratePayment(school) {
     // Plano piloto: cobranças sempre liberadas
     const planId = this._f(school, 'planId', 'plan_id');
@@ -961,6 +987,11 @@ const Plans = {
   // ───────────────────────────────────────────────────────────
   // BLOQUEIO DE ESCOLA — trial expirado sem plano OU plano vencido
   // ───────────────────────────────────────────────────────────
+  /**
+   * Verifica se a escola está bloqueada (trial expirado OU plano vencido).
+   * @param {School | null | undefined} school
+   * @returns {boolean}
+   */
   isSchoolBlocked(school) {
     if (!school) return false;
 
@@ -1116,7 +1147,11 @@ const Plans = {
     return days !== null && days <= 10 && days >= 0;
   },
 
-  // Escola PIX mensal com plano já vencido → bloquear acesso
+  /**
+   * Escola PIX mensal com plano já vencido → bloquear acesso.
+   * @param {School | null | undefined} school
+   * @returns {boolean}
+   */
   isPlanExpired(school) {
     if (!school) return false;
     if (this.isOnTrial(school)) return false;

@@ -2,6 +2,9 @@
 //  GESTESCOLAR SaaS – INICIALIZACAO (Supabase)
 // =============================================
 
+// Tipos: usar import('../types/models').School inline nas anotações JSDoc
+// (typedef global causa conflito em ambiente sem módulos)
+
 (async function () {
   // 1. Listener para detectar token de recovery (link de e-mail)
   //    e para limpar ges_session se a sessão Supabase for invalidada externamente
