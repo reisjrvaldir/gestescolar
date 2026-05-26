@@ -908,7 +908,10 @@ const Plans = {
   // ── SISTEMA DE TESTE: Verifica se está em período de 7 dias de teste ──
   isOnTrial(school) {
     if (!school) return false;
+    const planId = this._f(school, 'planId', 'plan_id');
     const status = this._f(school, 'schoolStatus', 'school_status');
+
+    // Check 1: status === 'trial'
     if (status === 'trial') {
       const started = this._f(school, 'createdAt', 'created_at')
                    || this._f(school, 'trialStartedAt', 'trial_started_at');
@@ -916,6 +919,18 @@ const Plans = {
       const trialEnd   = new Date(trialStart.getTime() + 7 * 24 * 60 * 60 * 1000);
       return new Date() < trialEnd;
     }
+
+    // Check 2 (Fallback robusto): sem plan_id ativo e dentro do período de 7 dias
+    //         Esta verificação é independente de schoolStatus para garantir cobertura
+    //         de casos onde o campo status não foi setado corretamente.
+    if (!planId && planId !== 'piloto') {
+      const started = this._f(school, 'createdAt', 'created_at')
+                   || this._f(school, 'trialStartedAt', 'trial_started_at');
+      const trialStart = new Date(started);
+      const trialEnd   = new Date(trialStart.getTime() + 7 * 24 * 60 * 60 * 1000);
+      return new Date() < trialEnd;
+    }
+
     return false;
   },
 
@@ -962,6 +977,17 @@ const Plans = {
       if (new Date() >= trialEnd) return true;
     }
 
+    // 1b. Trial expirado (fallback robusto): plan_id não ativado + >7 dias de criação
+    //     Não depende do campo schoolStatus estar correto. Garante bloqueio mesmo se
+    //     status não foi setado ou sofreu reset.
+    if (!planId) {
+      const started = this._f(school, 'createdAt', 'created_at')
+                   || this._f(school, 'trialStartedAt', 'trial_started_at');
+      const trialStart = new Date(started);
+      const trialEnd   = new Date(trialStart.getTime() + 7 * 24 * 60 * 60 * 1000);
+      if (new Date() >= trialEnd) return true;
+    }
+
     // 2. Plano vencido (planExpiresAt no passado).
     //    Aplica-se TAMBÉM a assinaturas recorrentes (planSubscriptionId set):
     //    se o webhook PAYMENT_CONFIRMED não chegou para renovar +30d a tempo,
@@ -978,7 +1004,20 @@ const Plans = {
 
   // Modal bloqueante para escolas em estado de bloqueio
   showBlockedModal(school) {
-    const isTrialExpired = this._f(school, 'schoolStatus', 'school_status') === 'trial';
+    // Detecta trial expirado de forma robusta (n\u00e3o depende de schoolStatus)
+    const planId = this._f(school, 'planId', 'plan_id');
+    const schoolStatus = this._f(school, 'schoolStatus', 'school_status');
+    let isTrialExpired = schoolStatus === 'trial';
+
+    // Fallback: se plan_id est\u00e1 vazio (trial) e passou de 7 dias, \u00e9 trial expirado
+    if (!isTrialExpired && !planId) {
+      const started = this._f(school, 'createdAt', 'created_at')
+                   || this._f(school, 'trialStartedAt', 'trial_started_at');
+      const trialStart = new Date(started);
+      const trialEnd   = new Date(trialStart.getTime() + 7 * 24 * 60 * 60 * 1000);
+      isTrialExpired = new Date() >= trialEnd;
+    }
+
     const title = isTrialExpired ? 'Per\u00edodo de teste encerrado' : 'Assinatura vencida';
     const msg = isTrialExpired
       ? 'Seu per\u00edodo de 7 dias de teste terminou. Para continuar usando o GestEscolar, escolha e ative um plano.'

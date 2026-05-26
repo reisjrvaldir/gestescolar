@@ -98,6 +98,15 @@
     DB.fixMissingParentIds();
     if (user.schoolId) DB.setTenant(user.schoolId);
 
+    // Validar trial period antes de rotear
+    const school = DB.getSchool(user.schoolId);
+    if (school && Plans.isSchoolBlocked(school)) {
+      console.warn('[App] Escola bloqueada (trial expirado ou plano vencido) → redirecionando para planos');
+      Router.go('school-plans');
+      Auth.startIdleTimer();
+      return;
+    }
+
     const map = {
       superadmin:     'superadmin-dashboard',
       administrativo: 'admin-dashboard',
