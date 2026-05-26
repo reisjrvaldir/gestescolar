@@ -1,0 +1,145 @@
+name: CI - Code Review Automatizado
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+
+jobs:
+  syntax-check:
+    name: Verificar Sintaxe JS
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Validar sintaxe de todos os arquivos .js
+        run: |
+          echo "Verificando sintaxe de arquivos JS..."
+          FAILED=0
+          for file in $(find js api -name "*.js" -type f 2>/dev/null); do
+            if ! node --check "$file" 2>/dev/null; then
+              echo "ERRO de sintaxe em: $file"
+              node --check "$file" || true
+              FAILED=1
+            fi
+          done
+          if [ $FAILED -eq 1 ]; then
+            echo ""
+            echo "Falha: arquivos com erro de sintaxe encontrados"
+            exit 1
+          fi
+          echo "Todos os arquivos JS passaram na verificação de sintaxe"
+
+  typecheck:
+    name: Verificação de Tipos (JSDoc)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Rodar verificação de tipos
+        run: npm run typecheck
+        continue-on-error: true
+
+  code-quality:
+    name: Qualidade de Código
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Detectar console.log esquecidos em código novo
+        run: |
+          echo "Procurando console.log adicionados em PRs..."
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            BASE_REF="origin/${{ github.base_ref }}"
+            git fetch origin ${{ github.base_ref }} --depth=1
+            ADDED_LOGS=$(git diff "$BASE_REF"...HEAD -- 'js/**/*.js' 'api/**/*.js' | grep -E "^\+.*console\.log" | grep -v "^+++" || true)
+            if [ -n "$ADDED_LOGS" ]; then
+              echo "AVISO: console.log adicionados neste PR:"
+              echo "$ADDED_LOGS"
+              echo ""
+              echo "Considere usar console.warn/error com contexto ou remover."
+            else
+              echo "Nenhum console.log novo encontrado."
+            fi
+          fi
+
+      - name: Detectar TODOs e FIXMEs em código novo
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            BASE_REF="origin/${{ github.base_ref }}"
+            git fetch origin ${{ github.base_ref }} --depth=1 2>/dev/null || true
+            ADDED_TODOS=$(git diff "$BASE_REF"...HEAD -- 'js/**/*.js' 'api/**/*.js' | grep -iE "^\+.*(TODO|FIXME|XXX|HACK):" | grep -v "^+++" || true)
+            if [ -n "$ADDED_TODOS" ]; then
+              echo "AVISO: TODOs/FIXMEs adicionados:"
+              echo "$ADDED_TODOS"
+            else
+              echo "Nenhum TODO/FIXME novo."
+            fi
+          fi
+
+      - name: Detectar arquivos grandes (>500KB)
+        run: |
+          LARGE_FILES=$(find . -type f -size +500k -not -path "./node_modules/*" -not -path "./.git/*" 2>/dev/null || true)
+          if [ -n "$LARGE_FILES" ]; then
+            echo "AVISO: Arquivos grandes detectados:"
+            echo "$LARGE_FILES"
+          fi
+
+  security:
+    name: Verificação de Segurança Básica
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Detectar credenciais hardcoded
+        run: |
+          echo "Procurando padrões suspeitos..."
+          FAILED=0
+
+          # Procurar tokens/keys hardcoded em código
+          SUSPICIOUS=$(grep -rEn "(api[_-]?key|secret|password|token)\s*[:=]\s*['\"][a-zA-Z0-9]{16,}['\"]" \
+            --include="*.js" \
+            --exclude-dir=node_modules \
+            --exclude-dir=.git \
+            js/ api/ 2>/dev/null | \
+            grep -v "process\.env" | \
+            grep -v "// example" | \
+            grep -v "// fake" || true)
+
+          if [ -n "$SUSPICIOUS" ]; then
+            echo "ALERTA: Possíveis credenciais hardcoded encontradas:"
+            echo "$SUSPICIOUS"
+            FAILED=1
+          fi
+
+          # Verificar se .env não foi commitado
+          if [ -f ".env" ]; then
+            echo "ERRO: arquivo .env não deveria estar no repositório"
+            FAILED=1
+          fi
+
+          if [ $FAILED -eq 1 ]; then
+            exit 1
+          fi
+          echo "Nenhum problema de segurança óbvio encontrado"

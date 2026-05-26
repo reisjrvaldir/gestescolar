@@ -1,0 +1,63 @@
+name: Validar Pattern de Commits
+
+on:
+  pull_request:
+    branches: [main, master]
+
+jobs:
+  commit-lint:
+    name: Verificar Padrão de Commit Messages
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Validar mensagens de commit do PR
+        run: |
+          echo "Verificando commits do PR..."
+          echo ""
+
+          # Padrão: tipo(escopo opcional): descrição
+          # Tipos: feat, fix, refactor, docs, chore, test, style, perf, ci, build, revert
+          PATTERN='^(feat|fix|refactor|docs|chore|test|style|perf|ci|build|revert)(\([a-z0-9_-]+\))?!?:\ .+'
+
+          # Pegar commits do PR (exclui merge commits)
+          COMMITS=$(git log --no-merges --format="%H|%s" origin/${{ github.base_ref }}..HEAD)
+
+          FAILED=0
+          INVALID_COMMITS=""
+
+          while IFS= read -r line; do
+            if [ -z "$line" ]; then continue; fi
+            SHA=$(echo "$line" | cut -d'|' -f1)
+            MSG=$(echo "$line" | cut -d'|' -f2-)
+
+            if ! echo "$MSG" | grep -qE "$PATTERN"; then
+              INVALID_COMMITS="${INVALID_COMMITS}  - ${SHA:0:8}: $MSG\n"
+              FAILED=1
+            fi
+          done <<< "$COMMITS"
+
+          if [ $FAILED -eq 1 ]; then
+            echo "ERRO: Commits fora do padrão encontrados:"
+            echo ""
+            echo -e "$INVALID_COMMITS"
+            echo ""
+            echo "Padrão esperado: tipo(escopo): descrição"
+            echo ""
+            echo "Tipos válidos: feat, fix, refactor, docs, chore, test, style, perf, ci, build, revert"
+            echo ""
+            echo "Exemplos válidos:"
+            echo "  feat(auth): adicionar reset de senha por email"
+            echo "  fix(payment): webhook ativa plano após PIX confirmado"
+            echo "  refactor: extrair helper de normalização de schools"
+            echo "  docs(readme): atualizar instruções de setup"
+            echo "  chore: bump dependencies"
+            echo ""
+            echo "Veja CONTRIBUTING.md para mais detalhes."
+            exit 1
+          fi
+
+          echo "Todos os commits seguem o padrão!"
