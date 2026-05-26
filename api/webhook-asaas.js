@@ -35,12 +35,115 @@ module.exports = async function handler(req, res) {
 
   try {
     const body = typeof req.body === 'string' ? JSON.parse(req.body) : req.body;
-    const { event, payment, account } = body;
+    const { event, payment, account, subscription } = body;
 
     console.log(`[Webhook Asaas] Evento: ${event}`);
 
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
     const VERCEL_URL = process.env.VERCEL_URL || 'https://gestescolar.app';
+
+    // ═══════════════════════════════════════════════════════════════════
+    //  EVENTOS DE ASSINATURA RECORRENTE (cartão mensal)
+    //  Quando o cartão falha múltiplas vezes, o Asaas inativa a subscription
+    //  e dispara SUBSCRIPTION_INACTIVATED. Sem tratar isso, a escola fica
+    //  liberada para sempre (planExpiresAt:null + planSubscriptionId definido
+    //  isenta o bloqueio por padrão).
+    // ═══════════════════════════════════════════════════════════════════
+    if (event && event.startsWith('SUBSCRIPTION_')) {
+      const subId = subscription?.id || body?.id;
+      const subExtRef = subscription?.externalReference || '';
+
+      if (!subId && !subExtRef) {
+        return res.status(200).json({ received: true, message: 'Sem dados de assinatura.' });
+      }
+
+      // Localizar escola pelo plan_subscription_id OU pelo externalReference (schoolId|planId|billing)
+      let targetSchoolId = null;
+      if (subExtRef) {
+        const m = subExtRef.match(/^([0-9a-fA-F-]{36})\|/);
+        if (m) targetSchoolId = m[1];
+      }
+      if (!targetSchoolId && subId) {
+        const { data: schs } = await supabase
+          .from('schools')
+          .select('id')
+          .eq('plan_subscription_id', subId)
+          .limit(1);
+        targetSchoolId = schs?.[0]?.id || null;
+      }
+
+      if (!targetSchoolId) {
+        console.warn(`[Webhook Sub] Escola não encontrada para subscription ${subId} / ref=${subExtRef}`);
+        return res.status(200).json({ received: true, message: 'Escola não encontrada.' });
+      }
+
+      // Idempotência via audit_log
+      const subAuditKey = `PLAN_SUB_${event}_${subId || subExtRef}`;
+      const { data: existingSub } = await supabase
+        .from('audit_log')
+        .select('id')
+        .eq('school_id', targetSchoolId)
+        .eq('action', subAuditKey)
+        .limit(1);
+      if (existingSub && existingSub.length > 0) {
+        console.log(`[Webhook Sub] ${subAuditKey} já processado.`);
+        return res.status(200).json({ received: true, duplicate: true });
+      }
+
+      if (event === 'SUBSCRIPTION_INACTIVATED' || event === 'SUBSCRIPTION_DELETED') {
+        // Bloqueia escola: zera subscription e marca expiração no passado
+        const epochPast = new Date(0).toISOString();
+        await supabase
+          .from('schools')
+          .update({
+            plan_subscription_id: null,
+            plan_expires_at:      epochPast,
+            school_status:        'inactive',
+            updated_at:           new Date().toISOString(),
+          })
+          .eq('id', targetSchoolId);
+
+        await supabase.from('audit_log').insert({
+          school_id: targetSchoolId,
+          action:    subAuditKey,
+          details:   JSON.stringify({ subscriptionId: subId, externalReference: subExtRef, event }),
+        }).catch(e => console.error('[Webhook Sub] audit_log err:', e.message));
+
+        console.log(`[Webhook Sub] 🔒 Escola ${targetSchoolId} BLOQUEADA — assinatura ${subId} inativada (${event})`);
+
+        // Notificar gestor por e-mail
+        const { data: schoolData } = await supabase
+          .from('schools')
+          .select('name, owner_id')
+          .eq('id', targetSchoolId)
+          .single();
+        const { data: userData } = schoolData?.owner_id
+          ? await supabase.from('users').select('email').eq('id', schoolData.owner_id).single()
+          : { data: null };
+        if (userData?.email) {
+          fetch(`${VERCEL_URL}/api/send-email`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              to:       userData.email,
+              subject:  '⚠️ Assinatura cancelada — GestEscolar',
+              template: 'subscription_inactivated',
+              data: {
+                schoolName: schoolData?.name || 'Sua Escola',
+                loginUrl:   `${VERCEL_URL}/login`,
+                reason:     'Não foi possível processar a cobrança recorrente. Atualize seu cartão para reativar o acesso.',
+              },
+            }),
+          }).catch(e => console.error('[Webhook Sub] email err:', e.message));
+        }
+
+        return res.status(200).json({ received: true, action: 'school_blocked', schoolId: targetSchoolId });
+      }
+
+      // Outros eventos de subscription (CREATED, UPDATED, SPLIT_DISABLED): apenas log
+      console.log(`[Webhook Sub] ${event} para escola ${targetSchoolId} — sem ação.`);
+      return res.status(200).json({ received: true, event });
+    }
 
     // ───────────────────────────────────────────────────────────
     //  EVENTOS DE STATUS DA SUBCONTA (KYC)
@@ -91,6 +194,188 @@ module.exports = async function handler(req, res) {
     if (!payment || !payment.id) {
       return res.status(200).json({ received: true, message: 'Sem dados de pagamento.' });
     }
+
+    // ═══════════════════════════════════════════════════════════════════
+    //  PAGAMENTOS DE PLANO SAAS
+    //  Identificados por externalReference no formato "schoolId|planId|billing".
+    //  Esses pagamentos NÃO ficam em "invoices" (que é para mensalidades de
+    //  alunos). Sem este handler, dinheiro era cobrado mas plano não ativava
+    //  caso o usuário fechasse o navegador antes do polling do PIX confirmar.
+    // ═══════════════════════════════════════════════════════════════════
+    const extRef = payment.externalReference || '';
+    const planMatch = extRef.match(/^([0-9a-fA-F-]{36})\|([a-z0-9_]+)\|(mensal|anual|renewal)$/i);
+    if (planMatch) {
+      const [, planSchoolId, planIdRef, billingRef] = planMatch;
+      const planAuditKey = `PLAN_PAY_${event}_${payment.id}`;
+
+      // Idempotência por (school + ação)
+      const { data: existingPlan } = await supabase
+        .from('audit_log')
+        .select('id')
+        .eq('school_id', planSchoolId)
+        .eq('action', planAuditKey)
+        .limit(1);
+      if (existingPlan && existingPlan.length > 0) {
+        console.log(`[Webhook Plan] ${planAuditKey} já processado.`);
+        return res.status(200).json({ received: true, duplicate: true });
+      }
+
+      // Confirmação de pagamento → ativa/renova plano
+      if (event === 'PAYMENT_CONFIRMED' || event === 'PAYMENT_RECEIVED') {
+        const days = billingRef.toLowerCase() === 'anual' ? 365 : 30;
+        const expiresAt = new Date(Date.now() + days * 24 * 60 * 60 * 1000).toISOString();
+
+        const updateFields = {
+          plan_id:         planIdRef,
+          billing:         billingRef.toLowerCase() === 'renewal' ? 'mensal' : billingRef.toLowerCase(),
+          plan_expires_at: expiresAt,
+          plan_payment_id: payment.id,
+          school_status:   'active',
+          updated_at:      new Date().toISOString(),
+        };
+        // Renovação via PIX zera plan_subscription_id (era cartão recorrente que falhou)
+        if (billingRef.toLowerCase() === 'renewal') {
+          updateFields.plan_subscription_id = null;
+        }
+
+        const { error: schUpdErr } = await supabase
+          .from('schools')
+          .update(updateFields)
+          .eq('id', planSchoolId);
+
+        if (schUpdErr) {
+          console.error('[Webhook Plan] Erro ao ativar plano:', schUpdErr);
+          return res.status(500).json({ error: 'Erro ao ativar plano.' });
+        }
+
+        await supabase.from('audit_log').insert({
+          school_id: planSchoolId,
+          action:    planAuditKey,
+          details:   JSON.stringify({ planId: planIdRef, billing: billingRef, paymentId: payment.id, expiresAt, value: payment.value }),
+        }).catch(e => console.error('[Webhook Plan] audit_log err:', e.message));
+
+        console.log(`[Webhook Plan] ✅ Plano ${planIdRef} (${billingRef}) ativado para escola ${planSchoolId} — vence em ${expiresAt}`);
+
+        // E-mail de confirmação ao gestor
+        const { data: schoolData } = await supabase
+          .from('schools')
+          .select('name, owner_id')
+          .eq('id', planSchoolId)
+          .single();
+        const { data: userData } = schoolData?.owner_id
+          ? await supabase.from('users').select('email').eq('id', schoolData.owner_id).single()
+          : { data: null };
+        if (userData?.email) {
+          fetch(`${VERCEL_URL}/api/send-email`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              to:       userData.email,
+              subject:  '✅ Pagamento confirmado — GestEscolar',
+              template: 'payment_confirmed',
+              data: {
+                schoolName:    schoolData?.name || 'Sua Escola',
+                value:         payment.value,
+                daysRemaining: days,
+                loginUrl:      `${VERCEL_URL}/login`,
+              },
+            }),
+          }).catch(e => console.error('[Webhook Plan] email err:', e.message));
+        }
+
+        return res.status(200).json({ received: true, action: 'plan_activated', expiresAt });
+      }
+
+      // Pagamento atrasado / cartão recusado → BLOQUEIA escola
+      // Para assinaturas recorrentes, esse é o sinal de que o cartão falhou.
+      if (event === 'PAYMENT_OVERDUE' || event === 'PAYMENT_CREDIT_CARD_CAPTURE_REFUSED') {
+        const epochPast = new Date(0).toISOString();
+        const { error: schUpdErr } = await supabase
+          .from('schools')
+          .update({
+            plan_expires_at:      epochPast,
+            plan_subscription_id: null, // tira proteção da assinatura recorrente
+            school_status:        'inactive',
+            updated_at:           new Date().toISOString(),
+          })
+          .eq('id', planSchoolId);
+
+        if (schUpdErr) {
+          console.error('[Webhook Plan] Erro ao bloquear escola:', schUpdErr);
+          return res.status(500).json({ error: 'Erro ao bloquear escola.' });
+        }
+
+        await supabase.from('audit_log').insert({
+          school_id: planSchoolId,
+          action:    planAuditKey,
+          details:   JSON.stringify({ planId: planIdRef, billing: billingRef, paymentId: payment.id, event, value: payment.value }),
+        }).catch(e => console.error('[Webhook Plan] audit_log err:', e.message));
+
+        console.log(`[Webhook Plan] 🔒 Escola ${planSchoolId} BLOQUEADA — pagamento ${event} (paymentId=${payment.id})`);
+
+        // Notificar gestor por e-mail
+        const { data: schoolData } = await supabase
+          .from('schools')
+          .select('name, owner_id')
+          .eq('id', planSchoolId)
+          .single();
+        const { data: userData } = schoolData?.owner_id
+          ? await supabase.from('users').select('email').eq('id', schoolData.owner_id).single()
+          : { data: null };
+        if (userData?.email) {
+          fetch(`${VERCEL_URL}/api/send-email`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              to:       userData.email,
+              subject:  '⚠️ Pagamento não processado — GestEscolar',
+              template: 'payment_failed',
+              data: {
+                schoolName: schoolData?.name || 'Sua Escola',
+                loginUrl:   `${VERCEL_URL}/login`,
+                reason:     event === 'PAYMENT_CREDIT_CARD_CAPTURE_REFUSED'
+                              ? 'Seu cartão foi recusado pela operadora.'
+                              : 'Sua cobrança recorrente não foi paga até o vencimento.',
+              },
+            }),
+          }).catch(e => console.error('[Webhook Plan] email err:', e.message));
+        }
+
+        return res.status(200).json({ received: true, action: 'school_blocked', schoolId: planSchoolId, reason: event });
+      }
+
+      // Estorno / cancelamento → bloqueia também
+      if (event === 'PAYMENT_DELETED' || event === 'PAYMENT_REFUNDED' ||
+          event === 'PAYMENT_CHARGEBACK_REQUESTED' || event === 'PAYMENT_CHARGEBACK_DISPUTE' ||
+          event === 'PAYMENT_AWAITING_CHARGEBACK_REVERSAL') {
+        const epochPast = new Date(0).toISOString();
+        await supabase
+          .from('schools')
+          .update({
+            plan_expires_at:      epochPast,
+            plan_subscription_id: null,
+            school_status:        'inactive',
+            updated_at:           new Date().toISOString(),
+          })
+          .eq('id', planSchoolId);
+
+        await supabase.from('audit_log').insert({
+          school_id: planSchoolId,
+          action:    planAuditKey,
+          details:   JSON.stringify({ planId: planIdRef, billing: billingRef, paymentId: payment.id, event }),
+        }).catch(e => console.error('[Webhook Plan] audit_log err:', e.message));
+
+        console.log(`[Webhook Plan] 🔒 Escola ${planSchoolId} BLOQUEADA por estorno/cancelamento (${event})`);
+        return res.status(200).json({ received: true, action: 'school_blocked', reason: event });
+      }
+
+      // Outros eventos de plano (CREATED, RESTORED, etc.): apenas log
+      console.log(`[Webhook Plan] Evento ${event} para escola ${planSchoolId} — sem ação.`);
+      return res.status(200).json({ received: true, event, planEvent: true });
+    }
+    // ═══════════════════════════════════════════════════════════════════
+    //  FIM: pagamentos de plano. Restante é mensalidade de aluno (invoices).
+    // ═══════════════════════════════════════════════════════════════════
 
     // Buscar invoice pelo asaas_id (incluindo payment_method para não sobrescrever espécie)
     const { data: invoices, error: findErr } = await supabase
