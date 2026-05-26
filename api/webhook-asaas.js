@@ -27,8 +27,11 @@ module.exports = async function handler(req, res) {
     return res.status(500).json({ error: 'Configuração do servidor incompleta.' });
   }
 
-  // Validar token do webhook
-  const token = req.headers['asaas-access-token'] || req.query.token;
+  // Validar token do webhook — aceitar APENAS via header (asaas-access-token).
+  // Query param foi removido: vazava o token nos logs do Vercel, no Referer
+  // header e em qualquer proxy intermediário. O Asaas envia via header por
+  // padrão (documentação oficial), então não há regressão funcional.
+  const token = req.headers['asaas-access-token'];
   if (token !== WEBHOOK_TOKEN) {
     return res.status(403).json({ error: 'Token inválido.' });
   }

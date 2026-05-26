@@ -837,7 +837,11 @@ const Plans = {
           Utils.toast('Pagamento PIX confirmado! Plano ativado.', 'success');
           Router.go('admin-dashboard');
         }
-      } catch(e) { /* silencioso */ }
+      } catch (e) {
+        // Log para diagnóstico — erros recorrentes aqui indicam problema no proxy
+        // ou no Asaas, e o usuário fica preso no modal sem feedback.
+        console.warn('[Polling Plan PIX] erro ao consultar pagamento:', e?.message || e);
+      }
     }, 5000);
   },
 
@@ -849,8 +853,12 @@ const Plans = {
     if (billing === 'anual') {
       expiresAt = new Date(now.getFullYear() + 1, now.getMonth(), now.getDate()).toISOString();
     } else if (subscriptionId) {
-      // Cartão mensal com assinatura recorrente Asaas: sem data de expiração local
-      expiresAt = null;
+      // Cartão mensal com assinatura recorrente Asaas: dá 35 dias como "rede de segurança".
+      // O webhook PAYMENT_CONFIRMED renova para +30d a cada cobrança bem-sucedida.
+      // Se um webhook for perdido/falhar (configuração Asaas, downtime, etc.),
+      // a data natural vence em 35d e a escola entra em bloqueio automático em
+      // vez de ficar liberada para sempre.
+      expiresAt = new Date(now.getTime() + 35 * 24 * 60 * 60 * 1000).toISOString();
     } else {
       // PIX mensal: cobra uma vez e precisa renovar em 30 dias
       expiresAt = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000).toISOString();
@@ -954,10 +962,16 @@ const Plans = {
       if (new Date() >= trialEnd) return true;
     }
 
-    // 2. Plano anual/mensal vencido (planExpiresAt no passado)
+    // 2. Plano vencido (planExpiresAt no passado).
+    //    Aplica-se TAMBÉM a assinaturas recorrentes (planSubscriptionId set):
+    //    se o webhook PAYMENT_CONFIRMED não chegou para renovar +30d a tempo,
+    //    a data natural (now+35d setada em _activatePlan) vence e bloqueia.
+    //    Sem este check o sistema confiava cegamente no webhook chegar; se o
+    //    Asaas perdesse o evento, a escola ficava liberada para sempre.
+    //    Escolas legadas com planExpiresAt=null permanecem inalteradas (null
+    //    é falsy → check passa direto).
     const exp = this._f(school, 'planExpiresAt', 'plan_expires_at');
-    const subId = this._f(school, 'planSubscriptionId', 'plan_subscription_id');
-    if (exp && new Date(exp) < new Date() && !subId) return true;
+    if (exp && new Date(exp) < new Date()) return true;
 
     return false;
   },
@@ -1125,8 +1139,10 @@ const Plans = {
   async openRenewalModal(blocking = false) {
     const session = Auth.current();
     const school  = DB.getSchool(session?.schoolId);
-    if (!school || !school.plan_id) { Router.go('school-plans'); return; }
-    const plan    = this.get(school.plan_id);
+    // Helper _f aceita tanto camelCase quanto snake_case (escola pode vir em qualquer formato dependendo da origem)
+    const planId  = this._f(school, 'planId', 'plan_id');
+    if (!school || !planId) { Router.go('school-plans'); return; }
+    const plan    = this.get(planId);
     const price   = plan.price;
 
     // Fecha modais anteriores
@@ -1195,7 +1211,7 @@ const Plans = {
           <div style="flex:1;min-width:0;">Após o pagamento, sua assinatura será renovada automaticamente em até 5 minutos.</div>
         </div>`;
 
-      this._pollRenewalPix(payRes.id, school.plan_id);
+      this._pollRenewalPix(payRes.id, planId);
     } catch (e) {
       const area = document.getElementById('renewal-pix-area');
       if (area) area.innerHTML = `<div style="color:var(--danger);">${e.message || 'Erro ao gerar PIX.'}</div>`;
@@ -1220,24 +1236,25 @@ const Plans = {
           Utils.toast('Renovação confirmada! Acesso liberado por mais 30 dias.', 'success');
           Router.go('admin-dashboard');
         }
-      } catch (e) { /* silencioso */ }
+      } catch (e) {
+        console.warn('[Polling Renewal PIX] erro ao consultar pagamento:', e?.message || e);
+      }
     }, 5000);
   },
 
-  // Estende o plano mensal por +30 dias a partir da data atual de expiração
+  // Estende o plano mensal por 30 dias a partir de AGORA.
+  // Alinhado com webhook (api/webhook-asaas.js → PAYMENT_CONFIRMED) que também
+  // usa "now + 30d". Se o webhook chegar antes/depois do polling, o resultado
+  // converge: ambos fazem UPDATE com o mesmo cálculo, não há duplicação de dias.
   async _extendMonthlyPlan(planId, paymentId) {
     const session = Auth.current();
-    const school  = DB.getSchool(session.schoolId);
-    const curExp  = this._f(school, 'planExpiresAt', 'plan_expires_at');
-    const currentExp = curExp ? new Date(curExp) : new Date();
-    const base       = currentExp > new Date() ? currentExp : new Date();
-    const newExp     = new Date(base.getTime() + 30 * 24 * 60 * 60 * 1000).toISOString();
+    const newExp = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
 
     await DB.updateSchool(session.schoolId, {
       planExpiresAt: newExp,
       planPaymentId: paymentId,
       schoolStatus:  'active',
     });
-    DB.addAuditLog('renewal', `Plano renovado: +30 dias (pagamento ${paymentId})`);
+    DB.addAuditLog('renewal', `Plano renovado: vence em ${newExp} (pagamento ${paymentId})`);
   },
 };
