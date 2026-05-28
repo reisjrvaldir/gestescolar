@@ -613,6 +613,14 @@ Router.register('landing', () => {
           <h4>Contato</h4>
           <ul>
             <li><a href="mailto:geste.escolar@gmail.com"><i class="fa-solid fa-envelope"></i> geste.escolar@gmail.com</a></li>
+            <li><a href="mailto:dpo@gestescolar.com"><i class="fa-solid fa-shield-halved"></i> dpo@gestescolar.com (LGPD)</a></li>
+          </ul>
+        </div>
+        <div>
+          <h4>Legal</h4>
+          <ul>
+            <li><a href="#" onclick="event.preventDefault();Router.go('privacy')"><i class="fa-solid fa-shield-halved"></i> Política de Privacidade</a></li>
+            <li><a href="#" onclick="event.preventDefault();Router.go('terms')"><i class="fa-solid fa-file-contract"></i> Termos de Uso</a></li>
           </ul>
         </div>
       </div>

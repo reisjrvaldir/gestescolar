@@ -20,7 +20,7 @@ const Router = {
     // EXCEÇÃO: professor/pai NÃO são bloqueados — só roles que decidem sobre
     // plano (gestor/administrativo/financeiro) precisam ver tela de assinatura.
     try {
-      const allowed = new Set(['school-plans','login','landing','recover','fin-balance']);
+      const allowed = new Set(['school-plans','login','landing','recover','fin-balance','privacy','terms']);
       const adminRoles = new Set(['gestor','administrativo','financeiro']);
       if (typeof Auth !== 'undefined' && typeof Plans !== 'undefined' && !allowed.has(name)) {
         const sess = Auth.current();
@@ -303,6 +303,7 @@ const Router = {
         { id: 'superadmin-tickets',   route: 'superadmin-tickets',   icon: 'fa-headset',         label: 'Chamados' },
         { section: 'Conta' },
         { id: 'superadmin-profile',   route: 'superadmin-profile',   icon: 'fa-user-gear',       label: 'Meu Perfil' },
+        { id: 'lgpd-portal',          route: 'lgpd-portal',          icon: 'fa-shield-halved',   label: 'Meus Dados (LGPD)' },
       ],
       administrativo: [
         { section: 'Gestão' },
@@ -319,6 +320,7 @@ const Router = {
         { id: 'admin-settings',  route: 'admin-settings',  icon: 'fa-gear',             label: 'Configurações' },
         { section: 'Suporte' },
         { id: 'user-tickets',    route: 'user-tickets',    icon: 'fa-headset',          label: 'Meus Chamados' },
+        { id: 'lgpd-portal',     route: 'lgpd-portal',     icon: 'fa-shield-halved',    label: 'Meus Dados (LGPD)' },
       ],
       financeiro: [
         { section: 'Financeiro' },
@@ -328,6 +330,7 @@ const Router = {
         { id: 'fin-balance',     route: 'fin-balance',     icon: 'fa-piggy-bank',       label: 'Saldo / Resgate' },
         { section: 'Suporte' },
         { id: 'user-tickets',    route: 'user-tickets',    icon: 'fa-headset',          label: 'Meus Chamados' },
+        { id: 'lgpd-portal',     route: 'lgpd-portal',     icon: 'fa-shield-halved',    label: 'Meus Dados (LGPD)' },
       ],
       professor: [
         { section: 'Pedagógico' },
@@ -338,6 +341,8 @@ const Router = {
         { id: 'teacher-messages',route: 'teacher-messages',icon: 'fa-envelope',         label: 'Mensagens' },
         { section: 'Ponto' },
         { id: 'professor-ponto', route: 'professor-ponto', icon: 'fa-fingerprint',      label: 'Meu Ponto' },
+        { section: 'Conta' },
+        { id: 'lgpd-portal',     route: 'lgpd-portal',     icon: 'fa-shield-halved',    label: 'Meus Dados (LGPD)' },
       ],
       pai: [
         { section: 'Pedagógico' },
@@ -349,6 +354,7 @@ const Router = {
         { id: 'parent-invoices', route: 'parent-invoices', icon: 'fa-file-invoice',     label: 'Pagamentos' },
         { section: 'Suporte' },
         { id: 'user-tickets',    route: 'user-tickets',    icon: 'fa-headset',          label: 'Chamados' },
+        { id: 'lgpd-portal',     route: 'lgpd-portal',     icon: 'fa-shield-halved',    label: 'Meus Dados (LGPD)' },
       ],
       gestor: [
         { section: 'Gestão' },
@@ -374,6 +380,7 @@ const Router = {
         { id: 'admin-settings',   route: 'admin-settings',   icon: 'fa-gear',             label: 'Configurações' },
         { section: 'Suporte' },
         { id: 'user-tickets',     route: 'user-tickets',     icon: 'fa-headset',          label: 'Meus Chamados' },
+        { id: 'lgpd-portal',      route: 'lgpd-portal',      icon: 'fa-shield-halved',    label: 'Meus Dados (LGPD)' },
       ],
     };
     const activeRoles = (roles && roles.length > 0) ? roles : [role];

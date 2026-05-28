@@ -172,7 +172,10 @@ const Auth = {
     this._save(safeUser);
     if (school) {
       DB.setTenant(school.id);
-      DB.addAuditLog('login', `Login: ${safeUser.email}`);
+      // Log de auditoria LGPD: registra login com timestamp
+      // Não armazenamos IP/UA aqui (browser não tem acesso confiável); o backend deve loggar isso.
+      const ua = (navigator?.userAgent || '').slice(0, 100);
+      DB.addAuditLog('USER_LOGIN', `Login: ${safeUser.email} | UA: ${ua}`);
     }
     return { ok: true, user: safeUser };
   },
@@ -252,6 +255,13 @@ const Auth = {
 
   async logout() {
     this._stopIdleTimer();
+    // Log de auditoria LGPD antes de remover sessão
+    try {
+      const user = this.current();
+      if (user && DB && typeof DB.addAuditLog === 'function') {
+        DB.addAuditLog('USER_LOGOUT', `Logout de ${user.email || user.id}`);
+      }
+    } catch (_) { /* não bloqueia logout em caso de erro de log */ }
     this._remove();
     DB.setTenant(null);
     // Aguardar logout do Supabase antes de redirecionar

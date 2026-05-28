@@ -329,6 +329,26 @@ Router.register('school-register', () => {
             </span>
           </div>
 
+          <!-- Consentimento LGPD (Art. 7 e 8 da Lei 13.709/2018) -->
+          <div style="margin-top:16px;padding:12px;border:1px solid #e0e0e0;border-radius:8px;background:#fafafa;">
+            <label style="display:flex;align-items:flex-start;gap:8px;cursor:pointer;font-size:13px;line-height:1.5;">
+              <input type="checkbox" id="regAcceptTerms" required style="margin-top:3px;flex-shrink:0;" />
+              <span>
+                Li e concordo com a
+                <a href="#" onclick="event.preventDefault();window.open('/privacy','_blank')" style="color:#1a73e8;font-weight:600;">Pol\u00edtica de Privacidade</a>
+                e com os
+                <a href="#" onclick="event.preventDefault();window.open('/terms','_blank')" style="color:#1a73e8;font-weight:600;">Termos de Uso</a>.
+                Autorizo o tratamento dos meus dados pessoais conforme descrito, em conformidade com a LGPD (Lei 13.709/2018). <span style="color:#c62828;">*</span>
+              </span>
+            </label>
+            <label style="display:flex;align-items:flex-start;gap:8px;cursor:pointer;font-size:12px;line-height:1.5;margin-top:8px;color:#666;">
+              <input type="checkbox" id="regMarketingOpt" style="margin-top:3px;flex-shrink:0;" />
+              <span>
+                (Opcional) Aceito receber comunica\u00e7\u00f5es de marketing e novidades sobre o GestEscolar.
+              </span>
+            </label>
+          </div>
+
           <button type="submit" class="btn btn-primary w-100" style="margin-top:12px;">
             <i class="fa-solid fa-rocket"></i> Criar Conta e Come\u00e7ar
           </button>
@@ -660,6 +680,15 @@ const LoginPage = {
       return;
     }
 
+    // Validar consentimento LGPD (obrigat\u00f3rio - Art. 7 e 8 da Lei 13.709/2018)
+    const acceptTerms = document.getElementById('regAcceptTerms')?.checked;
+    if (!acceptTerms) {
+      alertEl.innerHTML = '<div class="alert alert-danger"><i class="fa-solid fa-circle-exclamation"></i> Voc\u00ea precisa aceitar a Pol\u00edtica de Privacidade e os Termos de Uso para continuar.</div>';
+      return;
+    }
+    const acceptMarketing = document.getElementById('regMarketingOpt')?.checked || false;
+    const termsAcceptedAt = new Date().toISOString();
+
     // Verificar email duplicado em todas as escolas
     const schools = DB.getSchools();
     for (const s of schools) {
@@ -743,6 +772,11 @@ const LoginPage = {
         cpf:       '',
         active:    true,
         createdAt: new Date().toISOString(),
+        // Consentimento LGPD (Art. 7 e 8 LGPD)
+        termsAcceptedAt:     termsAcceptedAt,
+        privacyAcceptedAt:   termsAcceptedAt,
+        marketingOptIn:      acceptMarketing,
+        marketingOptInAt:    acceptMarketing ? termsAcceptedAt : null,
       };
       DB._cache.users.push(gestorObj);
       await DB._insert('users', gestorObj);
