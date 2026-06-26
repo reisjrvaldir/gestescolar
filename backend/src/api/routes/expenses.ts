@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { z } from 'zod';
 import { withTenant } from '../../db/withTenant';
 import { requireAuth, requireRole } from '../../middleware/auth';
+import { dateSchema } from '../../lib/validation';
 
 export const expensesRouter = Router();
 expensesRouter.use(requireAuth);
@@ -24,7 +25,7 @@ const expenseSchema = z.object({
   supplier_name: z.string().min(1, 'Informe o fornecedor'),
   description: z.string().optional(),
   amount: z.number().positive('Valor deve ser positivo'),
-  due_date: z.string().optional(),
+  due_date: dateSchema.optional(),
 });
 
 expensesRouter.post('/', requireRole('school_admin', 'financial', 'superadmin'), async (req, res) => {

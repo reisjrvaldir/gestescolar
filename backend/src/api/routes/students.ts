@@ -3,17 +3,14 @@ import { z } from 'zod';
 import { withTenant } from '../../db/withTenant';
 import { requireAuth, requireRole } from '../../middleware/auth';
 import { signUpGuardian } from '../../lib/authSignup';
+import { cpfSchema, dateSchema, generateSecurePassword } from '../../lib/validation';
 
 export const studentsRouter = Router();
-
-// Validação CPF: 11 dígitos (aceita formatado, normaliza pra dígitos)
-const cpfDigits = (s: string) => s.replace(/\D/g, '');
-const cpfSchema = z.string().transform(cpfDigits).refine((v) => v.length === 11, 'CPF inválido (11 dígitos)');
 
 const studentSchema = z.object({
   name: z.string().min(2, 'Nome do aluno obrigatório'),
   cpf: cpfSchema,
-  birth_date: z.string().min(1, 'Data de nascimento obrigatória'),
+  birth_date: dateSchema,
   father_name: z.string().min(2, 'Nome do pai obrigatório'),
   mother_name: z.string().min(2, 'Nome da mãe obrigatório'),
   class_id: z.string().uuid().optional(),
@@ -92,9 +89,7 @@ studentsRouter.post('/', requireRole('school_admin', 'superadmin'), async (req, 
       const matRow = await c.query(`select public.next_matricula() as matricula`);
       const matricula: string = matRow.rows[0].matricula;
 
-      // 3) Senha inicial = email do responsável + 6 primeiros do CPF do aluno
-      // (troca obrigatória no 1º acesso — controlada pela flag em profiles)
-      const password = `${s.guardian.email}${s.cpf.slice(0, 6)}`;
+      const password = generateSecurePassword();
 
       // 4) Criar usuário no Neon Auth (público — sign-up)
       const authResult = await signUpGuardian({
@@ -138,7 +133,8 @@ studentsRouter.post('/', requireRole('school_admin', 'superadmin'), async (req, 
         ...studentRow.rows[0],
         monthly_fee: monthlyFee,
         guardian_email: s.guardian.email,
-        login_password_hint: 'email + 6 primeiros dígitos do CPF do aluno (troca obrigatória no 1º acesso)',
+        initial_password: password,
+        login_password_hint: 'Senha temporária gerada — troca obrigatória no 1º acesso',
       };
     });
     res.status(201).json({ ok: true, data: result });

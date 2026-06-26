@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { withTenant } from '../../db/withTenant';
 import { requireAuth, requireRole } from '../../middleware/auth';
 import { createPixCharge } from '../../lib/nuvende';
+import { dateSchema } from '../../lib/validation';
 
 export const invoicesRouter = Router();
 invoicesRouter.use(requireAuth);
@@ -24,7 +25,7 @@ const invoiceSchema = z.object({
   student_id: z.string().uuid().optional(),
   student_name: z.string().min(1),
   amount: z.number().positive(),
-  due_date: z.string().optional(),
+  due_date: dateSchema.optional(),
 });
 
 // POST /api/invoices — gera fatura
