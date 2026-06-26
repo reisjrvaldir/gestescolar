@@ -1,0 +1,191 @@
+import { Router } from 'express';
+import { z } from 'zod';
+import { withTenant } from '../../db/withTenant';
+import { requireAuth, requireRole } from '../../middleware/auth';
+import { signUpGuardian } from '../../lib/authSignup';
+import { cpfSchema, dateSchema, generateSecurePassword } from '../../lib/validation';
+
+export const studentsRouter = Router();
+
+const studentSchema = z.object({
+  name: z.string().min(2, 'Nome do aluno obrigatório'),
+  cpf: cpfSchema,
+  birth_date: dateSchema,
+  father_name: z.string().min(2, 'Nome do pai obrigatório'),
+  mother_name: z.string().min(2, 'Nome da mãe obrigatório'),
+  class_id: z.string().uuid().optional(),
+  plan_id: z.string().uuid('Selecione um plano'),
+  guardian: z.object({
+    name: z.string().min(2, 'Nome do responsável obrigatório'),
+    email: z.string().email('Email do responsável inválido'),
+    cpf: cpfSchema,
+    phone: z.string().optional(),
+  }),
+});
+
+const studentUpdateSchema = studentSchema.omit({ guardian: true }).partial().extend({
+  name: z.string().min(2),
+});
+
+studentsRouter.use(requireAuth);
+
+studentsRouter.get('/', async (req, res) => {
+  const classId = req.query.class_id as string | undefined;
+  const data = await withTenant(req.ctx!, async (c) => {
+    const params: unknown[] = [req.ctx!.schoolId];
+    let filter = '';
+    if (classId) {
+      filter = ' and s.class_id = $2';
+      params.push(classId);
+    }
+    const isAdmin = ['school_admin', 'superadmin', 'financial'].includes(req.ctx!.role);
+    const cpfCol = isAdmin ? 's.cpf' : "left(s.cpf,3) || '*****' || right(s.cpf,2) as cpf";
+    const { rows } = await c.query(
+      `select s.id, s.name, s.registration_number, s.status, s.class_id, s.guardian_id,
+              ${cpfCol}, s.birth_date, s.father_name, s.mother_name,
+              s.monthly_fee::float8 as monthly_fee, s.plan_id,
+              s.created_at,
+              cl.name as class_name,
+              g.name as guardian_name, g.email as guardian_email
+         from public.students s
+         left join public.classes cl on cl.id = s.class_id
+         left join public.guardians g on g.id = s.guardian_id
+        where s.school_id = $1${filter}
+        order by s.name asc`,
+      params,
+    );
+    return rows;
+  });
+  res.json({ ok: true, data });
+});
+
+// POST /api/students — cria aluno + responsável + login (transacional)
+studentsRouter.post('/', requireRole('school_admin', 'superadmin'), async (req, res) => {
+  const parsed = studentSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json({ code: 'validation', message: parsed.error.issues[0]?.message });
+  }
+  const s = parsed.data;
+
+  let authUserId: string | null = null;
+  try {
+    const result = await withTenant(req.ctx!, async (c) => {
+      // 1) Buscar valor do plano (sempre como número, evita string vazia ou null)
+      const planRow = await c.query(
+        `select monthly_fee::numeric as monthly_fee from public.school_plans where id=$1 and school_id=$2`,
+        [s.plan_id, req.ctx!.schoolId],
+      );
+      if (planRow.rows.length === 0) {
+        throw Object.assign(new Error('Plano não encontrado ou pertence a outra escola'), { http: 400, code: 'plan_not_found' });
+      }
+      const rawFee = planRow.rows[0].monthly_fee;
+      const monthlyFee = rawFee == null ? 0 : Number(rawFee);
+      if (Number.isNaN(monthlyFee)) {
+        throw Object.assign(new Error('Plano com mensalidade inválida'), { http: 400, code: 'invalid_plan_fee' });
+      }
+      console.log('[students.create] plano=', s.plan_id, 'monthly_fee=', monthlyFee);
+
+      // 2) Gerar matrícula global atômica
+      const matRow = await c.query(`select public.next_matricula() as matricula`);
+      const matricula: string = matRow.rows[0].matricula;
+
+      const password = generateSecurePassword();
+
+      // 4) Criar usuário no Neon Auth (público — sign-up)
+      const authResult = await signUpGuardian({
+        email: s.guardian.email,
+        password,
+        name: s.guardian.name,
+      });
+      authUserId = authResult.authUserId;
+
+      // 5) Criar profile vinculado com flag de troca obrigatória
+      const profileRow = await c.query(
+        `insert into public.profiles (auth_user_id, school_id, name, email, phone, role, password_change_required)
+         values ($1, $2, $3, $4, $5, 'guardian', true)
+         returning id`,
+        [authUserId, req.ctx!.schoolId, s.guardian.name, s.guardian.email, s.guardian.phone ?? null],
+      );
+      const profileId = profileRow.rows[0].id;
+
+      // 6) Criar guardian
+      const guardianRow = await c.query(
+        `insert into public.guardians (school_id, user_id, name, email, phone, cpf, relationship)
+         values ($1, $2, $3, $4, $5, $6, 'responsavel')
+         returning id`,
+        [req.ctx!.schoolId, profileId, s.guardian.name, s.guardian.email,
+         s.guardian.phone ?? null, s.guardian.cpf],
+      );
+      const guardianId = guardianRow.rows[0].id;
+
+      // 7) Criar aluno
+      const studentRow = await c.query(
+        `insert into public.students
+           (school_id, name, cpf, birth_date, registration_number, class_id, guardian_id,
+            father_name, mother_name, monthly_fee, plan_id)
+         values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
+         returning id, name, registration_number, status, monthly_fee`,
+        [req.ctx!.schoolId, s.name, s.cpf, s.birth_date, matricula,
+         s.class_id ?? null, guardianId, s.father_name, s.mother_name, monthlyFee, s.plan_id],
+      );
+
+      return {
+        ...studentRow.rows[0],
+        monthly_fee: monthlyFee,
+        guardian_email: s.guardian.email,
+        initial_password: password,
+        login_password_hint: 'Senha temporária gerada — troca obrigatória no 1º acesso',
+      };
+    });
+    res.status(201).json({ ok: true, data: result });
+  } catch (err: any) {
+    const status = err?.http ?? 500;
+    const code = err?.code ?? 'create_failed';
+    console.error('[students.create] erro:', err?.message ?? err);
+    // Nota: se authUserId foi criado mas a transação falhou, o usuário fica órfão no Neon Auth.
+    // Aceitável neste MVP — admin pode limpar manualmente.
+    res.status(status).json({ code, message: err?.message ?? 'Falha ao criar aluno' });
+  }
+});
+
+studentsRouter.put('/:id', requireRole('school_admin', 'superadmin'), async (req, res) => {
+  const parsed = studentUpdateSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json({ code: 'validation', message: parsed.error.issues[0]?.message });
+  }
+  const s = parsed.data;
+  const updated = await withTenant(req.ctx!, async (c) => {
+    const { rows } = await c.query(
+      `update public.students set
+          name=coalesce($1,name),
+          cpf=coalesce($2,cpf),
+          birth_date=coalesce($3,birth_date),
+          father_name=coalesce($4,father_name),
+          mother_name=coalesce($5,mother_name),
+          class_id=coalesce($6,class_id),
+          plan_id=coalesce($7,plan_id),
+          monthly_fee=coalesce(
+            (select monthly_fee from public.school_plans where id=$7 and school_id=$9),
+            monthly_fee
+          )
+        where id=$8 and school_id=$9
+        returning id, name, registration_number, status, class_id, monthly_fee, plan_id`,
+      [s.name ?? null, s.cpf ?? null, s.birth_date ?? null, s.father_name ?? null,
+       s.mother_name ?? null, s.class_id ?? null, s.plan_id ?? null,
+       req.params.id, req.ctx!.schoolId],
+    );
+    return rows[0];
+  });
+  if (!updated) return res.status(404).json({ code: 'not_found' });
+  res.json({ ok: true, data: updated });
+});
+
+studentsRouter.delete('/:id', requireRole('school_admin', 'superadmin'), async (req, res) => {
+  await withTenant(req.ctx!, async (c) => {
+    await c.query(
+      `update public.students set status = 'inactive' where id = $1 and school_id = $2`,
+      [req.params.id, req.ctx!.schoolId],
+    );
+  });
+  res.status(204).end();
+});

@@ -1,0 +1,278 @@
+import { useEffect, useState } from 'react';
+import { useForm } from 'react-hook-form';
+import { Users, Plus, Trash2, Pencil, Mail, Phone, Loader2, Copy, Check } from 'lucide-react';
+import { PageHeader } from '@/components/ui/PageHeader';
+import { MetricCard } from '@/components/ui/MetricCard';
+import { StatusBadge } from '@/components/ui/StatusBadge';
+import { Modal } from '@/components/ui/Modal';
+import { EmptyState } from '@/components/ui/EmptyState';
+import { staffService, type NewStaff, type CreatedStaff } from '@/services/staff';
+import { STAFF_ROLE_LABELS, type Staff, type StaffRole } from '@/types/models';
+
+const ROLE_TONE: Record<StaffRole, 'primary' | 'success' | 'warning'> = {
+  school_admin: 'primary',
+  financial: 'success',
+  teacher: 'primary',
+  coordinator: 'warning',
+};
+
+interface FormFields extends NewStaff {}
+
+export function StaffPage() {
+  const [staff, setStaff] = useState<Staff[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [open, setOpen] = useState(false);
+  const [editing, setEditing] = useState<Staff | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [credentials, setCredentials] = useState<CreatedStaff | null>(null);
+  const [copied, setCopied] = useState(false);
+
+  const { register, handleSubmit, reset, watch, formState: { errors } } = useForm<FormFields>();
+  const watchRole = watch('role_type');
+
+  useEffect(() => { load(); }, []);
+
+  async function load() {
+    setLoading(true);
+    try { setStaff(await staffService.list()); } catch (e) { console.error(e); }
+    setLoading(false);
+  }
+
+  function openNew() {
+    setEditing(null);
+    reset({ name: '', cpf: '', email: '', phone: '', role_type: 'teacher', subject_teaches: '' });
+    setOpen(true);
+  }
+
+  function openEdit(s: Staff) {
+    setEditing(s);
+    reset({
+      name: s.name, cpf: s.cpf ?? '', email: s.email, phone: s.phone ?? '',
+      role_type: (s.role_type ?? s.role) as FormFields['role_type'],
+      subject_teaches: s.subject_teaches ?? '',
+    });
+    setOpen(true);
+  }
+
+  function closeModal() { reset(); setEditing(null); setOpen(false); }
+
+  async function onSubmit(data: FormFields) {
+    setSaving(true);
+    setError(null);
+    try {
+      if (editing) {
+        await staffService.update(editing.id, data);
+      } else {
+        const created = await staffService.create(data);
+        setCredentials(created);
+      }
+      await load();
+      closeModal();
+    } catch (e: any) {
+      setError(e?.message ?? 'Erro ao salvar funcionário');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function onRemove(id: string) {
+    await staffService.remove(id);
+    await load();
+  }
+
+  function copyCredentials() {
+    if (!credentials) return;
+    const text = `Funcionário: ${credentials.name}
+Matrícula: ${credentials.registration_number}
+Email (login): ${credentials.email}
+Senha inicial: ${credentials.initial_password ?? '(gerada pelo sistema)'}
+(troca obrigatória no 1º acesso)`;
+    navigator.clipboard.writeText(text);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  }
+
+  if (loading) {
+    return <div className="flex items-center justify-center py-20 text-ink-muted"><Loader2 className="animate-spin" size={24} /> <span className="ml-2">Carregando…</span></div>;
+  }
+
+  return (
+    <>
+      <PageHeader
+        title="Funcionários"
+        subtitle="Cadastre e gerencie a equipe da sua escola."
+        actions={
+          <button className="btn-primary" onClick={openNew}>
+            <Plus size={16} /> Novo funcionário
+          </button>
+        }
+      />
+
+      {error && <div className="mb-4 rounded-xl bg-danger-soft px-3 py-2 text-sm text-danger">{error}</div>}
+
+      <div className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-3">
+        <MetricCard label="Total" value={staff.length} icon={Users} tone="primary" />
+        <MetricCard label="Professores" value={staff.filter((s) => (s.role_type ?? s.role) === 'teacher').length} icon={Users} tone="primary" />
+        <MetricCard label="Ativos" value={staff.filter((s) => s.status === 'active').length} icon={Users} tone="success" />
+      </div>
+
+      <div className="card overflow-hidden">
+        {staff.length === 0 ? (
+          <EmptyState
+            icon={Users}
+            title="Nenhum funcionário cadastrado"
+            action={<button className="btn-primary" onClick={openNew}><Plus size={16} /> Novo funcionário</button>}
+          />
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-border text-left text-xs font-semibold uppercase text-ink-subtle">
+                  <th className="px-4 py-3">Nome</th>
+                  <th className="px-4 py-3">Matrícula</th>
+                  <th className="px-4 py-3">Contato</th>
+                  <th className="px-4 py-3">Perfil</th>
+                  <th className="px-4 py-3">Leciona</th>
+                  <th className="px-4 py-3">Status</th>
+                  <th className="px-4 py-3 text-right">Ações</th>
+                </tr>
+              </thead>
+              <tbody>
+                {staff.map((s) => {
+                  const role = (s.role_type ?? s.role) as StaffRole;
+                  return (
+                    <tr key={s.id} className="border-b border-border last:border-0 hover:bg-canvas">
+                      <td className="px-4 py-3">
+                        <div className="flex items-center gap-3">
+                          <div className="flex h-9 w-9 items-center justify-center rounded-full bg-primary-soft text-xs font-bold text-primary">
+                            {s.name.split(' ').slice(0, 2).map((n) => n[0]).join('')}
+                          </div>
+                          <span className="font-medium text-ink">{s.name}</span>
+                        </div>
+                      </td>
+                      <td className="px-4 py-3 font-mono text-xs text-ink-muted">{s.registration_number ?? '—'}</td>
+                      <td className="px-4 py-3 text-ink-muted">
+                        <div className="flex items-center gap-1.5"><Mail size={13} /> {s.email}</div>
+                        {s.phone && <div className="flex items-center gap-1.5 text-xs"><Phone size={12} /> {s.phone}</div>}
+                      </td>
+                      <td className="px-4 py-3">
+                        <StatusBadge tone={ROLE_TONE[role]}>{STAFF_ROLE_LABELS[role]}</StatusBadge>
+                      </td>
+                      <td className="px-4 py-3 text-ink-muted text-xs">{s.subject_teaches ?? '—'}</td>
+                      <td className="px-4 py-3">
+                        <StatusBadge tone={s.status === 'active' ? 'success' : 'neutral'}>
+                          {s.status === 'active' ? 'Ativo' : 'Inativo'}
+                        </StatusBadge>
+                      </td>
+                      <td className="px-4 py-3 text-right">
+                        <div className="inline-flex gap-1">
+                          <button className="rounded-lg p-2 text-ink-muted hover:bg-primary-soft hover:text-primary" onClick={() => openEdit(s)} title="Editar">
+                            <Pencil size={15} />
+                          </button>
+                          <button className="rounded-lg p-2 text-ink-muted hover:bg-danger-soft hover:text-danger" onClick={() => onRemove(s.id)} title="Remover">
+                            <Trash2 size={15} />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+
+      <Modal
+        open={open}
+        title={editing ? 'Editar funcionário' : 'Novo funcionário'}
+        onClose={closeModal}
+        footer={
+          <>
+            <button className="btn-outline" onClick={closeModal}>Cancelar</button>
+            <button className="btn-primary" form="staff-form" type="submit" disabled={saving}>
+              {saving && <Loader2 size={16} className="animate-spin" />} {editing ? 'Salvar' : 'Cadastrar'}
+            </button>
+          </>
+        }
+      >
+        <form id="staff-form" className="space-y-4" onSubmit={handleSubmit(onSubmit)}>
+          <div>
+            <label className="label">Nome completo *</label>
+            <input className="input" {...register('name', { required: 'Informe o nome' })} />
+            {errors.name && <p className="mt-1 text-xs text-danger">{errors.name.message}</p>}
+          </div>
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <div>
+              <label className="label">CPF *</label>
+              <input className="input" placeholder="000.000.000-00" {...register('cpf', { required: 'Informe o CPF' })} />
+              {errors.cpf && <p className="mt-1 text-xs text-danger">{errors.cpf.message}</p>}
+            </div>
+            <div>
+              <label className="label">Telefone</label>
+              <input className="input" placeholder="(00) 00000-0000" {...register('phone')} />
+            </div>
+          </div>
+          <div>
+            <label className="label">E-mail *</label>
+            <input type="email" className="input" {...register('email', { required: 'Informe o e-mail' })} />
+            {errors.email && <p className="mt-1 text-xs text-danger">{errors.email.message}</p>}
+          </div>
+          <div>
+            <label className="label">Perfil *</label>
+            <select className="input" {...register('role_type', { required: true })}>
+              <option value="school_admin">Gestor/Admin</option>
+              <option value="financial">Financeiro</option>
+              <option value="teacher">Professor</option>
+              <option value="coordinator">Coordenação</option>
+            </select>
+          </div>
+          {watchRole === 'teacher' && (
+            <div>
+              <label className="label">Matéria / Ano que leciona</label>
+              <input className="input" placeholder="Ex.: Matemática / 5º ano, ou Maternal" {...register('subject_teaches')} />
+              <p className="mt-1 text-xs text-ink-muted">
+                Para escolas infantis use o ano (ex.: "Maternal", "Pré I"). Para fundamental/médio use a matéria.
+              </p>
+            </div>
+          )}
+          {!editing && (
+            <div className="rounded-xl border border-border bg-canvas p-3 text-xs text-ink-muted">
+              Uma conta de acesso será criada automaticamente com uma senha temporária gerada pelo sistema. No primeiro acesso o sistema obrigará a troca por uma senha intransferível.
+            </div>
+          )}
+        </form>
+      </Modal>
+
+      <Modal
+        open={!!credentials}
+        title="Funcionário cadastrado com sucesso!"
+        onClose={() => setCredentials(null)}
+        footer={
+          <>
+            <button className="btn-outline" onClick={copyCredentials}>
+              {copied ? <Check size={16} /> : <Copy size={16} />} {copied ? 'Copiado!' : 'Copiar dados'}
+            </button>
+            <button className="btn-primary" onClick={() => setCredentials(null)}>Fechar</button>
+          </>
+        }
+      >
+        {credentials && (
+          <div className="space-y-3 text-sm">
+            <div className="rounded-xl bg-success-soft p-4 text-success">
+              <p className="font-semibold">Conta criada.</p>
+              <p className="mt-1 text-xs">Anote ou envie estas credenciais ao funcionário.</p>
+            </div>
+            <div className="space-y-2 rounded-xl border border-border p-4">
+              <div className="flex justify-between"><span className="text-ink-muted">Funcionário:</span><span className="font-medium text-ink">{credentials.name}</span></div>
+              <div className="flex justify-between"><span className="text-ink-muted">Matrícula:</span><span className="font-mono font-bold text-primary">{credentials.registration_number}</span></div>
+              <div className="flex justify-between"><span className="text-ink-muted">Email:</span><span className="font-medium text-ink">{credentials.email}</span></div>
+              <div className="flex justify-between"><span className="text-ink-muted">Senha inicial:</span><span className="font-mono font-bold text-ink">{credentials.login_password_hint}</span></div>
+            </div>
+          </div>
+        )}
+      </Modal>
+    </>
+  );
+}
