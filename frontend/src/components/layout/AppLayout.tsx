@@ -25,6 +25,7 @@ export function AppLayout() {
         <Topbar
           userName={me?.name ?? '—'}
           schoolName={me?.school_name ?? '—'}
+          role={me?.role}
           onMenuClick={() => setSidebarOpen(true)}
           onLogout={handleLogout}
         />
