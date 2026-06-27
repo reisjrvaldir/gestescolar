@@ -4,13 +4,23 @@ import { Search, Bell, Menu, ChevronDown, LogOut } from 'lucide-react';
 interface Props {
   userName: string;
   schoolName: string;
+  role?: string;
   onMenuClick: () => void;
   onLogout?: () => void;
 }
 
-export function Topbar({ userName, schoolName, onMenuClick, onLogout }: Props) {
+const ROLE_LABELS: Record<string, string> = {
+  school_admin: 'Diretor(a) / Gestor(a)',
+  financial: 'Financeiro',
+  teacher: 'Professor(a)',
+  guardian: 'Responsável',
+  superadmin: 'Administrador',
+};
+
+export function Topbar({ userName, schoolName, role, onMenuClick, onLogout }: Props) {
   const [menuOpen, setMenuOpen] = useState(false);
   const initials = userName.split(' ').slice(0, 2).map((n) => n[0]).join('').toUpperCase();
+  const roleLabel = role ? ROLE_LABELS[role] ?? role : '';
 
   return (
     <header className="sticky top-0 z-20 flex h-16 items-center gap-3 border-b border-border bg-surface/80 px-4 backdrop-blur lg:px-6">
@@ -46,7 +56,10 @@ export function Topbar({ userName, schoolName, onMenuClick, onLogout }: Props) {
             <div className="flex h-9 w-9 items-center justify-center rounded-full bg-primary-soft text-sm font-bold text-primary">
               {initials || '?'}
             </div>
-            <span className="hidden text-sm font-medium text-ink sm:block">{userName}</span>
+            <div className="hidden text-left sm:block">
+              <span className="block text-sm font-semibold leading-tight text-ink">{userName}</span>
+              {roleLabel && <span className="block text-[11px] leading-tight text-ink-subtle">{roleLabel}</span>}
+            </div>
             <ChevronDown size={15} className="hidden text-ink-subtle sm:block" />
           </button>
           {menuOpen && (

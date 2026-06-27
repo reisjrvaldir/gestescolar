@@ -60,8 +60,10 @@ dashboardRouter.get('/stats', async (req, res) => {
     }
 
     // ---------- Dashboard padrão (admin/financial/teacher) ----------
-    const [students, classes, teachers, revenue, overdue, attendanceToday, trialInfo] =
-      await Promise.all([
+    const [
+      students, classes, teachers, revenue, prevRevenue, overdue, attendanceToday,
+      expensesMonth, revenueSeries, upcomingCharges, recentActivities, pixSummary, trialInfo,
+    ] = await Promise.all([
         c.query(
           `select count(*)::int as total from public.students where school_id=$1 and status='active'`,
           [schoolId],
@@ -75,14 +77,23 @@ dashboardRouter.get('/stats', async (req, res) => {
           [schoolId],
         ),
         c.query(
-          `select coalesce(sum(amount),0)::numeric as total
+          `select coalesce(sum(amount),0)::float8 as total
              from public.invoices
             where school_id=$1 and status='paid'
               and paid_at >= date_trunc('month', now())`,
           [schoolId],
         ),
+        // Receita do mês anterior — para calcular variação (%)
         c.query(
-          `select coalesce(sum(amount),0)::numeric as total, count(*)::int as count
+          `select coalesce(sum(amount),0)::float8 as total
+             from public.invoices
+            where school_id=$1 and status='paid'
+              and paid_at >= date_trunc('month', now()) - interval '1 month'
+              and paid_at <  date_trunc('month', now())`,
+          [schoolId],
+        ),
+        c.query(
+          `select coalesce(sum(amount),0)::float8 as total, count(*)::int as count
              from public.invoices
             where school_id=$1 and status='overdue'`,
           [schoolId],
@@ -91,6 +102,75 @@ dashboardRouter.get('/stats', async (req, res) => {
           `select count(distinct class_id)::int as total
              from public.attendance
             where school_id=$1 and date = current_date`,
+          [schoolId],
+        ),
+        // Despesas pagas no mês
+        c.query(
+          `select coalesce(sum(amount),0)::float8 as total
+             from public.expenses
+            where school_id=$1 and status='paid'
+              and due_date >= date_trunc('month', now())`,
+          [schoolId],
+        ),
+        // Série de receita dos últimos 6 meses
+        c.query(
+          `select d.month as month,
+                  coalesce(sum(i.amount),0)::float8 as total
+             from generate_series(
+                    date_trunc('month', now()) - interval '5 months',
+                    date_trunc('month', now()),
+                    interval '1 month'
+                  ) as d(month)
+             left join public.invoices i
+               on i.school_id=$1 and i.status='paid'
+              and date_trunc('month', i.paid_at) = d.month
+            group by d.month
+            order by d.month`,
+          [schoolId],
+        ),
+        // Próximas cobranças (pendentes/vencidas)
+        c.query(
+          `select i.id, i.amount::float8 as amount, i.due_date, i.status,
+                  s.name as student_name, cl.name as class_name
+             from public.invoices i
+             left join public.students s on s.id = i.student_id
+             left join public.classes cl on cl.id = s.class_id
+            where i.school_id=$1 and i.status in ('pending','overdue')
+            order by i.due_date asc nulls last
+            limit 5`,
+          [schoolId],
+        ),
+        // Atividades recentes (eventos reais: pagamentos, novos alunos, cobranças)
+        c.query(
+          `select * from (
+             (select 'payment' as type, 'Pagamento recebido' as title,
+                     s.name as subtitle, i.paid_at as at
+                from public.invoices i left join public.students s on s.id=i.student_id
+               where i.school_id=$1 and i.status='paid' and i.paid_at is not null
+               order by i.paid_at desc limit 5)
+             union all
+             (select 'student', 'Novo aluno cadastrado', s.name, s.created_at
+                from public.students s where s.school_id=$1
+               order by s.created_at desc limit 5)
+             union all
+             (select 'invoice', 'Cobrança gerada', s.name, i.created_at
+                from public.invoices i left join public.students s on s.id=i.student_id
+               where i.school_id=$1
+               order by i.created_at desc limit 5)
+           ) t
+           order by at desc nulls last
+           limit 6`,
+          [schoolId],
+        ),
+        // Resumo PIX do mês
+        c.query(
+          `select count(*)::int as count,
+                  coalesce(sum(gross_amount),0)::float8 as total,
+                  coalesce(avg(gross_amount),0)::float8 as avg_ticket,
+                  coalesce(avg(case when status='paid' then 1.0 else 0 end),0)::float8 as success_rate
+             from public.payments
+            where school_id=$1 and payment_method='pix'
+              and created_at >= date_trunc('month', now())`,
           [schoolId],
         ),
         c.query(
@@ -106,15 +186,49 @@ dashboardRouter.get('/stats', async (req, res) => {
       trialDaysLeft = Math.max(0, Math.ceil(diff / 86_400_000));
     }
 
+    const revenueMonth = Number(revenue.rows[0].total);
+    const prevRevenueMonth = Number(prevRevenue.rows[0].total);
+    const revenueDelta = prevRevenueMonth > 0
+      ? ((revenueMonth - prevRevenueMonth) / prevRevenueMonth) * 100
+      : null;
+    const expenses = Number(expensesMonth.rows[0].total);
+
     return {
       role,
       students: students.rows[0].total,
       classes: classes.rows[0].total,
       teachers: teachers.rows[0].total,
-      revenue_month: Number(revenue.rows[0].total),
+      revenue_month: revenueMonth,
+      revenue_delta_pct: revenueDelta,
       overdue_amount: Number(overdue.rows[0].total),
       overdue_count: overdue.rows[0].count,
       attendance_today: attendanceToday.rows[0].total,
+      expenses_month: expenses,
+      balance_month: revenueMonth - expenses,
+      revenue_series: revenueSeries.rows.map((r: any) => ({
+        month: new Date(r.month).toLocaleDateString('pt-BR', { month: 'short' }).replace('.', ''),
+        total: Number(r.total),
+      })),
+      upcoming_charges: upcomingCharges.rows.map((r: any) => ({
+        id: r.id,
+        student_name: r.student_name,
+        class_name: r.class_name,
+        amount: Number(r.amount),
+        due_date: r.due_date,
+        status: r.status,
+      })),
+      recent_activities: recentActivities.rows.map((r: any) => ({
+        type: r.type,
+        title: r.title,
+        subtitle: r.subtitle,
+        at: r.at,
+      })),
+      pix_summary: {
+        count: pixSummary.rows[0].count,
+        total: Number(pixSummary.rows[0].total),
+        avg_ticket: Number(pixSummary.rows[0].avg_ticket),
+        success_rate: Number(pixSummary.rows[0].success_rate),
+      },
       subscription_status: school.subscription_status ?? null,
       trial_days_left: trialDaysLeft,
     };
