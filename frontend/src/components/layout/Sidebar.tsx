@@ -9,7 +9,7 @@ interface Props {
 }
 
 export function Sidebar({ role, open, onClose }: Props) {
-  const items = MENUS[role] ?? [];
+  const sections = MENUS[role] ?? [];
 
   return (
     <>
@@ -40,23 +40,32 @@ export function Sidebar({ role, open, onClose }: Props) {
         </div>
 
         {/* Nav */}
-        <nav className="flex-1 space-y-1 overflow-y-auto px-3 py-2">
-          {items.map((item) => (
-            <NavLink
-              key={item.to}
-              to={item.to}
-              end={item.to === '/app'}
-              onClick={onClose}
-              className={({ isActive }) =>
-                `flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-colors
-                ${isActive
-                  ? 'bg-primary-soft text-primary'
-                  : 'text-ink-muted hover:bg-canvas hover:text-ink'}`
-              }
-            >
-              <item.icon size={18} />
-              {item.label}
-            </NavLink>
+        <nav className="flex-1 space-y-4 overflow-y-auto px-3 py-2">
+          {sections.map((section, i) => (
+            <div key={section.title ?? `sec-${i}`} className="space-y-1">
+              {section.title && (
+                <p className="px-3 pb-1 pt-1 text-[11px] font-bold uppercase tracking-wider text-ink-subtle">
+                  {section.title}
+                </p>
+              )}
+              {section.items.map((item) => (
+                <NavLink
+                  key={item.to}
+                  to={item.to}
+                  end={item.to === '/app'}
+                  onClick={onClose}
+                  className={({ isActive }) =>
+                    `flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-colors
+                    ${isActive
+                      ? 'bg-primary-soft text-primary'
+                      : 'text-ink-muted hover:bg-canvas hover:text-ink'}`
+                  }
+                >
+                  <item.icon size={18} />
+                  {item.label}
+                </NavLink>
+              ))}
+            </div>
           ))}
         </nav>
       </aside>

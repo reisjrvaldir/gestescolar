@@ -1,8 +1,8 @@
 import {
   LayoutDashboard, GraduationCap, Users, School2, Star, ClipboardCheck,
-  Fingerprint, CalendarClock, CalendarDays, Wallet, ArrowUpRight, CreditCard,
-  PiggyBank, Settings, Headset, ShieldCheck, Crown, Tag, Mail,
-  CalendarOff, FolderOpen,
+  Fingerprint, CalendarClock, CalendarDays, Wallet, CreditCard,
+  Settings, Headset, ShieldCheck, Crown, Tag, Mail,
+  CalendarOff, FolderOpen, PiggyBank, ArrowUpRight,
   type LucideIcon,
 } from 'lucide-react';
 
@@ -14,61 +14,119 @@ export interface MenuItem {
   icon: LucideIcon;
 }
 
+export interface MenuSection {
+  title?: string;
+  items: MenuItem[];
+}
+
 const LGPD: MenuItem = { to: '/app/lgpd', label: 'Meus Dados (LGPD)', icon: ShieldCheck };
 const TICKETS: MenuItem = { to: '/app/tickets', label: 'Chamados', icon: Headset };
 
-export const MENUS: Record<Role, MenuItem[]> = {
+export const MENUS: Record<Role, MenuSection[]> = {
   school_admin: [
-    { to: '/app', label: 'Dashboard', icon: LayoutDashboard },
-    { to: '/app/students', label: 'Alunos', icon: GraduationCap },
-    { to: '/app/staff', label: 'Funcionários', icon: Users },
-    { to: '/app/classes', label: 'Turmas', icon: School2 },
-    { to: '/app/grades', label: 'Avaliações', icon: Star },
-    { to: '/app/attendance', label: 'Chamada', icon: ClipboardCheck },
-    { to: '/app/messages', label: 'Mensagens', icon: Mail },
-    { to: '/app/timeclock', label: 'Ponto', icon: Fingerprint },
-    { to: '/app/leave-requests', label: 'Folgas e Férias', icon: CalendarOff },
-    { to: '/app/journeys', label: 'Jornadas', icon: CalendarClock },
-    { to: '/app/calendar', label: 'Ano Letivo', icon: CalendarDays },
-    { to: '/app/finance', label: 'Financeiro', icon: Wallet },
-    { to: '/app/settings', label: 'Configurações', icon: Settings },
-    TICKETS, LGPD,
+    { items: [{ to: '/app', label: 'Dashboard', icon: LayoutDashboard }] },
+    {
+      title: 'Gestão',
+      items: [
+        { to: '/app/students', label: 'Alunos', icon: GraduationCap },
+        { to: '/app/staff', label: 'Funcionários', icon: Users },
+        { to: '/app/classes', label: 'Turmas', icon: School2 },
+      ],
+    },
+    {
+      title: 'Acadêmico',
+      items: [
+        { to: '/app/calendar', label: 'Ano Letivo', icon: CalendarDays },
+        { to: '/app/grades', label: 'Avaliações', icon: Star },
+        { to: '/app/attendance', label: 'Chamada', icon: ClipboardCheck },
+      ],
+    },
+    {
+      title: 'RH',
+      items: [
+        { to: '/app/journeys', label: 'Jornadas', icon: CalendarClock },
+        { to: '/app/timeclock', label: 'Ponto', icon: Fingerprint },
+        { to: '/app/leave-requests', label: 'Folgas e Férias', icon: CalendarOff },
+      ],
+    },
+    {
+      title: 'Financeiro',
+      items: [
+        { to: '/app/finance', label: 'Financeiro', icon: Wallet },
+        { to: '/app/finance/expenses', label: 'Contas a Pagar', icon: CreditCard },
+      ],
+    },
+    {
+      items: [
+        { to: '/app/messages', label: 'Mensagens', icon: Mail },
+        TICKETS,
+        { to: '/app/settings', label: 'Configurações', icon: Settings },
+        LGPD,
+      ],
+    },
   ],
   financial: [
-    { to: '/app', label: 'Dashboard', icon: LayoutDashboard },
-    { to: '/app/finance/entries', label: 'Entradas', icon: ArrowUpRight },
-    { to: '/app/finance/expenses', label: 'Contas a Pagar', icon: CreditCard },
-    { to: '/app/finance/balance', label: 'Saldo / Resgate', icon: PiggyBank },
-    TICKETS, LGPD,
+    { items: [{ to: '/app', label: 'Dashboard', icon: LayoutDashboard }] },
+    {
+      title: 'Financeiro',
+      items: [
+        { to: '/app/finance/entries', label: 'Entradas', icon: ArrowUpRight },
+        { to: '/app/finance/expenses', label: 'Contas a Pagar', icon: CreditCard },
+        { to: '/app/finance/balance', label: 'Saldo / Resgate', icon: PiggyBank },
+      ],
+    },
+    { items: [TICKETS, LGPD] },
   ],
   teacher: [
-    { to: '/app', label: 'Dashboard', icon: LayoutDashboard },
-    { to: '/app/attendance', label: 'Chamada', icon: ClipboardCheck },
-    { to: '/app/grades', label: 'Avaliações', icon: Star },
-    { to: '/app/calendar', label: 'Calendário', icon: CalendarDays },
-    { to: '/app/messages', label: 'Mensagens', icon: Mail },
-    { to: '/app/timeclock', label: 'Meu Ponto', icon: Fingerprint },
-    { to: '/app/leave-requests', label: 'Folgas e Férias', icon: CalendarOff },
-    { to: '/app/documents', label: 'Meus Documentos', icon: FolderOpen },
-    LGPD,
+    { items: [{ to: '/app', label: 'Dashboard', icon: LayoutDashboard }] },
+    {
+      title: 'Acadêmico',
+      items: [
+        { to: '/app/attendance', label: 'Chamada', icon: ClipboardCheck },
+        { to: '/app/grades', label: 'Avaliações', icon: Star },
+        { to: '/app/calendar', label: 'Calendário', icon: CalendarDays },
+      ],
+    },
+    {
+      title: 'Minha Área',
+      items: [
+        { to: '/app/timeclock', label: 'Meu Ponto', icon: Fingerprint },
+        { to: '/app/leave-requests', label: 'Folgas e Férias', icon: CalendarOff },
+        { to: '/app/documents', label: 'Meus Documentos', icon: FolderOpen },
+      ],
+    },
+    { items: [{ to: '/app/messages', label: 'Mensagens', icon: Mail }, LGPD] },
   ],
   guardian: [
-    { to: '/app', label: 'Início', icon: LayoutDashboard },
-    { to: '/app/attendance', label: 'Presenças', icon: ClipboardCheck },
-    { to: '/app/grades', label: 'Boletim', icon: Star },
-    { to: '/app/calendar', label: 'Calendário', icon: CalendarDays },
-    { to: '/app/messages', label: 'Mensagens', icon: Mail },
-    TICKETS, LGPD,
+    { items: [{ to: '/app', label: 'Início', icon: LayoutDashboard }] },
+    {
+      title: 'Acadêmico',
+      items: [
+        { to: '/app/attendance', label: 'Presenças', icon: ClipboardCheck },
+        { to: '/app/grades', label: 'Boletim', icon: Star },
+        { to: '/app/calendar', label: 'Calendário', icon: CalendarDays },
+      ],
+    },
+    { items: [{ to: '/app/messages', label: 'Mensagens', icon: Mail }, TICKETS, LGPD] },
   ],
   superadmin: [
-    { to: '/app', label: 'Dashboard', icon: Crown },
-    { to: '/app/schools', label: 'Escolas', icon: School2 },
-    { to: '/app/students', label: 'Alunos Global', icon: GraduationCap },
-    { to: '/app/users', label: 'Usuários', icon: Users },
-    { to: '/app/saas-payments', label: 'Pagamentos SaaS', icon: CreditCard },
-    { to: '/app/email-config', label: 'Config. E-mail', icon: Mail },
-    { to: '/app/coupons', label: 'Cupons', icon: Tag },
-    TICKETS,
-    { to: '/app/profile', label: 'Meu Perfil', icon: Settings },
+    { items: [{ to: '/app', label: 'Dashboard', icon: Crown }] },
+    {
+      title: 'Gestão',
+      items: [
+        { to: '/app/schools', label: 'Escolas', icon: School2 },
+        { to: '/app/students', label: 'Alunos Global', icon: GraduationCap },
+        { to: '/app/users', label: 'Usuários', icon: Users },
+      ],
+    },
+    {
+      title: 'SaaS',
+      items: [
+        { to: '/app/saas-payments', label: 'Pagamentos SaaS', icon: CreditCard },
+        { to: '/app/email-config', label: 'Config. E-mail', icon: Mail },
+        { to: '/app/coupons', label: 'Cupons', icon: Tag },
+      ],
+    },
+    { items: [TICKETS, { to: '/app/profile', label: 'Meu Perfil', icon: Settings }] },
   ],
 };
