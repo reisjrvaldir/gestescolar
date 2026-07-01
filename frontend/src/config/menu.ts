@@ -1,6 +1,6 @@
 import {
   LayoutDashboard, GraduationCap, Users, School2, Star, ClipboardCheck,
-  Fingerprint, CalendarClock, CalendarDays, Wallet, CreditCard,
+  Fingerprint, CalendarClock, CalendarDays, CreditCard,
   Settings, Headset, ShieldCheck, Crown, Tag, Mail,
   CalendarOff, FolderOpen, PiggyBank, ArrowUpRight,
   type LucideIcon,
@@ -42,18 +42,11 @@ export const MENUS: Record<Role, MenuSection[]> = {
       ],
     },
     {
-      title: 'RH',
+      title: 'Recursos Humanos',
       items: [
         { to: '/app/journeys', label: 'Jornadas', icon: CalendarClock },
         { to: '/app/timeclock', label: 'Ponto', icon: Fingerprint },
         { to: '/app/leave-requests', label: 'Folgas e Férias', icon: CalendarOff },
-      ],
-    },
-    {
-      title: 'Financeiro',
-      items: [
-        { to: '/app/finance', label: 'Financeiro', icon: Wallet },
-        { to: '/app/finance/expenses', label: 'Contas a Pagar', icon: CreditCard },
       ],
     },
     {
