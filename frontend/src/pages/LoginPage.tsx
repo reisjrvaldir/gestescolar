@@ -20,10 +20,33 @@ export function LoginPage() {
     e.preventDefault();
     setError(null);
     setLoading(true);
-    const { error } = await signIn.email({ email, password });
-    setLoading(false);
-    if (error) return setError(error.message ?? 'Falha ao entrar');
-    navigate('/app');
+    try {
+      const id = email.trim();
+      let loginEmail = id;
+
+      // Login por matrícula: resolve o e-mail da conta no backend.
+      if (!id.includes('@')) {
+        const API = (import.meta.env.VITE_API_URL as string | undefined) ?? '/api';
+        const r = await fetch(`${API}/public/login-email?matricula=${encodeURIComponent(id)}`);
+        if (!r.ok) {
+          setLoading(false);
+          return setError('Matrícula não encontrada. Verifique com a secretaria.');
+        }
+        loginEmail = (await r.json()).data.email;
+      }
+
+      let res = await signIn.email({ email: loginEmail, password });
+      // Senha inicial de 6 dígitos: reconstrói a versão de 8 chars armazenada no provedor.
+      if (res.error && /^\d{6}$/.test(password)) {
+        res = await signIn.email({ email: loginEmail, password: (password + password).slice(0, 8) });
+      }
+      setLoading(false);
+      if (res.error) return setError(res.error.message ?? 'Falha ao entrar');
+      navigate('/app');
+    } catch {
+      setLoading(false);
+      setError('Falha ao entrar. Verifique os dados e tente novamente.');
+    }
   }
 
   async function handleSignup(e: React.FormEvent) {
@@ -76,12 +99,13 @@ export function LoginPage() {
           {tab === 'login' ? (
             <form className="space-y-4" onSubmit={handleLogin}>
               <div>
-                <label className="label">E-mail</label>
-                <input type="email" className="input" value={email} onChange={(e) => setEmail(e.target.value)} required />
+                <label className="label">E-mail ou Matrícula</label>
+                <input type="text" className="input" placeholder="seu@email.com ou nº de matrícula" value={email} onChange={(e) => setEmail(e.target.value)} required />
               </div>
               <div>
                 <label className="label">Senha</label>
                 <input type="password" className="input" value={password} onChange={(e) => setPassword(e.target.value)} required />
+                <p className="mt-1 text-xs text-ink-subtle">1º acesso: senha = 6 primeiros dígitos do CPF.</p>
               </div>
               <button className="btn-primary w-full justify-center" disabled={loading}>
                 {loading && <Loader2 size={16} className="animate-spin" />} Entrar na conta

@@ -84,10 +84,10 @@ export function StaffPage() {
   function copyCredentials() {
     if (!credentials) return;
     const text = `Funcionário: ${credentials.name}
-Matrícula: ${credentials.registration_number}
-Email (login): ${credentials.email}
-Senha inicial: ${credentials.initial_password ?? '(gerada pelo sistema)'}
-(troca obrigatória no 1º acesso)`;
+Login (matrícula): ${credentials.registration_number}
+Senha inicial: ${credentials.initial_password ?? '(6 primeiros dígitos do CPF)'}
+E-mail: ${credentials.email}
+(troca de senha obrigatória no 1º acesso)`;
     navigator.clipboard.writeText(text);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
@@ -266,9 +266,10 @@ Senha inicial: ${credentials.initial_password ?? '(gerada pelo sistema)'}
             </div>
             <div className="space-y-2 rounded-xl border border-border p-4">
               <div className="flex justify-between"><span className="text-ink-muted">Funcionário:</span><span className="font-medium text-ink">{credentials.name}</span></div>
-              <div className="flex justify-between"><span className="text-ink-muted">Matrícula:</span><span className="font-mono font-bold text-primary">{credentials.registration_number}</span></div>
-              <div className="flex justify-between"><span className="text-ink-muted">Email:</span><span className="font-medium text-ink">{credentials.email}</span></div>
-              <div className="flex justify-between"><span className="text-ink-muted">Senha inicial:</span><span className="font-mono font-bold text-ink">{credentials.login_password_hint}</span></div>
+              <div className="flex justify-between"><span className="text-ink-muted">Login (matrícula):</span><span className="font-mono font-bold text-primary">{credentials.registration_number}</span></div>
+              <div className="flex justify-between"><span className="text-ink-muted">Senha inicial:</span><span className="font-mono font-bold text-ink">{credentials.initial_password ?? '—'}</span></div>
+              <div className="flex justify-between"><span className="text-ink-muted">E-mail:</span><span className="font-medium text-ink">{credentials.email}</span></div>
+              <p className="pt-1 text-xs text-ink-subtle">Senha = 6 primeiros dígitos do CPF. Troca obrigatória no 1º acesso.</p>
             </div>
           </div>
         )}
