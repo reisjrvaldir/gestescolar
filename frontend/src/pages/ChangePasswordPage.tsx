@@ -36,10 +36,18 @@ export function ChangePasswordPage() {
     }
     setLoading(true);
     try {
-      const { error: bErr } = await changePassword({
+      let { error: bErr } = await changePassword({
         currentPassword: data.current,
         newPassword: data.next,
       });
+      // Senha inicial de 6 dígitos é armazenada expandida para 8 chars no provedor;
+      // refaz o mesmo cálculo se a tentativa direta falhar.
+      if (bErr && /^\d{6}$/.test(data.current)) {
+        ({ error: bErr } = await changePassword({
+          currentPassword: (data.current + data.current).slice(0, 8),
+          newPassword: data.next,
+        }));
+      }
       if (bErr) {
         setError(bErr.message ?? 'Falha ao trocar a senha. Verifique a senha atual.');
         setLoading(false);
