@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { withTenant } from '../../db/withTenant';
 import { requireAuth, requireRole } from '../../middleware/auth';
 import { signUpGuardian } from '../../lib/authSignup';
-import { cpfSchema, dateSchema, generateSecurePassword } from '../../lib/validation';
+import { cpfSchema, dateSchema, initialPassword, toStoredPassword } from '../../lib/validation';
 
 export const studentsRouter = Router();
 
@@ -89,12 +89,13 @@ studentsRouter.post('/', requireRole('school_admin', 'superadmin'), async (req, 
       const matRow = await c.query(`select public.next_matricula() as matricula`);
       const matricula: string = matRow.rows[0].matricula;
 
-      const password = generateSecurePassword();
+      // Login = matrícula do aluno; senha visível = 6 primeiros dígitos do CPF do responsável.
+      const visiblePassword = initialPassword(s.guardian.cpf);
 
-      // 4) Criar usuário no Neon Auth (público — sign-up)
+      // 4) Criar usuário no Neon Auth (público — sign-up); guarda versão de 8 chars.
       const authResult = await signUpGuardian({
         email: s.guardian.email,
-        password,
+        password: toStoredPassword(visiblePassword),
         name: s.guardian.name,
       });
       authUserId = authResult.authUserId;
@@ -133,8 +134,9 @@ studentsRouter.post('/', requireRole('school_admin', 'superadmin'), async (req, 
         ...studentRow.rows[0],
         monthly_fee: monthlyFee,
         guardian_email: s.guardian.email,
-        initial_password: password,
-        login_password_hint: 'Senha temporária gerada — troca obrigatória no 1º acesso',
+        login_matricula: matricula,
+        initial_password: visiblePassword,
+        login_password_hint: 'Login: matrícula do aluno • Senha inicial: 6 primeiros dígitos do CPF do responsável. Troca obrigatória no 1º acesso.',
       };
     });
     res.status(201).json({ ok: true, data: result });

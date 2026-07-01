@@ -34,3 +34,22 @@ export const optionalDateSchema = dateSchema.optional();
 export function generateSecurePassword(): string {
   return randomBytes(12).toString('base64url');
 }
+
+/**
+ * Senha inicial que o usuário digita: os 6 primeiros dígitos do CPF.
+ * Login é feito pela matrícula. Troca é obrigatória no 1º acesso
+ * (password_change_required = true).
+ */
+export function initialPassword(cpf: string): string {
+  return cpfDigits(cpf).slice(0, 6);
+}
+
+/**
+ * O provedor de auth (Neon/Better Auth) exige senha com no mínimo 8 caracteres.
+ * A senha de 6 dígitos é completada de forma determinística e reconstruível
+ * (6 dígitos + os 2 primeiros repetidos = 8), para o login refazer o cálculo
+ * a partir do que o usuário digitou. Ver mesma lógica no frontend (authClient).
+ */
+export function toStoredPassword(visible6: string): string {
+  return visible6.length >= 8 ? visible6 : (visible6 + visible6).slice(0, 8);
+}

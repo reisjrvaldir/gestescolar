@@ -26,6 +26,7 @@ import { leaveRequestsRouter } from './routes/leaveRequests';
 import { staffDocumentsRouter } from './routes/staffDocuments';
 import { cronRouter } from './routes/cron';
 import { webhooksRouter } from './routes/webhooks';
+import { publicAuthRouter } from './routes/publicAuth';
 
 export const app = express();
 
@@ -60,6 +61,7 @@ app.get('/api/health', (_req, res) => {
   res.json({ ok: true, service: 'gestescolar-backend', dbConfigured: isDbConfigured });
 });
 
+app.use('/api/public', publicAuthRouter);
 app.use('/api/plans', plansRouter);
 app.use('/api/students', studentsRouter);
 app.use('/api/staff', staffRouter);
