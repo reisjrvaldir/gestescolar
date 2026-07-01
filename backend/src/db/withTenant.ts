@@ -6,6 +6,8 @@ export interface TenantContext {
   profileId: string;
   schoolId: string | null;
   role: string;
+  subscriptionStatus?: string | null;
+  trialEndsAt?: string | null;
 }
 
 /**

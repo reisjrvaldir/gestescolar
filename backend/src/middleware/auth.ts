@@ -62,16 +62,42 @@ async function verifyAuthToken(req: Request): Promise<AuthIdentity | null> {
   return { authUserId, email };
 }
 
-/** Resolve school_id + role a partir do profile vinculado ao auth_user_id. */
+/** Resolve school_id + role + assinatura a partir do profile vinculado ao auth_user_id. */
 async function resolveProfile(authUserId: string): Promise<TenantContext | null> {
   if (!isDbConfigured) return null;
   const { rows } = await pool.query(
-    'select id, auth_user_id, school_id, role from public.profiles where auth_user_id = $1 limit 1',
+    `select p.id, p.auth_user_id, p.school_id, p.role,
+            s.subscription_status, s.trial_ends_at
+       from public.profiles p
+       left join public.schools s on s.id = p.school_id
+      where p.auth_user_id = $1 limit 1`,
     [authUserId],
   );
   if (rows.length === 0) return null;
-  return { userId: rows[0].auth_user_id, profileId: rows[0].id, schoolId: rows[0].school_id, role: rows[0].role };
+  return {
+    userId: rows[0].auth_user_id,
+    profileId: rows[0].id,
+    schoolId: rows[0].school_id,
+    role: rows[0].role,
+    subscriptionStatus: rows[0].subscription_status ?? null,
+    trialEndsAt: rows[0].trial_ends_at ?? null,
+  };
 }
+
+/** Assinatura ativa = 'active' OU trial ainda válido. Superadmin nunca é barrado. */
+function isSubscriptionActive(ctx: TenantContext): boolean {
+  if (ctx.role === 'superadmin') return true;
+  const status = ctx.subscriptionStatus ?? 'trialing';
+  if (status === 'active') return true;
+  if (status === 'trialing') {
+    if (!ctx.trialEndsAt) return true; // sem data → não bloqueia
+    return new Date(ctx.trialEndsAt).getTime() > Date.now();
+  }
+  return false; // past_due | canceled | outros
+}
+
+// Rotas que permanecem acessíveis mesmo com assinatura inativa (para regularizar).
+const GATE_EXEMPT_PREFIXES = ['/api/me', '/api/settings', '/api/school-plans', '/api/lgpd'];
 
 /** Middleware: exige JWT válido (identidade), mas NÃO exige perfil.
  *  Usado em /api/me e /api/onboarding (usuário recém-criado ainda sem perfil). */
@@ -101,6 +127,17 @@ export async function requireAuth(req: Request, res: Response, next: NextFunctio
     if (!ctx) return res.status(403).json({ code: 'no_profile', message: 'Usuário sem perfil vinculado' });
 
     req.ctx = ctx;
+
+    // Paywall (defense-in-depth): com assinatura inativa, bloqueia gravações
+    // nas rotas do produto. Leituras (GET) seguem para a UI mostrar o aviso.
+    const exempt = GATE_EXEMPT_PREFIXES.some((p) => (req.baseUrl ?? '').startsWith(p));
+    if (req.method !== 'GET' && !exempt && !isSubscriptionActive(ctx)) {
+      return res.status(402).json({
+        code: 'subscription_inactive',
+        message: 'Assinatura inativa. Regularize o pagamento para continuar usando o GestEscolar.',
+      });
+    }
+
     next();
   } catch (err: any) {
     const code = err?.code === 'AUTH_NOT_CONFIGURED' ? 'auth_not_configured' : 'unauthorized';
