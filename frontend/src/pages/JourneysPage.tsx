@@ -8,7 +8,7 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { listSchedules, createSchedule, removeSchedule, WEEKDAY_LABELS, type Schedule } from '@/services/schedules';
 import { api } from '@/lib/api';
 
-interface StaffOption { id: string; name: string }
+interface StaffOption { id: string; name: string; user_id?: string }
 
 const WEEKDAY_SHORT = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
 
@@ -184,7 +184,7 @@ export function JourneysPage() {
             <label className="label">Colaborador *</label>
             <select className="input" {...register('user_id', { required: 'Selecione o colaborador' })}>
               <option value="">Selecione…</option>
-              {staffList.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+              {staffList.map((s) => <option key={s.id} value={s.user_id ?? s.id}>{s.name}</option>)}
             </select>
             {errors.user_id && <p className="mt-1 text-xs text-danger">{errors.user_id.message}</p>}
           </div>
