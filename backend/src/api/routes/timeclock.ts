@@ -101,11 +101,17 @@ timeclockRouter.post('/clock-in', async (req, res) => {
     );
     if (sched.rows.length === 0) return { error: 'no_schedule' as const };
 
-    // Dentro do horário (com tolerância)?
+    // Dentro do horário (com tolerância)? Compara em minutos-do-dia com clamp,
+    // evitando o "wrap" da meia-noite (ex.: 00:00 - 15min viraria 23:45).
     const within = await c.query(
-      `select (now() at time zone '${TZ}')::time
-                between (($1)::time - interval '${TOLERANCE_MIN} min')
-                    and (($2)::time + interval '${TOLERANCE_MIN} min') as ok`,
+      `with t as (
+         select extract(epoch from (now() at time zone '${TZ}')::time) / 60 as cur,
+                extract(epoch from ($1)::time) / 60 as st,
+                extract(epoch from ($2)::time) / 60 as en
+       )
+       select cur >= greatest(0, st - ${TOLERANCE_MIN})
+          and cur <= least(1439, en + ${TOLERANCE_MIN}) as ok
+         from t`,
       [sched.rows[0].start_time, sched.rows[0].end_time],
     );
     if (!within.rows[0].ok) {
