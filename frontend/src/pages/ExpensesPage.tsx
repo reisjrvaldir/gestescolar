@@ -88,6 +88,7 @@ export function ExpensesPage() {
               <tr className="border-b border-border text-left text-xs font-semibold uppercase text-ink-subtle">
                 <th className="px-4 py-3">Fornecedor</th>
                 <th className="px-4 py-3">Descrição</th>
+                <th className="px-4 py-3">Categoria</th>
                 <th className="px-4 py-3">Valor</th>
                 <th className="px-4 py-3">Vencimento</th>
                 <th className="px-4 py-3">Status</th>
@@ -99,6 +100,7 @@ export function ExpensesPage() {
                 <tr key={e.id} className="border-b border-border last:border-0 hover:bg-canvas">
                   <td className="px-4 py-3 font-medium text-ink">{e.supplier_name}</td>
                   <td className="px-4 py-3 text-ink-muted">{e.description ?? '—'}</td>
+                  <td className="px-4 py-3 text-ink-muted">{e.category ?? '—'}</td>
                   <td className="px-4 py-3 text-ink-muted">{brl(e.amount)}</td>
                   <td className="px-4 py-3 text-ink-muted">{e.due_date ? new Date(e.due_date).toLocaleDateString('pt-BR') : '—'}</td>
                   <td className="px-4 py-3"><StatusBadge tone={STATUS[e.status].tone}>{STATUS[e.status].label}</StatusBadge></td>
@@ -149,6 +151,10 @@ export function ExpensesPage() {
           <div>
             <label className="label">Descrição</label>
             <input className="input" placeholder="Ex.: Material didático" {...register('description')} />
+          </div>
+          <div>
+            <label className="label">Categoria</label>
+            <input className="input" placeholder="Ex.: Infraestrutura, Pessoal, Materiais, Serviços" {...register('category')} />
           </div>
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div>

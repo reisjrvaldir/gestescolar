@@ -1,8 +1,8 @@
 import { brl } from '@/lib/fees';
-import type { MonthBalance } from '@/data/finance/financeChartData';
+import type { MonthlyBalancePoint } from '@/services/finance';
 
 interface Props {
-  data: MonthBalance[];
+  data: MonthlyBalancePoint[];
 }
 
 /**

@@ -79,3 +79,70 @@ export async function processConfirmedPayment(
 
   return { applied: true, split };
 }
+
+/**
+ * Liquida um pagamento de ASSINATURA SaaS (a escola pagando a plataforma).
+ * Não há split (100% é receita da plataforma): apenas confirma o pagamento,
+ * ativa a assinatura/escola e renova o período vigente.
+ */
+export async function processSubscriptionPayment(
+  client: PoolClient,
+  input: {
+    schoolId: string;
+    planId: string | null;
+    cycle: 'monthly' | 'annual';
+    grossAmount: number;
+    providerPaymentId: string;
+    providerChargeId?: string;
+    provider?: string;
+  },
+): Promise<{ applied: boolean }> {
+  const provider = input.provider ?? 'asaas';
+
+  const dup = await client.query(
+    'select id from public.payments where provider_payment_id = $1 limit 1',
+    [input.providerPaymentId],
+  );
+  if (dup.rows.length > 0) return { applied: false };
+
+  // Assinatura mais recente da escola para este plano.
+  const subRow = await client.query(
+    `select id from public.subscriptions
+      where school_id=$1 and ($2::uuid is null or plan_id=$2)
+      order by created_at desc limit 1`,
+    [input.schoolId, input.planId],
+  );
+  const subscriptionId = subRow.rows[0]?.id ?? null;
+
+  await client.query(
+    `insert into public.payments
+       (school_id, subscription_id, gross_amount, payment_method, provider, provider_payment_id, provider_charge_id, status, paid_at)
+     values ($1,$2,$3,'credit_card',$4,$5,$6,'confirmed',now())`,
+    [input.schoolId, subscriptionId, input.grossAmount, provider, input.providerPaymentId, input.providerChargeId ?? null],
+  );
+
+  const periodInterval = input.cycle === 'annual' ? '1 year' : '1 month';
+  if (subscriptionId) {
+    await client.query(
+      `update public.subscriptions
+          set status='active', amount=$2, billing_cycle=$3,
+              current_period_start=now(), current_period_end = now() + $4::interval,
+              checkout_url = null, updated_at = now()
+        where id=$1`,
+      [subscriptionId, input.grossAmount, input.cycle, periodInterval],
+    );
+  }
+
+  await client.query(
+    `update public.schools set subscription_status='active', trial_ends_at=null where id=$1`,
+    [input.schoolId],
+  );
+
+  await client.query(
+    `insert into public.audit_logs (school_id, action, entity_type, entity_id, metadata)
+     values ($1,'SUBSCRIPTION_PAYMENT_CONFIRMED','subscription',$2,$3)`,
+    [input.schoolId, subscriptionId, JSON.stringify({ provider, providerPaymentId: input.providerPaymentId, cycle: input.cycle, amount: input.grossAmount })],
+  );
+
+  return { applied: true };
+}

@@ -1,25 +1,22 @@
 // =============================================================
-//  Cálculo de taxa de serviço e split — pagamentos PIX
+//  Cálculo de split — pagamentos PIX/cartão via ASAAS
 //
 //  Regra (obrigatória):
-//    taxa_nuvende_pix          = R$ 1,99 (fixo por PIX pago)
-//    taxa_plataforma_percentual = valor_pago * 3%
-//    taxa_total_servico        = 1,99 + (valor_pago * 0,03)
-//    valor_liquido_escola      = valor_pago - taxa_total_servico
+//    taxa_plataforma = valor_pago * 5%
+//    valor_liquido_escola = valor_pago - taxa_plataforma
 //
-//  Contabilmente separamos: bruto, taxa Nuvende, taxa plataforma,
-//  taxa total e líquido da escola.
+//  A taxa cobrada pelo gateway (ASAAS) é absorvida pelos 5% da plataforma —
+//  não é repassada separadamente à escola.
 // =============================================================
 
-export const NUVENDE_PIX_FEE = 1.99;
-export const PLATFORM_FEE_PERCENTAGE = 0.03;
+export const PLATFORM_FEE_PERCENTAGE = 0.05;
 
 export interface PixSplit {
   grossAmount: number;            // valor pago pelo responsável
-  nuvendePixFee: number;          // taxa fixa Nuvende (1,99)
-  platformFeePercentage: number;  // 0,03
-  platformFeeAmount: number;      // receita da plataforma (gross * 3%)
-  totalServiceFee: number;        // nuvende + plataforma
+  nuvendePixFee: number;          // taxa fixa do gateway (0 — absorvida na taxa da plataforma)
+  platformFeePercentage: number;  // 0,05
+  platformFeeAmount: number;      // receita da plataforma (gross * 5%)
+  totalServiceFee: number;        // = platformFeeAmount (sem taxa fixa separada)
   schoolNetAmount: number;        // o que a escola recebe líquido
 }
 
@@ -29,7 +26,7 @@ function round2(value: number): number {
 }
 
 /**
- * Calcula o split de um pagamento PIX confirmado.
+ * Calcula o split de um pagamento confirmado (PIX ou cartão).
  * @param grossAmount valor bruto pago (> 0)
  */
 export function calculatePixSplit(grossAmount: number): PixSplit {
@@ -38,12 +35,12 @@ export function calculatePixSplit(grossAmount: number): PixSplit {
   }
 
   const platformFeeAmount = round2(grossAmount * PLATFORM_FEE_PERCENTAGE);
-  const totalServiceFee = round2(NUVENDE_PIX_FEE + platformFeeAmount);
+  const totalServiceFee = platformFeeAmount;
   const schoolNetAmount = round2(grossAmount - totalServiceFee);
 
   return {
     grossAmount: round2(grossAmount),
-    nuvendePixFee: NUVENDE_PIX_FEE,
+    nuvendePixFee: 0,
     platformFeePercentage: PLATFORM_FEE_PERCENTAGE,
     platformFeeAmount,
     totalServiceFee,
