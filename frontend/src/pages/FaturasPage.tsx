@@ -6,6 +6,7 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { Modal } from '@/components/ui/Modal';
 import { invoicesService, type MyInvoice, type InvoiceStatus } from '@/services/invoices';
 import { brl } from '@/lib/fees';
+import { fmtDate } from '@/lib/dates';
 
 const STATUS: Record<InvoiceStatus, { tone: 'success' | 'warning' | 'danger'; label: string }> = {
   paid: { tone: 'success', label: 'Pago' },
@@ -14,11 +15,6 @@ const STATUS: Record<InvoiceStatus, { tone: 'success' | 'warning' | 'danger'; la
   cancelled: { tone: 'danger', label: 'Cancelado' },
   refunded: { tone: 'warning', label: 'Estornado' },
 };
-
-function fmtDate(iso?: string) {
-  if (!iso) return '—';
-  return new Date(iso + 'T12:00:00').toLocaleDateString('pt-BR');
-}
 
 export function FaturasPage() {
   const [invoices, setInvoices] = useState<MyInvoice[]>([]);

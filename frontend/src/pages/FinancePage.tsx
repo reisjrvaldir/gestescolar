@@ -17,6 +17,7 @@ import { invoicesService, type Invoice } from '@/services/invoices';
 import { expensesService, type Expense } from '@/services/expenses';
 import { financeService, type FinanceSummary, type MonthlyBalancePoint, type DelinquentInvoice } from '@/services/finance';
 import { calculatePixSplit, brl } from '@/lib/fees';
+import { fmtDate } from '@/lib/dates';
 
 const TABS = [
   { key: 'visao', label: 'Visão geral' },
@@ -219,7 +220,7 @@ export function FinancePage() {
                     >
                       <td className="px-5 py-3 font-medium text-ink">{inv.student_name}</td>
                       <td className="whitespace-nowrap px-5 py-3 text-right text-ink-muted">{brl(inv.amount)}</td>
-                      <td className="px-5 py-3 text-ink-muted">{inv.due_date ? new Date(inv.due_date).toLocaleDateString('pt-BR') : '—'}</td>
+                      <td className="px-5 py-3 text-ink-muted">{fmtDate(inv.due_date)}</td>
                       <td className="px-5 py-3"><StatusBadge tone={STATUS[inv.status].tone}>{STATUS[inv.status].label}</StatusBadge></td>
                       <td className="px-5 py-3 text-right">
                         {inv.status !== 'paid' && (
