@@ -1,7 +1,7 @@
 import {
   LayoutDashboard, GraduationCap, Users, School2, Star, ClipboardCheck,
   Fingerprint, CalendarClock, CalendarDays, CreditCard,
-  Settings, Headset, ShieldCheck, Crown, Tag, Mail,
+  Headset, Crown, Tag, Mail,
   CalendarOff, FolderOpen, PiggyBank, ArrowUpRight,
   type LucideIcon,
 } from 'lucide-react';
@@ -19,7 +19,6 @@ export interface MenuSection {
   items: MenuItem[];
 }
 
-const LGPD: MenuItem = { to: '/app/lgpd', label: 'Meus Dados (LGPD)', icon: ShieldCheck };
 const TICKETS: MenuItem = { to: '/app/tickets', label: 'Chamados', icon: Headset };
 
 export const MENUS: Record<Role, MenuSection[]> = {
@@ -53,8 +52,6 @@ export const MENUS: Record<Role, MenuSection[]> = {
       items: [
         { to: '/app/messages', label: 'Mensagens', icon: Mail },
         TICKETS,
-        { to: '/app/settings', label: 'Configurações', icon: Settings },
-        LGPD,
       ],
     },
   ],
@@ -68,7 +65,7 @@ export const MENUS: Record<Role, MenuSection[]> = {
         { to: '/app/finance/balance', label: 'Saldo / Resgate', icon: PiggyBank },
       ],
     },
-    { items: [TICKETS, LGPD] },
+    { items: [TICKETS] },
   ],
   teacher: [
     { items: [{ to: '/app', label: 'Dashboard', icon: LayoutDashboard }] },
@@ -88,7 +85,7 @@ export const MENUS: Record<Role, MenuSection[]> = {
         { to: '/app/documents', label: 'Meus Documentos', icon: FolderOpen },
       ],
     },
-    { items: [{ to: '/app/messages', label: 'Mensagens', icon: Mail }, LGPD] },
+    { items: [{ to: '/app/messages', label: 'Mensagens', icon: Mail }] },
   ],
   guardian: [
     { items: [{ to: '/app', label: 'Início', icon: LayoutDashboard }] },
@@ -100,7 +97,7 @@ export const MENUS: Record<Role, MenuSection[]> = {
         { to: '/app/calendar', label: 'Calendário', icon: CalendarDays },
       ],
     },
-    { items: [{ to: '/app/messages', label: 'Mensagens', icon: Mail }, TICKETS, LGPD] },
+    { items: [{ to: '/app/messages', label: 'Mensagens', icon: Mail }, TICKETS] },
   ],
   superadmin: [
     { items: [{ to: '/app', label: 'Dashboard', icon: Crown }] },
@@ -120,6 +117,6 @@ export const MENUS: Record<Role, MenuSection[]> = {
         { to: '/app/coupons', label: 'Cupons', icon: Tag },
       ],
     },
-    { items: [TICKETS, { to: '/app/profile', label: 'Meu Perfil', icon: Settings }] },
+    { items: [TICKETS] },
   ],
 };
