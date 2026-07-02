@@ -1,12 +1,8 @@
 import { ArrowRight, Info, CheckCircle2 } from 'lucide-react';
 import { StatusBadge } from '@/components/ui/StatusBadge';
 import { brl } from '@/lib/fees';
+import { fmtDate } from '@/lib/dates';
 import type { DelinquentInvoice } from '@/services/finance';
-
-function fmtDate(iso?: string) {
-  if (!iso) return '—';
-  return new Date(iso + 'T12:00:00').toLocaleDateString('pt-BR');
-}
 
 interface Props {
   rows: DelinquentInvoice[];

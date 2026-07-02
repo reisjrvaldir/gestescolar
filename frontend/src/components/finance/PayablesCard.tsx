@@ -2,12 +2,8 @@ import { Plus, ArrowRight, CreditCard } from 'lucide-react';
 import { StatusBadge } from '@/components/ui/StatusBadge';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { brl } from '@/lib/fees';
+import { fmtDate } from '@/lib/dates';
 import type { Expense, ExpenseStatus } from '@/services/expenses';
-
-function fmtDate(iso?: string) {
-  if (!iso) return '—';
-  return new Date(iso + 'T12:00:00').toLocaleDateString('pt-BR');
-}
 
 const STATUS: Record<ExpenseStatus, { tone: 'success' | 'warning' | 'danger'; label: string }> = {
   paid: { tone: 'success', label: 'Pago' },
