@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react';
-import { useForm } from 'react-hook-form';
 import { useNavigate } from 'react-router-dom';
-import { Plus, Loader2, Info, Check } from 'lucide-react';
+import { Plus, Loader2, Info, Check, AlertTriangle, Copy } from 'lucide-react';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { StatusBadge } from '@/components/ui/StatusBadge';
 import { Modal } from '@/components/ui/Modal';
@@ -12,13 +11,11 @@ import { PayablesCard } from '@/components/finance/PayablesCard';
 import { ReceivablesCard } from '@/components/finance/ReceivablesCard';
 import { DelinquencyCard } from '@/components/finance/DelinquencyCard';
 import { QuickActionsGrid } from '@/components/finance/QuickActionsGrid';
-import { financeSummary } from '@/data/finance/financeSummary';
-import { financeChartData } from '@/data/finance/financeChartData';
-import { payablesData } from '@/data/finance/payablesData';
-import { receivablesData } from '@/data/finance/receivablesData';
-import { delinquencyData } from '@/data/finance/delinquencyData';
+import { AdhocChargeModal } from '@/components/finance/AdhocChargeModal';
 import { quickActionsData } from '@/data/finance/quickActionsData';
-import { invoicesService, type Invoice, type NewInvoice } from '@/services/invoices';
+import { invoicesService, type Invoice } from '@/services/invoices';
+import { expensesService, type Expense } from '@/services/expenses';
+import { financeService, type FinanceSummary, type MonthlyBalancePoint, type DelinquentInvoice } from '@/services/finance';
 import { calculatePixSplit, brl } from '@/lib/fees';
 
 const TABS = [
@@ -40,41 +37,62 @@ export function FinancePage() {
   const navigate = useNavigate();
   const [tab, setTab] = useState('visao');
   const [invoices, setInvoices] = useState<Invoice[]>([]);
+  const [expenses, setExpenses] = useState<Expense[]>([]);
+  const [summary, setSummary] = useState<FinanceSummary | null>(null);
+  const [monthly, setMonthly] = useState<MonthlyBalancePoint[]>([]);
+  const [delinquency, setDelinquency] = useState<DelinquentInvoice[]>([]);
   const [loading, setLoading] = useState(true);
   const [selected, setSelected] = useState<Invoice | null>(null);
-  const [open, setOpen] = useState(false);
-  const [toast, setToast] = useState<string | null>(null);
-
-  const { register, handleSubmit, reset, formState: { errors } } = useForm<NewInvoice>();
+  const [adhocOpen, setAdhocOpen] = useState(false);
+  const [sendingId, setSendingId] = useState<string | null>(null);
+  const [pixResult, setPixResult] = useState<{ studentName: string; copyPaste?: string } | null>(null);
+  const [toast, setToast] = useState<{ type: 'success' | 'error'; msg: string } | null>(null);
 
   useEffect(() => { load(); }, []);
 
   async function load() {
     setLoading(true);
     try {
-      setInvoices(await invoicesService.list());
+      const [inv, exp, summ, mon, delq] = await Promise.all([
+        invoicesService.list(),
+        expensesService.list(),
+        financeService.summary(),
+        financeService.monthly(),
+        financeService.delinquency(),
+      ]);
+      setInvoices(inv);
+      setExpenses(exp);
+      setSummary(summ);
+      setMonthly(mon);
+      setDelinquency(delq);
     } catch (e) { console.error(e); }
     setLoading(false);
   }
 
-  // --- Funcionalidade real preservada: criar fatura ---
-  async function onCreate(data: NewInvoice) {
-    await invoicesService.create({ ...data, amount: Number(data.amount) });
-    await load();
-    reset();
-    setOpen(false);
-    showToast('Fatura criada com sucesso.');
+  function showToast(type: 'success' | 'error', msg: string) {
+    setToast({ type, msg });
+    setTimeout(() => setToast(null), 6000);
   }
 
-  function showToast(msg: string) {
-    setToast(msg);
-    setTimeout(() => setToast(null), 5000);
+  // Gera (ou renova) a cobrança PIX real da fatura — endpoint real do gateway.
+  async function handleSendCharge(id: string) {
+    setSendingId(id);
+    try {
+      const charge = await invoicesService.generatePix(id);
+      const inv = invoices.find((i) => i.id === id);
+      setPixResult({ studentName: inv?.student_name ?? '—', copyPaste: charge.pixCopyPaste });
+      showToast('success', 'Cobrança PIX gerada com sucesso — disponível no portal do responsável.');
+      await load();
+    } catch (e: any) {
+      showToast('error', e?.message ?? 'Erro ao gerar a cobrança PIX.');
+    } finally {
+      setSendingId(null);
+    }
   }
 
-  // Ação mock: no futuro dispara o código PIX ao app do responsável (WhatsApp/push).
-  function handleSendCharge(id: string) {
-    showToast(`Código PIX enviado ao responsável (cobrança ${id}).`);
-    // TODO: integrar com POST /api/invoices/:id/send-charge → notifica app do responsável.
+  function handleAdhocCreated(result: { studentsCount: number; invoicesCreated: number }) {
+    showToast('success', `Cobrança avulsa criada para ${result.invoicesCreated} aluno(s).`);
+    load();
   }
 
   function handleQuickAction(key: string) {
@@ -85,26 +103,30 @@ export function FinancePage() {
         break;
       case 'nova-cobranca':
       case 'gerar-pix':
-        setOpen(true);
+        setAdhocOpen(true);
         break;
       case 'ver-inadimplentes':
         setTab('inadimplencia');
         break;
       case 'cobranca-lote':
-        showToast('Envio de cobrança em lote — disponível em breve.');
+        setAdhocOpen(true);
         break;
       case 'registrar-pagamento':
-        showToast('Registro de pagamento — disponível em breve.');
+        showToast('error', 'Registro manual de pagamento — disponível em breve.');
         break;
       case 'exportar-relatorio':
-        showToast('Exportação de relatório — disponível em breve.');
+        showToast('error', 'Exportação de relatório — disponível em breve.');
         break;
       default:
-        showToast('Ação em breve.');
+        showToast('error', 'Ação em breve.');
     }
   }
 
   const goExpenses = () => navigate('/app/finance/expenses');
+
+  if (loading || !summary) {
+    return <div className="flex items-center justify-center py-20 text-ink-muted"><Loader2 className="animate-spin" size={24} /> <span className="ml-2">Carregando…</span></div>;
+  }
 
   return (
     <>
@@ -112,8 +134,8 @@ export function FinancePage() {
         title="Financeiro"
         subtitle="Gerencie receitas, despesas, contas a pagar, a receber e inadimplência da sua escola."
         actions={
-          <button className="btn-primary" onClick={() => setOpen(true)}>
-            <Plus size={16} /> Nova cobrança
+          <button className="btn-primary" onClick={() => setAdhocOpen(true)}>
+            <Plus size={16} /> Nova cobrança avulsa
           </button>
         }
       />
@@ -121,28 +143,31 @@ export function FinancePage() {
       <FinanceTabs tabs={TABS} active={tab} onChange={setTab} />
 
       {toast && (
-        <div className="mb-4 flex items-center gap-2 rounded-xl bg-success-soft px-4 py-2.5 text-sm font-medium text-success">
-          <Check size={16} /> {toast}
+        <div className={`mb-4 flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-medium ${
+          toast.type === 'success' ? 'bg-success-soft text-success' : 'bg-danger-soft text-danger'
+        }`}>
+          {toast.type === 'success' ? <Check size={16} /> : <AlertTriangle size={16} />} {toast.msg}
         </div>
       )}
 
       {/* ===================== VISÃO GERAL ===================== */}
       {tab === 'visao' && (
         <div className="space-y-6">
-          <FinanceSummaryCards cards={financeSummary} />
-          <RevenueExpenseChart data={financeChartData} />
+          <FinanceSummaryCards summary={summary} />
+          <RevenueExpenseChart data={monthly} />
 
           <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
-            <PayablesCard rows={payablesData} onNew={goExpenses} onViewAll={goExpenses} />
+            <PayablesCard rows={expenses} onNew={goExpenses} onViewAll={goExpenses} />
             <ReceivablesCard
-              rows={receivablesData}
-              onNew={() => setOpen(true)}
+              rows={invoices}
+              onNew={() => setAdhocOpen(true)}
               onSend={handleSendCharge}
               onViewAll={() => setTab('receber')}
+              sendingId={sendingId}
             />
           </div>
 
-          <DelinquencyCard rows={delinquencyData} onViewAll={() => setTab('inadimplencia')} />
+          <DelinquencyCard rows={delinquency} onViewAll={() => setTab('inadimplencia')} />
 
           <QuickActionsGrid actions={quickActionsData} onAction={handleQuickAction} />
         </div>
@@ -151,7 +176,7 @@ export function FinancePage() {
       {/* ===================== CONTAS A PAGAR ===================== */}
       {tab === 'pagar' && (
         <div className="space-y-4">
-          <PayablesCard rows={payablesData} onNew={goExpenses} onViewAll={goExpenses} />
+          <PayablesCard rows={expenses} onNew={goExpenses} onViewAll={goExpenses} />
           <p className="text-xs text-ink-subtle">
             As despesas cadastradas alimentam automaticamente o card “Despesas do mês” da visão geral.
             A gestão completa de despesas fica em <button className="font-semibold text-primary hover:underline" onClick={goExpenses}>Contas a Pagar</button>.
@@ -166,15 +191,13 @@ export function FinancePage() {
             <div className="flex items-center justify-between border-b border-border px-5 py-4">
               <div>
                 <h3 className="text-sm font-bold text-ink">A receber</h3>
-                <p className="mt-0.5 text-xs text-ink-muted">Faturas e mensalidades dos alunos.</p>
+                <p className="mt-0.5 text-xs text-ink-muted">Mensalidades e cobranças avulsas dos alunos.</p>
               </div>
-              <button className="inline-flex items-center gap-1 rounded-lg border border-border px-2.5 py-1.5 text-xs font-semibold text-ink hover:bg-canvas" onClick={() => setOpen(true)}>
-                <Plus size={14} /> Nova cobrança
+              <button className="inline-flex items-center gap-1 rounded-lg border border-border px-2.5 py-1.5 text-xs font-semibold text-ink hover:bg-canvas" onClick={() => setAdhocOpen(true)}>
+                <Plus size={14} /> Nova cobrança avulsa
               </button>
             </div>
-            {loading ? (
-              <div className="flex items-center justify-center gap-2 py-14 text-ink-muted"><Loader2 className="animate-spin" size={18} /> Carregando…</div>
-            ) : invoices.length === 0 ? (
+            {invoices.length === 0 ? (
               <div className="px-5 py-10 text-center text-sm text-ink-muted">Nenhuma fatura cadastrada ainda.</div>
             ) : (
               <table className="w-full text-sm">
@@ -199,12 +222,15 @@ export function FinancePage() {
                       <td className="px-5 py-3 text-ink-muted">{inv.due_date ? new Date(inv.due_date).toLocaleDateString('pt-BR') : '—'}</td>
                       <td className="px-5 py-3"><StatusBadge tone={STATUS[inv.status].tone}>{STATUS[inv.status].label}</StatusBadge></td>
                       <td className="px-5 py-3 text-right">
-                        <button
-                          className="inline-flex items-center gap-1 rounded-lg bg-primary-soft px-2.5 py-1.5 text-xs font-semibold text-primary hover:bg-primary hover:text-white"
-                          onClick={(e) => { e.stopPropagation(); handleSendCharge(inv.id); }}
-                        >
-                          Enviar cobrança
-                        </button>
+                        {inv.status !== 'paid' && (
+                          <button
+                            className="inline-flex items-center gap-1 rounded-lg bg-primary-soft px-2.5 py-1.5 text-xs font-semibold text-primary hover:bg-primary hover:text-white disabled:opacity-50"
+                            onClick={(e) => { e.stopPropagation(); handleSendCharge(inv.id); }}
+                            disabled={sendingId === inv.id}
+                          >
+                            {sendingId === inv.id ? <Loader2 size={13} className="animate-spin" /> : null} Enviar cobrança
+                          </button>
+                        )}
                       </td>
                     </tr>
                   ))}
@@ -212,7 +238,7 @@ export function FinancePage() {
               </table>
             )}
             <p className="border-t border-border px-5 py-3 text-[11px] text-ink-subtle">
-              Ao clicar em “Enviar cobrança”, o código PIX é enviado diretamente para o app do responsável.
+              Ao clicar em “Enviar cobrança”, o código PIX é gerado e fica disponível no portal do responsável.
             </p>
           </div>
 
@@ -231,39 +257,42 @@ export function FinancePage() {
 
       {/* ===================== INADIMPLÊNCIA ===================== */}
       {tab === 'inadimplencia' && (
-        <DelinquencyCard rows={delinquencyData} onViewAll={() => showToast('Lista completa de inadimplentes — disponível em breve.')} />
+        <DelinquencyCard rows={delinquency} onViewAll={() => showToast('error', 'Exportação da lista completa — disponível em breve.')} />
       )}
 
-      {/* Modal real de nova fatura (funcionalidade preservada) */}
+      <AdhocChargeModal
+        open={adhocOpen}
+        onClose={() => setAdhocOpen(false)}
+        onCreated={handleAdhocCreated}
+        onError={(msg) => showToast('error', msg)}
+      />
+
+      {/* Confirmação da cobrança PIX gerada — código copia-e-cola real */}
       <Modal
-        open={open}
-        title="Nova cobrança"
-        onClose={() => { reset(); setOpen(false); }}
-        footer={
-          <>
-            <button className="btn-outline" onClick={() => { reset(); setOpen(false); }}>Cancelar</button>
-            <button className="btn-primary" form="invoice-form" type="submit">Criar cobrança</button>
-          </>
-        }
+        open={!!pixResult}
+        title="Cobrança PIX gerada"
+        onClose={() => setPixResult(null)}
+        footer={<button className="btn-primary" onClick={() => setPixResult(null)}>Fechar</button>}
       >
-        <form id="invoice-form" className="space-y-4" onSubmit={handleSubmit(onCreate)}>
-          <div>
-            <label className="label">Nome do aluno *</label>
-            <input className="input" placeholder="Ex.: Ana Beatriz Souza" {...register('student_name', { required: 'Informe o nome do aluno' })} />
-            {errors.student_name && <p className="mt-1 text-xs text-danger">{errors.student_name.message}</p>}
+        {pixResult && (
+          <div className="space-y-3 text-sm">
+            <p className="text-ink-muted">Aluno: <strong className="text-ink">{pixResult.studentName}</strong></p>
+            {pixResult.copyPaste ? (
+              <div className="rounded-xl border border-border bg-canvas p-3">
+                <p className="mb-1 text-xs font-semibold text-ink-muted">Código PIX copia-e-cola</p>
+                <p className="break-all font-mono text-xs text-ink">{pixResult.copyPaste}</p>
+                <button
+                  className="btn-outline mt-2 text-xs"
+                  onClick={() => navigator.clipboard.writeText(pixResult.copyPaste ?? '')}
+                >
+                  <Copy size={13} /> Copiar código
+                </button>
+              </div>
+            ) : (
+              <p className="text-xs text-ink-subtle">O código já está disponível no portal do responsável.</p>
+            )}
           </div>
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <div>
-              <label className="label">Valor (R$) *</label>
-              <input type="number" step="0.01" min="0.01" className="input" placeholder="250.00" {...register('amount', { required: 'Informe o valor', min: { value: 0.01, message: 'Mínimo R$0,01' } })} />
-              {errors.amount && <p className="mt-1 text-xs text-danger">{errors.amount.message}</p>}
-            </div>
-            <div>
-              <label className="label">Vencimento</label>
-              <input type="date" className="input" {...register('due_date')} />
-            </div>
-          </div>
-        </form>
+        )}
       </Modal>
     </>
   );
@@ -282,14 +311,12 @@ function SplitDetail({ invoice }: { invoice: Invoice }) {
       <p className="mb-2 text-xs text-ink-subtle">{invoice.student_name}</p>
       <Row label="Valor pago (bruto)" value={brl(s.grossAmount)} />
       <div className="border-t border-border" />
-      <Row label="Taxa Nuvende (fixa)" value={`– ${brl(s.nuvendePixFee)}`} tone="text-warning" />
-      <Row label="Taxa plataforma (3%)" value={`– ${brl(s.platformFeeAmount)}`} tone="text-warning" />
-      <Row label="Taxa total de serviço" value={`– ${brl(s.totalServiceFee)}`} />
+      <Row label="Taxa da plataforma (5%)" value={`– ${brl(s.platformFeeAmount)}`} tone="text-warning" />
       <div className="border-t border-border" />
       <Row label="Líquido da escola" value={brl(s.schoolNetAmount)} strong tone="text-success" />
       <div className="mt-3 rounded-xl bg-canvas p-3 text-xs text-ink-muted">
-        O responsável paga {brl(s.grossAmount)} normalmente. A escola recebe {brl(s.schoolNetAmount)};
-        a plataforma retém {brl(s.platformFeeAmount)} (3%) e a Nuvende {brl(s.nuvendePixFee)}.
+        O responsável paga {brl(s.grossAmount)} normalmente. A escola recebe {brl(s.schoolNetAmount)} líquidos;
+        a plataforma retém {brl(s.platformFeeAmount)} (5%).
       </div>
     </div>
   );

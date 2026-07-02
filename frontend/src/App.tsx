@@ -11,6 +11,7 @@ import { ClassesPage } from '@/pages/ClassesPage';
 import { GradesPage } from '@/pages/GradesPage';
 import { AttendancePage } from '@/pages/AttendancePage';
 import { FinancePage } from '@/pages/FinancePage';
+import { FaturasPage } from '@/pages/FaturasPage';
 import { ExpensesPage } from '@/pages/ExpensesPage';
 import { BalancePage } from '@/pages/BalancePage';
 import { SettingsPage } from '@/pages/SettingsPage';
@@ -61,6 +62,7 @@ export default function App() {
           <Route path="finance/expenses" element={<AdminFinancial><ExpensesPage /></AdminFinancial>} />
           <Route path="finance/balance" element={<AdminFinancial><BalancePage /></AdminFinancial>} />
           <Route path="invoices" element={<AdminFinancial><FinancePage /></AdminFinancial>} />
+          <Route path="faturas" element={<FaturasPage />} />
           <Route path="messages" element={<MessagesPage />} />
           <Route path="leave-requests" element={<LeaveRequestsPage />} />
           <Route path="documents" element={<StaffDocumentsPage />} />

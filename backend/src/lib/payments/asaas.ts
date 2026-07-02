@@ -177,3 +177,71 @@ export async function asaasCreateSubaccount(input: {
   });
   return { accountId: acc.id, walletId: acc.walletId, apiKey: acc.apiKey };
 }
+
+/**
+ * Garante um cliente ASAAS para a ESCOLA como pagadora da assinatura SaaS
+ * (distinto do cliente/responsável que paga a mensalidade do aluno).
+ */
+export async function asaasEnsureBillingCustomer(input: {
+  existingCustomerId?: string | null;
+  name: string; cpfCnpj: string; email?: string; phone?: string;
+}): Promise<string> {
+  if (input.existingCustomerId) return input.existingCustomerId;
+  const created = await asaasFetch<{ id: string }>('/customers', {
+    method: 'POST',
+    body: JSON.stringify({
+      name: input.name, cpfCnpj: input.cpfCnpj, email: input.email, mobilePhone: input.phone,
+    }),
+  });
+  return created.id;
+}
+
+/**
+ * Cria uma assinatura recorrente (cobrança mensal) para o plano SaaS.
+ * Sem dados de cartão inline → ASAAS gera checkoutUrl hospedado para o
+ * pagador inserir o cartão com segurança (fora do nosso backend).
+ */
+export async function asaasCreateSubscription(input: {
+  customerId: string; value: number; description: string; externalReference: string; nextDueDate?: string;
+}): Promise<{ subscriptionId: string; checkoutUrl?: string }> {
+  const sub = await asaasFetch<{ id: string }>('/subscriptions', {
+    method: 'POST',
+    body: JSON.stringify({
+      customer: input.customerId,
+      billingType: 'CREDIT_CARD',
+      cycle: 'MONTHLY',
+      value: input.value,
+      nextDueDate: input.nextDueDate ?? todayIso(),
+      description: input.description,
+      externalReference: input.externalReference,
+    }),
+  });
+  // Busca a 1ª cobrança da assinatura para obter o link de checkout hospedado.
+  const payments = await asaasFetch<{ data: Array<{ id: string; invoiceUrl?: string }> }>(
+    `/subscriptions/${sub.id}/payments`,
+  );
+  return { subscriptionId: sub.id, checkoutUrl: payments.data?.[0]?.invoiceUrl };
+}
+
+/**
+ * Cria uma cobrança única parcelada no cartão (plano anual, até 12x).
+ * Retorna o checkoutUrl hospedado da 1ª parcela (cobre a seleção de parcelas).
+ */
+export async function asaasCreateInstallmentCharge(input: {
+  customerId: string; totalValue: number; installmentCount: number;
+  description: string; externalReference: string; dueDate?: string;
+}): Promise<{ paymentId: string; checkoutUrl?: string }> {
+  const charge = await asaasFetch<{ id: string; invoiceUrl?: string }>('/payments', {
+    method: 'POST',
+    body: JSON.stringify({
+      customer: input.customerId,
+      billingType: 'CREDIT_CARD',
+      installmentCount: input.installmentCount,
+      totalValue: input.totalValue,
+      dueDate: input.dueDate ?? todayIso(),
+      description: input.description,
+      externalReference: input.externalReference,
+    }),
+  });
+  return { paymentId: charge.id, checkoutUrl: charge.invoiceUrl };
+}

@@ -4,6 +4,7 @@ import { withTenant } from '../../db/withTenant';
 import { requireAuth, requireRole } from '../../middleware/auth';
 import { signUpGuardian } from '../../lib/authSignup';
 import { cpfSchema, dateSchema, initialPassword, toStoredPassword } from '../../lib/validation';
+import { insertMonthlyInvoices, generatePixForNewInvoices } from '../../lib/billing/studentInvoices';
 
 export const studentsRouter = Router();
 
@@ -129,16 +130,35 @@ studentsRouter.post('/', requireRole('school_admin', 'superadmin'), async (req, 
         [req.ctx!.schoolId, s.name, s.cpf, s.birth_date, matricula,
          s.class_id ?? null, guardianId, s.father_name, s.mother_name, monthlyFee, s.plan_id],
       );
+      const student = studentRow.rows[0];
+
+      // 8) Gerar as mensalidades (faturas) do restante do ano — cobrança PIX
+      //    é criada depois, fora desta transação (ver após o commit abaixo).
+      const invoiceIds = await insertMonthlyInvoices(c, {
+        schoolId: req.ctx!.schoolId!,
+        studentId: student.id,
+        studentName: student.name,
+        monthlyFee,
+      });
 
       return {
-        ...studentRow.rows[0],
+        ...student,
         monthly_fee: monthlyFee,
         guardian_email: s.guardian.email,
         login_matricula: matricula,
         initial_password: visiblePassword,
         login_password_hint: 'Login: matrícula do aluno • Senha inicial: 6 primeiros dígitos do CPF do responsável. Troca obrigatória no 1º acesso.',
+        invoice_ids: invoiceIds,
       };
     });
+
+    // Gera a cobrança PIX de cada mensalidade (fora da transação principal).
+    if (result.invoice_ids?.length) {
+      generatePixForNewInvoices(req.ctx!, result.invoice_ids).catch((err) =>
+        console.error('[students.create] falha ao gerar PIX das mensalidades:', err?.message ?? err),
+      );
+    }
+
     res.status(201).json({ ok: true, data: result });
   } catch (err: any) {
     const status = err?.http ?? 500;

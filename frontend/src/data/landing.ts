@@ -30,36 +30,3 @@ export const MODULES: ModuleItem[] = [
   { title: 'Documentos e contratos', desc: 'Armazene documentos, contratos e autorizações com segurança e acesso rápido.' },
 ];
 
-export interface Testimonial { name: string; role: string; text: string; }
-export const TESTIMONIALS: Testimonial[] = [
-  { name: 'Juliana Mendes', role: 'Diretora — Colégio Horizonte', text: 'O GestEscolar facilitou muito nosso dia a dia. Agora temos tudo organizado e a cobrança via PIX trouxe mais agilidade e menos dor de cabeça.' },
-  { name: 'Carlos Eduardo', role: 'Coordenador — Instituto Educare', text: 'Sistema completo, fácil de usar e com suporte excelente. Ganhamos tempo e produtividade em todas as áreas.' },
-  { name: 'Patrícia Lima', role: 'Gestora — Escola Saber Mais', text: 'A comunicação com os responsáveis melhorou muito e o controle financeiro ficou muito mais eficiente.' },
-];
-
-export interface Plan {
-  name: string; tagline: string; price: string;
-  features: string[]; cta: string; highlight?: boolean;
-}
-export const PLANS: Plan[] = [
-  {
-    name: 'Essencial', tagline: 'Ideal para escolas pequenas', price: 'R$ 59,90',
-    features: ['Até 200 alunos', 'Módulo financeiro', 'Cobrança PIX', 'Relatórios básicos', 'Suporte por e-mail'],
-    cta: 'Testar grátis',
-  },
-  {
-    name: 'Profissional', tagline: 'Para escolas em crescimento', price: 'R$ 119,90', highlight: true,
-    features: ['Até 800 alunos', 'Todos os módulos', 'Relatórios avançados', 'Acesso multiusuário', 'Suporte prioritário'],
-    cta: 'Testar grátis',
-  },
-  {
-    name: 'Enterprise', tagline: 'Para grandes instituições', price: 'R$ 249,90',
-    features: ['Alunos ilimitados', 'Personalizações', 'Integração via API', 'Treinamento dedicado', 'Suporte premium 24/7'],
-    cta: 'Falar com especialista',
-  },
-];
-
-export const SOCIAL_PROOF = [
-  'Colégio Horizonte', 'Instituto Educare', 'Escola Saber Mais',
-  'Colégio Futuro', 'Curso Prime', 'Rede Educar',
-];

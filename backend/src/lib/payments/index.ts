@@ -9,8 +9,9 @@ import { simulationProvider } from './simulation';
 
 export * from './types';
 export { isAsaasConfigured } from './asaas';
-export { asaasCreateSubaccount } from './asaas';
-export { processConfirmedPayment } from './settlement';
+export { asaasCreateSubaccount, asaasCreateSubscription, asaasCreateInstallmentCharge, asaasEnsureBillingCustomer } from './asaas';
+export { processConfirmedPayment, processSubscriptionPayment } from './settlement';
+export { buildChargeForInvoice } from './invoiceCharge';
 
 /** Provedor de pagamento ativo (ASAAS quando configurado, senão simulação). */
 export function getPaymentProvider(): PaymentProvider {

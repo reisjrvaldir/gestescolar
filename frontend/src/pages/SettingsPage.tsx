@@ -5,6 +5,7 @@ import { PageHeader } from '@/components/ui/PageHeader';
 import { StatusBadge } from '@/components/ui/StatusBadge';
 import { settingsService, type SchoolSettings, type UpdateSchoolSettings } from '@/services/settings';
 import { PlansManager } from '@/components/settings/PlansManager';
+import { SubscribePanel } from '@/components/settings/SubscribePanel';
 
 export function SettingsPage() {
   const [school, setSchool] = useState<SchoolSettings | null>(null);
@@ -141,6 +142,13 @@ export function SettingsPage() {
               </div>
             )}
           </div>
+
+          {school.subscription_status !== 'active' && (
+            <div className="mt-4 border-t border-border pt-4">
+              <p className="mb-3 text-xs font-bold uppercase tracking-wide text-ink-subtle">Assinar plano</p>
+              <SubscribePanel />
+            </div>
+          )}
         </div>
       </div>
     </>

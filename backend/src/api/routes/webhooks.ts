@@ -1,6 +1,6 @@
 import { Router, type Request, type Response } from 'express';
 import { pool } from '../../db/pool';
-import { processConfirmedPayment } from '../../lib/payments';
+import { processConfirmedPayment, processSubscriptionPayment } from '../../lib/payments';
 import type { PaymentProvider } from '../../lib/payments';
 import { asaasProvider } from '../../lib/payments/asaas';
 import { simulationProvider } from '../../lib/payments/simulation';
@@ -9,7 +9,8 @@ export const webhooksRouter = Router();
 
 /**
  * Handler genérico de webhook de pagamento. Valida a autenticidade pelo
- * provedor, normaliza o evento e liquida o pagamento (split/saldo/baixa).
+ * provedor, normaliza o evento e liquida o pagamento (fatura de aluno ou
+ * assinatura SaaS, identificado pelo formato do externalReference).
  */
 async function handlePaymentWebhook(provider: PaymentProvider, req: Request, res: Response) {
   const raw = JSON.stringify(req.body ?? {});
@@ -25,24 +26,40 @@ async function handlePaymentWebhook(provider: PaymentProvider, req: Request, res
     return res.json({ ok: true, ignored: event.rawType });
   }
 
-  // externalReference = invoiceId (enviado na criação da cobrança).
-  const invoiceId = event.externalReference;
-  if (!invoiceId || event.amount == null) {
-    return res.status(400).json({ code: 'invalid_payload', message: 'externalReference (invoiceId) e amount obrigatórios' });
+  const ref = event.externalReference;
+  if (!ref || event.amount == null) {
+    return res.status(400).json({ code: 'invalid_payload', message: 'externalReference e amount obrigatórios' });
   }
 
   const client = await pool.connect();
   try {
     await client.query('begin');
-    // Descobre a escola pela fatura (evita confiar em schoolId do payload).
-    const inv = await client.query('select school_id from public.invoices where id = $1 limit 1', [invoiceId]);
+
+    // Assinatura SaaS: externalReference = "subscription:{schoolId}:{planId}:{cycle}"
+    if (ref.startsWith('subscription:')) {
+      const [, schoolId, planId, cycle] = ref.split(':');
+      const result = await processSubscriptionPayment(client, {
+        schoolId,
+        planId: planId || null,
+        cycle: cycle === 'annual' ? 'annual' : 'monthly',
+        grossAmount: Number(event.amount),
+        providerPaymentId: event.providerPaymentId,
+        providerChargeId: event.providerChargeId,
+        provider: provider.name,
+      });
+      await client.query('commit');
+      return res.json({ ok: true, applied: result.applied });
+    }
+
+    // Fatura de aluno: externalReference = invoiceId.
+    const inv = await client.query('select school_id from public.invoices where id = $1 limit 1', [ref]);
     if (inv.rows.length === 0) {
       await client.query('rollback');
       return res.status(404).json({ code: 'invoice_not_found' });
     }
     const result = await processConfirmedPayment(client, {
       schoolId: String(inv.rows[0].school_id),
-      invoiceId,
+      invoiceId: ref,
       grossAmount: Number(event.amount),
       providerPaymentId: event.providerPaymentId,
       providerChargeId: event.providerChargeId,

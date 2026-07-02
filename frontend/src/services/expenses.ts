@@ -6,6 +6,7 @@ export interface Expense {
   id: string;
   supplier_name: string;
   description?: string;
+  category?: string;
   amount: number;
   due_date?: string;
   status: ExpenseStatus;
@@ -15,6 +16,7 @@ export interface Expense {
 export interface NewExpense {
   supplier_name: string;
   description?: string;
+  category?: string;
   amount: number;
   due_date?: string;
 }

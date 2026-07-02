@@ -2,7 +2,7 @@ import {
   LayoutDashboard, GraduationCap, Users, School2, Star, ClipboardCheck,
   Fingerprint, CalendarClock, CalendarDays, CreditCard,
   Headset, Crown, Tag, Mail,
-  CalendarOff, FolderOpen, PiggyBank, ArrowUpRight,
+  CalendarOff, FolderOpen, PiggyBank, ArrowUpRight, Wallet,
   type LucideIcon,
 } from 'lucide-react';
 
@@ -96,6 +96,10 @@ export const MENUS: Record<Role, MenuSection[]> = {
         { to: '/app/grades', label: 'Boletim', icon: Star },
         { to: '/app/calendar', label: 'Calendário', icon: CalendarDays },
       ],
+    },
+    {
+      title: 'Financeiro',
+      items: [{ to: '/app/faturas', label: 'Faturas', icon: Wallet }],
     },
     { items: [{ to: '/app/messages', label: 'Mensagens', icon: Mail }, TICKETS] },
   ],
