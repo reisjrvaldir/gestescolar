@@ -1,7 +1,7 @@
 import {
   LayoutDashboard, GraduationCap, Users, School2, Star, ClipboardCheck,
   Fingerprint, CalendarClock, CalendarDays, CreditCard,
-  Headset, Crown, Tag, Mail,
+  Headset, Crown, Mail,
   CalendarOff, FolderOpen, PiggyBank, ArrowUpRight, Wallet,
   type LucideIcon,
 } from 'lucide-react';
@@ -46,6 +46,13 @@ export const MENUS: Record<Role, MenuSection[]> = {
         { to: '/app/journeys', label: 'Jornadas', icon: CalendarClock },
         { to: '/app/timeclock', label: 'Ponto', icon: Fingerprint },
         { to: '/app/leave-requests', label: 'Folgas e Férias', icon: CalendarOff },
+      ],
+    },
+    {
+      title: 'Financeiro',
+      items: [
+        { to: '/app/finance', label: 'Financeiro', icon: Wallet },
+        { to: '/app/finance/expenses', label: 'Contas a Pagar', icon: CreditCard },
       ],
     },
     {
@@ -104,21 +111,11 @@ export const MENUS: Record<Role, MenuSection[]> = {
     { items: [{ to: '/app/messages', label: 'Mensagens', icon: Mail }, TICKETS] },
   ],
   superadmin: [
-    { items: [{ to: '/app', label: 'Dashboard', icon: Crown }] },
-    {
-      title: 'Gestão',
-      items: [
-        { to: '/app/schools', label: 'Escolas', icon: School2 },
-        { to: '/app/students', label: 'Alunos Global', icon: GraduationCap },
-        { to: '/app/users', label: 'Usuários', icon: Users },
-      ],
-    },
+    { items: [{ to: '/app', label: 'Dashboard', icon: LayoutDashboard }] },
     {
       title: 'SaaS',
       items: [
-        { to: '/app/saas-payments', label: 'Pagamentos SaaS', icon: CreditCard },
-        { to: '/app/email-config', label: 'Config. E-mail', icon: Mail },
-        { to: '/app/coupons', label: 'Cupons', icon: Tag },
+        { to: '/saas', label: 'Painel Super Admin', icon: Crown },
       ],
     },
     { items: [TICKETS] },
