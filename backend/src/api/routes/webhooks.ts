@@ -80,5 +80,12 @@ async function handlePaymentWebhook(provider: PaymentProvider, req: Request, res
 // ASAAS (produção): POST /api/webhooks/asaas
 webhooksRouter.post('/asaas', (req, res) => handlePaymentWebhook(asaasProvider, req, res));
 
-// Legado/simulação: POST /api/webhooks/nuvende (mantido para compatibilidade de testes)
-webhooksRouter.post('/nuvende', (req, res) => handlePaymentWebhook(simulationProvider, req, res));
+// Webhook de SIMULAÇÃO (verifyWebhook sempre true) — SÓ fora de produção.
+// Em produção seria uma falha crítica: qualquer um poderia forjar a confirmação
+// de um pagamento (marcar fatura paga / ativar assinatura SaaS de graça).
+const IS_PROD = process.env.VERCEL_ENV === 'production' || process.env.NODE_ENV === 'production';
+if (!IS_PROD) {
+  webhooksRouter.post('/nuvende', (req, res) => handlePaymentWebhook(simulationProvider, req, res));
+} else {
+  webhooksRouter.post('/nuvende', (_req, res) => res.status(410).json({ code: 'disabled', message: 'Webhook de simulação desativado em produção.' }));
+}
