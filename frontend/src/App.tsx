@@ -30,6 +30,7 @@ import { SaasAdminGuard } from '@/saas/SaasAdminGuard';
 import { SaasAdminLayout } from '@/saas/SaasAdminLayout';
 import { SaasDashboardPage } from '@/saas/pages/SaasDashboardPage';
 import { SaasPlaceholderPage } from '@/saas/pages/SaasPlaceholderPage';
+import { SaasSchoolsPage } from '@/saas/pages/SaasSchoolsPage';
 
 const Admin = ({ children }: { children: React.ReactNode }) => (
   <RoleGuard allowed={['school_admin', 'superadmin']}>{children}</RoleGuard>
@@ -81,7 +82,7 @@ export default function App() {
             <Route element={<SaasAdminLayout />}>
               <Route index element={<SaasDashboardPage />} />
               <Route path="resumo"           element={<SaasPlaceholderPage title="Resumo executivo" subtitle="Indicadores consolidados da operação SaaS." />} />
-              <Route path="escolas"          element={<SaasPlaceholderPage title="Todas as escolas" subtitle="Gerencie todas as escolas cadastradas na plataforma." />} />
+              <Route path="escolas"          element={<SaasSchoolsPage />} />
               <Route path="planos"           element={<SaasPlaceholderPage title="Planos e assinaturas" subtitle="Controle assinaturas ativas, upgrades, downgrades e cancelamentos." />} />
               <Route path="vencimentos"      element={<SaasPlaceholderPage title="Vencimentos" subtitle="Acompanhamento de vencimentos e ações rápidas." />} />
               <Route path="status"           element={<SaasPlaceholderPage title="Status das contas" subtitle="Contas ativas, suspensas, canceladas e trials." />} />

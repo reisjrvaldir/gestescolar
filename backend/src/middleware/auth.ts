@@ -67,7 +67,7 @@ async function resolveProfile(authUserId: string): Promise<TenantContext | null>
   if (!isDbConfigured) return null;
   const { rows } = await pool.query(
     `select p.id, p.auth_user_id, p.school_id, p.role,
-            s.subscription_status, s.trial_ends_at
+            s.subscription_status, s.trial_ends_at, s.status as school_status
        from public.profiles p
        left join public.schools s on s.id = p.school_id
       where p.auth_user_id = $1 limit 1`,
@@ -81,12 +81,15 @@ async function resolveProfile(authUserId: string): Promise<TenantContext | null>
     role: rows[0].role,
     subscriptionStatus: rows[0].subscription_status ?? null,
     trialEndsAt: rows[0].trial_ends_at ?? null,
+    schoolStatus: rows[0].school_status ?? null,
   };
 }
 
-/** Assinatura ativa = 'active' OU trial ainda válido. Superadmin nunca é barrado. */
+/** Assinatura ativa = 'active' OU trial ainda válido. Superadmin nunca é barrado.
+ *  Escola suspensa/bloqueada pelo Super Admin nunca é considerada ativa. */
 function isSubscriptionActive(ctx: TenantContext): boolean {
   if (ctx.role === 'superadmin') return true;
+  if (ctx.schoolStatus === 'suspended' || ctx.schoolStatus === 'blocked') return false;
   const status = ctx.subscriptionStatus ?? 'trialing';
   if (status === 'active') return true;
   if (status === 'trialing') {

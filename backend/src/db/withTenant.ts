@@ -8,6 +8,7 @@ export interface TenantContext {
   role: string;
   subscriptionStatus?: string | null;
   trialEndsAt?: string | null;
+  schoolStatus?: string | null;
 }
 
 /**

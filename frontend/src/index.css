@@ -17,6 +17,7 @@
   .btn-primary { @apply btn bg-primary text-white hover:bg-primary-hover; }
   .btn-outline { @apply btn border border-border bg-surface text-ink hover:bg-canvas; }
   .btn-ghost   { @apply btn text-ink-muted hover:bg-canvas; }
+  .btn-danger  { @apply btn bg-danger text-white hover:bg-danger-hover; }
 
   .card {
     @apply rounded-2xl border border-border bg-surface shadow-card;

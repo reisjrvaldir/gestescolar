@@ -33,7 +33,7 @@ export default {
         // Estados
         success: { DEFAULT: '#16A34A', soft: '#E7F6EC' },
         warning: { DEFAULT: '#D97706', soft: '#FEF6E7' },
-        danger:  { DEFAULT: '#DC2626', soft: '#FDECEC' },
+        danger:  { DEFAULT: '#DC2626', soft: '#FDECEC', hover: '#B91C1C' },
       },
       borderRadius: {
         xl: '0.875rem',

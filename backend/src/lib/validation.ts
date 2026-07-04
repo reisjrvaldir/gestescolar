@@ -35,13 +35,22 @@ export function generateSecurePassword(): string {
   return randomBytes(12).toString('base64url');
 }
 
+// Alfabeto sem caracteres ambíguos (0/O, 1/l/I) — senha temporária legível
+// para ser ditada/anotada e repassada ao responsável ou funcionário.
+const TEMP_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789';
+
 /**
- * Senha inicial que o usuário digita: os 6 primeiros dígitos do CPF.
- * Login é feito pela matrícula. Troca é obrigatória no 1º acesso
+ * Senha inicial ALEATÓRIA (10 caracteres) gerada no cadastro e exibida uma
+ * única vez a quem cadastra, para repasse ao usuário. Substitui o esquema
+ * anterior (6 dígitos do CPF), que permitia tomada de conta antes do 1º acesso.
+ * Login é feito pela matrícula; troca é obrigatória no 1º acesso
  * (password_change_required = true).
  */
-export function initialPassword(cpf: string): string {
-  return cpfDigits(cpf).slice(0, 6);
+export function initialPassword(): string {
+  const bytes = randomBytes(10);
+  let out = '';
+  for (let i = 0; i < bytes.length; i++) out += TEMP_ALPHABET[bytes[i] % TEMP_ALPHABET.length];
+  return out;
 }
 
 /**

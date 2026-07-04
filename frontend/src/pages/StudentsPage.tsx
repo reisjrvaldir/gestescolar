@@ -150,7 +150,7 @@ export function StudentsPage() {
     if (!credentials) return;
     const text = `Aluno: ${credentials.name}
 Login (matrícula): ${credentials.registration_number}
-Senha inicial: ${credentials.initial_password ?? '(6 primeiros dígitos do CPF do responsável)'}
+Senha inicial: ${credentials.initial_password ?? '(temporária gerada no cadastro)'}
 E-mail do responsável: ${credentials.guardian_email}
 (troca de senha obrigatória no 1º acesso)`;
     navigator.clipboard.writeText(text);
@@ -391,7 +391,7 @@ E-mail do responsável: ${credentials.guardian_email}
                 <div className="flex justify-between"><span className="text-ink-muted">Mensalidade:</span><span className="font-bold text-ink">{brl(Number(credentials.monthly_fee))}</span></div>
               )}
               <div className="flex justify-between"><span className="text-ink-muted">E-mail do responsável:</span><span className="font-medium text-ink">{credentials.guardian_email}</span></div>
-              <p className="pt-1 text-xs text-ink-subtle">Senha = 6 primeiros dígitos do CPF do responsável. Troca obrigatória no 1º acesso.</p>
+              <p className="pt-1 text-xs text-ink-subtle">Senha temporária gerada automaticamente — anote e repasse ao responsável. Troca obrigatória no 1º acesso.</p>
             </div>
           </div>
         )}

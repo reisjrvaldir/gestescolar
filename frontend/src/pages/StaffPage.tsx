@@ -85,7 +85,7 @@ export function StaffPage() {
     if (!credentials) return;
     const text = `Funcionário: ${credentials.name}
 Login (matrícula): ${credentials.registration_number}
-Senha inicial: ${credentials.initial_password ?? '(6 primeiros dígitos do CPF)'}
+Senha inicial: ${credentials.initial_password ?? '(temporária gerada no cadastro)'}
 E-mail: ${credentials.email}
 (troca de senha obrigatória no 1º acesso)`;
     navigator.clipboard.writeText(text);
@@ -269,7 +269,7 @@ E-mail: ${credentials.email}
               <div className="flex justify-between"><span className="text-ink-muted">Login (matrícula):</span><span className="font-mono font-bold text-primary">{credentials.registration_number}</span></div>
               <div className="flex justify-between"><span className="text-ink-muted">Senha inicial:</span><span className="font-mono font-bold text-ink">{credentials.initial_password ?? '—'}</span></div>
               <div className="flex justify-between"><span className="text-ink-muted">E-mail:</span><span className="font-medium text-ink">{credentials.email}</span></div>
-              <p className="pt-1 text-xs text-ink-subtle">Senha = 6 primeiros dígitos do CPF. Troca obrigatória no 1º acesso.</p>
+              <p className="pt-1 text-xs text-ink-subtle">Senha temporária gerada automaticamente — anote e repasse ao funcionário. Troca obrigatória no 1º acesso.</p>
             </div>
           </div>
         )}

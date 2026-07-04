@@ -105,7 +105,7 @@ export function LoginPage() {
               <div>
                 <label className="label">Senha</label>
                 <input type="password" className="input" value={password} onChange={(e) => setPassword(e.target.value)} required />
-                <p className="mt-1 text-xs text-ink-subtle">1º acesso: senha = 6 primeiros dígitos do CPF.</p>
+                <p className="mt-1 text-xs text-ink-subtle">1º acesso: use a senha temporária fornecida pela escola.</p>
               </div>
               <button className="btn-primary w-full justify-center" disabled={loading}>
                 {loading && <Loader2 size={16} className="animate-spin" />} Entrar na conta

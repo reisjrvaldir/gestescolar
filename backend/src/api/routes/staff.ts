@@ -52,9 +52,9 @@ staffRouter.post('/', requireRole('school_admin', 'superadmin'), async (req, res
       const matRow = await c.query(`select public.next_staff_matricula() as matricula`);
       const matricula: string = matRow.rows[0].matricula;
 
-      // Senha visível (o que o usuário digita) = 6 primeiros dígitos do CPF.
+      // Senha inicial = temporária aleatória (anote e repasse ao funcionário).
       // Login é feito pela matrícula. Guarda-se a versão de 8 chars no provedor.
-      const visiblePassword = initialPassword(s.cpf);
+      const visiblePassword = initialPassword();
       const authResult = await signUpGuardian({
         email: s.email,
         password: toStoredPassword(visiblePassword),
@@ -85,7 +85,7 @@ staffRouter.post('/', requireRole('school_admin', 'superadmin'), async (req, res
         ...tRow.rows[0],
         login_matricula: matricula,
         initial_password: visiblePassword,
-        login_password_hint: 'Login: matrícula • Senha inicial: 6 primeiros dígitos do CPF. Troca obrigatória no 1º acesso.',
+        login_password_hint: 'Login: matrícula • Senha inicial: temporária gerada automaticamente (anote e repasse ao funcionário). Troca obrigatória no 1º acesso.',
       };
     });
     res.status(201).json({ ok: true, data: result });

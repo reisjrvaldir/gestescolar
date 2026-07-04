@@ -136,3 +136,106 @@ saasRouter.get('/schools', async (req, res) => {
   });
   res.json({ ok: true, data });
 });
+
+// -------------------------------------------------------------------------
+// Ações críticas sobre escolas — cada uma registra em audit_logs (ator +
+// data/hora + motivo). Só superadmin chega aqui (middleware acima).
+// -------------------------------------------------------------------------
+
+// POST /api/saas/schools/:id/extend — prorroga o acesso (dias OU data final).
+saasRouter.post('/schools/:id/extend', async (req, res) => {
+  const schoolId = String(req.params.id);
+  const days = req.body?.days != null ? Number(req.body.days) : null;
+  const until = typeof req.body?.until === 'string' ? req.body.until.trim() : '';
+  const reason = typeof req.body?.reason === 'string' ? req.body.reason.trim() : '';
+  if (!reason) return res.status(400).json({ code: 'reason_required', message: 'Informe o motivo da prorrogação.' });
+
+  let newUntil: string | null = null;
+  if (until) {
+    const d = new Date(`${until}T23:59:59`);
+    if (Number.isNaN(d.getTime())) return res.status(400).json({ code: 'bad_date', message: 'Data final inválida.' });
+    if (d.getTime() <= Date.now()) return res.status(400).json({ code: 'past_date', message: 'A data final deve ser futura.' });
+    newUntil = d.toISOString();
+  } else if (days != null) {
+    if (!Number.isFinite(days) || days <= 0 || days > 3650) return res.status(400).json({ code: 'bad_days', message: 'Número de dias inválido.' });
+  } else {
+    return res.status(400).json({ code: 'missing_period', message: 'Informe a quantidade de dias ou uma data final.' });
+  }
+
+  const data = await withTenant(req.ctx!, async (c) => {
+    const upd = await c.query(
+      `update public.schools s set
+         trial_ends_at = case when $2::timestamptz is not null then $2::timestamptz
+                              else greatest(now(), coalesce(s.trial_ends_at, now())) + ($3::int * interval '1 day') end,
+         subscription_status = case when s.subscription_status = 'active' then s.subscription_status else 'trialing' end,
+         updated_at = now()
+       where s.id = $1
+       returning s.id, s.name, s.trial_ends_at, s.subscription_status, s.status as school_status`,
+      [schoolId, newUntil, days ?? 0],
+    );
+    if (upd.rowCount === 0) return null;
+    await c.query(
+      `insert into public.audit_logs (school_id, user_id, action, entity_type, entity_id, metadata)
+       values ($1,$2,'ACCESS_EXTENDED','school',$1,$3)`,
+      [schoolId, req.ctx!.profileId, JSON.stringify({ reason, days: days ?? null, until: newUntil, actor: req.identity?.email ?? null })],
+    );
+    return upd.rows[0];
+  });
+  if (!data) return res.status(404).json({ code: 'not_found', message: 'Escola não encontrada.' });
+  res.json({ ok: true, data });
+});
+
+// POST /api/saas/schools/:id/suspend — suspende a escola (bloqueia acesso).
+saasRouter.post('/schools/:id/suspend', async (req, res) => {
+  const schoolId = String(req.params.id);
+  const reason = typeof req.body?.reason === 'string' ? req.body.reason.trim() : '';
+  if (!reason) return res.status(400).json({ code: 'reason_required', message: 'Informe o motivo da suspensão.' });
+
+  const data = await withTenant(req.ctx!, async (c) => {
+    const upd = await c.query(
+      `update public.schools set status='suspended', updated_at=now() where id=$1
+       returning id, name, status as school_status, subscription_status, trial_ends_at`,
+      [schoolId],
+    );
+    if (upd.rowCount === 0) return null;
+    await c.query(
+      `insert into public.audit_logs (school_id, user_id, action, entity_type, entity_id, metadata)
+       values ($1,$2,'SCHOOL_SUSPENDED','school',$1,$3)`,
+      [schoolId, req.ctx!.profileId, JSON.stringify({ reason, actor: req.identity?.email ?? null })],
+    );
+    return upd.rows[0];
+  });
+  if (!data) return res.status(404).json({ code: 'not_found', message: 'Escola não encontrada.' });
+  res.json({ ok: true, data });
+});
+
+// POST /api/saas/schools/:id/reactivate — reativa a escola (opcionalmente com novo trial).
+saasRouter.post('/schools/:id/reactivate', async (req, res) => {
+  const schoolId = String(req.params.id);
+  const reason = typeof req.body?.reason === 'string' ? req.body.reason.trim() : '';
+  const raw = req.body?.trial_days != null ? Number(req.body.trial_days) : 7;
+  const days = Number.isFinite(raw) && raw > 0 && raw <= 3650 ? Math.floor(raw) : 7;
+
+  const data = await withTenant(req.ctx!, async (c) => {
+    const upd = await c.query(
+      `update public.schools s set
+         status='active',
+         subscription_status = case when s.subscription_status='active' then 'active' else 'trialing' end,
+         trial_ends_at = case when s.subscription_status='active' then s.trial_ends_at
+                              else greatest(coalesce(s.trial_ends_at, now()), now() + ($2::int * interval '1 day')) end,
+         updated_at = now()
+       where s.id=$1
+       returning s.id, s.name, s.status as school_status, s.subscription_status, s.trial_ends_at`,
+      [schoolId, days],
+    );
+    if (upd.rowCount === 0) return null;
+    await c.query(
+      `insert into public.audit_logs (school_id, user_id, action, entity_type, entity_id, metadata)
+       values ($1,$2,'SCHOOL_REACTIVATED','school',$1,$3)`,
+      [schoolId, req.ctx!.profileId, JSON.stringify({ reason: reason || null, trial_days: days, actor: req.identity?.email ?? null })],
+    );
+    return upd.rows[0];
+  });
+  if (!data) return res.status(404).json({ code: 'not_found', message: 'Escola não encontrada.' });
+  res.json({ ok: true, data });
+});
