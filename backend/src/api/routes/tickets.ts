@@ -77,6 +77,14 @@ ticketsRouter.post('/:id/comments', async (req, res) => {
   const p = commentSchema.safeParse(req.body);
   if (!p.success) return res.status(400).json({ code: 'validation', message: p.error.issues[0]?.message });
   const created = await withTenant(req.ctx!, async (c) => {
+    // Confirma que o ticket pertence à escola do solicitante antes de comentar
+    // (RLS inerte → sem esta checagem seria possível injetar comentário em
+    // ticket de outra escola informando um id arbitrário).
+    const owns = await c.query(
+      `select 1 from public.support_tickets where id=$1 and school_id=$2 limit 1`,
+      [req.params.id, req.ctx!.schoolId],
+    );
+    if (owns.rows.length === 0) return null;
     const { rows } = await c.query(
       `insert into public.ticket_comments (ticket_id, user_id, message)
        values ($1, $2, $3) returning id, message, created_at`,
@@ -84,6 +92,7 @@ ticketsRouter.post('/:id/comments', async (req, res) => {
     );
     return rows[0];
   });
+  if (!created) return res.status(404).json({ code: 'not_found' });
   res.status(201).json({ ok: true, data: created });
 });
 

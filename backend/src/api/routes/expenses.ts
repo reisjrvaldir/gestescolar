@@ -7,7 +7,7 @@ import { dateSchema } from '../../lib/validation';
 export const expensesRouter = Router();
 expensesRouter.use(requireAuth);
 
-expensesRouter.get('/', async (req, res) => {
+expensesRouter.get('/', requireRole('school_admin', 'financial', 'superadmin'), async (req, res) => {
   const data = await withTenant(req.ctx!, async (c) => {
     const { rows } = await c.query(
       `select id, supplier_name, description, category, amount::float8 as amount, due_date, status, created_at

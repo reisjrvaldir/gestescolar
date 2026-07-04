@@ -1,9 +1,11 @@
 import { Router } from 'express';
 import { withTenant } from '../../db/withTenant';
-import { requireAuth } from '../../middleware/auth';
+import { requireAuth, requireRole } from '../../middleware/auth';
 
 export const financeRouter = Router();
-financeRouter.use(requireAuth);
+// Dados financeiros da escola (previsão, despesas, inadimplência com nomes de
+// famílias) são restritos à gestão/financeiro — nunca a responsável/professor.
+financeRouter.use(requireAuth, requireRole('school_admin', 'financial', 'superadmin'));
 
 function currentMonth(): string {
   const d = new Date();

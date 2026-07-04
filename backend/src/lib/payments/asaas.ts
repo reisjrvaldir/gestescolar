@@ -12,9 +12,17 @@
 //  retém a taxa. Escola sem walletId → cobrança sem split (tudo na conta
 //  principal), até concluir o onboarding da subconta.
 // =============================================================
+import { timingSafeEqual } from 'crypto';
 import type {
   PaymentProvider, CreateChargeInput, ChargeResult, NormalizedWebhookEvent, ChargeCustomer,
 } from './types';
+
+/** Comparação em tempo constante (evita side-channel por timing no token). */
+function safeEqual(a: string, b: string): boolean {
+  const ba = Buffer.from(a);
+  const bb = Buffer.from(b);
+  return ba.length === bb.length && timingSafeEqual(ba, bb);
+}
 
 const API_KEY = process.env.ASAAS_API_KEY;
 const ENV = (process.env.ASAAS_ENV ?? 'sandbox').toLowerCase();
@@ -121,7 +129,8 @@ export const asaasProvider: PaymentProvider = {
     // ASAAS envia o token configurado no painel no header 'asaas-access-token'.
     if (!WEBHOOK_TOKEN) return false; // exige token em produção — sem ele, rejeita.
     const received = headers['asaas-access-token'] ?? headers['Asaas-Access-Token'];
-    return received === WEBHOOK_TOKEN;
+    if (!received) return false;
+    return safeEqual(String(received), WEBHOOK_TOKEN);
   },
 
   parseWebhook(body): NormalizedWebhookEvent | null {
