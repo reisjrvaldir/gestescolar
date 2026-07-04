@@ -1,5 +1,5 @@
 import { TrendingUp } from 'lucide-react';
-import type { MonthPoint } from '@/data/saas/dashboardData';
+import type { MonthPoint } from '@/services/saas';
 
 const brl = (v: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v);
 

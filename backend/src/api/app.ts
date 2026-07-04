@@ -30,6 +30,7 @@ import { publicAuthRouter } from './routes/publicAuth';
 import { chargesRouter } from './routes/charges';
 import { financeRouter } from './routes/finance';
 import { billingRouter } from './routes/billing';
+import { saasRouter } from './routes/saas';
 
 export const app = express();
 
@@ -94,6 +95,7 @@ app.use('/api/webhooks', webhooksRouter);
 app.use('/api/charges', chargesRouter);
 app.use('/api/finance', financeRouter);
 app.use('/api/billing', billingRouter);
+app.use('/api/saas', saasRouter);
 
 // 404 padrão
 app.use((_req, res) => res.status(404).json({ code: 'not_found', message: 'Rota não encontrada' }));

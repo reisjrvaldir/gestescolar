@@ -1,7 +1,7 @@
 import { UserPlus, ArrowUpDown, CheckCircle2, XCircle, UserCog, type LucideIcon } from 'lucide-react';
-import type { Activity } from '@/data/saas/dashboardData';
+import type { SaasActivity } from '@/services/saas';
 
-const CFG: Record<Activity['type'], { icon: LucideIcon; tone: string }> = {
+const CFG: Record<SaasActivity['type'], { icon: LucideIcon; tone: string }> = {
   school_created:    { icon: UserPlus,    tone: 'bg-primary-soft text-primary' },
   plan_changed:      { icon: ArrowUpDown, tone: 'bg-purple-soft text-purple' },
   payment_received:  { icon: CheckCircle2, tone: 'bg-success-soft text-success' },
@@ -20,18 +20,18 @@ function timeAgo(iso: string) {
   return d === 1 ? 'ontem' : `${d} dias atrás`;
 }
 
-export function ActivitiesFeed({ items }: { items: Activity[] }) {
+export function ActivitiesFeed({ items }: { items: SaasActivity[] }) {
   return (
     <div className="card overflow-hidden">
       <div className="border-b border-border px-5 py-3.5">
         <h3 className="text-sm font-bold text-ink">Atividades recentes</h3>
       </div>
       <div className="divide-y divide-border">
-        {items.map((a) => {
-          const cfg = CFG[a.type];
+        {items.map((a, i) => {
+          const cfg = CFG[a.type] ?? CFG.user_created;
           const Icon = cfg.icon;
           return (
-            <div key={a.id} className="flex items-center gap-3 px-5 py-3">
+            <div key={i} className="flex items-center gap-3 px-5 py-3">
               <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full ${cfg.tone}`}>
                 <Icon size={16} />
               </div>
