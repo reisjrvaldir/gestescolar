@@ -90,8 +90,8 @@ studentsRouter.post('/', requireRole('school_admin', 'superadmin'), async (req, 
       const matRow = await c.query(`select public.next_matricula() as matricula`);
       const matricula: string = matRow.rows[0].matricula;
 
-      // Login = matrícula do aluno; senha visível = 6 primeiros dígitos do CPF do responsável.
-      const visiblePassword = initialPassword(s.guardian.cpf);
+      // Login = matrícula do aluno; senha inicial = temporária aleatória (repasse ao responsável).
+      const visiblePassword = initialPassword();
 
       // 4) Criar usuário no Neon Auth (público — sign-up); guarda versão de 8 chars.
       const authResult = await signUpGuardian({
@@ -147,7 +147,7 @@ studentsRouter.post('/', requireRole('school_admin', 'superadmin'), async (req, 
         guardian_email: s.guardian.email,
         login_matricula: matricula,
         initial_password: visiblePassword,
-        login_password_hint: 'Login: matrícula do aluno • Senha inicial: 6 primeiros dígitos do CPF do responsável. Troca obrigatória no 1º acesso.',
+        login_password_hint: 'Login: matrícula do aluno • Senha inicial: temporária gerada automaticamente (anote e repasse ao responsável). Troca obrigatória no 1º acesso.',
         invoice_ids: invoiceIds,
       };
     });
