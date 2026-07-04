@@ -56,6 +56,18 @@ export const saasService = {
     const r = await api.get<{ ok: boolean; data: SaasSchool[] }>('/saas/schools');
     return r.data;
   },
+  async extendAccess(id: string, body: { days?: number; until?: string; reason: string }) {
+    const r = await api.post<{ ok: boolean; data: SaasSchool }>(`/saas/schools/${id}/extend`, body);
+    return r.data;
+  },
+  async suspendSchool(id: string, reason: string) {
+    const r = await api.post<{ ok: boolean; data: SaasSchool }>(`/saas/schools/${id}/suspend`, { reason });
+    return r.data;
+  },
+  async reactivateSchool(id: string, body: { reason?: string; trial_days?: number }) {
+    const r = await api.post<{ ok: boolean; data: SaasSchool }>(`/saas/schools/${id}/reactivate`, body);
+    return r.data;
+  },
 };
 
 // Paleta fixa para os donuts (o backend devolve só label/value).

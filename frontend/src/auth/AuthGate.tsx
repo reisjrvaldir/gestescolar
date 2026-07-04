@@ -59,6 +59,29 @@ function SubscriptionBlocked({ me }: { me: Me }) {
   );
 }
 
+function SchoolSuspended({ me }: { me: Me }) {
+  return (
+    <div className="flex min-h-screen items-center justify-center bg-canvas p-4">
+      <div className="card w-full max-w-md p-7 text-center">
+        <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-danger-soft text-danger">
+          <ShieldAlert size={28} />
+        </div>
+        <h1 className="text-lg font-bold text-ink">Conta suspensa</h1>
+        <p className="mt-2 text-sm text-ink-muted">
+          O acesso da <strong>{me.school_name}</strong> foi suspenso pela administração da plataforma.
+          Entre em contato com o suporte do GestEscolar para regularizar a situação.
+        </p>
+        <button
+          className="mt-5 w-full text-center text-xs text-ink-subtle hover:text-ink-muted"
+          onClick={() => signOut().then(() => { window.location.href = '/login'; })}
+        >
+          Sair
+        </button>
+      </div>
+    </div>
+  );
+}
+
 interface MeResponse {
   authenticated: boolean;
   hasProfile: boolean;
@@ -104,6 +127,12 @@ export function AuthGate() {
   // Troca obrigatória de senha — bloqueia tudo até trocar.
   if (me.profile.password_change_required && location.pathname !== '/app/change-password') {
     return <Navigate to="/app/change-password" replace />;
+  }
+
+  // Escola suspensa/bloqueada pela plataforma → bloqueio total (não é auto-regularizável).
+  if (me.profile.role !== 'superadmin' &&
+      (me.profile.school_status === 'suspended' || me.profile.school_status === 'blocked')) {
+    return <SchoolSuspended me={me.profile} />;
   }
 
   // Paywall: assinatura inativa bloqueia o app (exceto Configurações p/ regularizar).
