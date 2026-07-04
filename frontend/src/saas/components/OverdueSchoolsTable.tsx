@@ -1,7 +1,7 @@
 import { ArrowRight, AlertTriangle } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { brl } from '@/lib/fees';
-import type { OverdueSchool } from '@/data/saas/dashboardData';
+import type { OverdueSchool } from '@/services/saas';
 
 export function OverdueSchoolsTable({ rows }: { rows: OverdueSchool[] }) {
   const navigate = useNavigate();

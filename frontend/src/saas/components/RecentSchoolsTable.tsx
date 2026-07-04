@@ -2,11 +2,12 @@ import { ArrowRight } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { StatusBadge } from '@/components/ui/StatusBadge';
 import { fmtDate } from '@/lib/dates';
-import type { RecentSchool } from '@/data/saas/dashboardData';
+import type { RecentSchool } from '@/services/saas';
 
 const TONE: Record<RecentSchool['status'], { tone: 'success' | 'warning' | 'danger' | 'neutral'; label: string }> = {
   ativa: { tone: 'success', label: 'Ativa' },
   trial: { tone: 'warning', label: 'Trial' },
+  em_atraso: { tone: 'danger', label: 'Em atraso' },
   suspensa: { tone: 'warning', label: 'Suspensa' },
   cancelada: { tone: 'danger', label: 'Cancelada' },
 };
@@ -29,7 +30,6 @@ export function RecentSchoolsTable({ rows }: { rows: RecentSchool[] }) {
           <tr className="border-b border-border text-left text-[11px] font-semibold uppercase text-ink-subtle">
             <th className="px-5 py-2.5">Escola</th>
             <th className="hidden px-5 py-2.5 sm:table-cell">Plano</th>
-            <th className="hidden px-5 py-2.5 md:table-cell">Cidade</th>
             <th className="px-5 py-2.5">Cadastro</th>
             <th className="px-5 py-2.5">Status</th>
           </tr>
@@ -39,7 +39,6 @@ export function RecentSchoolsTable({ rows }: { rows: RecentSchool[] }) {
             <tr key={s.id} className="border-b border-border last:border-0 hover:bg-canvas">
               <td className="px-5 py-2.5 font-medium text-ink">{s.name}</td>
               <td className="hidden px-5 py-2.5 text-ink-muted sm:table-cell">{s.plan}</td>
-              <td className="hidden px-5 py-2.5 text-ink-muted md:table-cell">{s.city}</td>
               <td className="px-5 py-2.5 text-ink-muted">{fmtDate(s.created_at)}</td>
               <td className="px-5 py-2.5"><StatusBadge tone={TONE[s.status].tone}>{TONE[s.status].label}</StatusBadge></td>
             </tr>

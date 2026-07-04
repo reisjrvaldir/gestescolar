@@ -1,4 +1,4 @@
-import type { Slice } from '@/data/saas/dashboardData';
+import type { Slice } from '@/services/saas';
 
 interface Props { title: string; subtitle?: string; slices: Slice[] }
 
