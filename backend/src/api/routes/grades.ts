@@ -44,7 +44,24 @@ gradesRouter.post('/batch', requireRole('school_admin', 'teacher', 'superadmin')
     return res.status(400).json({ code: 'validation', message: parsed.error.issues[0]?.message });
   }
   const { class_id, subject, period, grades } = parsed.data;
-  await withTenant(req.ctx!, async (c) => {
+  const result = await withTenant(req.ctx!, async (c) => {
+    // Turma e alunos precisam pertencer à escola (RLS inerte → sem estas
+    // checagens seria possível gravar/ler nome de aluno de outra escola).
+    const cls = await c.query(
+      `select 1 from public.classes where id=$1 and school_id=$2 limit 1`,
+      [class_id, req.ctx!.schoolId],
+    );
+    if (cls.rows.length === 0) return { error: 'class_not_found' as const };
+
+    const ids = [...new Set(grades.map((g) => g.student_id))];
+    if (ids.length > 0) {
+      const valid = await c.query(
+        `select count(*)::int as n from public.students where school_id=$1 and id = any($2::uuid[])`,
+        [req.ctx!.schoolId, ids],
+      );
+      if (valid.rows[0].n !== ids.length) return { error: 'invalid_students' as const };
+    }
+
     await c.query(
       `delete from public.grades
         where school_id = $1 and class_id = $2 and period = $3 and subject = $4`,
@@ -57,6 +74,11 @@ gradesRouter.post('/batch', requireRole('school_admin', 'teacher', 'superadmin')
         [req.ctx!.schoolId, g.student_id, class_id, period, g.grade, subject],
       );
     }
+    return { ok: true as const };
   });
+  if ('error' in result) {
+    const msg = result.error === 'class_not_found' ? 'Turma não encontrada nesta escola.' : 'Aluno inválido para esta escola.';
+    return res.status(result.error === 'class_not_found' ? 404 : 400).json({ code: result.error, message: msg });
+  }
   res.json({ ok: true });
 });
