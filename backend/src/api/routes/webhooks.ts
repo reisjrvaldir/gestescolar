@@ -34,6 +34,9 @@ async function handlePaymentWebhook(provider: PaymentProvider, req: Request, res
   const client = await pool.connect();
   try {
     await client.query('begin');
+    // Liquidação é operação de sistema (identifica a escola pelo id da fatura /
+    // pela referência da assinatura) → contexto superadmin para a RLS forçada.
+    await client.query('select set_config($1, $2, true)', ['app.user_role', 'superadmin']);
 
     // Assinatura SaaS: externalReference = "subscription:{schoolId}:{planId}:{cycle}"
     if (ref.startsWith('subscription:')) {

@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { z } from 'zod';
-import { pool } from '../../db/pool';
+import { withSystem } from '../../db/withTenant';
 import { requireIdentity, resolveProfile } from '../../middleware/auth';
 
 export const meRouter = Router();
@@ -12,15 +12,18 @@ meRouter.get('/', requireIdentity, async (req, res) => {
   if (!ctx) {
     return res.json({ ok: true, authenticated: true, hasProfile: false, email: id.email });
   }
-  const { rows } = await pool.query(
-    `select p.name, p.email, p.role, p.password_change_required,
-            s.id as school_id, s.name as school_name,
-            s.status as school_status, s.subscription_status, s.trial_ends_at
-       from public.profiles p
-       left join public.schools s on s.id = p.school_id
-      where p.auth_user_id = $1 limit 1`,
-    [id.authUserId],
-  );
+  const rows = await withSystem(async (c) => {
+    const r = await c.query(
+      `select p.name, p.email, p.role, p.password_change_required,
+              s.id as school_id, s.name as school_name,
+              s.status as school_status, s.subscription_status, s.trial_ends_at
+         from public.profiles p
+         left join public.schools s on s.id = p.school_id
+        where p.auth_user_id = $1 limit 1`,
+      [id.authUserId],
+    );
+    return r.rows;
+  });
   res.json({ ok: true, authenticated: true, hasProfile: true, profile: rows[0] });
 });
 
@@ -28,9 +31,11 @@ meRouter.get('/', requireIdentity, async (req, res) => {
 // Frontend chama logo após sucesso do Better Auth changePassword.
 meRouter.post('/password-changed', requireIdentity, async (req, res) => {
   const id = req.identity!;
-  await pool.query(
-    `update public.profiles set password_change_required = false where auth_user_id = $1`,
-    [id.authUserId],
+  await withSystem((c) =>
+    c.query(
+      `update public.profiles set password_change_required = false where auth_user_id = $1`,
+      [id.authUserId],
+    ),
   );
   res.json({ ok: true });
 });
@@ -56,9 +61,9 @@ meRouter.post('/onboarding', requireIdentity, async (req, res) => {
   }
   const { school_name, admin_name, cnpj, phone } = parsed.data;
 
-  const client = await pool.connect();
-  try {
-    await client.query('begin');
+  // Contexto de sistema: cria escola + 1º perfil (school_admin) + saldo.
+  // Ainda não há escola no contexto do usuário — daí rodar como sistema.
+  const schoolId = await withSystem(async (client) => {
     // Trial de 7 dias a partir de agora.
     const school = await client.query(
       `insert into public.schools (name, cnpj, phone, status, subscription_status, trial_ends_at)
@@ -66,22 +71,17 @@ meRouter.post('/onboarding', requireIdentity, async (req, res) => {
        returning id`,
       [school_name, cnpj ?? null, phone ?? null],
     );
-    const schoolId = school.rows[0].id;
+    const newSchoolId = school.rows[0].id;
     await client.query(
       `insert into public.profiles (auth_user_id, school_id, name, email, role, status)
        values ($1, $2, $3, $4, 'school_admin', 'active')`,
-      [id.authUserId, schoolId, admin_name, id.email ?? null],
+      [id.authUserId, newSchoolId, admin_name, id.email ?? null],
     );
     await client.query(
       `insert into public.school_balances (school_id) values ($1)`,
-      [schoolId],
+      [newSchoolId],
     );
-    await client.query('commit');
-    res.status(201).json({ ok: true, school_id: schoolId });
-  } catch (err) {
-    await client.query('rollback');
-    throw err;
-  } finally {
-    client.release();
-  }
+    return newSchoolId;
+  });
+  res.status(201).json({ ok: true, school_id: schoolId });
 });

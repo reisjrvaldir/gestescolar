@@ -1,6 +1,7 @@
 import type { Request, Response, NextFunction } from 'express';
 import { createRemoteJWKSet, jwtVerify } from 'jose';
-import { pool, isDbConfigured } from '../db/pool';
+import { isDbConfigured } from '../db/pool';
+import { withSystem } from '../db/withTenant';
 import type { TenantContext } from '../db/withTenant';
 
 // JWKS do Neon Auth (Better Auth) — cacheado pelo jose entre requests.
@@ -65,14 +66,19 @@ async function verifyAuthToken(req: Request): Promise<AuthIdentity | null> {
 /** Resolve school_id + role + assinatura a partir do profile vinculado ao auth_user_id. */
 async function resolveProfile(authUserId: string): Promise<TenantContext | null> {
   if (!isDbConfigured) return null;
-  const { rows } = await pool.query(
-    `select p.id, p.auth_user_id, p.school_id, p.role,
-            s.subscription_status, s.trial_ends_at, s.status as school_status
-       from public.profiles p
-       left join public.schools s on s.id = p.school_id
-      where p.auth_user_id = $1 limit 1`,
-    [authUserId],
-  );
+  // Contexto de sistema: sob RLS forçada, o perfil é resolvido antes de haver
+  // escola no contexto — o acesso é por auth_user_id verificado no JWT.
+  const rows = await withSystem(async (c) => {
+    const r = await c.query(
+      `select p.id, p.auth_user_id, p.school_id, p.role,
+              s.subscription_status, s.trial_ends_at, s.status as school_status
+         from public.profiles p
+         left join public.schools s on s.id = p.school_id
+        where p.auth_user_id = $1 limit 1`,
+      [authUserId],
+    );
+    return r.rows;
+  });
   if (rows.length === 0) return null;
   return {
     userId: rows[0].auth_user_id,
