@@ -195,6 +195,9 @@ export function DashboardPage() {
   }
 
   // -------------------- Dashboard ADMIN / FINANCEIRO / PROFESSOR --------------------
+  // Financeiro só para gestão/financeiro. Professor/coordenador veem apenas
+  // indicadores operacionais (o backend também não envia os dados financeiros).
+  const finance = ['school_admin', 'financial', 'superadmin'].includes(stats.role);
   const series = stats.revenue_series ?? [];
   const maxRevenue = Math.max(1, ...series.map((s) => s.total));
   const charges = stats.upcoming_charges ?? [];
@@ -210,7 +213,7 @@ export function DashboardPage() {
       />
       {refreshIndicator}
 
-      {stats.subscription_status === 'trialing' && stats.trial_days_left != null && (
+      {finance && stats.subscription_status === 'trialing' && stats.trial_days_left != null && (
         <div className="mb-6 flex items-center gap-3 rounded-2xl border border-warning/30 bg-warning-soft px-4 py-3 text-sm text-warning">
           <AlertTriangle size={18} />
           <span className="font-medium">Período de teste ativo</span>
@@ -221,22 +224,31 @@ export function DashboardPage() {
       )}
 
       {/* Cards principais */}
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <MetricCard label="Alunos ativos" value={stats.students ?? 0} icon={GraduationCap} tone="primary" />
-        <MetricCard
-          label="Receita do mês"
-          value={brl(stats.revenue_month ?? 0)}
-          icon={Wallet}
-          tone="success"
-          hint={delta != null ? `${delta >= 0 ? '▲' : '▼'} ${Math.abs(delta).toFixed(1)}% vs. mês anterior` : undefined}
-        />
-        <MetricCard label="Inadimplência" value={brl(stats.overdue_amount ?? 0)} icon={AlertTriangle} tone="danger" hint={`${stats.overdue_count ?? 0} fatura(s) vencida(s)`} />
-        <MetricCard label="Turmas ativas" value={stats.classes ?? 0} icon={School2} tone="primary" hint={`${stats.teachers ?? 0} professor(es)`} />
-      </div>
+      {finance ? (
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+          <MetricCard label="Alunos ativos" value={stats.students ?? 0} icon={GraduationCap} tone="primary" />
+          <MetricCard
+            label="Receita do mês"
+            value={brl(stats.revenue_month ?? 0)}
+            icon={Wallet}
+            tone="success"
+            hint={delta != null ? `${delta >= 0 ? '▲' : '▼'} ${Math.abs(delta).toFixed(1)}% vs. mês anterior` : undefined}
+          />
+          <MetricCard label="Inadimplência" value={brl(stats.overdue_amount ?? 0)} icon={AlertTriangle} tone="danger" hint={`${stats.overdue_count ?? 0} fatura(s) vencida(s)`} />
+          <MetricCard label="Turmas ativas" value={stats.classes ?? 0} icon={School2} tone="primary" hint={`${stats.teachers ?? 0} professor(es)`} />
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+          <MetricCard label="Alunos ativos" value={stats.students ?? 0} icon={GraduationCap} tone="primary" />
+          <MetricCard label="Turmas ativas" value={stats.classes ?? 0} icon={School2} tone="primary" hint={`${stats.teachers ?? 0} professor(es)`} />
+          <MetricCard label="Presenças hoje" value={stats.attendance_today ?? 0} icon={ClipboardCheck} tone="success" hint="turmas com chamada" />
+        </div>
+      )}
 
       {/* Linha 1: gráfico de receita + próximas cobranças + atividades */}
       <div className="mt-4 grid grid-cols-1 gap-4 xl:grid-cols-3">
         {/* Gráfico de receita */}
+        {finance && (
         <div className="card p-5 xl:col-span-1">
           <div className="mb-4 flex items-center justify-between">
             <h3 className="text-sm font-bold text-ink">Receita dos últimos 6 meses</h3>
@@ -262,8 +274,10 @@ export function DashboardPage() {
             </div>
           )}
         </div>
+        )}
 
         {/* Próximas cobranças */}
+        {finance && (
         <div className="card overflow-hidden xl:col-span-1">
           <div className="border-b border-border px-5 py-3.5">
             <h3 className="text-sm font-bold text-ink">Próximas cobranças</h3>
@@ -295,6 +309,7 @@ export function DashboardPage() {
             </div>
           )}
         </div>
+        )}
 
         {/* Atividades recentes */}
         <div className="card overflow-hidden xl:col-span-1">
@@ -327,6 +342,7 @@ export function DashboardPage() {
       </div>
 
       {/* Linha 2: PIX + resumo financeiro */}
+      {finance && (
       <div className="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-3">
         {/* Painel PIX */}
         <div className="card p-5 lg:col-span-2">
@@ -376,6 +392,7 @@ export function DashboardPage() {
           </div>
         </div>
       </div>
+      )}
     </>
   );
 }
