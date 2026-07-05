@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { timingSafeEqual } from 'crypto';
-import { pool } from '../../db/pool';
+import { withSystem } from '../../db/withTenant';
 
 export const cronRouter = Router();
 
@@ -19,13 +19,17 @@ cronRouter.get('/overdue-invoices', async (req, res) => {
     return res.status(401).json({ code: 'unauthorized' });
   }
 
-  const result = await pool.query(
-    `update public.invoices
-        set status = 'overdue', updated_at = now()
-      where status = 'pending'
-        and due_date < current_date
-      returning id`,
-  );
+  // Job cross-escola → contexto de sistema (superadmin nas policies de RLS).
+  const rowCount = await withSystem(async (c) => {
+    const result = await c.query(
+      `update public.invoices
+          set status = 'overdue', updated_at = now()
+        where status = 'pending'
+          and due_date < current_date
+        returning id`,
+    );
+    return result.rowCount;
+  });
 
-  res.json({ ok: true, updated: result.rowCount });
+  res.json({ ok: true, updated: rowCount });
 });
