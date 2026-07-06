@@ -18,6 +18,12 @@
 --  ROLLBACK: ver 0011_rollback ao final (comentado). Em emergência, rodar
 --    manualmente `alter table public.<t> no force row level security` nas
 --    tabelas listadas.
+--
+--  ⚠️ IMPORTANTE (achado do ensaio 2026-07-05): o role atual `neondb_owner`
+--  tem BYPASSRLS = true e, portanto, IGNORA a RLS mesmo com FORCE. Esta
+--  migration é PRÉ-REQUISITO mas NÃO isola nada sozinha. O isolamento só passa
+--  a valer quando o app conectar por um role dedicado SEM bypassrls (ver
+--  docs/FORCE_RLS_RUNBOOK.md, Fase B.2). Aplicá-la agora é inócuo e seguro.
 -- =============================================================
 
 -- 1) profiles: hoje só tem policy de ESCRITA para superadmin. Sob FORCE, a
