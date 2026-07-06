@@ -114,13 +114,24 @@ export const asaasProvider: PaymentProvider = {
       providerCustomerId: customerId,
     };
 
-    // PIX: buscar QR code + copia-e-cola.
+    // PIX: buscar QR code + copia-e-cola. O ASAAS pode levar um instante para
+    // gerar o QR logo após criar a cobrança (especialmente na 1ª cobrança da
+    // conta), retornando 400. Tentamos algumas vezes com pequeno intervalo.
     if (input.billingType === 'PIX') {
-      const qr = await asaasFetch<{ encodedImage?: string; payload?: string }>(
-        `/payments/${charge.id}/pixQrCode`,
-      );
-      result.pixQrCode = qr.encodedImage;
-      result.pixCopyPaste = qr.payload;
+      let qr: { encodedImage?: string; payload?: string } | undefined;
+      for (let attempt = 0; attempt < 4; attempt++) {
+        try {
+          qr = await asaasFetch<{ encodedImage?: string; payload?: string }>(
+            `/payments/${charge.id}/pixQrCode`,
+          );
+          if (qr?.payload) break;
+        } catch (err) {
+          if (attempt === 3) throw err;
+        }
+        await new Promise((r) => setTimeout(r, 800));
+      }
+      result.pixQrCode = qr?.encodedImage;
+      result.pixCopyPaste = qr?.payload;
     }
     return result;
   },

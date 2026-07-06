@@ -4,6 +4,7 @@ import cors from 'cors';
 import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
 import { isDbConfigured } from '../db/pool';
+import { activeProviderName } from '../lib/payments';
 import { plansRouter } from './routes/plans';
 import { studentsRouter } from './routes/students';
 import { staffRouter } from './routes/staff';
@@ -66,7 +67,7 @@ app.use(express.json({ limit: '5mb' }));
 
 // Health check — não depende do banco.
 app.get('/api/health', (_req, res) => {
-  res.json({ ok: true, service: 'gestescolar-backend', dbConfigured: isDbConfigured });
+  res.json({ ok: true, service: 'gestescolar-backend', dbConfigured: isDbConfigured, paymentProvider: activeProviderName() });
 });
 
 app.use('/api/public', publicAuthRouter);
