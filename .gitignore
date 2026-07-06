@@ -4,3 +4,4 @@
 node_modules/
 backend/api/
 *.tsbuildinfo
+.env*
