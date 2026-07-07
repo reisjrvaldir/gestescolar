@@ -7,6 +7,7 @@ import { settingsService, type SchoolSettings, type UpdateSchoolSettings } from 
 import { PlansManager } from '@/components/settings/PlansManager';
 import { SubscribePanel } from '@/components/settings/SubscribePanel';
 import { PixPayoutCard } from '@/components/settings/PixPayoutCard';
+import { SubaccountForm } from '@/components/settings/SubaccountForm';
 
 export function SettingsPage() {
   const [school, setSchool] = useState<SchoolSettings | null>(null);
@@ -153,6 +154,7 @@ export function SettingsPage() {
           )}
         </div>
         <PixPayoutCard active={school.subscription_status === 'active'} />
+        <SubaccountForm active={school.subscription_status === 'active'} />
         </div>
       </div>
     </>
