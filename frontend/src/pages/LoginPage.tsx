@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link, useSearchParams } from 'react-router-dom';
 import { GraduationCap, Loader2, ShieldCheck, Zap, Headset } from 'lucide-react';
 import { signIn, signUp } from '@/lib/authClient';
 
@@ -15,6 +15,8 @@ export function LoginPage() {
   const [password, setPassword] = useState('');
   const [name, setName] = useState('');
   const [accept, setAccept] = useState(false);
+  const [params] = useSearchParams();
+  const resetOk = params.get('reset') === '1';
 
   async function handleLogin(e: React.FormEvent) {
     e.preventDefault();
@@ -95,6 +97,9 @@ export function LoginPage() {
           </div>
 
           {error && <div className="mb-4 rounded-xl bg-danger-soft px-3 py-2 text-sm text-danger">{error}</div>}
+          {resetOk && tab === 'login' && (
+            <div className="mb-4 rounded-xl bg-success-soft px-3 py-2 text-sm text-ink">Senha redefinida com sucesso. Faça login com a nova senha.</div>
+          )}
 
           {tab === 'login' ? (
             <form className="space-y-4" onSubmit={handleLogin}>
@@ -106,6 +111,9 @@ export function LoginPage() {
                 <label className="label">Senha</label>
                 <input type="password" className="input" value={password} onChange={(e) => setPassword(e.target.value)} required />
                 <p className="mt-1 text-xs text-ink-subtle">1º acesso: use a senha temporária fornecida pela escola.</p>
+                <div className="mt-1 text-right">
+                  <Link to="/forgot-password" className="text-xs font-medium text-primary hover:underline">Esqueci minha senha</Link>
+                </div>
               </div>
               <button className="btn-primary w-full justify-center" disabled={loading}>
                 {loading && <Loader2 size={16} className="animate-spin" />} Entrar na conta

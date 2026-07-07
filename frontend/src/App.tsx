@@ -4,6 +4,8 @@ import { AuthGate } from '@/auth/AuthGate';
 import { RoleGuard } from '@/auth/RoleGuard';
 import { LoginPage } from '@/pages/LoginPage';
 import { OnboardingPage } from '@/pages/OnboardingPage';
+import { ForgotPasswordPage } from '@/pages/ForgotPasswordPage';
+import { ResetPasswordPage } from '@/pages/ResetPasswordPage';
 import { DashboardPage } from '@/pages/DashboardPage';
 import { StudentsPage } from '@/pages/StudentsPage';
 import { StaffPage } from '@/pages/StaffPage';
@@ -48,6 +50,8 @@ export default function App() {
       <Routes>
         <Route path="/" element={<LandingPage />} />
         <Route path="/login" element={<LoginPage />} />
+        <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+        <Route path="/reset-password" element={<ResetPasswordPage />} />
         <Route path="/onboarding" element={<OnboardingPage />} />
         <Route element={<AuthGate />}>
           {/* Página fora do AppLayout — bloqueia acesso ao app até trocar a senha. */}
