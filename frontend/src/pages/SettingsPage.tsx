@@ -6,6 +6,7 @@ import { StatusBadge } from '@/components/ui/StatusBadge';
 import { settingsService, type SchoolSettings, type UpdateSchoolSettings } from '@/services/settings';
 import { PlansManager } from '@/components/settings/PlansManager';
 import { SubscribePanel } from '@/components/settings/SubscribePanel';
+import { PixPayoutCard } from '@/components/settings/PixPayoutCard';
 
 export function SettingsPage() {
   const [school, setSchool] = useState<SchoolSettings | null>(null);
@@ -120,6 +121,7 @@ export function SettingsPage() {
           </div>
         </form>
 
+        <div className="space-y-6">
         <div className="card p-5">
           <div className="mb-3 flex items-center gap-2 text-sm font-bold text-ink">
             <Settings size={16} className="text-primary" /> Status da conta
@@ -149,6 +151,8 @@ export function SettingsPage() {
               <SubscribePanel />
             </div>
           )}
+        </div>
+        <PixPayoutCard />
         </div>
       </div>
     </>
