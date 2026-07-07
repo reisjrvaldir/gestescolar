@@ -20,3 +20,17 @@ setTokenProvider(async () => {
 });
 
 export const { useSession, signIn, signUp, signOut, changePassword } = authClient;
+
+// Reset de senha (Better Auth). Os métodos vêm do plugin email/senha do servidor
+// (Neon Auth) e não são tipados no client — acessados via `any` com fallback de
+// nome entre versões (`requestPasswordReset` novo / `forgetPassword` antigo).
+export async function requestPasswordReset(email: string, redirectTo: string): Promise<any> {
+  const c = authClient as any;
+  const fn = c.requestPasswordReset ?? c.forgetPassword;
+  if (!fn) throw new Error('Reset de senha indisponível');
+  return fn({ email, redirectTo });
+}
+
+export async function resetPassword(newPassword: string, token: string): Promise<any> {
+  return (authClient as any).resetPassword({ newPassword, token });
+}
