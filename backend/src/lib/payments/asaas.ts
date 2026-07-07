@@ -221,6 +221,50 @@ export async function asaasCreateSubaccount(
 }
 
 /**
+ * Lista os documentos exigidos/enviados da SUBCONTA (usa a apiKey da subconta).
+ * Retorna os grupos de documentos com id, tipo e status (NOT_SENT/PENDING/APPROVED/REJECTED).
+ */
+export async function asaasListSubaccountDocuments(subaccountApiKey: string): Promise<any> {
+  const res = await fetch(`${BASE_URL}/myAccount/documents`, {
+    headers: { access_token: subaccountApiKey, 'User-Agent': 'GestEscolar' },
+  });
+  const text = await res.text();
+  const data = text ? JSON.parse(text) : {};
+  if (!res.ok) {
+    const msg = data?.errors?.[0]?.description ?? data?.message ?? `ASAAS HTTP ${res.status}`;
+    throw Object.assign(new Error(msg), { http: res.status });
+  }
+  return data;
+}
+
+/**
+ * Envia um arquivo de documento para um grupo de documentos da subconta
+ * (multipart). `groupId` é o id do grupo retornado por asaasListSubaccountDocuments.
+ */
+export async function asaasUploadSubaccountDocument(
+  subaccountApiKey: string,
+  groupId: string,
+  input: { type: string; fileBase64: string; filename: string; mime: string },
+): Promise<any> {
+  const buf = Buffer.from(input.fileBase64, 'base64');
+  const fd = new FormData();
+  fd.append('type', input.type);
+  fd.append('documentFile', new Blob([buf], { type: input.mime }), input.filename);
+  const res = await fetch(`${BASE_URL}/myAccount/documents/${groupId}`, {
+    method: 'POST',
+    headers: { access_token: subaccountApiKey, 'User-Agent': 'GestEscolar' },
+    body: fd,
+  });
+  const text = await res.text();
+  const data = text ? JSON.parse(text) : {};
+  if (!res.ok) {
+    const msg = data?.errors?.[0]?.description ?? data?.message ?? `ASAAS HTTP ${res.status}`;
+    throw Object.assign(new Error(msg), { http: res.status });
+  }
+  return data;
+}
+
+/**
  * Garante um cliente ASAAS para a ESCOLA como pagadora da assinatura SaaS
  * (distinto do cliente/responsável que paga a mensalidade do aluno).
  */

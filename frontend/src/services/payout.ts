@@ -43,6 +43,13 @@ export const payoutService = {
   async createSubaccount(): Promise<{ ok: boolean; wallet_id?: string; status?: string }> {
     return api.post('/payout/subaccount');
   },
+  async listDocuments(): Promise<any> {
+    const r = await api.get<{ ok: boolean; data: any }>('/payout/documents');
+    return r.data;
+  },
+  async uploadDocument(groupId: string, type: string, filename: string, mime: string, file_data: string): Promise<void> {
+    await api.post(`/payout/documents/${groupId}`, { type, filename, mime, file_data });
+  },
 };
 
 export const PIX_KEY_TYPE_LABELS: Record<PixKeyType, string> = {

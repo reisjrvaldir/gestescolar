@@ -9,7 +9,9 @@ import { z } from 'zod';
 import { withTenant } from '../../db/withTenant';
 import { requireAuth, requireRole, requireActivePlan } from '../../middleware/auth';
 import { isAsaasConfigured } from '../../lib/payments';
-import { asaasCreateSubaccount } from '../../lib/payments/asaas';
+import {
+  asaasCreateSubaccount, asaasListSubaccountDocuments, asaasUploadSubaccountDocument,
+} from '../../lib/payments/asaas';
 
 export const payoutRouter = Router();
 payoutRouter.use(requireAuth);
@@ -167,11 +169,16 @@ payoutRouter.post('/subaccount', requireRole('school_admin', 'superadmin'), requ
       companyType: bank.company_type,
       birthDate: bank.birth_date ?? undefined,
     });
+    // Guarda a apiKey da subconta em bank_data_json (NUNCA retornada ao frontend)
+    // para poder enviar os documentos em nome dela.
+    const newBank = { ...bank, provider_api_key: sub.apiKey ?? null };
     await withTenant(req.ctx!, async (c) => {
       await c.query(`update public.schools set asaas_wallet_id = $2 where id = $1`, [req.ctx!.schoolId, sub.walletId]);
       await c.query(
-        `update public.nuvende_accounts set provider_account_id = $2, status = 'pending_documents', updated_at = now() where school_id = $1`,
-        [req.ctx!.schoolId, sub.accountId],
+        `update public.nuvende_accounts
+           set provider_account_id = $2, bank_data_json = $3, status = 'pending_documents', updated_at = now()
+         where school_id = $1`,
+        [req.ctx!.schoolId, sub.accountId, JSON.stringify(newBank)],
       );
     });
     res.json({ ok: true, wallet_id: sub.walletId, status: 'pending_documents' });
@@ -179,5 +186,56 @@ payoutRouter.post('/subaccount', requireRole('school_admin', 'superadmin'), requ
     // Ex.: em sandbox (conta CPF) o ASAAS retorna 403 aqui — repassa a mensagem.
     const msg = err?.message ?? 'Falha ao criar subconta no ASAAS';
     return res.status(422).json({ code: 'asaas_error', message: msg });
+  }
+});
+
+/** Lê a apiKey da subconta guardada em bank_data_json (server-side only). */
+async function getSubaccountApiKey(req: any): Promise<string | null> {
+  return withTenant(req.ctx!, async (c) => {
+    const r = await c.query(
+      `select bank_data_json from public.nuvende_accounts where school_id = $1 limit 1`,
+      [req.ctx!.schoolId],
+    );
+    const bank = (r.rows[0]?.bank_data_json ?? {}) as Record<string, any>;
+    return (bank.provider_api_key as string) ?? null;
+  });
+}
+
+// GET /api/payout/documents — lista os documentos exigidos/enviados da subconta.
+payoutRouter.get('/documents', requireRole('school_admin', 'superadmin'), requireActivePlan, async (req, res) => {
+  const apiKey = await getSubaccountApiKey(req);
+  if (!apiKey) return res.status(400).json({ code: 'no_subaccount', message: 'Abra a subconta antes de enviar documentos.' });
+  try {
+    const docs = await asaasListSubaccountDocuments(apiKey);
+    res.json({ ok: true, data: docs });
+  } catch (err: any) {
+    res.status(422).json({ code: 'asaas_error', message: err?.message ?? 'Falha ao listar documentos' });
+  }
+});
+
+const MAX_DOC_SIZE = 5 * 1024 * 1024; // 5MB
+const docSchema = z.object({
+  type: z.string().trim().min(1).max(60),
+  filename: z.string().trim().min(1).max(200),
+  mime: z.string().trim().min(1).max(120),
+  file_data: z.string().min(10), // base64
+});
+
+// POST /api/payout/documents/:id — envia um arquivo para um grupo de documentos.
+payoutRouter.post('/documents/:id', requireRole('school_admin', 'superadmin'), requireActivePlan, async (req, res) => {
+  const p = docSchema.safeParse(req.body);
+  if (!p.success) return res.status(400).json({ code: 'invalid', errors: p.error.flatten() });
+  if (Buffer.byteLength(p.data.file_data, 'base64') > MAX_DOC_SIZE) {
+    return res.status(413).json({ code: 'too_large', message: 'Arquivo acima de 5MB.' });
+  }
+  const apiKey = await getSubaccountApiKey(req);
+  if (!apiKey) return res.status(400).json({ code: 'no_subaccount', message: 'Abra a subconta antes de enviar documentos.' });
+  try {
+    const r = await asaasUploadSubaccountDocument(apiKey, req.params.id, {
+      type: p.data.type, fileBase64: p.data.file_data, filename: p.data.filename, mime: p.data.mime,
+    });
+    res.json({ ok: true, data: r });
+  } catch (err: any) {
+    res.status(422).json({ code: 'asaas_error', message: err?.message ?? 'Falha ao enviar documento' });
   }
 });

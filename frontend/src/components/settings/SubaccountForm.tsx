@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Save, Check, Loader2, Landmark, Lock, Rocket, AlertTriangle, CheckCircle2 } from 'lucide-react';
 import { payoutService, COMPANY_TYPE_LABELS, type CompanyType, type SubaccountOnboarding } from '@/services/payout';
+import { SubaccountDocuments } from './SubaccountDocuments';
 
 const EMPTY: SubaccountOnboarding = {
   legal_name: '', cnpj: '', responsible_name: '', responsible_cpf: '', email: '', phone: '',
@@ -82,6 +83,7 @@ export function SubaccountForm({ active }: { active: boolean }) {
             <p className="font-semibold">Subconta ativa</p>
             <p className="text-ink-muted">Wallet: <span className="font-mono">{walletId}</span></p>
             <p className="text-ink-muted">Status: {status}</p>
+            <SubaccountDocuments />
           </div>
         </div>
       ) : (
