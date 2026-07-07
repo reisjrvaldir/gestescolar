@@ -181,10 +181,25 @@ export const asaasProvider: PaymentProvider = {
  * Cria uma subconta ASAAS para a escola (onboarding do split).
  * Retorna o walletId a ser salvo em schools.asaas_wallet_id.
  */
-export async function asaasCreateSubaccount(input: {
-  name: string; email: string; cpfCnpj: string; mobilePhone?: string;
-  incomeValue?: number;
-}): Promise<{ accountId: string; walletId: string; apiKey?: string }> {
+export interface AsaasSubaccountInput {
+  name: string;
+  email: string;
+  cpfCnpj: string;               // CNPJ (ou CPF) da escola
+  mobilePhone: string;
+  incomeValue: number;           // faturamento/renda mensal
+  address: string;
+  addressNumber: string;
+  province: string;              // bairro
+  postalCode: string;            // CEP (somente dígitos)
+  complement?: string;
+  companyType?: 'MEI' | 'LIMITED' | 'INDIVIDUAL' | 'ASSOCIATION'; // exigido p/ CNPJ
+  birthDate?: string;            // exigido p/ CPF (YYYY-MM-DD)
+}
+
+export async function asaasCreateSubaccount(
+  input: AsaasSubaccountInput,
+): Promise<{ accountId: string; walletId: string; apiKey?: string }> {
+  const isCnpj = input.cpfCnpj.replace(/\D/g, '').length === 14;
   const acc = await asaasFetch<{ id: string; walletId: string; apiKey?: string }>('/accounts', {
     method: 'POST',
     body: JSON.stringify({
@@ -192,7 +207,14 @@ export async function asaasCreateSubaccount(input: {
       email: input.email,
       cpfCnpj: input.cpfCnpj,
       mobilePhone: input.mobilePhone,
-      incomeValue: input.incomeValue ?? 1000,
+      incomeValue: input.incomeValue,
+      address: input.address,
+      addressNumber: input.addressNumber,
+      complement: input.complement,
+      province: input.province,
+      postalCode: input.postalCode,
+      ...(isCnpj ? { companyType: input.companyType ?? 'LIMITED' } : {}),
+      ...(!isCnpj && input.birthDate ? { birthDate: input.birthDate } : {}),
     }),
   });
   return { accountId: acc.id, walletId: acc.walletId, apiKey: acc.apiKey };
