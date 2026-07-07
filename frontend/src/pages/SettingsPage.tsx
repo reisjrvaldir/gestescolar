@@ -152,7 +152,7 @@ export function SettingsPage() {
             </div>
           )}
         </div>
-        <PixPayoutCard />
+        <PixPayoutCard active={school.subscription_status === 'active'} />
         </div>
       </div>
     </>

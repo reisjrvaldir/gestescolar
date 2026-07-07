@@ -154,6 +154,21 @@ export async function requireAuth(req: Request, res: Response, next: NextFunctio
   }
 }
 
+/** Middleware: exige assinatura ATIVA (paga) — trial NÃO basta.
+ *  Regra de negócio: configurar recebimento (PIX/subconta) e enviar documentos
+ *  para validação exige uma conta ativa em algum plano. */
+export function requireActivePlan(req: Request, res: Response, next: NextFunction) {
+  if (!req.ctx) return res.status(401).json({ code: 'unauthorized', message: 'Não autenticado' });
+  if (req.ctx.role === 'superadmin') return next();
+  if (req.ctx.subscriptionStatus !== 'active') {
+    return res.status(402).json({
+      code: 'plan_required',
+      message: 'Ative um plano pago para configurar recebimentos e enviar documentos.',
+    });
+  }
+  next();
+}
+
 /** Middleware factory: exige um dos papéis informados. */
 export function requireRole(...roles: string[]) {
   return (req: Request, res: Response, next: NextFunction) => {

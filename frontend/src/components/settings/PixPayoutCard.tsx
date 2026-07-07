@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react';
-import { Save, Check, Loader2, QrCode } from 'lucide-react';
+import { Save, Check, Loader2, QrCode, Lock } from 'lucide-react';
 import { payoutService, PIX_KEY_TYPE_LABELS, type PixKeyType } from '@/services/payout';
 
-/** Card no perfil da escola: cadastro da chave PIX de recebimento (repasses). */
-export function PixPayoutCard() {
+/** Card no perfil da escola: cadastro da chave PIX de recebimento (repasses).
+ *  Regra de negócio: só disponível para escolas com plano ativo (pago). */
+export function PixPayoutCard({ active }: { active: boolean }) {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -40,7 +41,12 @@ export function PixPayoutCard() {
       <p className="mb-3 text-xs text-ink-muted">
         Onde a escola recebe os repasses das mensalidades.
       </p>
-      {loading ? (
+      {!active ? (
+        <div className="flex items-start gap-2 rounded-lg bg-canvas p-3 text-xs text-ink-muted">
+          <Lock size={16} className="mt-0.5 shrink-0 text-ink-subtle" />
+          <span>Disponível apenas com um <strong className="text-ink">plano ativo</strong>. Assine um plano para configurar seus recebimentos.</span>
+        </div>
+      ) : loading ? (
         <div className="flex items-center gap-2 text-ink-muted">
           <Loader2 className="animate-spin" size={16} /> Carregando…
         </div>

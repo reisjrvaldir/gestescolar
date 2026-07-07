@@ -7,7 +7,7 @@
 import { Router } from 'express';
 import { z } from 'zod';
 import { withTenant } from '../../db/withTenant';
-import { requireAuth, requireRole } from '../../middleware/auth';
+import { requireAuth, requireRole, requireActivePlan } from '../../middleware/auth';
 
 export const payoutRouter = Router();
 payoutRouter.use(requireAuth);
@@ -42,7 +42,7 @@ const pixSchema = z.object({
 });
 
 // PUT /api/payout/pix — cadastra/atualiza a chave PIX de recebimento.
-payoutRouter.put('/pix', requireRole('school_admin', 'superadmin'), async (req, res) => {
+payoutRouter.put('/pix', requireRole('school_admin', 'superadmin'), requireActivePlan, async (req, res) => {
   const p = pixSchema.safeParse(req.body);
   if (!p.success) return res.status(400).json({ code: 'invalid', errors: p.error.flatten() });
   await withTenant(req.ctx!, async (c) => {
