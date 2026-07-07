@@ -54,7 +54,13 @@ async function handlePaymentWebhook(provider: PaymentProvider, req: Request, res
       return res.json({ ok: true, applied: result.applied });
     }
 
-    // Fatura de aluno: externalReference = invoiceId.
+    // Fatura de aluno: externalReference = invoiceId (UUID). Se não for um UUID
+    // (cobrança não originada por nós), ignora com 200 para o ASAAS não re-tentar.
+    const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    if (!UUID_RE.test(ref)) {
+      await client.query('rollback');
+      return res.json({ ok: true, ignored: 'ref_desconhecida' });
+    }
     const inv = await client.query('select school_id from public.invoices where id = $1 limit 1', [ref]);
     if (inv.rows.length === 0) {
       await client.query('rollback');
