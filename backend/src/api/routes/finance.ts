@@ -19,7 +19,7 @@ function currentMonth(): string {
 financeRouter.get('/summary', async (req, res) => {
   const month = (req.query.month as string | undefined) ?? currentMonth();
   const data = await withTenant(req.ctx!, async (c) => {
-    const [forecast, prevForecast, expenses, overdue] = await Promise.all([
+    const [forecast, prevForecast, expenses, overdue, received, expensesPaid, byCategory] = await Promise.all([
       c.query(
         `select coalesce(sum(amount),0)::float8 as total
            from public.invoices
@@ -45,6 +45,29 @@ financeRouter.get('/summary', async (req, res) => {
           where school_id=$1 and status='overdue'`,
         [req.ctx!.schoolId],
       ),
+      // Recebido de fato no mês (faturas pagas) → base do saldo/resumo real.
+      c.query(
+        `select coalesce(sum(amount),0)::float8 as total
+           from public.invoices
+          where school_id=$1 and status='paid' and to_char(paid_at,'YYYY-MM')=$2`,
+        [req.ctx!.schoolId, month],
+      ),
+      // Despesas efetivamente pagas no mês → "saiu" real.
+      c.query(
+        `select coalesce(sum(amount),0)::float8 as total
+           from public.expenses
+          where school_id=$1 and status='paid' and to_char(due_date,'YYYY-MM')=$2`,
+        [req.ctx!.schoolId, month],
+      ),
+      // Despesas do mês por categoria (para o gráfico de gastos).
+      c.query(
+        `select coalesce(nullif(trim(category),''),'Outros') as category,
+                coalesce(sum(amount),0)::float8 as total
+           from public.expenses
+          where school_id=$1 and to_char(due_date,'YYYY-MM')=$2 and status <> 'cancelled'
+          group by 1 order by total desc`,
+        [req.ctx!.schoolId, month],
+      ),
     ]);
 
     const forecastMonth = forecast.rows[0].total;
@@ -52,15 +75,21 @@ financeRouter.get('/summary', async (req, res) => {
     const expensesMonth = expenses.rows[0].total;
     const delinquencyAmount = overdue.rows[0].total;
     const delinquencyCount = overdue.rows[0].count;
+    const receivedMonth = received.rows[0].total;
+    const expensesPaidMonth = expensesPaid.rows[0].total;
 
     return {
       month,
       forecast_month: forecastMonth,
       forecast_delta_pct: prevForecastMonth > 0 ? ((forecastMonth - prevForecastMonth) / prevForecastMonth) * 100 : null,
       expenses_month: expensesMonth,
-      balance_month: forecastMonth - expensesMonth,
+      // Saldo/resumo REAL (realtime): baseado no que entrou (pago) e saiu (pago).
+      received_month: receivedMonth,
+      expenses_paid_month: expensesPaidMonth,
+      balance_month: receivedMonth - expensesPaidMonth,
       delinquency_amount: delinquencyAmount,
       delinquency_count: delinquencyCount,
+      expenses_by_category: byCategory.rows.map((r: any) => ({ category: r.category, total: Number(r.total) })),
     };
   });
   res.json({ ok: true, data });

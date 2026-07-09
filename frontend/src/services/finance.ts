@@ -1,5 +1,10 @@
 import { api } from '@/lib/api';
 
+export interface ExpenseCategorySlice {
+  category: string;
+  total: number;
+}
+
 export interface FinanceSummary {
   month: string;
   forecast_month: number;
@@ -8,6 +13,9 @@ export interface FinanceSummary {
   balance_month: number;
   delinquency_amount: number;
   delinquency_count: number;
+  received_month: number;
+  expenses_paid_month: number;
+  expenses_by_category: ExpenseCategorySlice[];
 }
 
 export interface MonthlyBalancePoint {
