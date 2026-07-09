@@ -31,6 +31,7 @@ export interface SchoolClass {
   student_count: number;
   status: 'active' | 'inactive';
   created_at: string;
+  subject_ids?: string[];
 }
 
 export const SHIFT_LABELS: Record<Shift, string> = {

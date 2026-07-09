@@ -7,6 +7,19 @@ export interface NewClass {
   level?: string;
   shift: Shift;
   teacher_id?: string;
+  subject_ids?: string[];
+}
+
+export interface ClassStudent {
+  id: string;
+  name: string;
+  registration_number?: string;
+  status: string;
+}
+
+export interface ClassSubject {
+  id: string;
+  name: string;
 }
 
 export const classesService = {
@@ -24,5 +37,13 @@ export const classesService = {
   },
   async remove(id: string): Promise<void> {
     await api.del(`/classes/${id}`);
+  },
+  async students(id: string): Promise<ClassStudent[]> {
+    const r = await api.get<{ ok: boolean; data: ClassStudent[] }>(`/classes/${id}/students`);
+    return r.data;
+  },
+  async subjects(id: string): Promise<ClassSubject[]> {
+    const r = await api.get<{ ok: boolean; data: ClassSubject[] }>(`/classes/${id}/subjects`);
+    return r.data;
   },
 };
