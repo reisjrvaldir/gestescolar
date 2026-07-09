@@ -2,11 +2,12 @@ import { useCallback, useEffect, useState } from 'react';
 import { Star, Save, Check, Loader2, AlertTriangle } from 'lucide-react';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { EmptyState } from '@/components/ui/EmptyState';
-import { classesService } from '@/services/classes';
+import { classesService, type ClassSubject } from '@/services/classes';
 import { gradesService } from '@/services/grades';
 import { api } from '@/lib/api';
 import type { SchoolClass, Student } from '@/types/models';
 
+// Fallback quando a turma ainda não tem matérias cadastradas.
 const SUBJECTS = ['Português', 'Matemática', 'Ciências', 'História', 'Geografia', 'Inglês'];
 const PERIODS = ['1º Bimestre', '2º Bimestre', '3º Bimestre', '4º Bimestre'];
 
@@ -20,6 +21,7 @@ function gradeColor(v: number): string {
 export function GradesPage() {
   const [classes, setClasses] = useState<SchoolClass[]>([]);
   const [classId, setClassId] = useState('');
+  const [classSubjects, setClassSubjects] = useState<ClassSubject[]>([]);
   const [subject, setSubject] = useState(SUBJECTS[0]);
   const [period, setPeriod] = useState(PERIODS[0]);
   const [students, setStudents] = useState<Student[]>([]);
@@ -35,6 +37,15 @@ export function GradesPage() {
       setLoading(false);
     });
   }, []);
+
+  // Matérias da turma → alimentam o select de disciplina.
+  useEffect(() => {
+    if (!classId) { setClassSubjects([]); return; }
+    classesService.subjects(classId).then((subs) => {
+      setClassSubjects(subs);
+      if (subs.length > 0) setSubject(subs[0].name);
+    }).catch(() => setClassSubjects([]));
+  }, [classId]);
 
   const loadContext = useCallback(async () => {
     if (!classId) return;
@@ -113,7 +124,9 @@ export function GradesPage() {
           <div>
             <label className="label">Disciplina</label>
             <select className="input" value={subject} onChange={(e) => setSubject(e.target.value)}>
-              {SUBJECTS.map((s) => <option key={s} value={s}>{s}</option>)}
+              {(classSubjects.length > 0 ? classSubjects.map((s) => s.name) : SUBJECTS).map((s) => (
+                <option key={s} value={s}>{s}</option>
+              ))}
             </select>
           </div>
           <div>

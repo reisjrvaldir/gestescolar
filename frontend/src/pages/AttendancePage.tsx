@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { ClipboardCheck, Save, Check, Loader2, AlertTriangle } from 'lucide-react';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { EmptyState } from '@/components/ui/EmptyState';
-import { classesService } from '@/services/classes';
+import { classesService, type ClassSubject } from '@/services/classes';
 import { attendanceService, type AttendanceStatus } from '@/services/attendance';
 import { api } from '@/lib/api';
 import type { SchoolClass, Student } from '@/types/models';
@@ -25,6 +25,8 @@ interface EntryState {
 export function AttendancePage() {
   const [classes, setClasses] = useState<SchoolClass[]>([]);
   const [classId, setClassId] = useState('');
+  const [subjects, setSubjects] = useState<ClassSubject[]>([]);
+  const [subjectId, setSubjectId] = useState(''); // '' = chamada por dia
   const [date, setDate] = useState(today());
   const [entries, setEntries] = useState<Record<string, EntryState>>({});
   const [saving, setSaving] = useState(false);
@@ -39,11 +41,18 @@ export function AttendancePage() {
     });
   }, []);
 
+  // Matérias da turma (para chamada por aula). Muda a turma → recarrega e volta p/ "por dia".
+  useEffect(() => {
+    if (!classId) { setSubjects([]); setSubjectId(''); return; }
+    setSubjectId('');
+    classesService.subjects(classId).then(setSubjects).catch(() => setSubjects([]));
+  }, [classId]);
+
   const loadContext = useCallback(async () => {
     if (!classId) return;
     const [stuRes, attRows] = await Promise.all([
       api.get<{ ok: boolean; data: Student[] }>(`/students?class_id=${classId}`),
-      attendanceService.forContext(classId, date),
+      attendanceService.forContext(classId, date, subjectId || undefined),
     ]);
     const existingMap: Record<string, EntryState> = {};
     for (const a of attRows) {
@@ -64,7 +73,7 @@ export function AttendancePage() {
     }
     setEntries(seeded);
     setToast(null);
-  }, [classId, date]);
+  }, [classId, date, subjectId]);
 
   useEffect(() => { loadContext(); }, [loadContext]);
 
@@ -94,7 +103,7 @@ export function AttendancePage() {
         status: e.status,
         justification: e.justification,
       }));
-      await attendanceService.saveBatch(classId, date, batch);
+      await attendanceService.saveBatch(classId, date, batch, subjectId || undefined);
       setToast({ type: 'success', msg: `Chamada salva — ${batch.length} aluno(s) registrado(s)` });
     } catch (err: any) {
       setToast({ type: 'error', msg: err?.message ?? 'Erro ao salvar chamada' });
@@ -135,11 +144,18 @@ export function AttendancePage() {
       )}
 
       <div className="card mb-6 p-4">
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-4">
           <div>
             <label className="label">Turma</label>
             <select className="input" value={classId} onChange={(e) => setClassId(e.target.value)}>
               {classes.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+            </select>
+          </div>
+          <div>
+            <label className="label">Matéria (opcional)</label>
+            <select className="input" value={subjectId} onChange={(e) => setSubjectId(e.target.value)}>
+              <option value="">Chamada por dia</option>
+              {subjects.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
             </select>
           </div>
           <div>
