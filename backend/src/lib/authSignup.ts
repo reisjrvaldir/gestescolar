@@ -76,8 +76,15 @@ export async function signUpGuardian(params: {
 
   if (!res.ok) {
     const errBody = await res.text().catch(() => '');
+    // E-mail já cadastrado no provedor de auth → mensagem clara (sem JSON cru).
+    if (res.status === 422 && /USER_ALREADY_EXISTS/i.test(errBody)) {
+      throw Object.assign(
+        new Error('Este e-mail já está cadastrado. Use outro e-mail.'),
+        { http: 409, code: 'email_exists' },
+      );
+    }
     throw Object.assign(
-      new Error(`Falha ao criar login do responsável (HTTP ${res.status}): ${errBody.slice(0, 200)}`),
+      new Error(`Falha ao criar login (HTTP ${res.status}): ${errBody.slice(0, 200)}`),
       { http: res.status >= 400 && res.status < 500 ? 400 : 500 },
     );
   }
