@@ -11,6 +11,7 @@ export function PlansManager() {
   const [loading, setLoading] = useState(true);
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<SchoolPlan | null>(null);
+  const [saving, setSaving] = useState(false);
 
   const { register, handleSubmit, reset, formState: { errors } } = useForm<NewSchoolPlan>();
 
@@ -37,14 +38,20 @@ export function PlansManager() {
   function close() { reset(); setEditing(null); setOpen(false); }
 
   async function onSubmit(data: NewSchoolPlan) {
-    const payload = { ...data, monthly_fee: Number(data.monthly_fee) };
-    if (editing) {
-      await schoolPlansService.update(editing.id, payload);
-    } else {
-      await schoolPlansService.create(payload);
+    if (saving) return; // evita double-submit (planos duplicados)
+    setSaving(true);
+    try {
+      const payload = { ...data, monthly_fee: Number(data.monthly_fee) };
+      if (editing) {
+        await schoolPlansService.update(editing.id, payload);
+      } else {
+        await schoolPlansService.create(payload);
+      }
+      await load();
+      close();
+    } finally {
+      setSaving(false);
     }
-    await load();
-    close();
   }
 
   async function onRemove(id: string) {
@@ -112,8 +119,10 @@ export function PlansManager() {
         onClose={close}
         footer={
           <>
-            <button className="btn-outline" onClick={close}>Cancelar</button>
-            <button className="btn-primary" form="plan-form" type="submit">{editing ? 'Salvar' : 'Criar'}</button>
+            <button className="btn-outline" onClick={close} disabled={saving}>Cancelar</button>
+            <button className="btn-primary" form="plan-form" type="submit" disabled={saving}>
+              {saving && <Loader2 size={16} className="animate-spin" />} {editing ? 'Salvar' : 'Criar'}
+            </button>
           </>
         }
       >
