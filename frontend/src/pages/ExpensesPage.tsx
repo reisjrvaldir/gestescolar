@@ -6,7 +6,7 @@ import { MetricCard } from '@/components/ui/MetricCard';
 import { StatusBadge } from '@/components/ui/StatusBadge';
 import { Modal } from '@/components/ui/Modal';
 import { EmptyState } from '@/components/ui/EmptyState';
-import { expensesService, type Expense, type NewExpense } from '@/services/expenses';
+import { expensesService, EXPENSE_CATEGORIES, type Expense, type NewExpense } from '@/services/expenses';
 import { brl } from '@/lib/fees';
 
 const STATUS: Record<Expense['status'], { tone: 'success' | 'warning' | 'danger'; label: string }> = {
@@ -154,7 +154,10 @@ export function ExpensesPage() {
           </div>
           <div>
             <label className="label">Categoria</label>
-            <input className="input" placeholder="Ex.: Infraestrutura, Pessoal, Materiais, Serviços" {...register('category')} />
+            <select className="input" defaultValue="" {...register('category')}>
+              <option value="" disabled>Selecione a categoria…</option>
+              {EXPENSE_CATEGORIES.map((c) => <option key={c} value={c}>{c}</option>)}
+            </select>
           </div>
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div>

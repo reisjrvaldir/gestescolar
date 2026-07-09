@@ -2,6 +2,18 @@ import { api } from '@/lib/api';
 
 export type ExpenseStatus = 'pending' | 'paid' | 'overdue';
 
+/** Categorias de despesa (para classificar os gastos da escola). */
+export const EXPENSE_CATEGORIES = [
+  'Infraestrutura',
+  'Material',
+  'Pessoal',
+  'Custo fixo',
+  'Serviços',
+  'Impostos',
+  'Marketing',
+  'Outros',
+] as const;
+
 export interface Expense {
   id: string;
   supplier_name: string;

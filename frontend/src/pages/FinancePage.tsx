@@ -7,6 +7,7 @@ import { Modal } from '@/components/ui/Modal';
 import { FinanceTabs } from '@/components/finance/FinanceTabs';
 import { FinanceSummaryCards } from '@/components/finance/FinanceSummaryCards';
 import { RevenueExpenseChart } from '@/components/finance/RevenueExpenseChart';
+import { ExpensesByCategoryChart } from '@/components/finance/ExpensesByCategoryChart';
 import { PayablesCard } from '@/components/finance/PayablesCard';
 import { ReceivablesCard } from '@/components/finance/ReceivablesCard';
 import { DelinquencyCard } from '@/components/finance/DelinquencyCard';
@@ -155,7 +156,10 @@ export function FinancePage() {
       {tab === 'visao' && (
         <div className="space-y-6">
           <FinanceSummaryCards summary={summary} />
-          <RevenueExpenseChart data={monthly} />
+          <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+            <RevenueExpenseChart data={monthly} />
+            <ExpensesByCategoryChart data={summary.expenses_by_category} />
+          </div>
 
           <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
             <PayablesCard rows={expenses} onNew={goExpenses} onViewAll={goExpenses} />

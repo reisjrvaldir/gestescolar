@@ -50,7 +50,9 @@ export function FinanceSummaryCards({ summary }: Props) {
           </div>
         </div>
         <p className={`mt-2 text-2xl font-extrabold ${summary.balance_month >= 0 ? 'text-ink' : 'text-danger'}`}>{brl(summary.balance_month)}</p>
-        <p className="mt-1 text-xs text-ink-subtle">Previsão de receita − despesas do mês.</p>
+        <p className="mt-1 text-xs text-ink-subtle">
+          Recebido <span className="font-semibold text-success">{brl(summary.received_month)}</span> − pago <span className="font-semibold text-danger">{brl(summary.expenses_paid_month)}</span> · tempo real.
+        </p>
       </div>
 
       <div className="card p-5">
