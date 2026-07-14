@@ -22,6 +22,8 @@ export interface Invoice {
 export interface MyInvoice extends Invoice {
   pix_qr_code?: string;
   pix_copy_paste?: string;
+  charge_title?: string;
+  charge_description?: string;
 }
 
 export interface ChargeResult {

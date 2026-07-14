@@ -33,9 +33,11 @@ invoicesRouter.get('/mine', async (req, res) => {
     if (guardian.rows.length === 0) return [];
     const { rows } = await c.query(
       `select i.id, i.student_name, i.amount::float8 as amount, i.due_date, i.status, i.kind,
-              i.reference_month, i.pix_qr_code, i.pix_copy_paste, i.checkout_url, i.paid_at
+              i.reference_month, i.pix_qr_code, i.pix_copy_paste, i.checkout_url, i.paid_at,
+              b.title as charge_title, b.description as charge_description
          from public.invoices i
          join public.students s on s.id = i.student_id
+         left join public.charge_batches b on b.id = i.batch_id
         where s.guardian_id = $1 and i.school_id = $2
         order by i.due_date asc nulls last`,
       [guardian.rows[0].id, req.ctx!.schoolId],
