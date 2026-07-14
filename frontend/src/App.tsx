@@ -35,6 +35,7 @@ import { SaasPlaceholderPage } from '@/saas/pages/SaasPlaceholderPage';
 import { SaasSchoolsPage } from '@/saas/pages/SaasSchoolsPage';
 import { SaasRevenuePage } from '@/saas/pages/SaasRevenuePage';
 import { SaasPayoutsPage } from '@/saas/pages/SaasPayoutsPage';
+import { SaasPlansConfigPage } from '@/saas/pages/SaasPlansConfigPage';
 
 const Admin = ({ children }: { children: React.ReactNode }) => (
   <RoleGuard allowed={['school_admin', 'superadmin']}>{children}</RoleGuard>
@@ -100,7 +101,7 @@ export default function App() {
               <Route path="repasses"         element={<SaasPayoutsPage />} />
               <Route path="transacoes"       element={<SaasPlaceholderPage title="Cobranças e transações" subtitle="Todas as cobranças SaaS e transações do gateway." />} />
               <Route path="gateway"          element={<SaasPlaceholderPage title="Gateway de pagamento" subtitle="Integração, chaves, webhooks e ambiente." />} />
-              <Route path="config/planos"           element={<SaasPlaceholderPage title="Configuração de planos" subtitle="Cadastro, edição e destaque dos planos SaaS." />} />
+              <Route path="config/planos"           element={<SaasPlansConfigPage />} />
               <Route path="config/recursos"         element={<SaasPlaceholderPage title="Recursos do sistema" subtitle="Feature flags globais e por escola." />} />
               <Route path="config/personalizacoes"  element={<SaasPlaceholderPage title="Personalizações" subtitle="Branding e textos institucionais." />} />
               <Route path="config/integracoes"      element={<SaasPlaceholderPage title="Integrações" subtitle="Gateway, e-mail, WhatsApp, storage e webhooks." />} />

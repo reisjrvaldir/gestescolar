@@ -346,3 +346,96 @@ saasRouter.post('/schools/:id/reactivate', async (req, res) => {
   if (!data) return res.status(404).json({ code: 'not_found', message: 'Escola não encontrada.' });
   res.json({ ok: true, data });
 });
+
+// -------------------------------------------------------------------------
+// Configuração de planos (CRUD) — só superadmin.
+// -------------------------------------------------------------------------
+
+type PlanFields = {
+  name: string; student_limit: number | null; monthly_price: number; annual_price: number;
+  discount_percentage: number; is_public: boolean; is_pilot: boolean; features_json: string[];
+};
+
+function parsePlanBody(body: any): { error: string } | PlanFields {
+  const name = typeof body?.name === 'string' ? body.name.trim() : '';
+  if (name.length < 2) return { error: 'Informe o nome do plano.' };
+  const monthly = Number(body?.monthly_price);
+  const annual = Number(body?.annual_price);
+  const discount = Number(body?.discount_percentage ?? 0);
+  if (!Number.isFinite(monthly) || monthly < 0) return { error: 'Preço mensal inválido.' };
+  if (!Number.isFinite(annual) || annual < 0) return { error: 'Preço anual inválido.' };
+  if (!Number.isFinite(discount) || discount < 0 || discount > 100) return { error: 'Desconto inválido (0–100).' };
+  const rawLimit = body?.student_limit;
+  const student_limit = rawLimit === null || rawLimit === '' || rawLimit === undefined
+    ? null : Math.max(0, Math.floor(Number(rawLimit)));
+  if (student_limit !== null && !Number.isFinite(student_limit)) return { error: 'Limite de alunos inválido.' };
+  const features_json = Array.isArray(body?.features_json)
+    ? body.features_json.filter((f: any) => typeof f === 'string' && f.trim()).map((f: string) => f.trim()).slice(0, 30)
+    : [];
+  return {
+    name, student_limit, monthly_price: monthly, annual_price: annual,
+    discount_percentage: discount, is_public: Boolean(body?.is_public), is_pilot: Boolean(body?.is_pilot),
+    features_json,
+  };
+}
+
+// GET /api/saas/plans — todos os planos (inclui privados/piloto) + nº de escolas.
+saasRouter.get('/plans', async (req, res) => {
+  const data = await withTenant(req.ctx!, async (c) => {
+    const { rows } = await c.query(
+      `select p.id, p.name, p.student_limit,
+              p.monthly_price::float8 as monthly_price, p.annual_price::float8 as annual_price,
+              p.discount_percentage::float8 as discount_percentage, p.is_public, p.is_pilot,
+              p.features_json, p.created_at,
+              (select count(*)::int from public.schools s where s.plan_id = p.id) as schools_count
+         from public.plans p order by p.monthly_price asc`,
+    );
+    return rows;
+  });
+  res.json({ ok: true, data });
+});
+
+// POST /api/saas/plans — cria um plano.
+saasRouter.post('/plans', async (req, res) => {
+  const p = parsePlanBody(req.body);
+  if ('error' in p) return res.status(400).json({ code: 'validation', message: p.error });
+  const data = await withTenant(req.ctx!, async (c) => {
+    const r = await c.query(
+      `insert into public.plans (name, student_limit, monthly_price, annual_price, discount_percentage, is_public, is_pilot, features_json)
+       values ($1,$2,$3,$4,$5,$6,$7,$8) returning id`,
+      [p.name, p.student_limit, p.monthly_price, p.annual_price, p.discount_percentage, p.is_public, p.is_pilot, JSON.stringify(p.features_json)],
+    );
+    return r.rows[0];
+  });
+  res.status(201).json({ ok: true, data });
+});
+
+// PUT /api/saas/plans/:id — edita um plano.
+saasRouter.put('/plans/:id', async (req, res) => {
+  const p = parsePlanBody(req.body);
+  if ('error' in p) return res.status(400).json({ code: 'validation', message: p.error });
+  const data = await withTenant(req.ctx!, async (c) => {
+    const r = await c.query(
+      `update public.plans set name=$2, student_limit=$3, monthly_price=$4, annual_price=$5,
+              discount_percentage=$6, is_public=$7, is_pilot=$8, features_json=$9, updated_at=now()
+        where id=$1 returning id`,
+      [req.params.id, p.name, p.student_limit, p.monthly_price, p.annual_price, p.discount_percentage, p.is_public, p.is_pilot, JSON.stringify(p.features_json)],
+    );
+    return r.rows[0] ?? null;
+  });
+  if (!data) return res.status(404).json({ code: 'not_found', message: 'Plano não encontrado.' });
+  res.json({ ok: true, data });
+});
+
+// DELETE /api/saas/plans/:id — remove um plano (bloqueado se estiver em uso).
+saasRouter.delete('/plans/:id', async (req, res) => {
+  const result = await withTenant(req.ctx!, async (c) => {
+    const used = await c.query(`select count(*)::int as n from public.schools where plan_id=$1`, [req.params.id]);
+    if (used.rows[0].n > 0) return { error: 'in_use' as const, count: used.rows[0].n };
+    const r = await c.query(`delete from public.plans where id=$1`, [req.params.id]);
+    return { deleted: r.rowCount ?? 0 };
+  });
+  if ('error' in result) return res.status(409).json({ code: 'in_use', message: `Plano em uso por ${result.count} escola(s). Migre-as antes de excluir.` });
+  if (!result.deleted) return res.status(404).json({ code: 'not_found', message: 'Plano não encontrado.' });
+  res.json({ ok: true });
+});

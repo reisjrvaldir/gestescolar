@@ -68,10 +68,41 @@ export interface SaasPayouts {
   }[];
 }
 
+export interface SaasPlanFull {
+  id: string;
+  name: string;
+  student_limit: number | null;
+  monthly_price: number;
+  annual_price: number;
+  discount_percentage: number;
+  is_public: boolean;
+  is_pilot: boolean;
+  features_json: string[];
+  created_at: string;
+  schools_count: number;
+}
+
+export type PlanInput = Omit<SaasPlanFull, 'id' | 'created_at' | 'schools_count'>;
+
 export const saasService = {
   async dashboard(): Promise<SaasDashboard> {
     const r = await api.get<{ ok: boolean; data: SaasDashboard }>('/saas/dashboard');
     return r.data;
+  },
+  async plans(): Promise<SaasPlanFull[]> {
+    const r = await api.get<{ ok: boolean; data: SaasPlanFull[] }>('/saas/plans');
+    return r.data;
+  },
+  async createPlan(body: PlanInput): Promise<{ id: string }> {
+    const r = await api.post<{ ok: boolean; data: { id: string } }>('/saas/plans', body);
+    return r.data;
+  },
+  async updatePlan(id: string, body: PlanInput): Promise<{ id: string }> {
+    const r = await api.put<{ ok: boolean; data: { id: string } }>(`/saas/plans/${id}`, body);
+    return r.data;
+  },
+  async deletePlan(id: string): Promise<void> {
+    await api.del(`/saas/plans/${id}`);
   },
   async revenue(): Promise<SaasRevenue> {
     const r = await api.get<{ ok: boolean; data: SaasRevenue }>('/saas/revenue');
