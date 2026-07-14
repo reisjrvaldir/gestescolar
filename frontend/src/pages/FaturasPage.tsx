@@ -120,6 +120,16 @@ export function FaturasPage() {
               <span className="text-ink-muted">Valor</span>
               <span className="text-lg font-extrabold text-ink">{brl(selected.amount)}</span>
             </div>
+            {selected.pix_qr_code && !selected.pix_qr_code.startsWith('SIMULADO') && (
+              <div className="flex flex-col items-center rounded-xl border border-border bg-white p-4">
+                <p className="mb-2 text-xs font-semibold text-ink-muted">Aponte a câmera do seu banco</p>
+                <img
+                  src={`data:image/png;base64,${selected.pix_qr_code}`}
+                  alt="QR Code PIX para pagamento"
+                  className="h-48 w-48 rounded-lg"
+                />
+              </div>
+            )}
             {selected.pix_copy_paste && (
               <div className="rounded-xl border border-border bg-canvas p-3">
                 <p className="mb-1 text-xs font-semibold text-ink-muted">Código PIX copia-e-cola</p>
