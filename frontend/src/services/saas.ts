@@ -135,6 +135,28 @@ export interface SaasExpiration {
   derived_status: SchoolDerivedStatus;
 }
 
+export interface SaasUserRow {
+  id: string;
+  name: string | null;
+  email: string | null;
+  role: string;
+  status: string;
+  created_at: string;
+  school_name: string | null;
+}
+
+export interface SaasTicketRow {
+  id: string;
+  title: string;
+  status: string;
+  priority: string;
+  category: string | null;
+  created_at: string;
+  updated_at: string;
+  school_name: string | null;
+  opened_by_name: string | null;
+}
+
 export const saasService = {
   async dashboard(): Promise<SaasDashboard> {
     const r = await api.get<{ ok: boolean; data: SaasDashboard }>('/saas/dashboard');
@@ -169,6 +191,14 @@ export const saasService = {
   },
   async expirations(): Promise<SaasExpiration[]> {
     const r = await api.get<{ ok: boolean; data: SaasExpiration[] }>('/saas/expirations');
+    return r.data;
+  },
+  async users(): Promise<SaasUserRow[]> {
+    const r = await api.get<{ ok: boolean; data: SaasUserRow[] }>('/saas/users');
+    return r.data;
+  },
+  async tickets(): Promise<SaasTicketRow[]> {
+    const r = await api.get<{ ok: boolean; data: SaasTicketRow[] }>('/saas/tickets');
     return r.data;
   },
   async revenue(): Promise<SaasRevenue> {

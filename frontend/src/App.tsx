@@ -40,6 +40,8 @@ import { SaasAuditLogsPage } from '@/saas/pages/SaasAuditLogsPage';
 import { SaasTransactionsPage } from '@/saas/pages/SaasTransactionsPage';
 import { SaasSubscriptionsPage } from '@/saas/pages/SaasSubscriptionsPage';
 import { SaasExpirationsPage } from '@/saas/pages/SaasExpirationsPage';
+import { SaasUsersPage } from '@/saas/pages/SaasUsersPage';
+import { SaasSupportPage } from '@/saas/pages/SaasSupportPage';
 
 const Admin = ({ children }: { children: React.ReactNode }) => (
   <RoleGuard allowed={['school_admin', 'superadmin']}>{children}</RoleGuard>
@@ -98,7 +100,7 @@ export default function App() {
               <Route path="vencimentos"      element={<SaasExpirationsPage />} />
               <Route path="status"           element={<SaasPlaceholderPage title="Status das contas" subtitle="Contas ativas, suspensas, canceladas e trials." />} />
               <Route path="admins"           element={<SaasPlaceholderPage title="Administradores do SaaS" subtitle="Time de operação e suporte." />} />
-              <Route path="usuarios-escolas" element={<SaasPlaceholderPage title="Usuários das escolas" subtitle="Visão consolidada dos usuários administrativos das escolas." />} />
+              <Route path="usuarios-escolas" element={<SaasUsersPage />} />
               <Route path="permissoes"       element={<SaasPlaceholderPage title="Perfis e permissões" subtitle="Papéis do time SaaS e permissões granulares." />} />
               <Route path="logs-acesso"      element={<SaasAuditLogsPage />} />
               <Route path="receitas"         element={<SaasRevenuePage />} />
@@ -111,7 +113,7 @@ export default function App() {
               <Route path="config/integracoes"      element={<SaasPlaceholderPage title="Integrações" subtitle="Gateway, e-mail, WhatsApp, storage e webhooks." />} />
               <Route path="config/notificacoes"     element={<SaasPlaceholderPage title="Notificações" subtitle="Templates, disparos e avisos globais." />} />
               <Route path="config/seguranca"        element={<SaasPlaceholderPage title="Segurança" subtitle="Políticas de senha, sessão, 2FA e IP allowlist." />} />
-              <Route path="suporte"          element={<SaasPlaceholderPage title="Suporte ao cliente" subtitle="Tickets, contato rápido e observações internas." />} />
+              <Route path="suporte"          element={<SaasSupportPage />} />
               <Route path="*" element={<SaasPlaceholderPage title="Página não encontrada" />} />
             </Route>
           </Route>

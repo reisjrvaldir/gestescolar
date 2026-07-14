@@ -490,6 +490,38 @@ saasRouter.get('/transactions', async (req, res) => {
   res.json({ ok: true, data });
 });
 
+// GET /api/saas/users — usuários das escolas (staff e responsáveis), consolidado.
+saasRouter.get('/users', async (req, res) => {
+  const data = await withTenant(req.ctx!, async (c) => {
+    const { rows } = await c.query(
+      `select pr.id, pr.name, pr.email, pr.role, pr.status, pr.created_at,
+              s.name as school_name
+         from public.profiles pr
+         left join public.schools s on s.id = pr.school_id
+        where pr.role <> 'superadmin'
+        order by pr.created_at desc limit 500`,
+    );
+    return rows;
+  });
+  res.json({ ok: true, data });
+});
+
+// GET /api/saas/tickets — tickets de suporte de todas as escolas.
+saasRouter.get('/tickets', async (req, res) => {
+  const data = await withTenant(req.ctx!, async (c) => {
+    const { rows } = await c.query(
+      `select t.id, t.title, t.status, t.priority, t.category, t.created_at, t.updated_at,
+              s.name as school_name, op.name as opened_by_name
+         from public.support_tickets t
+         left join public.schools s on s.id = t.school_id
+         left join public.profiles op on op.id = t.opened_by
+        order by t.created_at desc limit 200`,
+    );
+    return rows;
+  });
+  res.json({ ok: true, data });
+});
+
 // GET /api/saas/expirations — escolas com trial vencendo (30d) ou já em atraso.
 saasRouter.get('/expirations', async (req, res) => {
   const data = await withTenant(req.ctx!, async (c) => {
