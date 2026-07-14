@@ -295,7 +295,7 @@ export function DashboardPage() {
                     <p className="truncate text-sm font-medium text-ink">{ch.student_name ?? '—'}</p>
                     <p className="text-xs text-ink-muted">
                       {ch.class_name ?? '—'}
-                      {ch.due_date && ` • vence ${new Date(ch.due_date + 'T12:00:00').toLocaleDateString('pt-BR')}`}
+                      {ch.due_date && ` • vence ${new Date(String(ch.due_date).slice(0, 10) + 'T12:00:00').toLocaleDateString('pt-BR')}`}
                     </p>
                   </div>
                   <div className="text-right">
