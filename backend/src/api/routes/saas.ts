@@ -137,6 +137,113 @@ saasRouter.get('/schools', async (req, res) => {
   res.json({ ok: true, data });
 });
 
+// GET /api/saas/revenue — receita do SaaS (MRR, ARR, série, por plano, últimos pagamentos).
+saasRouter.get('/revenue', async (req, res) => {
+  const data = await withTenant(req.ctx!, async (c) => {
+    const [mrr, month, series, byPlan, recent] = await Promise.all([
+      c.query(
+        `select coalesce(sum(p.monthly_price),0)::float8 as mrr, count(*)::int as active_count
+           from public.schools s join public.plans p on p.id = s.plan_id
+          where s.subscription_status = 'active'`,
+      ),
+      c.query(
+        `select
+           coalesce(sum(gross_amount) filter (where paid_at >= date_trunc('month', now())),0)::float8 as this_month,
+           coalesce(sum(gross_amount) filter (where paid_at >= date_trunc('month', now()) - interval '1 month'
+             and paid_at < date_trunc('month', now())),0)::float8 as prev_month
+         from public.payments where subscription_id is not null and status='confirmed'`,
+      ),
+      c.query(
+        `select d.month, coalesce(sum(pm.gross_amount),0)::float8 as revenue
+           from generate_series(date_trunc('month', now()) - interval '11 months', date_trunc('month', now()), interval '1 month') d(month)
+           left join public.payments pm on pm.subscription_id is not null and pm.status='confirmed'
+             and date_trunc('month', pm.paid_at) = d.month
+          group by d.month order by d.month`,
+      ),
+      c.query(
+        `select coalesce(pl.name,'Sem plano') as label, coalesce(sum(pm.gross_amount),0)::float8 as value
+           from public.payments pm
+           join public.schools s on s.id = pm.school_id
+           left join public.plans pl on pl.id = s.plan_id
+          where pm.subscription_id is not null and pm.status='confirmed'
+          group by 1 order by value desc`,
+      ),
+      c.query(
+        `select pm.id, s.name as school_name, pm.gross_amount::float8 as amount, pm.paid_at, pm.status
+           from public.payments pm join public.schools s on s.id = pm.school_id
+          where pm.subscription_id is not null
+          order by pm.paid_at desc nulls last limit 10`,
+      ),
+    ]);
+    const mrrVal = Number(mrr.rows[0].mrr);
+    const activeCount = mrr.rows[0].active_count || 0;
+    const thisMonth = Number(month.rows[0].this_month);
+    const prevMonth = Number(month.rows[0].prev_month);
+    return {
+      mrr: mrrVal,
+      arr: mrrVal * 12,
+      active_count: activeCount,
+      avg_ticket: activeCount ? mrrVal / activeCount : 0,
+      revenue_month: thisMonth,
+      revenue_delta_pct: prevMonth > 0 ? ((thisMonth - prevMonth) / prevMonth) * 100 : null,
+      series: series.rows.map((r: any) => ({
+        month: new Date(r.month).toLocaleDateString('pt-BR', { month: 'short', year: '2-digit' }).replace('.', ''),
+        revenue: Number(r.revenue),
+      })),
+      by_plan: byPlan.rows.map((r: any) => ({ label: r.label, value: Number(r.value) })),
+      recent: recent.rows.map((r: any) => ({
+        id: r.id, school_name: r.school_name, amount: Number(r.amount),
+        paid_at: r.paid_at, status: r.status,
+      })),
+    };
+  });
+  res.json({ ok: true, data });
+});
+
+// GET /api/saas/payouts — repasses/saldos por escola (split ASAAS).
+saasRouter.get('/payouts', async (req, res) => {
+  const data = await withTenant(req.ctx!, async (c) => {
+    const [totals, schools] = await Promise.all([
+      c.query(
+        `select
+           coalesce(sum(available_balance),0)::float8 as available,
+           coalesce(sum(pending_balance),0)::float8 as pending,
+           coalesce(sum(gross_received_total),0)::float8 as gross,
+           coalesce(sum(platform_fees_total),0)::float8 as platform_fees,
+           coalesce(sum(withdrawn_total),0)::float8 as withdrawn
+         from public.school_balances`,
+      ),
+      c.query(
+        `select s.id, s.name,
+                coalesce(b.available_balance,0)::float8 as available_balance,
+                coalesce(b.pending_balance,0)::float8 as pending_balance,
+                coalesce(b.gross_received_total,0)::float8 as gross_received_total,
+                coalesce(b.platform_fees_total,0)::float8 as platform_fees_total,
+                coalesce(b.withdrawn_total,0)::float8 as withdrawn_total
+           from public.schools s
+           left join public.school_balances b on b.school_id = s.id
+          order by coalesce(b.available_balance,0) desc`,
+      ),
+    ]);
+    const t = totals.rows[0];
+    return {
+      totals: {
+        available: Number(t.available), pending: Number(t.pending), gross: Number(t.gross),
+        platform_fees: Number(t.platform_fees), withdrawn: Number(t.withdrawn),
+      },
+      schools: schools.rows.map((r: any) => ({
+        id: r.id, name: r.name,
+        available_balance: Number(r.available_balance),
+        pending_balance: Number(r.pending_balance),
+        gross_received_total: Number(r.gross_received_total),
+        platform_fees_total: Number(r.platform_fees_total),
+        withdrawn_total: Number(r.withdrawn_total),
+      })),
+    };
+  });
+  res.json({ ok: true, data });
+});
+
 // -------------------------------------------------------------------------
 // Ações críticas sobre escolas — cada uma registra em audit_logs (ator +
 // data/hora + motivo). Só superadmin chega aqui (middleware acima).

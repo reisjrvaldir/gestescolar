@@ -47,9 +47,38 @@ export interface SaasSchool {
   users_count: number; students_count: number;
 }
 
+export interface SaasRevenue {
+  mrr: number;
+  arr: number;
+  active_count: number;
+  avg_ticket: number;
+  revenue_month: number;
+  revenue_delta_pct: number | null;
+  series: MonthPoint[];
+  by_plan: DistItem[];
+  recent: { id: string; school_name: string; amount: number; paid_at?: string; status: string }[];
+}
+
+export interface SaasPayouts {
+  totals: { available: number; pending: number; gross: number; platform_fees: number; withdrawn: number };
+  schools: {
+    id: string; name: string;
+    available_balance: number; pending_balance: number;
+    gross_received_total: number; platform_fees_total: number; withdrawn_total: number;
+  }[];
+}
+
 export const saasService = {
   async dashboard(): Promise<SaasDashboard> {
     const r = await api.get<{ ok: boolean; data: SaasDashboard }>('/saas/dashboard');
+    return r.data;
+  },
+  async revenue(): Promise<SaasRevenue> {
+    const r = await api.get<{ ok: boolean; data: SaasRevenue }>('/saas/revenue');
+    return r.data;
+  },
+  async payouts(): Promise<SaasPayouts> {
+    const r = await api.get<{ ok: boolean; data: SaasPayouts }>('/saas/payouts');
     return r.data;
   },
   async schools(): Promise<SaasSchool[]> {

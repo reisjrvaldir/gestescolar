@@ -33,6 +33,8 @@ import { SaasAdminLayout } from '@/saas/SaasAdminLayout';
 import { SaasDashboardPage } from '@/saas/pages/SaasDashboardPage';
 import { SaasPlaceholderPage } from '@/saas/pages/SaasPlaceholderPage';
 import { SaasSchoolsPage } from '@/saas/pages/SaasSchoolsPage';
+import { SaasRevenuePage } from '@/saas/pages/SaasRevenuePage';
+import { SaasPayoutsPage } from '@/saas/pages/SaasPayoutsPage';
 
 const Admin = ({ children }: { children: React.ReactNode }) => (
   <RoleGuard allowed={['school_admin', 'superadmin']}>{children}</RoleGuard>
@@ -94,8 +96,8 @@ export default function App() {
               <Route path="usuarios-escolas" element={<SaasPlaceholderPage title="Usuários das escolas" subtitle="Visão consolidada dos usuários administrativos das escolas." />} />
               <Route path="permissoes"       element={<SaasPlaceholderPage title="Perfis e permissões" subtitle="Papéis do time SaaS e permissões granulares." />} />
               <Route path="logs-acesso"      element={<SaasPlaceholderPage title="Logs de acesso" subtitle="Auditoria de logins, ações críticas e eventos." />} />
-              <Route path="receitas"         element={<SaasPlaceholderPage title="Receitas do SaaS" subtitle="MRR, ARR, ticket médio, churn e evolução." />} />
-              <Route path="repasses"         element={<SaasPlaceholderPage title="Repasses para escolas" subtitle="Splits e valores líquidos por escola." />} />
+              <Route path="receitas"         element={<SaasRevenuePage />} />
+              <Route path="repasses"         element={<SaasPayoutsPage />} />
               <Route path="transacoes"       element={<SaasPlaceholderPage title="Cobranças e transações" subtitle="Todas as cobranças SaaS e transações do gateway." />} />
               <Route path="gateway"          element={<SaasPlaceholderPage title="Gateway de pagamento" subtitle="Integração, chaves, webhooks e ambiente." />} />
               <Route path="config/planos"           element={<SaasPlaceholderPage title="Configuração de planos" subtitle="Cadastro, edição e destaque dos planos SaaS." />} />
