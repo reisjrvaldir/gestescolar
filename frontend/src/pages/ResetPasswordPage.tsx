@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { GraduationCap, Loader2, ArrowLeft, KeyRound } from 'lucide-react';
 import { resetPassword } from '@/lib/authClient';
+import { PasswordInput } from '@/components/ui/PasswordInput';
 
 /** Define uma nova senha a partir do token recebido por e-mail. */
 export function ResetPasswordPage() {
@@ -55,12 +56,12 @@ export function ResetPasswordPage() {
             <form className="space-y-4" onSubmit={handleSubmit}>
               <div>
                 <label className="label">Nova senha</label>
-                <input type="password" className="input" value={password} onChange={(e) => setPassword(e.target.value)} required minLength={8} />
+                <PasswordInput value={password} onChange={(e) => setPassword(e.target.value)} required minLength={8} />
                 <p className="mt-1 text-xs text-ink-subtle">Mínimo 8 caracteres.</p>
               </div>
               <div>
                 <label className="label">Confirmar senha</label>
-                <input type="password" className="input" value={confirm} onChange={(e) => setConfirm(e.target.value)} required minLength={8} />
+                <PasswordInput value={confirm} onChange={(e) => setConfirm(e.target.value)} required minLength={8} />
               </div>
               <button className="btn-primary w-full justify-center" disabled={loading}>
                 {loading && <Loader2 size={16} className="animate-spin" />} Redefinir senha
