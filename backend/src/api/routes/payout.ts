@@ -355,6 +355,14 @@ payoutRouter.post('/documents/:id', requireRole('school_admin', 'superadmin'), r
     const r = await asaasUploadSubaccountDocument(apiKey, req.params.id, {
       type: p.data.type, fileBase64: p.data.file_data, filename: p.data.filename, mime: p.data.mime,
     });
+    // Documentos enviados → habilita a emissão de cobranças (recebimento) da escola.
+    await withTenant(req.ctx!, async (c) => {
+      await c.query(
+        `update public.nuvende_accounts set status='under_review', updated_at=now()
+          where school_id=$1 and status not in ('approved','active')`,
+        [req.ctx!.schoolId],
+      );
+    });
     res.json({ ok: true, data: r });
   } catch (err: any) {
     res.status(422).json({ code: 'asaas_error', message: err?.message ?? 'Falha ao enviar documento' });

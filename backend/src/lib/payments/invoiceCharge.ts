@@ -10,12 +10,18 @@ import { getPaymentProvider, isAsaasConfigured } from './index';
 import { calculatePixSplit } from '../fees';
 import type { BillingType, CreateChargeInput, ChargeResult } from './types';
 
+// Status da conta de recebimento que liberam a emissão de cobranças.
+// Regra de negócio: a escola só pode RECEBER (gerar PIX/cobrança) depois de
+// abrir a subconta E enviar os documentos — evita dinheiro caindo na conta
+// principal da plataforma por uma escola ainda não habilitada no split.
+const PAYOUT_READY_STATUSES = ['under_review', 'approved', 'active'];
+
 export async function buildChargeForInvoice(
   c: PoolClient,
   schoolId: string,
   invoiceId: string,
   billingType: BillingType,
-): Promise<{ error: 'not_found' | 'already_paid' } | { charge: ChargeResult }> {
+): Promise<{ error: 'not_found' | 'already_paid' | 'payout_not_ready' } | { charge: ChargeResult }> {
   const inv = await c.query(
     `select id, amount::float8 as amount, student_name, status, student_id
        from public.invoices where id=$1 and school_id=$2`,
@@ -24,6 +30,21 @@ export async function buildChargeForInvoice(
   if (inv.rows.length === 0) return { error: 'not_found' };
   const invoice = inv.rows[0];
   if (invoice.status === 'paid') return { error: 'already_paid' };
+
+  // Com ASAAS ativo, exige conta de recebimento habilitada (subconta + docs
+  // enviados) antes de gerar qualquer cobrança. Em simulação não se aplica.
+  if (isAsaasConfigured) {
+    const acc = await c.query(
+      `select na.status, s.asaas_wallet_id
+         from public.schools s
+         left join public.nuvende_accounts na on na.school_id = s.id
+        where s.id = $1`,
+      [schoolId],
+    );
+    const row = acc.rows[0] ?? {};
+    const ready = Boolean(row.asaas_wallet_id) && PAYOUT_READY_STATUSES.includes(row.status);
+    if (!ready) return { error: 'payout_not_ready' };
+  }
 
   const chargeInput: CreateChargeInput = {
     invoiceId: invoice.id,

@@ -68,6 +68,9 @@ invoicesRouter.post('/:id/pix', requireRole('school_admin', 'financial', 'supera
     return { charge: r.charge, info: info.rows[0] as any };
   });
   if ('error' in result) {
+    if (result.error === 'payout_not_ready') {
+      return res.status(409).json({ code: 'payout_not_ready', message: 'Envie os documentos da conta de recebimento antes de gerar cobranças PIX.' });
+    }
     return res.status(result.error === 'not_found' ? 404 : 409).json({ code: result.error, message: result.error });
   }
 
@@ -91,6 +94,9 @@ invoicesRouter.post('/:id/charge', requireRole('school_admin', 'financial', 'sup
   const billingType: BillingType = req.body?.billingType === 'CREDIT_CARD' ? 'CREDIT_CARD' : 'PIX';
   const result = await withTenant(req.ctx!, (c) => buildChargeForInvoice(c, req.ctx!.schoolId!, req.params.id, billingType));
   if ('error' in result) {
+    if (result.error === 'payout_not_ready') {
+      return res.status(409).json({ code: 'payout_not_ready', message: 'Envie os documentos da conta de recebimento antes de gerar cobranças.' });
+    }
     return res.status(result.error === 'not_found' ? 404 : 409).json({ code: result.error, message: result.error });
   }
   res.json({ ok: true, data: result.charge });
