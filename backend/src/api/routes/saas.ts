@@ -490,6 +490,32 @@ saasRouter.get('/transactions', async (req, res) => {
   res.json({ ok: true, data });
 });
 
+// GET /api/saas/expirations — escolas com trial vencendo (30d) ou já em atraso.
+saasRouter.get('/expirations', async (req, res) => {
+  const data = await withTenant(req.ctx!, async (c) => {
+    const { rows } = await c.query(
+      `select s.id, s.name, coalesce(p.name,'—') as plan,
+              coalesce(p.monthly_price,0)::float8 as monthly_price,
+              s.subscription_status, s.trial_ends_at,
+              (s.trial_ends_at::date - current_date) as days_left,
+              ${DERIVED} as derived_status
+         from public.schools s left join public.plans p on p.id = s.plan_id
+        where coalesce(s.status,'active') <> 'suspended'
+          and (
+            (s.subscription_status = 'trialing' and s.trial_ends_at is not null
+              and s.trial_ends_at < now() + interval '30 days')
+            or s.subscription_status = 'past_due'
+          )
+        order by s.trial_ends_at asc nulls last`,
+    );
+    return rows.map((r: any) => ({
+      ...r, monthly_price: Number(r.monthly_price),
+      days_left: r.days_left == null ? null : Number(r.days_left),
+    }));
+  });
+  res.json({ ok: true, data });
+});
+
 // GET /api/saas/subscriptions — assinaturas das escolas (plano, status, período).
 saasRouter.get('/subscriptions', async (req, res) => {
   const data = await withTenant(req.ctx!, async (c) => {

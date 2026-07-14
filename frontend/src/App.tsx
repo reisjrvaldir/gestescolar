@@ -39,6 +39,7 @@ import { SaasPlansConfigPage } from '@/saas/pages/SaasPlansConfigPage';
 import { SaasAuditLogsPage } from '@/saas/pages/SaasAuditLogsPage';
 import { SaasTransactionsPage } from '@/saas/pages/SaasTransactionsPage';
 import { SaasSubscriptionsPage } from '@/saas/pages/SaasSubscriptionsPage';
+import { SaasExpirationsPage } from '@/saas/pages/SaasExpirationsPage';
 
 const Admin = ({ children }: { children: React.ReactNode }) => (
   <RoleGuard allowed={['school_admin', 'superadmin']}>{children}</RoleGuard>
@@ -94,7 +95,7 @@ export default function App() {
               <Route path="resumo"           element={<SaasPlaceholderPage title="Resumo executivo" subtitle="Indicadores consolidados da operação SaaS." />} />
               <Route path="escolas"          element={<SaasSchoolsPage />} />
               <Route path="planos"           element={<SaasSubscriptionsPage />} />
-              <Route path="vencimentos"      element={<SaasPlaceholderPage title="Vencimentos" subtitle="Acompanhamento de vencimentos e ações rápidas." />} />
+              <Route path="vencimentos"      element={<SaasExpirationsPage />} />
               <Route path="status"           element={<SaasPlaceholderPage title="Status das contas" subtitle="Contas ativas, suspensas, canceladas e trials." />} />
               <Route path="admins"           element={<SaasPlaceholderPage title="Administradores do SaaS" subtitle="Time de operação e suporte." />} />
               <Route path="usuarios-escolas" element={<SaasPlaceholderPage title="Usuários das escolas" subtitle="Visão consolidada dos usuários administrativos das escolas." />} />

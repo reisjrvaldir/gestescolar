@@ -124,6 +124,17 @@ export interface SaasSubscriptionRow {
   plan: string;
 }
 
+export interface SaasExpiration {
+  id: string;
+  name: string;
+  plan: string;
+  monthly_price: number;
+  subscription_status: string;
+  trial_ends_at: string | null;
+  days_left: number | null;
+  derived_status: SchoolDerivedStatus;
+}
+
 export const saasService = {
   async dashboard(): Promise<SaasDashboard> {
     const r = await api.get<{ ok: boolean; data: SaasDashboard }>('/saas/dashboard');
@@ -154,6 +165,10 @@ export const saasService = {
   },
   async subscriptions(): Promise<SaasSubscriptionRow[]> {
     const r = await api.get<{ ok: boolean; data: SaasSubscriptionRow[] }>('/saas/subscriptions');
+    return r.data;
+  },
+  async expirations(): Promise<SaasExpiration[]> {
+    const r = await api.get<{ ok: boolean; data: SaasExpiration[] }>('/saas/expirations');
     return r.data;
   },
   async revenue(): Promise<SaasRevenue> {
