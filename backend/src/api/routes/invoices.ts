@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { requireAuth, requireRole } from '../../middleware/auth';
 import { withTenant } from '../../db/withTenant';
 import { buildChargeForInvoice, type BillingType } from '../../lib/payments';
+import { notifyChargeCreated } from '../../lib/email';
 
 export const invoicesRouter = Router();
 invoicesRouter.use(requireAuth);
@@ -49,10 +50,39 @@ invoicesRouter.get('/mine', async (req, res) => {
 
 // POST /api/invoices/:id/pix — gera/renova a cobrança PIX da fatura
 invoicesRouter.post('/:id/pix', requireRole('school_admin', 'financial', 'superadmin'), async (req, res) => {
-  const result = await withTenant(req.ctx!, (c) => buildChargeForInvoice(c, req.ctx!.schoolId!, req.params.id, 'PIX'));
+  const result = await withTenant(req.ctx!, async (c) => {
+    const r = await buildChargeForInvoice(c, req.ctx!.schoolId!, req.params.id, 'PIX');
+    if ('error' in r) return r;
+    // Dados para notificar o responsável por e-mail (fora da transação).
+    const info = await c.query(
+      `select i.student_name, i.amount::float8 as amount, i.due_date, i.kind,
+              g.email as guardian_email, b.title as charge_title, sc.name as school_name
+         from public.invoices i
+         left join public.students st on st.id = i.student_id
+         left join public.guardians g on g.id = st.guardian_id
+         left join public.charge_batches b on b.id = i.batch_id
+         left join public.schools sc on sc.id = i.school_id
+        where i.id=$1 and i.school_id=$2`,
+      [req.params.id, req.ctx!.schoolId],
+    );
+    return { charge: r.charge, info: info.rows[0] as any };
+  });
   if ('error' in result) {
     return res.status(result.error === 'not_found' ? 404 : 409).json({ code: result.error, message: result.error });
   }
+
+  // Notificação por e-mail — fire-and-forget: nunca bloqueia nem quebra a resposta.
+  const info = result.info;
+  if (info?.guardian_email) {
+    notifyChargeCreated(info.guardian_email, {
+      studentName: info.student_name,
+      amount: Number(info.amount),
+      dueDate: info.due_date instanceof Date ? info.due_date.toISOString().slice(0, 10) : info.due_date,
+      description: info.kind === 'avulsa' ? (info.charge_title ?? 'Cobrança avulsa') : 'Mensalidade',
+      schoolName: info.school_name,
+    }).catch((e) => console.error('[invoices.pix] notificação de e-mail falhou:', e?.message ?? e));
+  }
+
   res.json({ ok: true, data: result.charge });
 });
 
