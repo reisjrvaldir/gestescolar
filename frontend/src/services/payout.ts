@@ -29,9 +29,35 @@ export interface PayoutAccount {
   onboarding: SubaccountOnboarding;
 }
 
+export interface Withdrawal {
+  id: string;
+  amount: number;
+  status: 'requested' | 'processing' | 'paid' | 'failed' | 'cancelled';
+  requested_at: string;
+  paid_at?: string | null;
+  failed_reason?: string | null;
+}
+
+export interface WithdrawalsInfo {
+  available: number;
+  pending: number;
+  withdrawn: number;
+  pix_key: string | null;
+  pix_key_type: PixKeyType | null;
+  history: Withdrawal[];
+}
+
 export const payoutService = {
   async get(): Promise<PayoutAccount> {
     const r = await api.get<{ ok: boolean; data: PayoutAccount }>('/payout');
+    return r.data;
+  },
+  async withdrawals(): Promise<WithdrawalsInfo> {
+    const r = await api.get<{ ok: boolean; data: WithdrawalsInfo }>('/payout/withdrawals');
+    return r.data;
+  },
+  async withdraw(amount: number): Promise<{ withdrawal_id: string; status: string; amount: number }> {
+    const r = await api.post<{ ok: boolean; data: { withdrawal_id: string; status: string; amount: number } }>('/payout/withdraw', { amount });
     return r.data;
   },
   async savePix(pix_key: string, pix_key_type: PixKeyType): Promise<void> {

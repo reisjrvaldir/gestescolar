@@ -11,6 +11,7 @@ import { requireAuth, requireRole, requireActivePlan } from '../../middleware/au
 import { isAsaasConfigured } from '../../lib/payments';
 import {
   asaasCreateSubaccount, asaasListSubaccountDocuments, asaasUploadSubaccountDocument,
+  asaasSubaccountTransferPix,
 } from '../../lib/payments/asaas';
 
 export const payoutRouter = Router();
@@ -79,6 +80,126 @@ payoutRouter.put('/pix', requireRole('school_admin', 'superadmin'), requireActiv
     );
   });
   res.json({ ok: true });
+});
+
+// GET /api/payout/withdrawals — saldo disponível + histórico de saques.
+payoutRouter.get('/withdrawals', requireRole('school_admin', 'financial', 'superadmin'), async (req, res) => {
+  const data = await withTenant(req.ctx!, async (c) => {
+    const bal = await c.query(
+      `select available_balance::float8 as available, pending_balance::float8 as pending,
+              withdrawn_total::float8 as withdrawn
+         from public.school_balances where school_id = $1`,
+      [req.ctx!.schoolId],
+    );
+    const acc = await c.query(
+      `select pix_key, pix_key_type from public.nuvende_accounts where school_id = $1`,
+      [req.ctx!.schoolId],
+    );
+    const hist = await c.query(
+      `select id, amount::float8 as amount, status, requested_at, paid_at, failed_reason
+         from public.withdrawals where school_id = $1 order by requested_at desc limit 20`,
+      [req.ctx!.schoolId],
+    );
+    const b = bal.rows[0] ?? {};
+    return {
+      available: Number(b.available ?? 0),
+      pending: Number(b.pending ?? 0),
+      withdrawn: Number(b.withdrawn ?? 0),
+      pix_key: acc.rows[0]?.pix_key ?? null,
+      pix_key_type: acc.rows[0]?.pix_key_type ?? null,
+      history: hist.rows.map((r: any) => ({
+        id: r.id, amount: Number(r.amount), status: r.status,
+        requested_at: r.requested_at, paid_at: r.paid_at, failed_reason: r.failed_reason,
+      })),
+    };
+  });
+  res.json({ ok: true, data });
+});
+
+// POST /api/payout/withdraw — saca (transfere via PIX) o saldo disponível da escola.
+// Padrão reservar→executar→restaurar: debita o saldo de forma atômica (guarda
+// anti-duplo-saque), chama o ASAAS e, se a transferência falhar, restaura o saldo.
+payoutRouter.post('/withdraw', requireRole('school_admin', 'superadmin'), requireActivePlan, async (req, res) => {
+  if (!isAsaasConfigured) {
+    return res.status(503).json({ code: 'provider_off', message: 'Pagamentos não configurados.' });
+  }
+  const amount = Math.round(Number(req.body?.amount) * 100) / 100;
+  if (!Number.isFinite(amount) || amount <= 0) {
+    return res.status(400).json({ code: 'bad_amount', message: 'Informe um valor de saque válido.' });
+  }
+
+  const prep = await withTenant(req.ctx!, async (c) => {
+    const acc = await c.query(
+      `select pix_key, pix_key_type, bank_data_json from public.nuvende_accounts where school_id = $1 limit 1`,
+      [req.ctx!.schoolId],
+    );
+    const row = acc.rows[0];
+    const bank = (row?.bank_data_json ?? {}) as Record<string, any>;
+    const apiKey = bank.provider_api_key as string | undefined;
+    if (!row?.pix_key) return { error: 'no_pix' as const };
+    if (!apiKey) return { error: 'no_subaccount' as const };
+
+    const upd = await c.query(
+      `update public.school_balances
+          set available_balance = available_balance - $2,
+              withdrawn_total   = withdrawn_total + $2,
+              updated_at = now()
+        where school_id = $1 and available_balance >= $2
+        returning available_balance::float8 as remaining`,
+      [req.ctx!.schoolId, amount],
+    );
+    if (upd.rowCount === 0) return { error: 'insufficient' as const };
+
+    const wd = await c.query(
+      `insert into public.withdrawals (school_id, amount, status, requested_by, requested_at)
+         values ($1,$2,'processing',$3, now()) returning id`,
+      [req.ctx!.schoolId, amount, req.ctx!.profileId],
+    );
+    return { withdrawalId: wd.rows[0].id as string, pixKey: row.pix_key as string, pixKeyType: row.pix_key_type as string | null, apiKey };
+  });
+
+  if ('error' in prep) {
+    const message =
+      prep.error === 'no_pix' ? 'Cadastre a chave PIX de recebimento antes de sacar.'
+      : prep.error === 'no_subaccount' ? 'Abra a subconta de recebimento antes de sacar.'
+      : 'Saldo insuficiente para este saque.';
+    return res.status(400).json({ code: prep.error, message });
+  }
+
+  try {
+    const t = await asaasSubaccountTransferPix(prep.apiKey, {
+      value: amount, pixKey: prep.pixKey, pixKeyType: prep.pixKeyType ?? undefined,
+    });
+    await withTenant(req.ctx!, async (c) => {
+      await c.query(
+        `update public.withdrawals set status='paid', nuvende_withdrawal_id=$2, paid_at=now(), updated_at=now() where id=$1`,
+        [prep.withdrawalId, t.id],
+      );
+      await c.query(
+        `insert into public.audit_logs (school_id, user_id, action, entity_type, entity_id, metadata)
+         values ($1,$2,'WITHDRAWAL_REQUESTED','withdrawal',$3,$4)`,
+        [req.ctx!.schoolId, req.ctx!.profileId, prep.withdrawalId, JSON.stringify({ amount, provider_transfer_id: t.id, status: t.status })],
+      );
+    });
+    res.json({ ok: true, data: { withdrawal_id: prep.withdrawalId, provider_transfer_id: t.id, status: t.status, amount } });
+  } catch (err: any) {
+    // Restaura o saldo reservado e marca o saque como falho.
+    await withTenant(req.ctx!, async (c) => {
+      await c.query(
+        `update public.school_balances
+            set available_balance = available_balance + $2,
+                withdrawn_total   = withdrawn_total - $2,
+                updated_at = now()
+          where school_id = $1`,
+        [req.ctx!.schoolId, amount],
+      );
+      await c.query(
+        `update public.withdrawals set status='failed', failed_reason=$2, updated_at=now() where id=$1`,
+        [prep.withdrawalId, String(err?.message ?? 'Falha na transferência').slice(0, 300)],
+      );
+    });
+    res.status(422).json({ code: 'transfer_failed', message: err?.message ?? 'Falha ao transferir via PIX.' });
+  }
 });
 
 const onboardingSchema = z.object({

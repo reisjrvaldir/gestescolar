@@ -264,6 +264,44 @@ export async function asaasUploadSubaccountDocument(
   return data;
 }
 
+/** Saldo real disponível na SUBCONTA da escola (usa a apiKey da subconta). */
+export async function asaasSubaccountBalance(subaccountApiKey: string): Promise<number> {
+  const res = await fetch(`${BASE_URL}/finance/balance`, {
+    headers: { access_token: subaccountApiKey, 'User-Agent': 'GestEscolar' },
+  });
+  const text = await res.text();
+  const data = text ? JSON.parse(text) : {};
+  if (!res.ok) {
+    const msg = data?.errors?.[0]?.description ?? data?.message ?? `ASAAS HTTP ${res.status}`;
+    throw Object.assign(new Error(msg), { http: res.status });
+  }
+  return Number(data.balance ?? 0);
+}
+
+/** Transferência PIX SAINDO da subconta da escola para a chave PIX dela. */
+export async function asaasSubaccountTransferPix(
+  subaccountApiKey: string,
+  input: { value: number; pixKey: string; pixKeyType?: string },
+): Promise<{ id: string; status: string }> {
+  const res = await fetch(`${BASE_URL}/transfers`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', access_token: subaccountApiKey, 'User-Agent': 'GestEscolar' },
+    body: JSON.stringify({
+      value: input.value,
+      operationType: 'PIX',
+      pixAddressKey: input.pixKey,
+      ...(input.pixKeyType ? { pixAddressKeyType: input.pixKeyType } : {}),
+    }),
+  });
+  const text = await res.text();
+  const data = text ? JSON.parse(text) : {};
+  if (!res.ok) {
+    const msg = data?.errors?.[0]?.description ?? data?.message ?? `ASAAS HTTP ${res.status}`;
+    throw Object.assign(new Error(msg), { http: res.status });
+  }
+  return { id: String(data.id), status: String(data.status ?? 'PENDING') };
+}
+
 /**
  * Garante um cliente ASAAS para a ESCOLA como pagadora da assinatura SaaS
  * (distinto do cliente/responsável que paga a mensalidade do aluno).
