@@ -1,4 +1,5 @@
-import { Plus, ArrowRight, Send, Loader2, Wallet } from 'lucide-react';
+import { useMemo, useState } from 'react';
+import { Plus, ArrowRight, Send, Loader2, Wallet, ChevronLeft, ChevronRight } from 'lucide-react';
 import { StatusBadge } from '@/components/ui/StatusBadge';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { brl } from '@/lib/fees';
@@ -21,14 +22,45 @@ interface Props {
   sendingId?: string | null;
 }
 
-/** Bloco de A receber (mensalidades e cobranças a entrar) com envio de cobrança PIX real. */
+/** Chave YYYY-MM do mês atual deslocado por `offset` meses. */
+function monthKey(offset: number): string {
+  const d = new Date();
+  d.setDate(1);
+  d.setMonth(d.getMonth() + offset);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+}
+
+function monthLabel(key: string): string {
+  const [y, m] = key.split('-').map(Number);
+  return new Date(y, m - 1, 1).toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
+}
+
+/** Mês de referência da fatura: usa reference_month; senão, o mês do vencimento. */
+function invoiceMonth(r: Invoice): string {
+  if (r.reference_month) return r.reference_month;
+  return r.due_date ? String(r.due_date).slice(0, 7) : '';
+}
+
+/** Bloco de A receber — mostra as cobranças (mensalidade + avulsas) do mês
+ *  selecionado, com navegação entre meses e total do mês. */
 export function ReceivablesCard({ rows, onNew, onSend, onViewAll, sendingId }: Props) {
+  const [offset, setOffset] = useState(0);
+  const selMonth = monthKey(offset);
+
+  const monthRows = useMemo(
+    () => rows
+      .filter((r) => r.status !== 'paid' && r.status !== 'cancelled' && invoiceMonth(r) === selMonth)
+      .sort((a, b) => String(a.due_date).localeCompare(String(b.due_date))),
+    [rows, selMonth],
+  );
+  const monthTotal = monthRows.reduce((s, r) => s + r.amount, 0);
+
   return (
     <div className="card flex flex-col overflow-hidden">
       <div className="flex items-start justify-between gap-3 border-b border-border px-5 py-4">
         <div>
           <h3 className="text-sm font-bold text-ink">A receber</h3>
-          <p className="mt-0.5 text-xs text-ink-muted">Valores das mensalidades e cobranças que ainda vão entrar.</p>
+          <p className="mt-0.5 text-xs text-ink-muted">Mensalidades e cobranças que ainda vão entrar no mês.</p>
         </div>
         <button
           className="inline-flex shrink-0 items-center gap-1 rounded-lg border border-border px-2.5 py-1.5 text-xs font-semibold text-ink hover:bg-canvas"
@@ -38,8 +70,33 @@ export function ReceivablesCard({ rows, onNew, onSend, onViewAll, sendingId }: P
         </button>
       </div>
 
-      {rows.length === 0 ? (
-        <EmptyState icon={Wallet} title="Nenhuma cobrança em aberto" description="As mensalidades geradas para os alunos aparecerão aqui." />
+      {/* Navegação de mês + total */}
+      <div className="flex items-center justify-between gap-3 border-b border-border bg-canvas px-5 py-2.5">
+        <div className="flex items-center gap-2">
+          <button
+            className="rounded-lg border border-border p-1 text-ink-muted hover:bg-surface hover:text-ink"
+            onClick={() => setOffset((o) => o - 1)}
+            aria-label="Mês anterior"
+          >
+            <ChevronLeft size={16} />
+          </button>
+          <span className="min-w-[130px] text-center text-sm font-semibold capitalize text-ink">{monthLabel(selMonth)}</span>
+          <button
+            className="rounded-lg border border-border p-1 text-ink-muted hover:bg-surface hover:text-ink"
+            onClick={() => setOffset((o) => o + 1)}
+            aria-label="Próximo mês"
+          >
+            <ChevronRight size={16} />
+          </button>
+        </div>
+        <div className="text-right">
+          <p className="text-[11px] text-ink-subtle">Total do mês</p>
+          <p className="text-sm font-bold text-ink">{brl(monthTotal)}</p>
+        </div>
+      </div>
+
+      {monthRows.length === 0 ? (
+        <EmptyState icon={Wallet} title="Nenhuma cobrança em aberto" description="Não há mensalidades ou cobranças em aberto para este mês." />
       ) : (
         <div className="flex-1 overflow-x-auto">
           <table className="w-full text-sm">
@@ -55,7 +112,7 @@ export function ReceivablesCard({ rows, onNew, onSend, onViewAll, sendingId }: P
               </tr>
             </thead>
             <tbody>
-              {rows.slice(0, 8).map((r) => (
+              {monthRows.slice(0, 8).map((r) => (
                 <tr key={r.id} className="border-b border-border last:border-0 hover:bg-canvas">
                   <td className="px-5 py-2.5 font-medium text-ink">{r.student_name}</td>
                   <td className="hidden px-5 py-2.5 text-ink-muted lg:table-cell">{r.guardian_name ?? '—'}</td>
