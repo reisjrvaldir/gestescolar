@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useNavigate, Link, useSearchParams } from 'react-router-dom';
 import { GraduationCap, Loader2, ShieldCheck, Zap, Headset } from 'lucide-react';
 import { signIn, signUp } from '@/lib/authClient';
+import { PasswordInput } from '@/components/ui/PasswordInput';
 
 type Tab = 'login' | 'signup';
 
@@ -109,7 +110,7 @@ export function LoginPage() {
               </div>
               <div>
                 <label className="label">Senha</label>
-                <input type="password" className="input" value={password} onChange={(e) => setPassword(e.target.value)} required />
+                <PasswordInput value={password} onChange={(e) => setPassword(e.target.value)} required />
                 <p className="mt-1 text-xs text-ink-subtle">1º acesso: use a senha temporária fornecida pela escola.</p>
                 <div className="mt-1 text-right">
                   <Link to="/forgot-password" className="text-xs font-medium text-primary hover:underline">Esqueci minha senha</Link>
@@ -131,7 +132,7 @@ export function LoginPage() {
               </div>
               <div>
                 <label className="label">Senha</label>
-                <input type="password" className="input" value={password} onChange={(e) => setPassword(e.target.value)} required minLength={8} />
+                <PasswordInput value={password} onChange={(e) => setPassword(e.target.value)} required minLength={8} />
                 <p className="mt-1 text-xs text-ink-subtle">Mínimo 8 caracteres.</p>
               </div>
               <label className="flex items-start gap-2 text-sm text-ink-muted">

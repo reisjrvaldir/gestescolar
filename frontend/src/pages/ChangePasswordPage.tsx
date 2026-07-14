@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { ShieldCheck, Loader2, Check } from 'lucide-react';
 import { changePassword, signOut } from '@/lib/authClient';
 import { api } from '@/lib/api';
+import { PasswordInput } from '@/components/ui/PasswordInput';
 
 interface Fields {
   current: string;
@@ -98,21 +99,21 @@ export function ChangePasswordPage() {
             )}
             <div>
               <label className="label">Senha atual (inicial)</label>
-              <input type="password" autoComplete="current-password" className="input"
+              <PasswordInput autoComplete="current-password"
                 placeholder="Senha temporária recebida"
                 {...register('current', { required: 'Informe a senha atual' })} />
               {errors.current && <p className="mt-1 text-xs text-danger">{errors.current.message}</p>}
             </div>
             <div>
               <label className="label">Nova senha</label>
-              <input type="password" autoComplete="new-password" className="input"
+              <PasswordInput autoComplete="new-password"
                 placeholder="Mínimo 8 caracteres"
                 {...register('next', { required: 'Informe a nova senha', minLength: { value: 8, message: 'Mínimo 8 caracteres' } })} />
               {errors.next && <p className="mt-1 text-xs text-danger">{errors.next.message}</p>}
             </div>
             <div>
               <label className="label">Confirme a nova senha</label>
-              <input type="password" autoComplete="new-password" className="input"
+              <PasswordInput autoComplete="new-password"
                 {...register('confirm', {
                   required: 'Confirme a senha',
                   validate: (v) => v === next || 'As senhas não conferem',

@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { QRCodeSVG } from 'qrcode.react';
 import { Plus, Loader2, Info, Check, AlertTriangle, Copy } from 'lucide-react';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { StatusBadge } from '@/components/ui/StatusBadge';
@@ -47,7 +48,7 @@ export function FinancePage() {
   const [selected, setSelected] = useState<Invoice | null>(null);
   const [adhocOpen, setAdhocOpen] = useState(false);
   const [sendingId, setSendingId] = useState<string | null>(null);
-  const [pixResult, setPixResult] = useState<{ studentName: string; copyPaste?: string; qrCode?: string } | null>(null);
+  const [pixResult, setPixResult] = useState<{ studentName: string; copyPaste?: string } | null>(null);
   const [toast, setToast] = useState<{ type: 'success' | 'error'; msg: string } | null>(null);
 
   useEffect(() => { load(); }, []);
@@ -82,7 +83,7 @@ export function FinancePage() {
     try {
       const charge = await invoicesService.generatePix(id);
       const inv = invoices.find((i) => i.id === id);
-      setPixResult({ studentName: inv?.student_name ?? '—', copyPaste: charge.pixCopyPaste, qrCode: charge.pixQrCode });
+      setPixResult({ studentName: inv?.student_name ?? '—', copyPaste: charge.pixCopyPaste });
       showToast('success', 'Cobrança PIX gerada com sucesso — disponível no portal do responsável.');
       await load();
     } catch (e: any) {
@@ -282,14 +283,10 @@ export function FinancePage() {
         {pixResult && (
           <div className="space-y-3 text-sm">
             <p className="text-ink-muted">Aluno: <strong className="text-ink">{pixResult.studentName}</strong></p>
-            {pixResult.qrCode && !pixResult.qrCode.startsWith('SIMULADO') && (
+            {pixResult.copyPaste && (
               <div className="flex flex-col items-center rounded-xl border border-border bg-white p-4">
                 <p className="mb-2 text-xs font-semibold text-ink-muted">Aponte a câmera do banco para pagar</p>
-                <img
-                  src={`data:image/png;base64,${pixResult.qrCode}`}
-                  alt="QR Code PIX para pagamento"
-                  className="h-48 w-48 rounded-lg"
-                />
+                <QRCodeSVG value={pixResult.copyPaste} size={192} level="M" marginSize={2} />
               </div>
             )}
             {pixResult.copyPaste ? (

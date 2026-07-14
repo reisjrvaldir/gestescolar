@@ -4,6 +4,7 @@ import { PageHeader } from '@/components/ui/PageHeader';
 import { StatusBadge } from '@/components/ui/StatusBadge';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Modal } from '@/components/ui/Modal';
+import { QRCodeSVG } from 'qrcode.react';
 import { invoicesService, type MyInvoice, type InvoiceStatus } from '@/services/invoices';
 import { brl } from '@/lib/fees';
 import { fmtDate } from '@/lib/dates';
@@ -120,14 +121,10 @@ export function FaturasPage() {
               <span className="text-ink-muted">Valor</span>
               <span className="text-lg font-extrabold text-ink">{brl(selected.amount)}</span>
             </div>
-            {selected.pix_qr_code && !selected.pix_qr_code.startsWith('SIMULADO') && (
+            {selected.pix_copy_paste && (
               <div className="flex flex-col items-center rounded-xl border border-border bg-white p-4">
                 <p className="mb-2 text-xs font-semibold text-ink-muted">Aponte a câmera do seu banco</p>
-                <img
-                  src={`data:image/png;base64,${selected.pix_qr_code}`}
-                  alt="QR Code PIX para pagamento"
-                  className="h-48 w-48 rounded-lg"
-                />
+                <QRCodeSVG value={selected.pix_copy_paste} size={192} level="M" marginSize={2} />
               </div>
             )}
             {selected.pix_copy_paste && (
