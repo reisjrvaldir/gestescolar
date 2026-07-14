@@ -38,8 +38,64 @@ export function FaturasPage() {
     return <div className="flex items-center justify-center py-20 text-ink-muted"><Loader2 className="animate-spin" size={24} /> <span className="ml-2">Carregando…</span></div>;
   }
 
+  const currentMonth = `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}`;
   const open = invoices.filter((i) => i.status !== 'paid' && i.status !== 'cancelled');
   const paid = invoices.filter((i) => i.status === 'paid');
+
+  // Três grupos das cobranças em aberto.
+  const mesAtual = open.filter((i) => i.kind !== 'avulsa' && (i.reference_month ?? '') <= currentMonth);
+  const futuras = open.filter((i) => i.kind !== 'avulsa' && (i.reference_month ?? '') > currentMonth);
+  const avulso = open.filter((i) => i.kind === 'avulsa');
+
+  const total = (list: MyInvoice[]) => list.reduce((s, i) => s + i.amount, 0);
+
+  const InvoiceRow = ({ inv, showPay }: { inv: MyInvoice; showPay: boolean }) => (
+    <div className="flex flex-wrap items-center justify-between gap-2 px-4 py-3">
+      <div className="min-w-0">
+        <p className="truncate font-medium text-ink">
+          {inv.kind === 'avulsa' ? (inv.charge_title ?? 'Cobrança avulsa') : inv.student_name}
+        </p>
+        <p className="text-xs text-ink-muted">
+          {inv.kind === 'avulsa'
+            ? (inv.charge_description ?? inv.student_name)
+            : `Mensalidade${inv.reference_month ? ` — ${inv.reference_month}` : ''}`}
+        </p>
+        <p className="mt-0.5 text-[11px] text-ink-subtle">
+          {inv.status === 'paid'
+            ? (inv.paid_at ? `Paga em ${fmtDate(inv.paid_at)}` : 'Paga')
+            : `Vence ${fmtDate(inv.due_date)}`}
+        </p>
+      </div>
+      <div className="flex flex-col items-end gap-1.5">
+        <span className="font-bold text-ink">{brl(inv.amount)}</span>
+        <StatusBadge tone={STATUS[inv.status].tone}>{STATUS[inv.status].label}</StatusBadge>
+        {showPay && (inv.pix_copy_paste || inv.checkout_url) && (
+          <button className="btn-outline text-xs" onClick={() => setSelected(inv)}>
+            <QrCode size={14} /> Pagar
+          </button>
+        )}
+      </div>
+    </div>
+  );
+
+  const Column = ({ title, hint, list }: { title: string; hint: string; list: MyInvoice[] }) => (
+    <div className="card flex flex-col overflow-hidden">
+      <div className="border-b border-border px-4 py-3">
+        <div className="flex items-center justify-between">
+          <span className="text-sm font-bold text-ink">{title}</span>
+          <span className="rounded-full bg-canvas px-2 py-0.5 text-xs font-semibold text-ink-muted">{list.length}</span>
+        </div>
+        <p className="mt-0.5 text-[11px] text-ink-subtle">{hint} · {brl(total(list))}</p>
+      </div>
+      {list.length === 0 ? (
+        <div className="px-4 py-8 text-center text-xs text-ink-subtle">Nada por aqui.</div>
+      ) : (
+        <div className="divide-y divide-border">
+          {list.map((inv) => <InvoiceRow key={inv.id} inv={inv} showPay />)}
+        </div>
+      )}
+    </div>
+  );
 
   return (
     <>
@@ -51,54 +107,17 @@ export function FaturasPage() {
         </div>
       ) : (
         <div className="space-y-6">
-          {open.length > 0 && (
-            <div className="card overflow-hidden">
-              <div className="border-b border-border px-4 py-3 text-sm font-bold text-ink">Em aberto</div>
-              <div className="divide-y divide-border">
-                {open.map((inv) => (
-                  <div key={inv.id} className="flex flex-wrap items-center justify-between gap-3 px-4 py-3">
-                    <div className="min-w-0">
-                      <p className="font-medium text-ink">{inv.student_name}</p>
-                      <p className="text-xs text-ink-muted">
-                        {inv.kind === 'avulsa' ? 'Cobrança avulsa' : 'Mensalidade'}
-                        {inv.reference_month ? ` — ${inv.reference_month}` : ''} · vence {fmtDate(inv.due_date)}
-                      </p>
-                    </div>
-                    <div className="flex items-center gap-3">
-                      <StatusBadge tone={STATUS[inv.status].tone}>{STATUS[inv.status].label}</StatusBadge>
-                      <span className="font-bold text-ink">{brl(inv.amount)}</span>
-                      {(inv.pix_copy_paste || inv.checkout_url) && (
-                        <button className="btn-outline text-xs" onClick={() => setSelected(inv)}>
-                          <QrCode size={14} /> Pagar
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
+          <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+            <Column title="Mês atual" hint="A pagar agora" list={mesAtual} />
+            <Column title="Futuras" hint="Próximos meses" list={futuras} />
+            <Column title="Avulsas" hint="Cobranças extras" list={avulso} />
+          </div>
 
           {paid.length > 0 && (
             <div className="card overflow-hidden">
               <div className="border-b border-border px-4 py-3 text-sm font-bold text-ink">Pagas</div>
               <div className="divide-y divide-border">
-                {paid.map((inv) => (
-                  <div key={inv.id} className="flex flex-wrap items-center justify-between gap-3 px-4 py-3">
-                    <div>
-                      <p className="font-medium text-ink">{inv.student_name}</p>
-                      <p className="text-xs text-ink-muted">
-                        {inv.kind === 'avulsa' ? 'Cobrança avulsa' : 'Mensalidade'}
-                        {inv.reference_month ? ` — ${inv.reference_month}` : ''}
-                        {inv.paid_at ? ` · paga em ${fmtDate(inv.paid_at)}` : ''}
-                      </p>
-                    </div>
-                    <div className="flex items-center gap-3">
-                      <StatusBadge tone="success">Pago</StatusBadge>
-                      <span className="font-bold text-ink">{brl(inv.amount)}</span>
-                    </div>
-                  </div>
-                ))}
+                {paid.map((inv) => <InvoiceRow key={inv.id} inv={inv} showPay={false} />)}
               </div>
             </div>
           )}
@@ -116,6 +135,17 @@ export function FaturasPage() {
             <div className="flex items-center justify-between">
               <span className="text-ink-muted">Aluno</span>
               <span className="font-medium text-ink">{selected.student_name}</span>
+            </div>
+            <div className="flex items-start justify-between gap-3">
+              <span className="text-ink-muted">Referente a</span>
+              <span className="text-right font-medium text-ink">
+                {selected.kind === 'avulsa'
+                  ? (selected.charge_title ?? 'Cobrança avulsa')
+                  : `Mensalidade${selected.reference_month ? ` — ${selected.reference_month}` : ''}`}
+                {selected.kind === 'avulsa' && selected.charge_description && (
+                  <span className="block text-xs font-normal text-ink-muted">{selected.charge_description}</span>
+                )}
+              </span>
             </div>
             <div className="flex items-center justify-between">
               <span className="text-ink-muted">Valor</span>
