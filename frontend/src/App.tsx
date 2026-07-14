@@ -36,6 +36,9 @@ import { SaasSchoolsPage } from '@/saas/pages/SaasSchoolsPage';
 import { SaasRevenuePage } from '@/saas/pages/SaasRevenuePage';
 import { SaasPayoutsPage } from '@/saas/pages/SaasPayoutsPage';
 import { SaasPlansConfigPage } from '@/saas/pages/SaasPlansConfigPage';
+import { SaasAuditLogsPage } from '@/saas/pages/SaasAuditLogsPage';
+import { SaasTransactionsPage } from '@/saas/pages/SaasTransactionsPage';
+import { SaasSubscriptionsPage } from '@/saas/pages/SaasSubscriptionsPage';
 
 const Admin = ({ children }: { children: React.ReactNode }) => (
   <RoleGuard allowed={['school_admin', 'superadmin']}>{children}</RoleGuard>
@@ -90,16 +93,16 @@ export default function App() {
               <Route index element={<SaasDashboardPage />} />
               <Route path="resumo"           element={<SaasPlaceholderPage title="Resumo executivo" subtitle="Indicadores consolidados da operação SaaS." />} />
               <Route path="escolas"          element={<SaasSchoolsPage />} />
-              <Route path="planos"           element={<SaasPlaceholderPage title="Planos e assinaturas" subtitle="Controle assinaturas ativas, upgrades, downgrades e cancelamentos." />} />
+              <Route path="planos"           element={<SaasSubscriptionsPage />} />
               <Route path="vencimentos"      element={<SaasPlaceholderPage title="Vencimentos" subtitle="Acompanhamento de vencimentos e ações rápidas." />} />
               <Route path="status"           element={<SaasPlaceholderPage title="Status das contas" subtitle="Contas ativas, suspensas, canceladas e trials." />} />
               <Route path="admins"           element={<SaasPlaceholderPage title="Administradores do SaaS" subtitle="Time de operação e suporte." />} />
               <Route path="usuarios-escolas" element={<SaasPlaceholderPage title="Usuários das escolas" subtitle="Visão consolidada dos usuários administrativos das escolas." />} />
               <Route path="permissoes"       element={<SaasPlaceholderPage title="Perfis e permissões" subtitle="Papéis do time SaaS e permissões granulares." />} />
-              <Route path="logs-acesso"      element={<SaasPlaceholderPage title="Logs de acesso" subtitle="Auditoria de logins, ações críticas e eventos." />} />
+              <Route path="logs-acesso"      element={<SaasAuditLogsPage />} />
               <Route path="receitas"         element={<SaasRevenuePage />} />
               <Route path="repasses"         element={<SaasPayoutsPage />} />
-              <Route path="transacoes"       element={<SaasPlaceholderPage title="Cobranças e transações" subtitle="Todas as cobranças SaaS e transações do gateway." />} />
+              <Route path="transacoes"       element={<SaasTransactionsPage />} />
               <Route path="gateway"          element={<SaasPlaceholderPage title="Gateway de pagamento" subtitle="Integração, chaves, webhooks e ambiente." />} />
               <Route path="config/planos"           element={<SaasPlansConfigPage />} />
               <Route path="config/recursos"         element={<SaasPlaceholderPage title="Recursos do sistema" subtitle="Feature flags globais e por escola." />} />

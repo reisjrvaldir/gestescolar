@@ -84,6 +84,46 @@ export interface SaasPlanFull {
 
 export type PlanInput = Omit<SaasPlanFull, 'id' | 'created_at' | 'schools_count'>;
 
+export interface SaasAuditLogRow {
+  id: string;
+  action: string;
+  entity_type: string | null;
+  entity_id: string | null;
+  metadata: Record<string, any> | null;
+  ip_address: string | null;
+  created_at: string;
+  school_name: string | null;
+  actor: string | null;
+}
+
+export interface SaasTransactionRow {
+  id: string;
+  amount: number;
+  payment_method: string | null;
+  provider: string | null;
+  status: string;
+  paid_at: string | null;
+  created_at: string;
+  kind: 'assinatura' | 'mensalidade';
+  school_name: string | null;
+}
+export interface SaasTransactions {
+  totals: { confirmed_total: number; confirmed_count: number; total_count: number };
+  rows: SaasTransactionRow[];
+}
+
+export interface SaasSubscriptionRow {
+  id: string;
+  status: string;
+  amount: number;
+  billing_cycle: string | null;
+  current_period_start: string | null;
+  current_period_end: string | null;
+  created_at: string;
+  school_name: string | null;
+  plan: string;
+}
+
 export const saasService = {
   async dashboard(): Promise<SaasDashboard> {
     const r = await api.get<{ ok: boolean; data: SaasDashboard }>('/saas/dashboard');
@@ -103,6 +143,18 @@ export const saasService = {
   },
   async deletePlan(id: string): Promise<void> {
     await api.del(`/saas/plans/${id}`);
+  },
+  async auditLogs(): Promise<SaasAuditLogRow[]> {
+    const r = await api.get<{ ok: boolean; data: SaasAuditLogRow[] }>('/saas/audit-logs');
+    return r.data;
+  },
+  async transactions(): Promise<SaasTransactions> {
+    const r = await api.get<{ ok: boolean; data: SaasTransactions }>('/saas/transactions');
+    return r.data;
+  },
+  async subscriptions(): Promise<SaasSubscriptionRow[]> {
+    const r = await api.get<{ ok: boolean; data: SaasSubscriptionRow[] }>('/saas/subscriptions');
+    return r.data;
   },
   async revenue(): Promise<SaasRevenue> {
     const r = await api.get<{ ok: boolean; data: SaasRevenue }>('/saas/revenue');

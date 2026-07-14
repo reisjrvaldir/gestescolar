@@ -439,3 +439,70 @@ saasRouter.delete('/plans/:id', async (req, res) => {
   if (!result.deleted) return res.status(404).json({ code: 'not_found', message: 'Plano não encontrado.' });
   res.json({ ok: true });
 });
+
+// GET /api/saas/audit-logs — auditoria de ações críticas (últimos 200 eventos).
+saasRouter.get('/audit-logs', async (req, res) => {
+  const data = await withTenant(req.ctx!, async (c) => {
+    const { rows } = await c.query(
+      `select a.id, a.action, a.entity_type, a.entity_id, a.metadata, a.ip_address, a.created_at,
+              s.name as school_name,
+              coalesce(p.name, p.email, a.metadata->>'actor') as actor
+         from public.audit_logs a
+         left join public.schools s on s.id = a.school_id
+         left join public.profiles p on p.id = a.user_id
+        order by a.created_at desc limit 200`,
+    );
+    return rows;
+  });
+  res.json({ ok: true, data });
+});
+
+// GET /api/saas/transactions — todas as cobranças/pagamentos da plataforma.
+saasRouter.get('/transactions', async (req, res) => {
+  const data = await withTenant(req.ctx!, async (c) => {
+    const [totals, list] = await Promise.all([
+      c.query(
+        `select
+           coalesce(sum(gross_amount) filter (where status='confirmed'),0)::float8 as confirmed_total,
+           count(*) filter (where status='confirmed')::int as confirmed_count,
+           count(*)::int as total_count
+         from public.payments`,
+      ),
+      c.query(
+        `select pm.id, pm.gross_amount::float8 as amount, pm.payment_method, pm.provider,
+                pm.status, pm.paid_at, pm.created_at,
+                case when pm.subscription_id is not null then 'assinatura' else 'mensalidade' end as kind,
+                s.name as school_name
+           from public.payments pm
+           left join public.schools s on s.id = pm.school_id
+          order by coalesce(pm.paid_at, pm.created_at) desc limit 200`,
+      ),
+    ]);
+    const t = totals.rows[0];
+    return {
+      totals: { confirmed_total: Number(t.confirmed_total), confirmed_count: t.confirmed_count, total_count: t.total_count },
+      rows: list.rows.map((r: any) => ({
+        id: r.id, amount: Number(r.amount), payment_method: r.payment_method, provider: r.provider,
+        status: r.status, paid_at: r.paid_at, created_at: r.created_at, kind: r.kind, school_name: r.school_name,
+      })),
+    };
+  });
+  res.json({ ok: true, data });
+});
+
+// GET /api/saas/subscriptions — assinaturas das escolas (plano, status, período).
+saasRouter.get('/subscriptions', async (req, res) => {
+  const data = await withTenant(req.ctx!, async (c) => {
+    const { rows } = await c.query(
+      `select sub.id, sub.status, sub.amount::float8 as amount, sub.billing_cycle,
+              sub.current_period_start, sub.current_period_end, sub.created_at,
+              s.name as school_name, coalesce(p.name,'—') as plan
+         from public.subscriptions sub
+         left join public.schools s on s.id = sub.school_id
+         left join public.plans p on p.id = sub.plan_id
+        order by sub.created_at desc limit 200`,
+    );
+    return rows.map((r: any) => ({ ...r, amount: Number(r.amount) }));
+  });
+  res.json({ ok: true, data });
+});
