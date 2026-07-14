@@ -193,7 +193,7 @@ dashboardRouter.get('/stats', async (req, res) => {
       })),
       upcoming_charges: upcomingCharges.rows.map((r: any) => ({
         id: r.id, student_name: r.student_name, class_name: r.class_name,
-        amount: Number(r.amount), due_date: r.due_date, status: r.status,
+        amount: Number(r.amount), due_date: r.due_date instanceof Date ? r.due_date.toISOString().slice(0, 10) : r.due_date, status: r.status,
       })),
       recent_activities: recentActivities.rows.map((r: any) => ({
         type: r.type, title: r.title, subtitle: r.subtitle, at: r.at,
