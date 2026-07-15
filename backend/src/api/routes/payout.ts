@@ -37,6 +37,8 @@ payoutRouter.get('/', async (req, res) => {
       pix_key: row.pix_key ?? null,
       pix_key_type: row.pix_key_type ?? null,
       wallet_id: school.rows[0]?.asaas_wallet_id ?? null,
+      account_id: row.provider_account_id ?? null,
+      account_email: row.email ?? null,
       asaas_configured: isAsaasConfigured,
       onboarding: {
         legal_name: row.legal_name ?? '',

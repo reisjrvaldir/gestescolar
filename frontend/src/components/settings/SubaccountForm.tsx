@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Save, Check, Loader2, Landmark, Lock, Rocket, AlertTriangle, CheckCircle2 } from 'lucide-react';
+import { Save, Check, Loader2, Landmark, Lock, Rocket, AlertTriangle, CheckCircle2, Copy } from 'lucide-react';
 import { payoutService, COMPANY_TYPE_LABELS, type CompanyType, type SubaccountOnboarding } from '@/services/payout';
 import { SubaccountDocuments } from './SubaccountDocuments';
 
@@ -17,6 +17,8 @@ export function SubaccountForm({ active }: { active: boolean }) {
   const [saved, setSaved] = useState(false);
   const [form, setForm] = useState<SubaccountOnboarding>(EMPTY);
   const [walletId, setWalletId] = useState<string | null>(null);
+  const [accountId, setAccountId] = useState<string | null>(null);
+  const [accountEmail, setAccountEmail] = useState<string | null>(null);
   const [status, setStatus] = useState<string>('not_started');
   const [error, setError] = useState<string | null>(null);
   const [okMsg, setOkMsg] = useState<string | null>(null);
@@ -26,6 +28,8 @@ export function SubaccountForm({ active }: { active: boolean }) {
       .then((d) => {
         setForm({ ...EMPTY, ...d.onboarding });
         setWalletId(d.wallet_id);
+        setAccountId(d.account_id);
+        setAccountEmail(d.account_email ?? d.onboarding.email ?? null);
         setStatus(d.status);
       })
       .catch(console.error)
@@ -77,14 +81,39 @@ export function SubaccountForm({ active }: { active: boolean }) {
       ) : loading ? (
         <div className="flex items-center gap-2 text-ink-muted"><Loader2 className="animate-spin" size={16} /> Carregando…</div>
       ) : walletId ? (
-        <div className="flex items-start gap-2 rounded-lg bg-success-soft p-3 text-xs text-ink">
-          <CheckCircle2 size={16} className="mt-0.5 shrink-0 text-success" />
-          <div>
-            <p className="font-semibold">Subconta ativa</p>
-            <p className="text-ink-muted">Wallet: <span className="font-mono">{walletId}</span></p>
-            <p className="text-ink-muted">Status: {status}</p>
-            <SubaccountDocuments />
+        <div className="space-y-3">
+          <div className="flex items-start gap-2 rounded-lg bg-success-soft p-3 text-xs text-ink">
+            <CheckCircle2 size={16} className="mt-0.5 shrink-0 text-success" />
+            <div className="min-w-0">
+              <p className="font-semibold">Subconta ativa</p>
+              <p className="text-ink-muted">Status: {status}</p>
+            </div>
           </div>
+
+          {/* Dados da conta ASAAS da escola (para acesso direto ao ASAAS). */}
+          <div className="rounded-lg border border-border p-3">
+            <p className="mb-2 text-xs font-bold uppercase tracking-wide text-ink-subtle">Sua conta ASAAS</p>
+            <div className="space-y-1.5 text-xs">
+              <Row label="E-mail de acesso" value={accountEmail ?? '—'} copy />
+              <Row label="ID da conta" value={accountId ?? '—'} copy />
+              <Row label="Wallet ID (split)" value={walletId} copy />
+            </div>
+            <details className="mt-3">
+              <summary className="cursor-pointer text-xs font-semibold text-primary">Como acessar minha conta ASAAS →</summary>
+              <ol className="mt-2 list-decimal space-y-1 pl-5 text-xs text-ink-muted">
+                <li>Acesse <a href="https://www.asaas.com/login" target="_blank" rel="noreferrer" className="font-medium text-primary hover:underline">asaas.com/login</a></li>
+                <li>Clique em <strong>“Esqueci minha senha”</strong> e informe o e-mail acima ({accountEmail ?? 'seu e-mail cadastrado'})</li>
+                <li>Você receberá um e-mail do ASAAS para definir sua senha de acesso</li>
+                <li>Defina a senha e entre — você verá o saldo, extrato e movimentações da sua conta</li>
+                <li>É a mesma conta que recebe os repasses das mensalidades via split</li>
+              </ol>
+              <p className="mt-2 rounded bg-canvas p-2 text-[11px] text-ink-subtle">
+                Por segurança, o GestEscolar não guarda nem exibe a senha da sua conta ASAAS — o acesso é sempre definido por você direto no ASAAS.
+              </p>
+            </details>
+          </div>
+
+          <SubaccountDocuments />
         </div>
       ) : (
         <div className="space-y-3">
@@ -144,6 +173,28 @@ function Field({ label, value, onChange, type = 'text', placeholder }: {
     <div>
       <label className="label">{label}</label>
       <input className="input" type={type} value={value} placeholder={placeholder} onChange={(e) => onChange(e.target.value)} />
+    </div>
+  );
+}
+
+function Row({ label, value, copy }: { label: string; value: string; copy?: boolean }) {
+  const [done, setDone] = useState(false);
+  return (
+    <div className="flex items-center justify-between gap-2">
+      <span className="shrink-0 text-ink-muted">{label}</span>
+      <span className="flex min-w-0 items-center gap-1.5">
+        <span className="truncate font-mono text-ink">{value}</span>
+        {copy && value !== '—' && (
+          <button
+            type="button"
+            className="shrink-0 rounded p-1 text-ink-subtle hover:bg-canvas hover:text-ink"
+            title="Copiar"
+            onClick={() => { navigator.clipboard.writeText(value); setDone(true); setTimeout(() => setDone(false), 1500); }}
+          >
+            {done ? <Check size={13} className="text-success" /> : <Copy size={13} />}
+          </button>
+        )}
+      </span>
     </div>
   );
 }

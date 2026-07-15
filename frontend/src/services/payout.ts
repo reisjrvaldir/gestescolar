@@ -25,6 +25,8 @@ export interface PayoutAccount {
   pix_key: string | null;
   pix_key_type: PixKeyType | null;
   wallet_id: string | null;
+  account_id: string | null;
+  account_email: string | null;
   asaas_configured: boolean;
   onboarding: SubaccountOnboarding;
 }
