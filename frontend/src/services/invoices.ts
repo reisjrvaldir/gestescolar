@@ -1,7 +1,7 @@
 import { api } from '@/lib/api';
 
 export type InvoiceStatus = 'pending' | 'paid' | 'overdue' | 'cancelled' | 'refunded';
-export type InvoiceKind = 'mensalidade' | 'avulsa';
+export type InvoiceKind = 'mensalidade' | 'avulsa' | 'matricula';
 
 export interface Invoice {
   id: string;

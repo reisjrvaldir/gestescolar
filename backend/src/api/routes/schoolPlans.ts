@@ -9,7 +9,8 @@ schoolPlansRouter.use(requireAuth);
 schoolPlansRouter.get('/', async (req, res) => {
   const data = await withTenant(req.ctx!, async (c) => {
     const { rows } = await c.query(
-      `select id, name, monthly_fee::float8 as monthly_fee, status, created_at
+      `select id, name, monthly_fee::float8 as monthly_fee,
+              enrollment_fee::float8 as enrollment_fee, status, created_at
          from public.school_plans
         where school_id = $1 and status = 'active'
         order by name`,
@@ -23,6 +24,7 @@ schoolPlansRouter.get('/', async (req, res) => {
 const planSchema = z.object({
   name: z.string().min(2),
   monthly_fee: z.number().nonnegative(),
+  enrollment_fee: z.number().nonnegative().optional(),
 });
 
 schoolPlansRouter.post('/', requireRole('school_admin', 'superadmin'), async (req, res) => {
@@ -30,9 +32,10 @@ schoolPlansRouter.post('/', requireRole('school_admin', 'superadmin'), async (re
   if (!p.success) return res.status(400).json({ code: 'validation', message: p.error.issues[0]?.message });
   const created = await withTenant(req.ctx!, async (c) => {
     const { rows } = await c.query(
-      `insert into public.school_plans (school_id, name, monthly_fee)
-       values ($1, $2, $3) returning id, name, monthly_fee::float8 as monthly_fee, status, created_at`,
-      [req.ctx!.schoolId, p.data.name, p.data.monthly_fee],
+      `insert into public.school_plans (school_id, name, monthly_fee, enrollment_fee)
+       values ($1, $2, $3, $4)
+       returning id, name, monthly_fee::float8 as monthly_fee, enrollment_fee::float8 as enrollment_fee, status, created_at`,
+      [req.ctx!.schoolId, p.data.name, p.data.monthly_fee, p.data.enrollment_fee ?? 0],
     );
     return rows[0];
   });
@@ -44,10 +47,10 @@ schoolPlansRouter.put('/:id', requireRole('school_admin', 'superadmin'), async (
   if (!p.success) return res.status(400).json({ code: 'validation', message: p.error.issues[0]?.message });
   const updated = await withTenant(req.ctx!, async (c) => {
     const { rows } = await c.query(
-      `update public.school_plans set name=$1, monthly_fee=$2
+      `update public.school_plans set name=$1, monthly_fee=$2, enrollment_fee=coalesce($5, enrollment_fee), updated_at=now()
         where id=$3 and school_id=$4
-        returning id, name, monthly_fee::float8 as monthly_fee, status, created_at`,
-      [p.data.name, p.data.monthly_fee, req.params.id, req.ctx!.schoolId],
+        returning id, name, monthly_fee::float8 as monthly_fee, enrollment_fee::float8 as enrollment_fee, status, created_at`,
+      [p.data.name, p.data.monthly_fee, req.params.id, req.ctx!.schoolId, p.data.enrollment_fee ?? null],
     );
     return rows[0];
   });

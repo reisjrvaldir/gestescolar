@@ -9,6 +9,9 @@ export interface NewStudent {
   mother_name: string;
   class_id?: string;
   plan_id: string;
+  discount_percentage?: number;
+  enrollment_payment_method?: 'cash' | 'pix' | 'card';
+  first_due?: '30' | '05' | '10' | '15';
   guardian: {
     name: string;
     email: string;
@@ -29,6 +32,8 @@ export interface UpdateStudent {
 
 export interface CreatedStudent extends Student {
   monthly_fee?: number;
+  enrollment_fee?: number;
+  enrollment_paid?: boolean;
   guardian_email?: string;
   initial_password?: string;
   login_password_hint?: string;

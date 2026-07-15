@@ -58,7 +58,9 @@ export function FaturasPage() {
         <p className="text-xs text-ink-muted">
           {inv.kind === 'avulsa'
             ? (inv.charge_description ?? inv.student_name)
-            : `Mensalidade${inv.reference_month ? ` — ${inv.reference_month}` : ''}`}
+            : inv.kind === 'matricula'
+              ? 'Matrícula'
+              : `Mensalidade${inv.reference_month ? ` — ${inv.reference_month}` : ''}`}
         </p>
         <p className="mt-0.5 text-[11px] text-ink-subtle">
           {inv.status === 'paid'
@@ -141,7 +143,9 @@ export function FaturasPage() {
               <span className="text-right font-medium text-ink">
                 {selected.kind === 'avulsa'
                   ? (selected.charge_title ?? 'Cobrança avulsa')
-                  : `Mensalidade${selected.reference_month ? ` — ${selected.reference_month}` : ''}`}
+                  : selected.kind === 'matricula'
+                    ? 'Matrícula'
+                    : `Mensalidade${selected.reference_month ? ` — ${selected.reference_month}` : ''}`}
                 {selected.kind === 'avulsa' && selected.charge_description && (
                   <span className="block text-xs font-normal text-ink-muted">{selected.charge_description}</span>
                 )}

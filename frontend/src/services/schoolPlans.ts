@@ -4,6 +4,7 @@ export interface SchoolPlan {
   id: string;
   name: string;
   monthly_fee: number;
+  enrollment_fee: number;
   status: string;
   created_at: string;
 }
@@ -11,6 +12,7 @@ export interface SchoolPlan {
 export interface NewSchoolPlan {
   name: string;
   monthly_fee: number;
+  enrollment_fee: number;
 }
 
 export const schoolPlansService = {

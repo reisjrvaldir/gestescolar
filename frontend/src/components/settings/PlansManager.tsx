@@ -25,13 +25,13 @@ export function PlansManager() {
 
   function openNew() {
     setEditing(null);
-    reset({ name: '', monthly_fee: 0 });
+    reset({ name: '', monthly_fee: 0, enrollment_fee: 0 });
     setOpen(true);
   }
 
   function openEdit(p: SchoolPlan) {
     setEditing(p);
-    reset({ name: p.name, monthly_fee: Number(p.monthly_fee) });
+    reset({ name: p.name, monthly_fee: Number(p.monthly_fee), enrollment_fee: Number(p.enrollment_fee ?? 0) });
     setOpen(true);
   }
 
@@ -41,7 +41,7 @@ export function PlansManager() {
     if (saving) return; // evita double-submit (planos duplicados)
     setSaving(true);
     try {
-      const payload = { ...data, monthly_fee: Number(data.monthly_fee) };
+      const payload = { ...data, monthly_fee: Number(data.monthly_fee), enrollment_fee: Number(data.enrollment_fee ?? 0) };
       if (editing) {
         await schoolPlansService.update(editing.id, payload);
       } else {
@@ -89,6 +89,7 @@ export function PlansManager() {
             <tr className="border-b border-border text-left text-xs font-semibold uppercase text-ink-subtle">
               <th className="px-4 py-3">Nome</th>
               <th className="px-4 py-3">Mensalidade</th>
+              <th className="px-4 py-3">Matrícula</th>
               <th className="px-4 py-3 text-right">Ações</th>
             </tr>
           </thead>
@@ -97,6 +98,7 @@ export function PlansManager() {
               <tr key={p.id} className="border-b border-border last:border-0 hover:bg-canvas">
                 <td className="px-4 py-3 font-medium text-ink">{p.name}</td>
                 <td className="px-4 py-3 text-ink-muted">{brl(Number(p.monthly_fee))}</td>
+                <td className="px-4 py-3 text-ink-muted">{brl(Number(p.enrollment_fee ?? 0))}</td>
                 <td className="px-4 py-3 text-right">
                   <div className="inline-flex gap-1">
                     <button className="rounded-lg p-1.5 text-ink-muted hover:bg-primary-soft hover:text-primary" onClick={() => openEdit(p)} title="Editar">
@@ -132,12 +134,21 @@ export function PlansManager() {
             <input className="input" placeholder="Ex.: Integral, Meio Período" {...register('name', { required: 'Informe o nome' })} />
             {errors.name && <p className="mt-1 text-xs text-danger">{errors.name.message}</p>}
           </div>
-          <div>
-            <label className="label">Mensalidade (R$) *</label>
-            <input type="number" step="0.01" min="0" className="input" placeholder="0,00"
-              {...register('monthly_fee', { required: 'Informe o valor', min: { value: 0, message: 'Inválido' }, valueAsNumber: true })} />
-            {errors.monthly_fee && <p className="mt-1 text-xs text-danger">{errors.monthly_fee.message}</p>}
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="label">Mensalidade (R$) *</label>
+              <input type="number" step="0.01" min="0" className="input" placeholder="0,00"
+                {...register('monthly_fee', { required: 'Informe o valor', min: { value: 0, message: 'Inválido' }, valueAsNumber: true })} />
+              {errors.monthly_fee && <p className="mt-1 text-xs text-danger">{errors.monthly_fee.message}</p>}
+            </div>
+            <div>
+              <label className="label">Matrícula (R$)</label>
+              <input type="number" step="0.01" min="0" className="input" placeholder="0,00"
+                {...register('enrollment_fee', { min: { value: 0, message: 'Inválido' }, valueAsNumber: true })} />
+              {errors.enrollment_fee && <p className="mt-1 text-xs text-danger">{errors.enrollment_fee.message}</p>}
+            </div>
           </div>
+          <p className="text-xs text-ink-subtle">A matrícula é cobrada uma vez, no cadastro do aluno. Deixe 0 se não cobrar.</p>
         </form>
       </Modal>
     </div>

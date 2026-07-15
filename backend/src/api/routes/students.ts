@@ -4,7 +4,7 @@ import { withTenant } from '../../db/withTenant';
 import { requireAuth, requireRole } from '../../middleware/auth';
 import { signUpGuardian } from '../../lib/authSignup';
 import { cpfSchema, dateSchema, initialPassword, toStoredPassword } from '../../lib/validation';
-import { insertMonthlyInvoices, generatePixForNewInvoices } from '../../lib/billing/studentInvoices';
+import { insertMonthlyInvoices, insertEnrollmentInvoice, generatePixForNewInvoices, type FirstDueRule } from '../../lib/billing/studentInvoices';
 
 export const studentsRouter = Router();
 
@@ -16,6 +16,9 @@ const studentSchema = z.object({
   mother_name: z.string().min(2, 'Nome da mãe obrigatório'),
   class_id: z.string().uuid().optional(),
   plan_id: z.string().uuid('Selecione um plano'),
+  discount_percentage: z.number().min(0).max(100).optional(),
+  enrollment_payment_method: z.enum(['cash', 'pix', 'card']).optional(),
+  first_due: z.enum(['30', '05', '10', '15']).optional(),
   guardian: z.object({
     name: z.string().min(2, 'Nome do responsável obrigatório'),
     email: z.string().email('Email do responsável inválido'),
@@ -71,20 +74,31 @@ studentsRouter.post('/', requireRole('school_admin', 'superadmin'), async (req, 
   let authUserId: string | null = null;
   try {
     const result = await withTenant(req.ctx!, async (c) => {
-      // 1) Buscar valor do plano (sempre como número, evita string vazia ou null)
+      // 1) Buscar valores do plano (mensalidade + matrícula). Aplica desconto %
+      //    igual em ambos (regra de negócio: desconto vale p/ matrícula e mensalidades).
       const planRow = await c.query(
-        `select monthly_fee::numeric as monthly_fee from public.school_plans where id=$1 and school_id=$2`,
+        `select monthly_fee::numeric as monthly_fee, enrollment_fee::numeric as enrollment_fee
+           from public.school_plans where id=$1 and school_id=$2`,
         [s.plan_id, req.ctx!.schoolId],
       );
       if (planRow.rows.length === 0) {
         throw Object.assign(new Error('Plano não encontrado ou pertence a outra escola'), { http: 400, code: 'plan_not_found' });
       }
-      const rawFee = planRow.rows[0].monthly_fee;
-      const monthlyFee = rawFee == null ? 0 : Number(rawFee);
-      if (Number.isNaN(monthlyFee)) {
-        throw Object.assign(new Error('Plano com mensalidade inválida'), { http: 400, code: 'invalid_plan_fee' });
+      const round2 = (n: number) => Math.round(n * 100) / 100;
+      const discountPct = Math.min(100, Math.max(0, Number(s.discount_percentage ?? 0)));
+      const factor = 1 - discountPct / 100;
+      const rawMonthly = planRow.rows[0].monthly_fee;
+      const rawEnroll = planRow.rows[0].enrollment_fee;
+      const baseMonthly = rawMonthly == null ? 0 : Number(rawMonthly);
+      const baseEnroll = rawEnroll == null ? 0 : Number(rawEnroll);
+      if (Number.isNaN(baseMonthly) || Number.isNaN(baseEnroll)) {
+        throw Object.assign(new Error('Plano com valores inválidos'), { http: 400, code: 'invalid_plan_fee' });
       }
-      console.log('[students.create] plano=', s.plan_id, 'monthly_fee=', monthlyFee);
+      const monthlyFee = round2(baseMonthly * factor);
+      const enrollmentFee = round2(baseEnroll * factor);
+      const enrollMethod = (s.enrollment_payment_method ?? 'pix') as 'cash' | 'pix' | 'card';
+      const firstDue = (s.first_due ?? '30') as FirstDueRule;
+      console.log('[students.create] plano=', s.plan_id, 'monthly=', monthlyFee, 'matricula=', enrollmentFee, 'desconto%=', discountPct);
 
       // 2) Gerar matrícula global atômica
       const matRow = await c.query(`select public.next_matricula() as matricula`);
@@ -132,23 +146,38 @@ studentsRouter.post('/', requireRole('school_admin', 'superadmin'), async (req, 
       );
       const student = studentRow.rows[0];
 
-      // 8) Gerar as mensalidades (faturas) do restante do ano — cobrança PIX
-      //    é criada depois, fora desta transação (ver após o commit abaixo).
-      const invoiceIds = await insertMonthlyInvoices(c, {
+      // 8a) Fatura de MATRÍCULA (cobrança única). Dinheiro → já paga (offline).
+      const enrollment = await insertEnrollmentInvoice(c, {
+        schoolId: req.ctx!.schoolId!,
+        studentId: student.id,
+        studentName: student.name,
+        amount: enrollmentFee,
+        paymentMethod: enrollMethod,
+      });
+
+      // 8b) Mensalidades do restante do ano, 1º vencimento conforme a regra.
+      const monthlyIds = await insertMonthlyInvoices(c, {
         schoolId: req.ctx!.schoolId!,
         studentId: student.id,
         studentName: student.name,
         monthlyFee,
+        firstDueRule: firstDue,
       });
+
+      // Cobranças PIX a gerar: mensalidades + matrícula (exceto se paga em dinheiro).
+      const chargeableIds = [...monthlyIds];
+      if (enrollment && !enrollment.paid) chargeableIds.push(enrollment.id);
 
       return {
         ...student,
         monthly_fee: monthlyFee,
+        enrollment_fee: enrollmentFee,
+        enrollment_paid: enrollment?.paid ?? false,
         guardian_email: s.guardian.email,
         login_matricula: matricula,
         initial_password: visiblePassword,
         login_password_hint: 'Login: matrícula do aluno • Senha inicial: temporária gerada automaticamente (anote e repasse ao responsável). Troca obrigatória no 1º acesso.',
-        invoice_ids: invoiceIds,
+        invoice_ids: chargeableIds,
       };
     });
 

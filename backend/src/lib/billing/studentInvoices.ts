@@ -10,25 +10,32 @@ import type { TenantContext } from '../../db/withTenant';
 import { withTenant } from '../../db/withTenant';
 import { buildChargeForInvoice } from '../payments';
 
-const DUE_DAY = 10; // dia de vencimento padrão das mensalidades
+// Regra do 1º vencimento: '30' = matrícula + 30 dias; '05'/'10'/'15' = próximo
+// dia fixo do mês. As mensalidades seguintes usam o mesmo dia, até dezembro.
+export type FirstDueRule = '30' | '05' | '10' | '15';
 
-function monthsFromEnrollmentToYearEnd(enrollmentDate = new Date()): { year: number; month: number }[] {
-  const year = enrollmentDate.getFullYear();
-  const startMonth = enrollmentDate.getMonth(); // 0-based
-  const months: { year: number; month: number }[] = [];
-  for (let m = startMonth; m <= 11; m++) months.push({ year, month: m });
-  return months;
-}
-
-function dueDateFor(year: number, month0: number, today: Date): string {
-  const due = new Date(year, month0, DUE_DAY, 12);
-  // Evita gerar uma fatura do mês corrente já "nascendo vencida".
-  if (due < today) {
-    const grace = new Date(today);
-    grace.setDate(grace.getDate() + 5);
-    return grace.toISOString().slice(0, 10);
+/** Calcula o cronograma de vencimentos das mensalidades a partir da matrícula. */
+function monthlyDueSchedule(enrollment: Date, rule: FirstDueRule): { referenceMonth: string; due: string }[] {
+  let first: Date;
+  if (rule === '30') {
+    first = new Date(enrollment);
+    first.setDate(first.getDate() + 30);
+  } else {
+    const day = Number(rule);
+    first = new Date(enrollment.getFullYear(), enrollment.getMonth(), day, 12);
+    if (first <= enrollment) first = new Date(enrollment.getFullYear(), enrollment.getMonth() + 1, day, 12);
   }
-  return due.toISOString().slice(0, 10);
+  const dueDay = first.getDate();
+  const endYear = first.getFullYear();
+  const out: { referenceMonth: string; due: string }[] = [];
+  let y = endYear;
+  let m = first.getMonth();
+  while (y === endYear && m <= 11) {
+    const d = new Date(y, m, dueDay, 12);
+    out.push({ referenceMonth: `${y}-${String(m + 1).padStart(2, '0')}`, due: d.toISOString().slice(0, 10) });
+    m++;
+  }
+  return out;
 }
 
 /**
@@ -38,26 +45,54 @@ function dueDateFor(year: number, month0: number, today: Date): string {
  */
 export async function insertMonthlyInvoices(
   c: PoolClient,
-  input: { schoolId: string; studentId: string; studentName: string; monthlyFee: number },
+  input: { schoolId: string; studentId: string; studentName: string; monthlyFee: number; firstDueRule?: FirstDueRule },
 ): Promise<string[]> {
   if (input.monthlyFee <= 0) return [];
-  const today = new Date();
-  const months = monthsFromEnrollmentToYearEnd(today);
+  const schedule = monthlyDueSchedule(new Date(), input.firstDueRule ?? '30');
   const ids: string[] = [];
 
-  for (const { year, month } of months) {
-    const dueDate = dueDateFor(year, month, today);
-    const referenceMonth = `${year}-${String(month + 1).padStart(2, '0')}`;
+  for (const { referenceMonth, due } of schedule) {
     const { rows } = await c.query(
       `insert into public.invoices
          (school_id, student_id, student_name, amount, due_date, status, kind, reference_month)
        values ($1,$2,$3,$4,$5,'pending','mensalidade',$6)
        returning id`,
-      [input.schoolId, input.studentId, input.studentName, input.monthlyFee, dueDate, referenceMonth],
+      [input.schoolId, input.studentId, input.studentName, input.monthlyFee, due, referenceMonth],
     );
     ids.push(rows[0].id);
   }
   return ids;
+}
+
+/**
+ * Insere a fatura de MATRÍCULA (cobrança única no cadastro do aluno).
+ * - dinheiro: já entra como paga (recebimento offline, sem PIX).
+ * - pix/cartão: fica pendente e recebe cobrança depois (ver generatePix...).
+ * Retorna null se não há valor de matrícula (nada a cobrar).
+ */
+export async function insertEnrollmentInvoice(
+  c: PoolClient,
+  input: { schoolId: string; studentId: string; studentName: string; amount: number; paymentMethod: 'cash' | 'pix' | 'card' },
+): Promise<{ id: string; paid: boolean } | null> {
+  if (input.amount <= 0) return null;
+  const cash = input.paymentMethod === 'cash';
+  const today = new Date();
+  const referenceMonth = today.toISOString().slice(0, 7);
+  const { rows } = await c.query(
+    `insert into public.invoices
+       (school_id, student_id, student_name, amount, due_date, status, kind, reference_month, payment_method, paid_at)
+     values ($1,$2,$3,$4,$5,$6,'matricula',$7,$8,$9)
+     returning id`,
+    [
+      input.schoolId, input.studentId, input.studentName, input.amount,
+      today.toISOString().slice(0, 10),
+      cash ? 'paid' : 'pending',
+      referenceMonth,
+      cash ? 'cash' : null,
+      cash ? today.toISOString() : null,
+    ],
+  );
+  return { id: rows[0].id, paid: cash };
 }
 
 /**

@@ -20,6 +20,9 @@ interface FormFields {
   mother_name: string;
   class_id?: string;
   plan_id: string;
+  discount_percentage?: number;
+  enrollment_payment_method?: 'cash' | 'pix' | 'card';
+  first_due?: '30' | '05' | '10' | '15';
   guardian_name: string;
   guardian_email: string;
   guardian_cpf: string;
@@ -71,6 +74,10 @@ export function StudentsPage() {
   const { register, handleSubmit, reset, watch, formState: { errors } } = useForm<FormFields>();
   const selectedPlanId = watch('plan_id');
   const selectedPlan = plans.find((p) => p.id === selectedPlanId);
+  const discountPct = Math.min(100, Math.max(0, Number(watch('discount_percentage') ?? 0) || 0));
+  const factor = 1 - discountPct / 100;
+  const previewMonthly = selectedPlan ? Math.round(Number(selectedPlan.monthly_fee) * factor * 100) / 100 : 0;
+  const previewEnrollment = selectedPlan ? Math.round(Number(selectedPlan.enrollment_fee ?? 0) * factor * 100) / 100 : 0;
 
   function openNew() {
     setEditing(null);
@@ -122,6 +129,9 @@ export function StudentsPage() {
           mother_name: data.mother_name,
           class_id: data.class_id || undefined,
           plan_id: data.plan_id,
+          discount_percentage: data.discount_percentage != null ? Number(data.discount_percentage) : undefined,
+          enrollment_payment_method: data.enrollment_payment_method || undefined,
+          first_due: data.first_due || undefined,
           guardian: {
             name: data.guardian_name,
             email: data.guardian_email,
@@ -317,11 +327,43 @@ E-mail do responsável: ${credentials.guardian_email}
                     {plans.map((p) => <option key={p.id} value={p.id}>{p.name} — {brl(Number(p.monthly_fee))}</option>)}
                   </select>
                   {errors.plan_id && <p className="mt-1 text-xs text-danger">{errors.plan_id.message}</p>}
-                  {selectedPlan && (
-                    <p className="mt-1 text-xs text-ink-muted">Mensalidade: <strong>{brl(Number(selectedPlan.monthly_fee))}</strong></p>
-                  )}
                 </div>
               </div>
+
+              {/* Matrícula + cobrança (só no cadastro de novo aluno). */}
+              {!editing && selectedPlan && (
+                <div className="mt-4 rounded-xl border border-border bg-canvas p-4">
+                  <p className="mb-3 text-xs font-bold uppercase tracking-wide text-ink-subtle">Cobrança inicial</p>
+                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+                    <div>
+                      <label className="label">Desconto (%)</label>
+                      <input type="number" step="0.1" min="0" max="100" className="input" placeholder="0"
+                        {...register('discount_percentage', { valueAsNumber: true })} />
+                    </div>
+                    <div>
+                      <label className="label">Matrícula paga em</label>
+                      <select className="input" {...register('enrollment_payment_method')} defaultValue="pix">
+                        <option value="pix">PIX</option>
+                        <option value="card">Cartão</option>
+                        <option value="cash">Dinheiro (recebido)</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="label">1ª mensalidade vence</label>
+                      <select className="input" {...register('first_due')} defaultValue="30">
+                        <option value="30">Matrícula + 30 dias</option>
+                        <option value="05">Todo dia 05</option>
+                        <option value="10">Todo dia 10</option>
+                        <option value="15">Todo dia 15</option>
+                      </select>
+                    </div>
+                  </div>
+                  <div className="mt-3 flex flex-wrap gap-x-6 gap-y-1 text-xs text-ink-muted">
+                    <span>Matrícula: <strong className="text-ink">{brl(previewEnrollment)}</strong>{discountPct > 0 && previewEnrollment !== Number(selectedPlan.enrollment_fee ?? 0) ? ` (de ${brl(Number(selectedPlan.enrollment_fee ?? 0))})` : ''}</span>
+                    <span>Mensalidade: <strong className="text-ink">{brl(previewMonthly)}</strong>{discountPct > 0 ? ` (de ${brl(Number(selectedPlan.monthly_fee))})` : ''}</span>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
 
