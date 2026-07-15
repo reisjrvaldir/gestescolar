@@ -65,7 +65,7 @@ app.use('/api/me/onboarding', authLimiter);
 const publicLimiter = rateLimit({ windowMs: 60_000, max: 12, message: { code: 'rate_limit', message: 'Muitas tentativas. Aguarde 1 minuto.' } });
 app.use('/api/public', publicLimiter);
 
-app.use(express.json({ limit: '5mb' }));
+app.use(express.json({ limit: '10mb' })); // base64 de PDF de até 5 MB → ~6.7 MB
 
 // Health check — não depende do banco.
 app.get('/api/health', (_req, res) => {

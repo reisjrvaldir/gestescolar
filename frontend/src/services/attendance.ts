@@ -1,6 +1,6 @@
 import { api } from '@/lib/api';
 
-export type AttendanceStatus = 'present' | 'absent' | 'justified';
+export type AttendanceStatus = 'present' | 'absent' | 'justified' | 'attested';
 
 export interface AttendanceRow {
   id: string;
@@ -17,6 +17,7 @@ export interface CalendarDay {
   present: number;
   absent: number;
   justified: number;
+  attested: number;
 }
 
 export const attendanceService = {
@@ -35,6 +36,16 @@ export const attendanceService = {
       class_id: classId, date, entries,
       ...(subjectId ? { subject_id: subjectId } : {}),
     });
+  },
+  async uploadAttestation(params: {
+    student_id: string;
+    class_id: string;
+    date: string;
+    filename: string;
+    file_size: number;
+    file_data: string; // base64
+  }): Promise<void> {
+    await api.post('/attendance/attestation', params);
   },
   async calendar(classId: string, year: number, month: number): Promise<CalendarDay[]> {
     const r = await api.get<{ ok: boolean; data: CalendarDay[] }>(
