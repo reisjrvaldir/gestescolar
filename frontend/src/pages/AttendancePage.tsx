@@ -167,8 +167,10 @@ export function AttendancePage() {
           file_data: b64,
         });
         setEntries((e) => ({ ...e, [id]: { ...e[id], confirmed: true, attestationUploaded: true } }));
-      } catch {
-        setToast({ type: 'error', msg: 'Erro ao enviar o atestado. Tente novamente.' });
+      } catch (err: any) {
+        console.error('[attestation upload]', err);
+        const detail = err?.message ? ` (${err.message})` : '';
+        setToast({ type: 'error', msg: `Erro ao enviar o atestado${detail}. Tente novamente.` });
       }
       return;
     }
