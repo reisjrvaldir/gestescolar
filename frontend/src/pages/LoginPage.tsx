@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import React, { useState } from 'react';
 import { useNavigate, Link, useSearchParams } from 'react-router-dom';
 import { GraduationCap, Loader2, ShieldCheck, Zap, Headset } from 'lucide-react';
 import { signIn, signUp } from '@/lib/authClient';
@@ -10,7 +10,7 @@ export function LoginPage() {
   const [tab, setTab] = useState<Tab>('login');
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<React.ReactNode | null>(null);
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -59,7 +59,24 @@ export function LoginPage() {
     setLoading(true);
     const { error } = await signUp.email({ email, password, name });
     setLoading(false);
-    if (error) return setError(error.message ?? 'Falha ao cadastrar');
+    if (error) {
+      const msg = error.message ?? '';
+      if (msg.toLowerCase().includes('already exists') || msg.toLowerCase().includes('user already')) {
+        return setError(
+          <span>
+            Este e-mail já possui cadastro.{' '}
+            <button
+              type="button"
+              className="font-semibold underline"
+              onClick={() => { setTab('login'); setError(null); }}
+            >
+              Clique aqui para entrar
+            </button>.
+          </span>
+        );
+      }
+      return setError(msg || 'Falha ao cadastrar');
+    }
     navigate('/app'); // cai no onboarding (criar escola)
   }
 
