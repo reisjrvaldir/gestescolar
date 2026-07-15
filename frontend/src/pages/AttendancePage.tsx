@@ -2,13 +2,14 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ClipboardCheck, Save, Check, Loader2, AlertTriangle,
   Lock, ChevronLeft, ChevronRight, CheckCircle2,
-  Paperclip, FileText,
+  Paperclip, FileText, Download,
 } from 'lucide-react';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { EmptyState } from '@/components/ui/EmptyState';
+import { Modal } from '@/components/ui/Modal';
 import { FinanceTabs } from '@/components/finance/FinanceTabs';
 import { classesService, type ClassSubject } from '@/services/classes';
-import { attendanceService, type AttendanceStatus, type CalendarDay } from '@/services/attendance';
+import { attendanceService, type AttendanceStatus, type AttendanceRow, type CalendarDay } from '@/services/attendance';
 import { api } from '@/lib/api';
 import { useMe } from '@/auth/AuthGate';
 import type { SchoolClass, Student } from '@/types/models';
@@ -79,6 +80,11 @@ export function AttendancePage() {
   const [calMonth, setCalMonth] = useState(new Date().getMonth() + 1);
   const [calDays, setCalDays] = useState<CalendarDay[]>([]);
   const [calLoading, setCalLoading] = useState(false);
+
+  // Popup do atestado (aberto ao clicar num dia com "A" no calendário)
+  const [attestModal, setAttestModal] = useState<{ date: string; students: AttendanceRow[] } | null>(null);
+  const [attestLoading, setAttestLoading] = useState(false);
+  const [attestPdf, setAttestPdf] = useState<{ student_id: string; filename: string; file_data: string } | null>(null);
 
   // Refs para file inputs (um por aluno)
   const fileInputRefs = useRef<Record<string, HTMLInputElement | null>>({});
@@ -191,19 +197,62 @@ export function AttendancePage() {
 
   const [downloadingId, setDownloadingId] = useState<string | null>(null);
 
-  async function downloadAttestation(studentId: string) {
+  async function downloadAttestation(studentId: string, forDate: string = date) {
     setDownloadingId(studentId);
     try {
-      const doc = await attendanceService.getAttestation(studentId, classId, date);
+      const doc = await attendanceService.getAttestation(studentId, classId, forDate);
       const link = document.createElement('a');
       link.href = `data:application/pdf;base64,${doc.file_data}`;
       link.download = doc.filename;
       link.click();
+      return doc;
     } catch (err: any) {
       setToast({ type: 'error', msg: err?.message ?? 'Erro ao baixar o atestado.' });
+      return null;
     } finally {
       setDownloadingId(null);
     }
+  }
+
+  // Clique num dia do calendário: se houver Atestado ("A"), abre o popup com o PDF.
+  // Caso contrário, mantém o comportamento antigo (abre a chamada daquele dia).
+  async function onCalendarDayClick(iso: string, info: CalendarDay | undefined) {
+    if (!info || info.attested === 0) {
+      setDate(iso);
+      setTab('chamada');
+      return;
+    }
+    setAttestLoading(true);
+    setAttestPdf(null);
+    try {
+      const rows = (await attendanceService.forContext(classId, iso)).rows;
+      const attestedRows = rows.filter((r) => r.status === 'attested');
+      setAttestModal({ date: iso, students: attestedRows });
+      if (attestedRows.length === 1) {
+        await openAttestationPreview(attestedRows[0].student_id, iso);
+      }
+    } catch {
+      setToast({ type: 'error', msg: 'Erro ao carregar os atestados deste dia.' });
+    } finally {
+      setAttestLoading(false);
+    }
+  }
+
+  async function openAttestationPreview(studentId: string, forDate: string) {
+    setAttestLoading(true);
+    try {
+      const doc = await attendanceService.getAttestation(studentId, classId, forDate);
+      setAttestPdf({ student_id: studentId, filename: doc.filename, file_data: doc.file_data });
+    } catch {
+      setToast({ type: 'error', msg: 'Erro ao carregar o PDF do atestado.' });
+    } finally {
+      setAttestLoading(false);
+    }
+  }
+
+  function closeAttestModal() {
+    setAttestModal(null);
+    setAttestPdf(null);
   }
 
   async function confirm(id: string) {
@@ -373,7 +422,7 @@ export function AttendancePage() {
                         return (
                           <button
                             key={ci}
-                            onClick={() => { setDate(cell.date); setTab('chamada'); }}
+                            onClick={() => onCalendarDayClick(cell.date, info)}
                             className={`flex aspect-square flex-col items-center justify-center gap-0.5 rounded-lg border text-xs transition-colors ${
                               info
                                 ? 'border-primary/30 bg-primary-soft hover:bg-primary/20'
@@ -396,7 +445,9 @@ export function AttendancePage() {
                     </div>
                   ))}
                 </div>
-                <p className="mt-4 text-xs text-ink-subtle">Clique em um dia com chamada registrada para abri-la na aba Chamada.</p>
+                <p className="mt-4 text-xs text-ink-subtle">
+                  Dias com atestado (A) abrem o PDF em uma janela. Os demais dias abrem a chamada na aba Chamada.
+                </p>
               </>
             )}
           </div>
@@ -613,6 +664,60 @@ export function AttendancePage() {
         </div>
       )}
       </>}
+
+      {/* Popup de atestado — abre o PDF ao clicar num dia com "A" no calendário */}
+      <Modal
+        open={!!attestModal}
+        title={attestModal ? `Atestados — ${new Date(attestModal.date + 'T12:00:00').toLocaleDateString('pt-BR')}` : ''}
+        onClose={closeAttestModal}
+        footer={
+          attestPdf ? (
+            <>
+              <button className="btn-outline" onClick={() => setAttestPdf(null)}>Voltar</button>
+              <button
+                className="btn-primary"
+                onClick={() => {
+                  const link = document.createElement('a');
+                  link.href = `data:application/pdf;base64,${attestPdf.file_data}`;
+                  link.download = attestPdf.filename;
+                  link.click();
+                }}
+              >
+                <Download size={14} /> Baixar PDF
+              </button>
+            </>
+          ) : undefined
+        }
+      >
+        {attestLoading ? (
+          <div className="flex justify-center py-10 text-ink-muted"><Loader2 size={20} className="animate-spin" /></div>
+        ) : attestPdf ? (
+          <div className="space-y-2">
+            <p className="text-xs text-ink-muted">{attestPdf.filename}</p>
+            <iframe
+              src={`data:application/pdf;base64,${attestPdf.file_data}`}
+              title="Atestado médico"
+              className="h-[60vh] w-full rounded-xl border border-border"
+            />
+          </div>
+        ) : attestModal && attestModal.students.length > 0 ? (
+          <div className="space-y-1">
+            <p className="mb-2 text-xs text-ink-muted">Selecione o aluno para visualizar o atestado:</p>
+            {attestModal.students.map((s) => (
+              <button
+                key={s.student_id}
+                onClick={() => openAttestationPreview(s.student_id, attestModal.date)}
+                className="flex w-full items-center gap-2 rounded-lg border border-border px-3 py-2 text-left text-sm hover:bg-canvas"
+              >
+                <FileText size={14} className="text-primary" />
+                {s.student_name}
+              </button>
+            ))}
+          </div>
+        ) : (
+          <p className="py-4 text-center text-sm text-ink-muted">Nenhum atestado encontrado para este dia.</p>
+        )}
+      </Modal>
     </>
   );
 }
