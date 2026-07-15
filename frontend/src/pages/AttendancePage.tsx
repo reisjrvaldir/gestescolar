@@ -2,14 +2,21 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ClipboardCheck, Save, Check, Loader2, AlertTriangle,
   Lock, ChevronLeft, ChevronRight, CheckCircle2,
-  Paperclip, FileText, Download,
+  Paperclip, FileText, Download, ShieldCheck,
 } from 'lucide-react';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Modal } from '@/components/ui/Modal';
 import { FinanceTabs } from '@/components/finance/FinanceTabs';
+import { AttendanceSummaryChart } from '@/components/attendance/AttendanceSummaryChart';
+import { AttendanceAlertsCard } from '@/components/attendance/AttendanceAlertsCard';
+import { ApprovalQueue } from '@/components/attendance/ApprovalQueue';
+import { GuardianAttestations } from '@/components/attendance/GuardianAttestations';
 import { classesService, type ClassSubject } from '@/services/classes';
-import { attendanceService, type AttendanceStatus, type AttendanceRow, type CalendarDay } from '@/services/attendance';
+import {
+  attendanceService, type AttendanceStatus, type AttendanceRow, type CalendarDay,
+  type AttendanceSummary, type TopAbsence,
+} from '@/services/attendance';
 import { api } from '@/lib/api';
 import { useMe } from '@/auth/AuthGate';
 import type { SchoolClass, Student } from '@/types/models';
@@ -19,8 +26,8 @@ const today = () => new Date().toISOString().slice(0, 10);
 const STATUS_OPTIONS: { value: AttendanceStatus; label: string; short: string; on: string; off: string }[] = [
   { value: 'present',   label: 'Presença',         short: 'P', on: 'bg-success text-white',  off: 'text-ink-muted hover:bg-success-soft' },
   { value: 'absent',    label: 'Falta',             short: 'F', on: 'bg-danger text-white',   off: 'text-ink-muted hover:bg-danger-soft' },
-  { value: 'justified', label: 'Falta Justificada', short: 'J', on: 'bg-warning text-white',  off: 'text-ink-muted hover:bg-warning-soft' },
-  { value: 'attested',  label: 'Atestado',          short: 'A', on: 'bg-primary text-white',  off: 'text-ink-muted hover:bg-primary-soft' },
+  { value: 'justified', label: 'F. Justificada',    short: 'J', on: 'bg-warning text-white',  off: 'text-ink-muted hover:bg-warning-soft' },
+  { value: 'attested',  label: 'Atestado Médico',   short: 'A', on: 'bg-primary text-white',  off: 'text-ink-muted hover:bg-primary-soft' },
 ];
 
 const STATUS_BADGE: Record<AttendanceStatus, string> = {
@@ -28,6 +35,7 @@ const STATUS_BADGE: Record<AttendanceStatus, string> = {
   absent:    'bg-danger-soft text-danger font-bold',
   justified: 'bg-warning-soft text-warning font-bold',
   attested:  'bg-primary-soft text-primary font-bold',
+  excused:   'bg-purple-soft text-purple font-bold',
 };
 
 const PT_MONTHS = [
@@ -36,14 +44,10 @@ const PT_MONTHS = [
 ];
 const PT_WEEKDAYS = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
 
-const TABS = [
-  { key: 'chamada', label: 'Chamada' },
-  { key: 'status', label: 'Status por dia' },
-];
-
 interface EntryState {
   student_id: string;
   student_name: string;
+  registration_number?: string;
   status: AttendanceStatus;
   justification?: string;
   confirmed: boolean;
@@ -62,7 +66,17 @@ function toBase64(file: File): Promise<string> {
 
 export function AttendancePage() {
   const me = useMe();
-  const isAdmin = me?.role === 'school_admin' || me?.role === 'superadmin';
+  // Portal do responsável tem uma experiência própria e bem mais simples.
+  if (me?.role === 'guardian') return <GuardianAttestations />;
+  return <TeacherAttendanceView isAdmin={me?.role === 'school_admin' || me?.role === 'superadmin'} />;
+}
+
+function TeacherAttendanceView({ isAdmin }: { isAdmin: boolean }) {
+  const TABS = [
+    { key: 'chamada', label: 'Chamada' },
+    { key: 'status', label: 'Status por dia' },
+    ...(isAdmin ? [{ key: 'aprovar', label: 'Aprovar Atestados' }] : []),
+  ];
 
   const [tab, setTab] = useState('chamada');
   const [classes, setClasses] = useState<SchoolClass[]>([]);
@@ -80,6 +94,13 @@ export function AttendancePage() {
   const [calMonth, setCalMonth] = useState(new Date().getMonth() + 1);
   const [calDays, setCalDays] = useState<CalendarDay[]>([]);
   const [calLoading, setCalLoading] = useState(false);
+
+  // Resumo (pizza + alertas) da coluna lateral
+  const [scope, setScope] = useState<'month' | '30d'>('month');
+  const [summary, setSummary] = useState<AttendanceSummary | null>(null);
+  const [summaryLoading, setSummaryLoading] = useState(true);
+  const [topAbsences, setTopAbsences] = useState<TopAbsence[]>([]);
+  const [absencesLoading, setAbsencesLoading] = useState(true);
 
   // Popup do atestado (aberto ao clicar num dia com "A" no calendário)
   const [attestModal, setAttestModal] = useState<{ date: string; students: AttendanceRow[] } | null>(null);
@@ -114,10 +135,11 @@ export function AttendancePage() {
       existingMap[a.student_id] = {
         student_id: a.student_id,
         student_name: a.student_name,
+        registration_number: a.registration_number,
         status: a.status,
         justification: a.justification ?? undefined,
         confirmed: true,
-        attestationUploaded: a.status === 'attested',
+        attestationUploaded: a.status === 'attested' || a.status === 'excused',
       };
     }
     const seeded: Record<string, EntryState> = {};
@@ -125,6 +147,7 @@ export function AttendancePage() {
       seeded[s.id] = existingMap[s.id] ?? {
         student_id: s.id,
         student_name: s.name,
+        registration_number: s.registration_number,
         status: 'present',
         confirmed: false,
       };
@@ -144,6 +167,19 @@ export function AttendancePage() {
       .finally(() => setCalLoading(false));
   }, [tab, classId, calYear, calMonth]);
 
+  // Resumo (pizza) e alerta de faltosos — atualiza com a turma e o período.
+  useEffect(() => {
+    if (!classId) return;
+    setSummaryLoading(true);
+    attendanceService.summary(classId, scope).then(setSummary).finally(() => setSummaryLoading(false));
+  }, [classId, scope]);
+
+  useEffect(() => {
+    if (!classId) return;
+    setAbsencesLoading(true);
+    attendanceService.topAbsences(classId, scope, 5).then(setTopAbsences).finally(() => setAbsencesLoading(false));
+  }, [classId, scope]);
+
   // Mapa data → resumo, para lookup rápido na grade do calendário.
   const calByDate = useMemo(() => {
     const map: Record<string, CalendarDay> = {};
@@ -158,6 +194,7 @@ export function AttendancePage() {
         absent: prev.absent + d.absent,
         justified: prev.justified + d.justified,
         attested: prev.attested + d.attested,
+        excused: prev.excused + d.excused,
       } : { ...d };
     }
     return map;
@@ -188,7 +225,7 @@ export function AttendancePage() {
 
   function setJustification(id: string, justification: string) {
     if (locked && !isAdmin) return;
-    setEntries((e) => ({ ...e, [id]: { ...e[id], justification } }));
+    setEntries((e) => ({ ...e, [id]: { ...e[id], justification: justification.slice(0, 100) } }));
   }
 
   function setAttestationFile(id: string, file: File | undefined) {
@@ -302,7 +339,7 @@ export function AttendancePage() {
       (e) => e.status === 'attested' && !e.attestationFile && !e.attestationUploaded
     );
     if (missing.length > 0) {
-      setToast({ type: 'error', msg: `${missing.length} aluno(s) com Atestado precisam ter o PDF enviado individualmente.` });
+      setToast({ type: 'error', msg: `${missing.length} aluno(s) com Atestado Médico precisam ter o PDF enviado individualmente.` });
       return;
     }
     setEntries((prev) => {
@@ -361,6 +398,10 @@ export function AttendancePage() {
   const canSave = allConfirmed && (!locked || isAdmin);
   const readOnly = locked && !isAdmin;
 
+  function toastFor(type: 'success' | 'error', msg: string) {
+    setToast({ type, msg });
+  }
+
   return (
     <>
       <PageHeader
@@ -382,6 +423,17 @@ export function AttendancePage() {
       />
 
       <FinanceTabs tabs={TABS} active={tab} onChange={setTab} />
+
+      {/* ===================== APROVAR ATESTADOS (só gestão) ===================== */}
+      {tab === 'aprovar' && isAdmin && (
+        <div className="space-y-4">
+          <div className="flex items-center gap-2 rounded-xl bg-primary-soft px-4 py-2.5 text-sm font-medium text-primary">
+            <ShieldCheck size={16} />
+            Ao aprovar, a falta do dia vira "Abono por Atestado". Ao recusar, ela permanece como falta.
+          </div>
+          <ApprovalQueue onToast={toastFor} />
+        </div>
+      )}
 
       {/* ===================== STATUS POR DIA (calendário) ===================== */}
       {tab === 'status' && (
@@ -432,11 +484,12 @@ export function AttendancePage() {
                           >
                             <span className={`font-semibold ${info ? 'text-primary' : 'text-ink'}`}>{cell.day}</span>
                             {info && (
-                              <span className="flex gap-0.5 text-[9px] font-bold leading-none">
+                              <span className="flex flex-wrap justify-center gap-0.5 text-[9px] font-bold leading-none">
                                 {info.present > 0 && <span className="text-success">{info.present}P</span>}
                                 {info.absent > 0 && <span className="text-danger">{info.absent}F</span>}
                                 {info.justified > 0 && <span className="text-warning">{info.justified}J</span>}
                                 {info.attested > 0 && <span className="text-primary">{info.attested}A</span>}
+                                {info.excused > 0 && <span className="text-purple">{info.excused}Ab</span>}
                               </span>
                             )}
                           </button>
@@ -454,216 +507,243 @@ export function AttendancePage() {
         </div>
       )}
 
-      {tab === 'chamada' && <>
-      {toast && (
-        <div className={`mb-4 flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-medium ${
-          toast.type === 'success' ? 'bg-success-soft text-success' : 'bg-danger-soft text-danger'
-        }`}>
-          {toast.type === 'success' ? <Check size={16} /> : <AlertTriangle size={16} />}
-          {toast.msg}
-        </div>
-      )}
-
-      {locked && (
-        <div className={`mb-4 flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-medium ${
-          isAdmin ? 'bg-warning-soft text-warning' : 'bg-primary-soft text-primary'
-        }`}>
-          <Lock size={16} />
-          {isAdmin
-            ? 'Chamada encerrada pelo professor. Como gestor, você pode substituí-la.'
-            : 'Chamada encerrada. Somente a gestão pode fazer alterações.'}
-        </div>
-      )}
-
-      <div className="card mb-6 p-4">
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-4">
-          <div>
-            <label className="label">Turma</label>
-            <select className="input" value={classId} onChange={(e) => setClassId(e.target.value)}>
-              {classes.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-            </select>
-          </div>
-          <div>
-            <label className="label">Matéria (opcional)</label>
-            <select className="input" value={subjectId} onChange={(e) => setSubjectId(e.target.value)}>
-              <option value="">Chamada por dia</option>
-              {subjects.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
-            </select>
-          </div>
-          <div>
-            <label className="label">Data</label>
-            <input type="date" className="input" value={date} onChange={(e) => setDate(e.target.value)} />
-          </div>
-          <div className="flex items-end gap-3">
-            <div className="flex flex-wrap items-center gap-2 text-sm">
-              <span className="inline-flex items-center gap-1 rounded-lg bg-success-soft px-2 py-1 font-semibold text-success">{present} P</span>
-              <span className="inline-flex items-center gap-1 rounded-lg bg-danger-soft px-2 py-1 font-semibold text-danger">{absent} F</span>
-              <span className="inline-flex items-center gap-1 rounded-lg bg-warning-soft px-2 py-1 font-semibold text-warning">{justified} J</span>
-              <span className="inline-flex items-center gap-1 rounded-lg bg-primary-soft px-2 py-1 font-semibold text-primary">{attested} A</span>
-            </div>
-          </div>
-        </div>
-        {studentList.length > 0 && !readOnly && (
-          <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-border pt-3">
-            <span className="text-xs text-ink-muted self-center mr-1">Marcar todos:</span>
-            <button className="rounded-lg bg-success-soft px-3 py-1 text-xs font-semibold text-success hover:bg-success/20" onClick={() => markAll('present')}>Presentes</button>
-            <button className="rounded-lg bg-danger-soft px-3 py-1 text-xs font-semibold text-danger hover:bg-danger/20" onClick={() => markAll('absent')}>Falta</button>
-            {!allConfirmed && (
-              <button className="ml-auto rounded-lg bg-primary-soft px-3 py-1 text-xs font-semibold text-primary hover:bg-primary/20" onClick={confirmAll}>
-                Confirmar todos
-              </button>
+      {tab === 'chamada' && (
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-[7fr_3fr]">
+          {/* ===================== COLUNA ESQUERDA (70%) — CHAMADA ===================== */}
+          <div className="min-w-0">
+            {toast && (
+              <div className={`mb-4 flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-medium ${
+                toast.type === 'success' ? 'bg-success-soft text-success' : 'bg-danger-soft text-danger'
+              }`}>
+                {toast.type === 'success' ? <Check size={16} /> : <AlertTriangle size={16} />}
+                {toast.msg}
+              </div>
             )}
-          </div>
-        )}
-      </div>
 
-      <div className="card overflow-hidden">
-        {studentList.length === 0 ? (
-          <EmptyState icon={ClipboardCheck} title="Nenhum aluno nesta turma" description="Vincule alunos a esta turma para fazer a chamada." />
-        ) : (
-          <div className="divide-y divide-border">
-            {studentList.map((entry) => (
-              <div key={entry.student_id} className={`flex flex-wrap items-start gap-3 px-4 py-3 sm:flex-nowrap ${entry.confirmed ? 'bg-success-soft/20' : 'hover:bg-canvas'}`}>
-                {/* Avatar + nome */}
-                <div className="flex min-w-0 flex-1 items-center gap-3 pt-1">
-                  <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary-soft text-xs font-bold text-primary">
-                    {entry.student_name.split(' ').slice(0, 2).map((n) => n[0]).join('')}
-                  </div>
-                  <span className="truncate font-medium text-ink">{entry.student_name}</span>
+            {locked && (
+              <div className={`mb-4 flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-medium ${
+                isAdmin ? 'bg-warning-soft text-warning' : 'bg-primary-soft text-primary'
+              }`}>
+                <Lock size={16} />
+                {isAdmin
+                  ? 'Chamada encerrada pelo professor. Como gestor, você pode substituí-la.'
+                  : 'Chamada encerrada. Somente a gestão pode fazer alterações.'}
+              </div>
+            )}
+
+            <div className="card mb-6 p-4">
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-4">
+                <div>
+                  <label className="label">Turma</label>
+                  <select className="input" value={classId} onChange={(e) => setClassId(e.target.value)}>
+                    {classes.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+                  </select>
                 </div>
+                <div>
+                  <label className="label">Matéria (opcional)</label>
+                  <select className="input" value={subjectId} onChange={(e) => setSubjectId(e.target.value)}>
+                    <option value="">Chamada por dia</option>
+                    {subjects.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className="label">Data</label>
+                  <input type="date" className="input" value={date} onChange={(e) => setDate(e.target.value)} />
+                </div>
+                <div className="flex items-end gap-3">
+                  <div className="flex flex-wrap items-center gap-2 text-sm">
+                    <span className="inline-flex items-center gap-1 rounded-lg bg-success-soft px-2 py-1 font-semibold text-success">{present} P</span>
+                    <span className="inline-flex items-center gap-1 rounded-lg bg-danger-soft px-2 py-1 font-semibold text-danger">{absent} F</span>
+                    <span className="inline-flex items-center gap-1 rounded-lg bg-warning-soft px-2 py-1 font-semibold text-warning">{justified} J</span>
+                    <span className="inline-flex items-center gap-1 rounded-lg bg-primary-soft px-2 py-1 font-semibold text-primary">{attested} A</span>
+                  </div>
+                </div>
+              </div>
+              {studentList.length > 0 && !readOnly && (
+                <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-border pt-3">
+                  <span className="text-xs text-ink-muted self-center mr-1">Marcar todos:</span>
+                  <button className="rounded-lg bg-success-soft px-3 py-1 text-xs font-semibold text-success hover:bg-success/20" onClick={() => markAll('present')}>Presentes</button>
+                  <button className="rounded-lg bg-danger-soft px-3 py-1 text-xs font-semibold text-danger hover:bg-danger/20" onClick={() => markAll('absent')}>Falta</button>
+                  {!allConfirmed && (
+                    <button className="ml-auto rounded-lg bg-primary-soft px-3 py-1 text-xs font-semibold text-primary hover:bg-primary/20" onClick={confirmAll}>
+                      Confirmar todos
+                    </button>
+                  )}
+                </div>
+              )}
+            </div>
 
-                {/* Controles ou badge */}
-                <div className="flex flex-col gap-2">
-                  {entry.confirmed ? (
-                    <span className={`self-start rounded-xl px-4 py-1.5 text-xs ${STATUS_BADGE[entry.status]}`}>
-                      {STATUS_OPTIONS.find(s => s.value === entry.status)?.short} — {STATUS_OPTIONS.find(s => s.value === entry.status)?.label}
-                    </span>
-                  ) : (
-                    <>
-                      {/* Botões P/F/J/A */}
-                      <div className="inline-flex rounded-xl border border-border p-0.5">
-                        {STATUS_OPTIONS.map((opt) => (
-                          <button
-                            key={opt.value}
-                            onClick={() => setStatus(entry.student_id, opt.value)}
-                            title={opt.label}
-                            className={`rounded-lg px-3 py-1.5 text-xs font-bold transition-colors ${
-                              entry.status === opt.value ? opt.on : opt.off
-                            }`}
-                          >
-                            {opt.short}
-                          </button>
-                        ))}
+            <div className="card overflow-hidden">
+              {studentList.length === 0 ? (
+                <EmptyState icon={ClipboardCheck} title="Nenhum aluno nesta turma" description="Vincule alunos a esta turma para fazer a chamada." />
+              ) : (
+                <div className="divide-y divide-border">
+                  {studentList.map((entry) => (
+                    <div key={entry.student_id} className={`flex flex-wrap items-start gap-3 px-4 py-3 sm:flex-nowrap ${entry.confirmed ? 'bg-success-soft/20' : 'hover:bg-canvas'}`}>
+                      {/* Avatar + nome + matrícula */}
+                      <div className="flex min-w-0 flex-1 items-center gap-3 pt-1">
+                        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary-soft text-xs font-bold text-primary">
+                          {entry.student_name.split(' ').slice(0, 2).map((n) => n[0]).join('')}
+                        </div>
+                        <div className="min-w-0">
+                          <p className="truncate font-medium text-ink">{entry.student_name}</p>
+                          {entry.registration_number && (
+                            <p className="truncate text-[11px] text-ink-subtle">Matrícula {entry.registration_number}</p>
+                          )}
+                        </div>
                       </div>
 
-                      {/* Justificativa (F ou J) */}
-                      {(entry.status === 'absent' || entry.status === 'justified') && (
-                        <input
-                          className="input w-full text-xs"
-                          placeholder="Justificativa (opcional)"
-                          value={entry.justification ?? ''}
-                          onChange={(e) => setJustification(entry.student_id, e.target.value)}
-                        />
-                      )}
+                      {/* Controles ou badge */}
+                      <div className="flex flex-col gap-2">
+                        {entry.confirmed ? (
+                          entry.status === 'excused' ? (
+                            <span className={`self-start rounded-xl px-4 py-1.5 text-xs ${STATUS_BADGE.excused}`}>
+                              Abono por Atestado
+                            </span>
+                          ) : (
+                            <span className={`self-start rounded-xl px-4 py-1.5 text-xs ${STATUS_BADGE[entry.status]}`}>
+                              {STATUS_OPTIONS.find(s => s.value === entry.status)?.short} — {STATUS_OPTIONS.find(s => s.value === entry.status)?.label}
+                            </span>
+                          )
+                        ) : (
+                          <>
+                            {/* Botões P/F/J/A */}
+                            <div className="inline-flex rounded-xl border border-border p-0.5">
+                              {STATUS_OPTIONS.map((opt) => (
+                                <button
+                                  key={opt.value}
+                                  onClick={() => setStatus(entry.student_id, opt.value)}
+                                  title={opt.label}
+                                  className={`rounded-lg px-3 py-1.5 text-xs font-bold transition-colors ${
+                                    entry.status === opt.value ? opt.on : opt.off
+                                  }`}
+                                >
+                                  {opt.short}
+                                </button>
+                              ))}
+                            </div>
 
-                      {/* Upload de atestado (A) */}
-                      {entry.status === 'attested' && (
-                        <div className="flex items-center gap-2">
-                          <input
-                            ref={(el) => { fileInputRefs.current[entry.student_id] = el; }}
-                            type="file"
-                            accept="application/pdf"
-                            className="hidden"
-                            onChange={(e) => {
-                              const f = e.target.files?.[0];
-                              if (!f) return;
-                              if (f.size > 5 * 1024 * 1024) {
-                                setToast({ type: 'error', msg: 'O PDF deve ter no máximo 5 MB.' });
-                                e.target.value = '';
-                                return;
-                              }
-                              setAttestationFile(entry.student_id, f);
-                            }}
-                          />
+                            {/* Descrição da F. Justificada (ex.: mãe avisou antes) */}
+                            {entry.status === 'justified' && (
+                              <div>
+                                <input
+                                  className="input w-full text-xs"
+                                  placeholder="Ex.: mãe avisou que o filho vai faltar (até 100 caracteres)"
+                                  maxLength={100}
+                                  value={entry.justification ?? ''}
+                                  onChange={(e) => setJustification(entry.student_id, e.target.value)}
+                                />
+                                <p className="mt-0.5 text-right text-[10px] text-ink-subtle">{(entry.justification ?? '').length}/100</p>
+                              </div>
+                            )}
+
+                            {/* Upload de atestado (A) — obrigatório para confirmar */}
+                            {entry.status === 'attested' && (
+                              <div className="flex items-center gap-2">
+                                <input
+                                  ref={(el) => { fileInputRefs.current[entry.student_id] = el; }}
+                                  type="file"
+                                  accept="application/pdf"
+                                  className="hidden"
+                                  onChange={(e) => {
+                                    const f = e.target.files?.[0];
+                                    if (!f) return;
+                                    if (f.size > 5 * 1024 * 1024) {
+                                      setToast({ type: 'error', msg: 'O PDF deve ter no máximo 5 MB.' });
+                                      e.target.value = '';
+                                      return;
+                                    }
+                                    setAttestationFile(entry.student_id, f);
+                                  }}
+                                />
+                                <button
+                                  type="button"
+                                  onClick={() => fileInputRefs.current[entry.student_id]?.click()}
+                                  className="flex items-center gap-1.5 rounded-lg border border-dashed border-primary px-3 py-1.5 text-xs font-medium text-primary hover:bg-primary-soft transition-colors"
+                                >
+                                  <Paperclip size={13} />
+                                  {entry.attestationFile ? entry.attestationFile.name : 'Selecionar PDF (obrigatório)'}
+                                </button>
+                                {entry.attestationFile && (
+                                  <span className="text-xs text-ink-muted flex items-center gap-1">
+                                    <FileText size={12} />
+                                    {(entry.attestationFile.size / 1024).toFixed(0)} KB
+                                  </span>
+                                )}
+                              </div>
+                            )}
+                          </>
+                        )}
+
+                        {/* Atestado já enviado — baixar PDF */}
+                        {entry.confirmed && (entry.status === 'attested' || entry.status === 'excused') && entry.attestationUploaded && (
                           <button
                             type="button"
-                            onClick={() => fileInputRefs.current[entry.student_id]?.click()}
-                            className="flex items-center gap-1.5 rounded-lg border border-dashed border-primary px-3 py-1.5 text-xs font-medium text-primary hover:bg-primary-soft transition-colors"
+                            onClick={() => downloadAttestation(entry.student_id)}
+                            disabled={downloadingId === entry.student_id}
+                            className="flex items-center gap-1 text-xs font-medium text-primary hover:underline disabled:opacity-50"
                           >
-                            <Paperclip size={13} />
-                            {entry.attestationFile ? entry.attestationFile.name : 'Selecionar PDF'}
+                            {downloadingId === entry.student_id
+                              ? <Loader2 size={12} className="animate-spin" />
+                              : <FileText size={12} />}
+                            Baixar atestado
                           </button>
-                          {entry.attestationFile && (
-                            <span className="text-xs text-ink-muted flex items-center gap-1">
-                              <FileText size={12} />
-                              {(entry.attestationFile.size / 1024).toFixed(0)} KB
-                            </span>
+                        )}
+                        {/* Justificativa (modo read) */}
+                        {entry.confirmed && entry.justification && entry.status === 'justified' && (
+                          <span className="text-xs text-ink-muted italic">{entry.justification}</span>
+                        )}
+                      </div>
+
+                      {/* Botão confirmar ou ícone confirmado */}
+                      {!readOnly && (
+                        <div className="flex items-center pt-1">
+                          {entry.confirmed ? (
+                            <CheckCircle2 size={18} className="shrink-0 text-success" />
+                          ) : (
+                            <button
+                              onClick={() => confirm(entry.student_id)}
+                              disabled={entry.status === 'attested' && !entry.attestationFile && !entry.attestationUploaded}
+                              className="shrink-0 rounded-lg border border-primary px-3 py-1.5 text-xs font-semibold text-primary hover:bg-primary hover:text-white transition-colors disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-primary"
+                            >
+                              Confirmar
+                            </button>
                           )}
                         </div>
                       )}
-                    </>
-                  )}
-
-                  {/* Atestado já enviado — baixar PDF */}
-                  {entry.confirmed && entry.status === 'attested' && entry.attestationUploaded && (
-                    <button
-                      type="button"
-                      onClick={() => downloadAttestation(entry.student_id)}
-                      disabled={downloadingId === entry.student_id}
-                      className="flex items-center gap-1 text-xs font-medium text-primary hover:underline disabled:opacity-50"
-                    >
-                      {downloadingId === entry.student_id
-                        ? <Loader2 size={12} className="animate-spin" />
-                        : <FileText size={12} />}
-                      Baixar atestado
-                    </button>
-                  )}
-                  {/* Justificativa (modo read) */}
-                  {entry.confirmed && entry.justification && entry.status !== 'attested' && (
-                    <span className="text-xs text-ink-muted italic">{entry.justification}</span>
-                  )}
+                    </div>
+                  ))}
                 </div>
+              )}
+            </div>
 
-                {/* Botão confirmar ou ícone confirmado */}
-                {!readOnly && (
-                  <div className="flex items-center pt-1">
-                    {entry.confirmed ? (
-                      <CheckCircle2 size={18} className="shrink-0 text-success" />
-                    ) : (
-                      <button
-                        onClick={() => confirm(entry.student_id)}
-                        className="shrink-0 rounded-lg border border-primary px-3 py-1.5 text-xs font-semibold text-primary hover:bg-primary hover:text-white transition-colors"
-                      >
-                        Confirmar
-                      </button>
-                    )}
-                  </div>
-                )}
+            {/* Rodapé */}
+            {!readOnly && studentList.length > 0 && (
+              <div className="mt-4 flex items-center justify-between rounded-xl border border-border bg-canvas px-4 py-3">
+                <span className="text-sm text-ink-muted">
+                  {allConfirmed
+                    ? 'Todos os alunos confirmados. Clique em Salvar para encerrar a chamada.'
+                    : `${unconfirmedCount} aluno(s) aguardando confirmação.`}
+                </span>
+                <button
+                  className="btn-primary flex items-center gap-2"
+                  onClick={save}
+                  disabled={!canSave || saving}
+                >
+                  {saving ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
+                  {saving ? 'Salvando…' : 'Salvar chamada'}
+                </button>
               </div>
-            ))}
+            )}
           </div>
-        )}
-      </div>
 
-      {/* Rodapé */}
-      {!readOnly && studentList.length > 0 && (
-        <div className="mt-4 flex items-center justify-between rounded-xl border border-border bg-canvas px-4 py-3">
-          <span className="text-sm text-ink-muted">
-            {allConfirmed
-              ? 'Todos os alunos confirmados. Clique em Salvar para encerrar a chamada.'
-              : `${unconfirmedCount} aluno(s) aguardando confirmação.`}
-          </span>
-          <button
-            className="btn-primary flex items-center gap-2"
-            onClick={save}
-            disabled={!canSave || saving}
-          >
-            {saving ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
-            {saving ? 'Salvando…' : 'Salvar chamada'}
-          </button>
+          {/* ===================== COLUNA DIREITA (30%) — RESUMO E ALERTAS ===================== */}
+          <div className="space-y-6">
+            <AttendanceSummaryChart summary={summary} loading={summaryLoading} scope={scope} onScopeChange={setScope} />
+            <AttendanceAlertsCard rows={topAbsences} loading={absencesLoading} />
+          </div>
         </div>
       )}
-      </>}
 
       {/* Popup de atestado — abre o PDF ao clicar num dia com "A" no calendário */}
       <Modal
