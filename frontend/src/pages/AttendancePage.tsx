@@ -514,7 +514,7 @@ function TeacherAttendanceView({ isAdmin }: { isAdmin: boolean }) {
                             key={ci}
                             onClick={() => clickable && onCalendarDayClick(cell.date, info)}
                             disabled={!clickable}
-                            className={`flex h-16 flex-col items-center justify-start gap-0.5 rounded-lg border px-1 pt-1.5 text-xs transition-colors ${cellBg} ${todayRing} disabled:cursor-default`}
+                            className={`flex h-16 flex-col items-center justify-center gap-0.5 rounded-lg border text-xs transition-colors ${cellBg} ${todayRing} disabled:cursor-default`}
                             title={event ? event.title : info ? `${info.total} aluno(s) registrado(s)` : 'Sem chamada registrada'}
                           >
                             <span className={`text-base font-bold leading-none ${numColor}`}>{cell.day}</span>
