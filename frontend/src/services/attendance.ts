@@ -69,6 +69,14 @@ export interface MyAttestation {
   review_note?: string;
 }
 
+export interface SchoolEvent {
+  id: string;
+  title: string;
+  date_start: string;
+  date_end: string | null;
+  event_type: 'holiday' | 'exam' | 'meeting' | 'event' | 'recess';
+}
+
 export const attendanceService = {
   async forContext(classId: string, date: string, subjectId?: string): Promise<{ rows: AttendanceRow[]; locked: boolean }> {
     const q = `class_id=${classId}&date=${date}${subjectId ? `&subject_id=${subjectId}` : ''}`;
@@ -118,6 +126,10 @@ export const attendanceService = {
   async topAbsences(classId: string | undefined, year: number, month: number, limit = 5): Promise<TopAbsence[]> {
     const q = `year=${year}&month=${month}&limit=${limit}${classId ? `&class_id=${classId}` : ''}`;
     const r = await api.get<{ ok: boolean; data: TopAbsence[] }>(`/attendance/top-absences?${q}`);
+    return r.data;
+  },
+  async schoolEvents(year: number, month: number): Promise<SchoolEvent[]> {
+    const r = await api.get<{ ok: boolean; data: SchoolEvent[] }>(`/attendance/school-events?year=${year}&month=${month}`);
     return r.data;
   },
   async pendingApprovals(): Promise<PendingApproval[]> {

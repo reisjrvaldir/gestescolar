@@ -15,6 +15,7 @@ import { GuardianAttestations } from '@/components/attendance/GuardianAttestatio
 import { classesService, type ClassSubject } from '@/services/classes';
 import {
   attendanceService, type AttendanceStatus, type AttendanceRow, type CalendarDay,
+  type SchoolEvent,
 } from '@/services/attendance';
 import { api } from '@/lib/api';
 import { useMe } from '@/auth/AuthGate';
@@ -93,6 +94,7 @@ function TeacherAttendanceView({ isAdmin }: { isAdmin: boolean }) {
   const [calMonth, setCalMonth] = useState(new Date().getMonth() + 1);
   const [calDays, setCalDays] = useState<CalendarDay[]>([]);
   const [calLoading, setCalLoading] = useState(false);
+  const [schoolEvents, setSchoolEvents] = useState<SchoolEvent[]>([]);
 
   // Resumo diário da coluna lateral — calculado direto dos entries (sem fetch adicional)
 
@@ -156,20 +158,22 @@ function TeacherAttendanceView({ isAdmin }: { isAdmin: boolean }) {
   useEffect(() => {
     if (tab !== 'status' || !classId) return;
     setCalLoading(true);
-    attendanceService.calendar(classId, calYear, calMonth)
-      .then(setCalDays)
-      .finally(() => setCalLoading(false));
+    Promise.all([
+      attendanceService.calendar(classId, calYear, calMonth),
+      attendanceService.schoolEvents(calYear, calMonth),
+    ]).then(([days, events]) => {
+      setCalDays(days);
+      setSchoolEvents(events);
+    }).finally(() => setCalLoading(false));
   }, [tab, classId, calYear, calMonth]);
 
   // Mapa data → resumo, para lookup rápido na grade do calendário.
   const calByDate = useMemo(() => {
     const map: Record<string, CalendarDay> = {};
     for (const d of calDays) {
-      // Se houver mais de uma matéria no mesmo dia, soma os totais.
       const prev = map[d.date];
       map[d.date] = prev ? {
-        date: d.date,
-        subject_id: null,
+        date: d.date, subject_id: null,
         total: prev.total + d.total,
         present: prev.present + d.present,
         absent: prev.absent + d.absent,
@@ -180,6 +184,19 @@ function TeacherAttendanceView({ isAdmin }: { isAdmin: boolean }) {
     }
     return map;
   }, [calDays]);
+
+  // Mapa data → evento escolar (expande intervalos multi-dia)
+  const eventByDate = useMemo(() => {
+    const map: Record<string, SchoolEvent> = {};
+    for (const ev of schoolEvents) {
+      const start = new Date(ev.date_start + 'T12:00:00');
+      const end   = ev.date_end ? new Date(ev.date_end + 'T12:00:00') : new Date(start);
+      for (const d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+        map[d.toISOString().slice(0, 10)] = ev;
+      }
+    }
+    return map;
+  }, [schoolEvents]);
 
   // Matriz do mês (semanas de domingo a sábado, com padding dos meses vizinhos).
   const calWeeks = useMemo(() => {
@@ -415,59 +432,104 @@ function TeacherAttendanceView({ isAdmin }: { isAdmin: boolean }) {
 
       {/* ===================== STATUS POR DIA (calendário) ===================== */}
       {tab === 'status' && (
-        <div className="space-y-4">
-          <div className="card p-4">
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-              <div>
-                <label className="label">Turma</label>
-                <select className="input" value={classId} onChange={(e) => setClassId(e.target.value)}>
-                  {classes.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-                </select>
-              </div>
-              <div className="flex items-end justify-between gap-3 sm:justify-end">
-                <div className="flex items-center gap-2">
-                  <button className="rounded-lg border border-border p-1.5 hover:bg-canvas" onClick={prevMonth}><ChevronLeft size={14} /></button>
-                  <span className="min-w-[9rem] text-center text-sm font-semibold text-ink">{PT_MONTHS[calMonth - 1]} {calYear}</span>
-                  <button className="rounded-lg border border-border p-1.5 hover:bg-canvas" onClick={nextMonth}><ChevronRight size={14} /></button>
-                </div>
-              </div>
+        <div className="space-y-3">
+          {/* Filtros + navegação */}
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <select className="input max-w-[200px]" value={classId} onChange={(e) => setClassId(e.target.value)}>
+              {classes.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+            </select>
+            <div className="flex items-center gap-2">
+              <button className="rounded-lg border border-border p-1.5 hover:bg-canvas" onClick={prevMonth}><ChevronLeft size={14} /></button>
+              <span className="min-w-[9rem] text-center text-sm font-semibold text-ink">{PT_MONTHS[calMonth - 1]} {calYear}</span>
+              <button className="rounded-lg border border-border p-1.5 hover:bg-canvas" onClick={nextMonth}><ChevronRight size={14} /></button>
             </div>
           </div>
 
-          <div className="card p-4">
+          {/* Legenda */}
+          <div className="flex flex-wrap gap-3 text-[11px] font-medium">
+            <span className="flex items-center gap-1.5"><span className="h-3 w-3 rounded-sm bg-success" />Chamada feita</span>
+            <span className="flex items-center gap-1.5"><span className="h-3 w-3 rounded-sm bg-primary-soft border border-primary/30" />Sem chamada</span>
+            <span className="flex items-center gap-1.5"><span className="h-3 w-3 rounded-sm bg-danger-soft border border-danger/30" />Feriado/Recesso</span>
+            <span className="flex items-center gap-1.5"><span className="h-3 w-3 rounded-sm bg-canvas border border-border" />Fim de semana</span>
+          </div>
+
+          {/* Grade do calendário */}
+          <div className="card p-3">
             {calLoading ? (
               <div className="flex justify-center py-10 text-ink-muted"><Loader2 size={20} className="animate-spin" /></div>
             ) : (
               <>
-                <div className="mb-2 grid grid-cols-7 gap-1.5 text-center text-[11px] font-semibold uppercase text-ink-subtle">
-                  {PT_WEEKDAYS.map((w) => <div key={w}>{w}</div>)}
+                {/* Cabeçalho dos dias da semana */}
+                <div className="mb-1.5 grid grid-cols-7 gap-1 text-center text-[11px] font-bold uppercase tracking-wide text-ink-subtle">
+                  {PT_WEEKDAYS.map((w) => <div key={w} className="py-1">{w}</div>)}
                 </div>
-                <div className="space-y-1.5">
+                {/* Células */}
+                <div className="space-y-1">
                   {calWeeks.map((week, wi) => (
-                    <div key={wi} className="grid grid-cols-7 gap-1.5">
+                    <div key={wi} className="grid grid-cols-7 gap-1">
                       {week.map((cell, ci) => {
-                        if (!cell.inMonth) return <div key={ci} className="aspect-square rounded-lg" />;
-                        const info = calByDate[cell.date];
-                        const isToday = cell.date === today();
+                        if (!cell.inMonth) return <div key={ci} className="h-16 rounded-lg" />;
+
+                        const info      = calByDate[cell.date];
+                        const event     = eventByDate[cell.date];
+                        const isToday   = cell.date === today();
+                        const isPast    = cell.date < today();
+                        const weekday   = new Date(cell.date + 'T12:00:00').getDay();
+                        const isWeekend = weekday === 0 || weekday === 6;
+
+                        // Cores por estado — prioridade: evento > chamada > dia-útil-sem-chamada > fds
+                        const EVENT_STYLE: Record<string, { bg: string; text: string; label: string }> = {
+                          holiday:  { bg: 'bg-danger-soft border-danger/30',   text: 'text-danger',   label: 'Feriado' },
+                          recess:   { bg: 'bg-warning-soft border-warning/30', text: 'text-warning',  label: 'Recesso' },
+                          exam:     { bg: 'bg-purple-soft border-purple/30',   text: 'text-purple',   label: 'Prova' },
+                          meeting:  { bg: 'bg-accent-soft border-accent/30',   text: 'text-accent',   label: 'Reunião' },
+                          event:    { bg: 'bg-cta-soft border-cta/30',         text: 'text-cta',      label: 'Evento' },
+                        };
+
+                        let cellBg   = 'bg-white border-border hover:bg-canvas';
+                        let numColor = 'text-ink';
+                        let eventLabel: string | null = null;
+
+                        if (isWeekend) {
+                          cellBg   = 'bg-canvas border-border/50 cursor-default';
+                          numColor = 'text-ink-subtle';
+                        } else if (event) {
+                          const s  = EVENT_STYLE[event.event_type] ?? EVENT_STYLE.event;
+                          cellBg   = `${s.bg} hover:opacity-90`;
+                          numColor = s.text;
+                          eventLabel = s.label;
+                        } else if (info) {
+                          cellBg   = 'bg-success-soft border-success/30 hover:bg-success/20';
+                          numColor = 'text-success';
+                        } else if (isPast && !isWeekend) {
+                          cellBg   = 'bg-primary-soft border-primary/20 hover:bg-primary/20';
+                          numColor = 'text-primary';
+                        }
+
+                        const todayRing = isToday ? 'ring-2 ring-primary ring-offset-1' : '';
+                        const clickable = !isWeekend;
+
                         return (
                           <button
                             key={ci}
-                            onClick={() => onCalendarDayClick(cell.date, info)}
-                            className={`flex aspect-square flex-col items-center justify-center gap-0.5 rounded-lg border text-xs transition-colors ${
-                              info
-                                ? 'border-primary/30 bg-primary-soft hover:bg-primary/20'
-                                : 'border-border hover:bg-canvas'
-                            } ${isToday ? 'ring-2 ring-primary ring-offset-1' : ''}`}
-                            title={info ? `${info.total} aluno(s) registrado(s)` : 'Sem chamada registrada'}
+                            onClick={() => clickable && onCalendarDayClick(cell.date, info)}
+                            disabled={!clickable}
+                            className={`flex h-16 flex-col items-center justify-start gap-0.5 rounded-lg border px-1 pt-1.5 text-xs transition-colors ${cellBg} ${todayRing} disabled:cursor-default`}
+                            title={event ? event.title : info ? `${info.total} aluno(s) registrado(s)` : 'Sem chamada registrada'}
                           >
-                            <span className={`font-semibold ${info ? 'text-primary' : 'text-ink'}`}>{cell.day}</span>
-                            {info && (
-                              <span className="flex flex-wrap justify-center gap-0.5 text-[9px] font-bold leading-none">
-                                {info.present > 0 && <span className="text-success">{info.present}P</span>}
-                                {info.absent > 0 && <span className="text-danger">{info.absent}F</span>}
+                            <span className={`text-base font-bold leading-none ${numColor}`}>{cell.day}</span>
+                            {eventLabel && (
+                              <span className={`mt-0.5 max-w-full truncate text-[9px] font-semibold leading-none ${numColor}`}>
+                                {event?.title ? event.title.slice(0, 10) : eventLabel}
+                              </span>
+                            )}
+                            {info && !event && (
+                              <span className="mt-0.5 flex flex-wrap justify-center gap-x-0.5 gap-y-0 text-[9px] font-bold leading-none">
+                                {info.present   > 0 && <span className="text-success">{info.present}P</span>}
+                                {info.absent    > 0 && <span className="text-danger">{info.absent}F</span>}
                                 {info.justified > 0 && <span className="text-warning">{info.justified}J</span>}
-                                {info.attested > 0 && <span className="text-primary">{info.attested}A</span>}
-                                {info.excused > 0 && <span className="text-purple">{info.excused}Ab</span>}
+                                {info.attested  > 0 && <span className="text-primary">{info.attested}A</span>}
+                                {info.excused   > 0 && <span className="text-purple">{info.excused}Ab</span>}
                               </span>
                             )}
                           </button>
@@ -476,9 +538,6 @@ function TeacherAttendanceView({ isAdmin }: { isAdmin: boolean }) {
                     </div>
                   ))}
                 </div>
-                <p className="mt-4 text-xs text-ink-subtle">
-                  Clique num dia para ver a chamada detalhada. Dias sem registro abrem a aba Chamada.
-                </p>
               </>
             )}
           </div>

@@ -123,6 +123,28 @@ attendanceRouter.get('/top-absences', async (req, res) => {
   res.json({ ok: true, data });
 });
 
+// GET /attendance/school-events?year=&month= → eventos do calendário escolar no mês
+attendanceRouter.get('/school-events', async (req, res) => {
+  const now = new Date();
+  const year  = req.query.year  ? Number(req.query.year)  : now.getFullYear();
+  const month = req.query.month ? Number(req.query.month) : now.getMonth() + 1;
+  const firstDay = `${year}-${String(month).padStart(2, '0')}-01`;
+  const lastDay  = new Date(year, month, 0).toISOString().slice(0, 10);
+  const data = await withTenant(req.ctx!, async (c) => {
+    const { rows } = await c.query(
+      `select id, title, date_start::text, date_end::text, event_type
+         from public.school_calendar
+        where school_id = $1
+          and date_start <= $2
+          and (date_end is null or date_end >= $3)
+        order by date_start`,
+      [req.ctx!.schoolId, lastDay, firstDay],
+    );
+    return rows;
+  });
+  res.json({ ok: true, data });
+});
+
 // GET /attendance/pending-approvals → fila de atestados aguardando análise (só gestão)
 attendanceRouter.get('/pending-approvals', requireRole('school_admin', 'superadmin'), async (req, res) => {
   const data = await withTenant(req.ctx!, async (c) => {
