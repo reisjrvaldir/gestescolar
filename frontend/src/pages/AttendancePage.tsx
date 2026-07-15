@@ -96,10 +96,10 @@ function TeacherAttendanceView({ isAdmin }: { isAdmin: boolean }) {
 
   // Resumo diário da coluna lateral — calculado direto dos entries (sem fetch adicional)
 
-  // Popup do atestado (aberto ao clicar num dia com "A" no calendário)
-  const [attestModal, setAttestModal] = useState<{ date: string; students: AttendanceRow[] } | null>(null);
-  const [attestLoading, setAttestLoading] = useState(false);
-  const [attestPdf, setAttestPdf] = useState<{ student_id: string; filename: string; file_data: string } | null>(null);
+  // Painel do dia — abre ao clicar num dia com chamada registrada no calendário
+  const [dayModal, setDayModal] = useState<{ date: string; rows: AttendanceRow[] } | null>(null);
+  const [dayModalLoading, setDayModalLoading] = useState(false);
+  const [dayPdfMap, setDayPdfMap] = useState<Record<string, { loading: boolean; fileData: string | null }>>({});
 
   // Refs para file inputs (um por aluno)
   const fileInputRefs = useRef<Record<string, HTMLInputElement | null>>({});
@@ -232,46 +232,40 @@ function TeacherAttendanceView({ isAdmin }: { isAdmin: boolean }) {
     }
   }
 
-  // Clique num dia do calendário: se houver Atestado ("A"), abre o popup com o PDF.
-  // Caso contrário, mantém o comportamento antigo (abre a chamada daquele dia).
+  // Clique num dia com chamada → abre painel detalhado do dia.
+  // Dias sem chamada → navega para a aba Chamada naquela data.
   async function onCalendarDayClick(iso: string, info: CalendarDay | undefined) {
-    if (!info || info.attested === 0) {
-      setDate(iso);
-      setTab('chamada');
+    if (!info) { setDate(iso); setTab('chamada'); return; }
+    setDayModalLoading(true);
+    setDayModal(null);
+    setDayPdfMap({});
+    try {
+      const { rows } = await attendanceService.forContext(classId, iso);
+      setDayModal({ date: iso, rows });
+    } catch {
+      setToast({ type: 'error', msg: 'Erro ao carregar a chamada deste dia.' });
+    } finally {
+      setDayModalLoading(false);
+    }
+  }
+
+  async function toggleDayPdf(studentId: string, forDate: string) {
+    // Já aberto → fecha
+    if (dayPdfMap[studentId]?.fileData) {
+      setDayPdfMap((m) => ({ ...m, [studentId]: { loading: false, fileData: null } }));
       return;
     }
-    setAttestLoading(true);
-    setAttestPdf(null);
-    try {
-      const rows = (await attendanceService.forContext(classId, iso)).rows;
-      const attestedRows = rows.filter((r) => r.status === 'attested');
-      setAttestModal({ date: iso, students: attestedRows });
-      if (attestedRows.length === 1) {
-        await openAttestationPreview(attestedRows[0].student_id, iso);
-      }
-    } catch {
-      setToast({ type: 'error', msg: 'Erro ao carregar os atestados deste dia.' });
-    } finally {
-      setAttestLoading(false);
-    }
-  }
-
-  async function openAttestationPreview(studentId: string, forDate: string) {
-    setAttestLoading(true);
+    setDayPdfMap((m) => ({ ...m, [studentId]: { loading: true, fileData: null } }));
     try {
       const doc = await attendanceService.getAttestation(studentId, classId, forDate);
-      setAttestPdf({ student_id: studentId, filename: doc.filename, file_data: doc.file_data });
+      setDayPdfMap((m) => ({ ...m, [studentId]: { loading: false, fileData: doc.file_data } }));
     } catch {
+      setDayPdfMap((m) => ({ ...m, [studentId]: { loading: false, fileData: null } }));
       setToast({ type: 'error', msg: 'Erro ao carregar o PDF do atestado.' });
-    } finally {
-      setAttestLoading(false);
     }
   }
 
-  function closeAttestModal() {
-    setAttestModal(null);
-    setAttestPdf(null);
-  }
+  function closeDayModal() { setDayModal(null); setDayPdfMap({}); }
 
   async function confirm(id: string) {
     const entry = entries[id];
@@ -483,7 +477,7 @@ function TeacherAttendanceView({ isAdmin }: { isAdmin: boolean }) {
                   ))}
                 </div>
                 <p className="mt-4 text-xs text-ink-subtle">
-                  Dias com atestado (A) abrem o PDF em uma janela. Os demais dias abrem a chamada na aba Chamada.
+                  Clique num dia para ver a chamada detalhada. Dias sem registro abrem a aba Chamada.
                 </p>
               </>
             )}
@@ -729,57 +723,99 @@ function TeacherAttendanceView({ isAdmin }: { isAdmin: boolean }) {
         </div>
       )}
 
-      {/* Popup de atestado — abre o PDF ao clicar num dia com "A" no calendário */}
+      {/* Painel do dia — lista completa de alunos + status + atestados */}
       <Modal
-        open={!!attestModal}
-        title={attestModal ? `Atestados — ${new Date(attestModal.date + 'T12:00:00').toLocaleDateString('pt-BR')}` : ''}
-        onClose={closeAttestModal}
-        footer={
-          attestPdf ? (
-            <>
-              <button className="btn-outline" onClick={() => setAttestPdf(null)}>Voltar</button>
-              <button
-                className="btn-primary"
-                onClick={() => {
-                  const link = document.createElement('a');
-                  link.href = `data:application/pdf;base64,${attestPdf.file_data}`;
-                  link.download = attestPdf.filename;
-                  link.click();
-                }}
-              >
-                <Download size={14} /> Baixar PDF
-              </button>
-            </>
-          ) : undefined
-        }
+        open={!!dayModal || dayModalLoading}
+        title={dayModal ? `Chamada — ${new Date(dayModal.date + 'T12:00:00').toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: 'long' })}` : 'Carregando…'}
+        onClose={closeDayModal}
       >
-        {attestLoading ? (
+        {dayModalLoading ? (
           <div className="flex justify-center py-10 text-ink-muted"><Loader2 size={20} className="animate-spin" /></div>
-        ) : attestPdf ? (
-          <div className="space-y-2">
-            <p className="text-xs text-ink-muted">{attestPdf.filename}</p>
-            <iframe
-              src={`data:application/pdf;base64,${attestPdf.file_data}`}
-              title="Atestado médico"
-              className="h-[60vh] w-full rounded-xl border border-border"
-            />
+        ) : dayModal && (
+          <div className="space-y-4">
+            {/* Chips de resumo */}
+            {(() => {
+              const r = dayModal.rows;
+              const p = r.filter(x => x.status === 'present').length;
+              const f = r.filter(x => x.status === 'absent').length;
+              const j = r.filter(x => x.status === 'justified').length;
+              const a = r.filter(x => x.status === 'attested').length;
+              const ab = r.filter(x => x.status === 'excused').length;
+              return (
+                <div className="flex flex-wrap gap-2">
+                  {p  > 0 && <span className="rounded-lg bg-success-soft px-3 py-1 text-xs font-bold text-success">{p} Presença{p !== 1 ? 's' : ''}</span>}
+                  {f  > 0 && <span className="rounded-lg bg-danger-soft  px-3 py-1 text-xs font-bold text-danger">{f} Falta{f !== 1 ? 's' : ''}</span>}
+                  {j  > 0 && <span className="rounded-lg bg-warning-soft px-3 py-1 text-xs font-bold text-warning">{j} Justificada{j !== 1 ? 's' : ''}</span>}
+                  {a  > 0 && <span className="rounded-lg bg-primary-soft px-3 py-1 text-xs font-bold text-primary">{a} Atestado{a !== 1 ? 's' : ''}</span>}
+                  {ab > 0 && <span className="rounded-lg bg-purple-soft  px-3 py-1 text-xs font-bold text-purple">{ab} Abono{ab !== 1 ? 's' : ''}</span>}
+                  <span className="rounded-lg border border-border px-3 py-1 text-xs font-semibold text-ink-muted">{r.length} aluno{r.length !== 1 ? 's' : ''}</span>
+                </div>
+              );
+            })()}
+
+            {/* Lista de alunos */}
+            <div className="divide-y divide-border rounded-xl border border-border">
+              {dayModal.rows.length === 0 ? (
+                <p className="px-4 py-6 text-center text-sm text-ink-muted">Nenhum registro para este dia.</p>
+              ) : dayModal.rows.map((row) => {
+                const pdf = dayPdfMap[row.student_id];
+                const hasAttest = row.status === 'attested' || row.status === 'excused';
+                const badgeCls = STATUS_BADGE[row.status];
+                const statusLabel = row.status === 'excused'
+                  ? 'Abono por Atestado'
+                  : STATUS_OPTIONS.find(o => o.value === row.status)?.label ?? row.status;
+
+                return (
+                  <div key={row.student_id}>
+                    <div className="flex items-center gap-3 px-4 py-3">
+                      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary-soft text-xs font-bold text-primary">
+                        {row.student_name.split(' ').slice(0, 2).map(n => n[0]).join('')}
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate font-medium text-ink">{row.student_name}</p>
+                        {row.registration_number && (
+                          <p className="text-[11px] text-ink-subtle">Matrícula {row.registration_number}</p>
+                        )}
+                        {row.justification && row.status === 'justified' && (
+                          <p className="mt-0.5 text-[11px] italic text-ink-muted">{row.justification}</p>
+                        )}
+                      </div>
+                      <div className="flex shrink-0 items-center gap-2">
+                        <span className={`rounded-xl px-3 py-1 text-xs ${badgeCls}`}>{statusLabel}</span>
+                        {hasAttest && (
+                          <button
+                            onClick={() => toggleDayPdf(row.student_id, dayModal.date)}
+                            disabled={pdf?.loading}
+                            className="flex items-center gap-1 rounded-lg border border-border px-2.5 py-1 text-xs font-medium text-primary hover:bg-primary-soft disabled:opacity-50"
+                          >
+                            {pdf?.loading ? <Loader2 size={12} className="animate-spin" /> : <FileText size={12} />}
+                            {pdf?.fileData ? 'Fechar' : 'Ver PDF'}
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                    {/* PDF inline */}
+                    {pdf?.fileData && (
+                      <div className="border-t border-border px-4 pb-4 pt-3">
+                        <iframe
+                          src={`data:application/pdf;base64,${pdf.fileData}`}
+                          title="Atestado médico"
+                          className="h-[55vh] w-full rounded-xl border border-border"
+                        />
+                        <a
+                          href={`data:application/pdf;base64,${pdf.fileData}`}
+                          download={row.student_name + '_atestado.pdf'}
+                          className="mt-2 inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline"
+                        >
+                          <Download size={12} /> Baixar PDF
+                        </a>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
           </div>
-        ) : attestModal && attestModal.students.length > 0 ? (
-          <div className="space-y-1">
-            <p className="mb-2 text-xs text-ink-muted">Selecione o aluno para visualizar o atestado:</p>
-            {attestModal.students.map((s) => (
-              <button
-                key={s.student_id}
-                onClick={() => openAttestationPreview(s.student_id, attestModal.date)}
-                className="flex w-full items-center gap-2 rounded-lg border border-border px-3 py-2 text-left text-sm hover:bg-canvas"
-              >
-                <FileText size={14} className="text-primary" />
-                {s.student_name}
-              </button>
-            ))}
-          </div>
-        ) : (
-          <p className="py-4 text-center text-sm text-ink-muted">Nenhum atestado encontrado para este dia.</p>
         )}
       </Modal>
     </>
