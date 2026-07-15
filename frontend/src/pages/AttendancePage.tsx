@@ -523,15 +523,6 @@ function TeacherAttendanceView({ isAdmin }: { isAdmin: boolean }) {
                                 {event?.title ? event.title.slice(0, 10) : eventLabel}
                               </span>
                             )}
-                            {info && !event && (
-                              <span className="mt-0.5 flex flex-wrap justify-center gap-x-0.5 gap-y-0 text-[9px] font-bold leading-none">
-                                {info.present   > 0 && <span className="text-success">{info.present}P</span>}
-                                {info.absent    > 0 && <span className="text-danger">{info.absent}F</span>}
-                                {info.justified > 0 && <span className="text-warning">{info.justified}J</span>}
-                                {info.attested  > 0 && <span className="text-primary">{info.attested}A</span>}
-                                {info.excused   > 0 && <span className="text-purple">{info.excused}Ab</span>}
-                              </span>
-                            )}
                           </button>
                         );
                       })}
