@@ -1,45 +1,39 @@
-import { PieChart, Loader2 } from 'lucide-react';
+import { PieChart } from 'lucide-react';
 import type { AttendanceSummary } from '@/services/attendance';
 
 const SLICES: { key: keyof AttendanceSummary; label: string; color: string }[] = [
   { key: 'present',   label: 'Presentes',        color: '#00B894' },
   { key: 'absent',    label: 'Faltas',            color: '#EF4444' },
   { key: 'justified', label: 'Falta Justificada', color: '#F59E0B' },
+  { key: 'attested',  label: 'Atestado',          color: '#3B82F6' },
   { key: 'excused',   label: 'Abono (Atestado)',  color: '#7C3AED' },
 ];
 
 interface Props {
-  summary: AttendanceSummary | null;
-  loading: boolean;
-  scope: 'month' | '30d';
-  onScopeChange: (scope: 'month' | '30d') => void;
+  summary: AttendanceSummary;
+  date: string;
 }
 
-export function AttendanceSummaryChart({ summary, loading, scope, onScopeChange }: Props) {
-  const data = summary ? SLICES.map((s) => ({ ...s, value: summary[s.key] })).filter((s) => s.value > 0) : [];
+export function AttendanceSummaryChart({ summary, date }: Props) {
+  const data = SLICES.map((s) => ({ ...s, value: summary[s.key] })).filter((s) => s.value > 0);
   const total = data.reduce((s, d) => s + d.value, 0);
+
+  const label = new Date(date + 'T12:00:00').toLocaleDateString('pt-BR', {
+    day: '2-digit', month: 'short',
+  });
 
   return (
     <div className="card p-4">
       <div className="mb-3 flex items-center justify-between">
         <div className="flex items-center gap-2 text-sm font-bold text-ink">
-          <PieChart size={16} className="text-primary" /> Resumo de frequência
+          <PieChart size={16} className="text-primary" /> Frequência do dia
         </div>
-        <div className="flex rounded-lg border border-border p-0.5 text-xs">
-          <button
-            className={`rounded-md px-2 py-1 font-semibold ${scope === 'month' ? 'bg-primary text-white' : 'text-ink-muted'}`}
-            onClick={() => onScopeChange('month')}
-          >Mês</button>
-          <button
-            className={`rounded-md px-2 py-1 font-semibold ${scope === '30d' ? 'bg-primary text-white' : 'text-ink-muted'}`}
-            onClick={() => onScopeChange('30d')}
-          >30 dias</button>
-        </div>
+        <span className="rounded-lg bg-canvas px-2 py-1 text-xs font-semibold text-ink-muted border border-border">
+          {label}
+        </span>
       </div>
 
-      {loading ? (
-        <div className="flex justify-center py-8 text-ink-muted"><Loader2 size={18} className="animate-spin" /></div>
-      ) : total === 0 ? (
+      {total === 0 ? (
         <p className="py-4 text-center text-xs text-ink-muted">Nenhuma chamada registrada no período.</p>
       ) : (
         <div className="flex flex-col items-center gap-4">

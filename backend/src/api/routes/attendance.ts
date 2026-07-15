@@ -95,11 +95,13 @@ attendanceRouter.get('/summary', async (req, res) => {
   res.json({ ok: true, data });
 });
 
-// GET /attendance/top-absences?class_id=&scope=month|30d&limit=5 → alunos com mais faltas
+// GET /attendance/top-absences?class_id=&year=&month=&limit=5 → alunos com mais faltas no mês
 attendanceRouter.get('/top-absences', async (req, res) => {
   const classId = (req.query.class_id as string | undefined) || null;
-  const scope = req.query.scope === '30d' ? '30d' : 'month';
   const limit = Math.min(Number(req.query.limit) || 5, 20);
+  const now = new Date();
+  const year  = req.query.year  ? Number(req.query.year)  : now.getFullYear();
+  const month = req.query.month ? Number(req.query.month) : now.getMonth() + 1;
   const data = await withTenant(req.ctx!, async (c) => {
     const { rows } = await c.query(
       `select a.student_id, s.name as student_name, cl.name as class_name, count(*)::int as absences
@@ -107,14 +109,14 @@ attendanceRouter.get('/top-absences', async (req, res) => {
          join public.students s on s.id = a.student_id
          left join public.classes cl on cl.id = a.class_id
         where a.school_id = $1
-          and a.status = 'absent'
+          and a.status in ('absent', 'attested')
           and ($2::uuid is null or a.class_id = $2)
-          and a.date >= ${scope === '30d' ? `current_date - interval '29 days'` : `date_trunc('month', current_date)`}
-          and a.date <= current_date
+          and extract(year  from a.date) = $3
+          and extract(month from a.date) = $4
         group by a.student_id, s.name, cl.name
         order by count(*) desc
-        limit $3`,
-      [req.ctx!.schoolId, classId, limit],
+        limit $5`,
+      [req.ctx!.schoolId, classId, year, month, limit],
     );
     return rows;
   });

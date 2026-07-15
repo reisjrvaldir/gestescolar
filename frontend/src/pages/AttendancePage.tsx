@@ -15,7 +15,6 @@ import { GuardianAttestations } from '@/components/attendance/GuardianAttestatio
 import { classesService, type ClassSubject } from '@/services/classes';
 import {
   attendanceService, type AttendanceStatus, type AttendanceRow, type CalendarDay,
-  type AttendanceSummary, type TopAbsence,
 } from '@/services/attendance';
 import { api } from '@/lib/api';
 import { useMe } from '@/auth/AuthGate';
@@ -95,12 +94,7 @@ function TeacherAttendanceView({ isAdmin }: { isAdmin: boolean }) {
   const [calDays, setCalDays] = useState<CalendarDay[]>([]);
   const [calLoading, setCalLoading] = useState(false);
 
-  // Resumo (pizza + alertas) da coluna lateral
-  const [scope, setScope] = useState<'month' | '30d'>('month');
-  const [summary, setSummary] = useState<AttendanceSummary | null>(null);
-  const [summaryLoading, setSummaryLoading] = useState(true);
-  const [topAbsences, setTopAbsences] = useState<TopAbsence[]>([]);
-  const [absencesLoading, setAbsencesLoading] = useState(true);
+  // Resumo diário da coluna lateral — calculado direto dos entries (sem fetch adicional)
 
   // Popup do atestado (aberto ao clicar num dia com "A" no calendário)
   const [attestModal, setAttestModal] = useState<{ date: string; students: AttendanceRow[] } | null>(null);
@@ -166,19 +160,6 @@ function TeacherAttendanceView({ isAdmin }: { isAdmin: boolean }) {
       .then(setCalDays)
       .finally(() => setCalLoading(false));
   }, [tab, classId, calYear, calMonth]);
-
-  // Resumo (pizza) e alerta de faltosos — atualiza com a turma e o período.
-  useEffect(() => {
-    if (!classId) return;
-    setSummaryLoading(true);
-    attendanceService.summary(classId, scope).then(setSummary).finally(() => setSummaryLoading(false));
-  }, [classId, scope]);
-
-  useEffect(() => {
-    if (!classId) return;
-    setAbsencesLoading(true);
-    attendanceService.topAbsences(classId, scope, 5).then(setTopAbsences).finally(() => setAbsencesLoading(false));
-  }, [classId, scope]);
 
   // Mapa data → resumo, para lookup rápido na grade do calendário.
   const calByDate = useMemo(() => {
@@ -358,8 +339,11 @@ function TeacherAttendanceView({ isAdmin }: { isAdmin: boolean }) {
   const absent    = studentList.filter((e) => e.status === 'absent').length;
   const justified = studentList.filter((e) => e.status === 'justified').length;
   const attested  = studentList.filter((e) => e.status === 'attested').length;
+  const excused   = studentList.filter((e) => e.status === 'excused').length;
   const allConfirmed = studentList.length > 0 && studentList.every((e) => e.confirmed);
   const unconfirmedCount = studentList.filter((e) => !e.confirmed).length;
+
+  const dailySummary = { present, absent, justified, attested, excused };
 
   async function save() {
     setSaving(true);
@@ -739,8 +723,8 @@ function TeacherAttendanceView({ isAdmin }: { isAdmin: boolean }) {
 
           {/* ===================== COLUNA DIREITA (30%) — RESUMO E ALERTAS ===================== */}
           <div className="space-y-6">
-            <AttendanceSummaryChart summary={summary} loading={summaryLoading} scope={scope} onScopeChange={setScope} />
-            <AttendanceAlertsCard rows={topAbsences} loading={absencesLoading} />
+            <AttendanceSummaryChart summary={dailySummary} date={date} />
+            <AttendanceAlertsCard classId={classId} />
           </div>
         </div>
       )}

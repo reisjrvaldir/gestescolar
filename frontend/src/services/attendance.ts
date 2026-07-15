@@ -115,8 +115,8 @@ export const attendanceService = {
     const r = await api.get<{ ok: boolean; data: AttendanceSummary }>(`/attendance/summary?${q}`);
     return r.data;
   },
-  async topAbsences(classId: string | undefined, scope: 'month' | '30d', limit = 5): Promise<TopAbsence[]> {
-    const q = `scope=${scope}&limit=${limit}${classId ? `&class_id=${classId}` : ''}`;
+  async topAbsences(classId: string | undefined, year: number, month: number, limit = 5): Promise<TopAbsence[]> {
+    const q = `year=${year}&month=${month}&limit=${limit}${classId ? `&class_id=${classId}` : ''}`;
     const r = await api.get<{ ok: boolean; data: TopAbsence[] }>(`/attendance/top-absences?${q}`);
     return r.data;
   },
