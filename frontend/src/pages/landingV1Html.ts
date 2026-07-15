@@ -588,6 +588,9 @@ export const LANDING_V1_HTML = `
         <div>
           <div class="lp-footer-brand"><i class="fa-solid fa-graduation-cap"></i> GestEscolar</div>
           <p>Plataforma SaaS de gestão escolar. Simplifique matrículas, financeiro, notas e comunicação da sua instituição.</p>
+          <button type="button" class="lp-superadmin-btn" onclick="LandingPage.openSuperadmin()">
+            <i class="fa-solid fa-user-shield"></i> Superadmin
+          </button>
         </div>
         <div>
           <h4>Plataforma</h4>
@@ -628,6 +631,24 @@ export const LANDING_V1_HTML = `
         </div>
       </div>
     </footer>
+
+    <!-- Modal de login do Super Admin -->
+    <div class="lp-sa-overlay" id="lpSaOverlay" onclick="if(event.target===this)LandingPage.closeSuperadmin()">
+      <div class="lp-sa-modal">
+        <h3>Acesso Super Admin</h3>
+        <p class="sub">Entre com sua conta de administrador da plataforma.</p>
+        <div class="lp-sa-err" id="lpSaErr"></div>
+        <label>E-mail</label>
+        <input type="email" id="lpSaEmail" placeholder="voce@email.com" autocomplete="username" />
+        <label>Senha</label>
+        <input type="password" id="lpSaPass" placeholder="Sua senha" autocomplete="current-password"
+          onkeydown="if(event.key==='Enter')LandingPage.superadminLogin()" />
+        <div class="lp-sa-actions">
+          <button type="button" class="lp-sa-cancel" onclick="LandingPage.closeSuperadmin()">Cancelar</button>
+          <button type="button" class="lp-sa-submit" id="lpSaSubmit" onclick="LandingPage.superadminLogin()">Entrar</button>
+        </div>
+      </div>
+    </div>
 
     <!-- Botão flutuante WhatsApp -->
     <a class="lp-whatsapp-btn" href="https://wa.me/5500000000000?text=Ol%C3%A1%2C%20tenho%20interesse%20no%20GestEscolar!" target="_blank" title="Falar no WhatsApp">

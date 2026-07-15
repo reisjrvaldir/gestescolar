@@ -618,8 +618,39 @@ html, body { width: 100%; overflow-x: hidden; }
 .lp-footer { background: #080812; padding: 70px 32px 32px; color: #aaa; }
 .lp-footer-inner {
   max-width: 1200px; margin: 0 auto;
-  display: grid; grid-template-columns: 2fr 1fr 1fr 1fr; gap: 48px;
+  display: grid; grid-template-columns: 1.6fr 1fr 1fr 1fr 1fr; gap: 40px;
 }
+.lp-superadmin-btn {
+  margin-top: 20px; display: inline-flex; align-items: center; gap: 8px;
+  padding: 9px 16px; border-radius: 10px; cursor: pointer;
+  background: rgba(255,255,255,.06); border: 1px solid rgba(255,255,255,.14);
+  color: #cbd5e1; font-size: 13px; font-weight: 600; transition: all .2s;
+}
+.lp-superadmin-btn:hover { background: rgba(255,255,255,.12); color: #fff; }
+.lp-sa-overlay {
+  position: fixed; inset: 0; z-index: 9999; display: none;
+  align-items: center; justify-content: center; padding: 20px;
+  background: rgba(8,8,18,.72); backdrop-filter: blur(4px);
+}
+.lp-sa-overlay.open { display: flex; }
+.lp-sa-modal {
+  width: 100%; max-width: 380px; background: #fff; border-radius: 16px;
+  padding: 28px; box-shadow: 0 24px 60px rgba(0,0,0,.4);
+}
+.lp-sa-modal h3 { font-size: 18px; font-weight: 800; color: #1a1a2e; margin-bottom: 4px; }
+.lp-sa-modal p.sub { font-size: 13px; color: #667; margin-bottom: 18px; }
+.lp-sa-modal label { display: block; font-size: 12px; font-weight: 600; color: #445; margin-bottom: 6px; }
+.lp-sa-modal input {
+  width: 100%; padding: 10px 12px; border: 1px solid #dde; border-radius: 10px;
+  font-size: 14px; margin-bottom: 14px; outline: none;
+}
+.lp-sa-modal input:focus { border-color: #1a73e8; box-shadow: 0 0 0 3px rgba(26,115,232,.12); }
+.lp-sa-err { color: #dc2626; font-size: 13px; margin-bottom: 12px; display: none; }
+.lp-sa-actions { display: flex; gap: 10px; margin-top: 4px; }
+.lp-sa-actions button { flex: 1; padding: 10px; border-radius: 10px; font-size: 14px; font-weight: 700; cursor: pointer; border: none; }
+.lp-sa-cancel { background: #f1f3f5; color: #445; }
+.lp-sa-submit { background: #1a73e8; color: #fff; }
+.lp-sa-submit:disabled { opacity: .6; cursor: default; }
 .lp-footer-brand {
   font-size: 20px; font-weight: 900; color: #fff; margin-bottom: 14px;
   background: linear-gradient(135deg,#1a73e8,#6c5ce7);

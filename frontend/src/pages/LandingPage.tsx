@@ -2,6 +2,7 @@ import { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import './landing-v1.css';
 import { LANDING_V1_HTML } from './landingV1Html';
+import { signIn } from '@/lib/authClient';
 
 const WHATSAPP = 'https://wa.me/5500000000000?text=Ol%C3%A1%2C%20tenho%20interesse%20no%20GestEscolar!';
 
@@ -26,6 +27,35 @@ export function LandingPage() {
       goLogin() { navigate('/login'); },
       goRegister() { navigate('/onboarding'); },
       goContact() { window.open(WHATSAPP, '_blank'); },
+      openSuperadmin() {
+        const ov = document.getElementById('lpSaOverlay');
+        const err = document.getElementById('lpSaErr');
+        if (err) err.style.display = 'none';
+        if (ov) ov.classList.add('open');
+        setTimeout(() => document.getElementById('lpSaEmail')?.focus(), 50);
+      },
+      closeSuperadmin() {
+        document.getElementById('lpSaOverlay')?.classList.remove('open');
+      },
+      async superadminLogin() {
+        const email = (document.getElementById('lpSaEmail') as HTMLInputElement | null)?.value.trim() ?? '';
+        const pass = (document.getElementById('lpSaPass') as HTMLInputElement | null)?.value ?? '';
+        const err = document.getElementById('lpSaErr');
+        const btn = document.getElementById('lpSaSubmit') as HTMLButtonElement | null;
+        const showErr = (m: string) => { if (err) { err.textContent = m; err.style.display = 'block'; } };
+        if (!email || !pass) { showErr('Informe e-mail e senha.'); return; }
+        if (err) err.style.display = 'none';
+        if (btn) { btn.disabled = true; btn.textContent = 'Entrando…'; }
+        try {
+          const res: any = await signIn.email({ email, password: pass });
+          if (res?.error) { showErr('E-mail ou senha inválidos.'); return; }
+          navigate('/saas');
+        } catch {
+          showErr('Não foi possível entrar. Tente novamente.');
+        } finally {
+          if (btn) { btn.disabled = false; btn.textContent = 'Entrar'; }
+        }
+      },
       toggleFaq(btn: HTMLElement) {
         const item = btn.closest('.lp-faq-item');
         if (!item) return;
