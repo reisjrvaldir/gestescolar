@@ -47,6 +47,12 @@ export const attendanceService = {
   }): Promise<void> {
     await api.post('/attendance/attestation', params);
   },
+  async getAttestation(studentId: string, classId: string, date: string): Promise<{ filename: string; file_size: number; file_data: string }> {
+    const r = await api.get<{ ok: boolean; data: { filename: string; file_size: number; file_data: string } }>(
+      `/attendance/attestation?student_id=${studentId}&class_id=${classId}&date=${date}`,
+    );
+    return r.data;
+  },
   async calendar(classId: string, year: number, month: number): Promise<CalendarDay[]> {
     const r = await api.get<{ ok: boolean; data: CalendarDay[] }>(
       `/attendance/calendar?class_id=${classId}&year=${year}&month=${month}`,

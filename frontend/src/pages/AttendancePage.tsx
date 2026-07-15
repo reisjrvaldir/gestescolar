@@ -189,6 +189,23 @@ export function AttendancePage() {
     setEntries((e) => ({ ...e, [id]: { ...e[id], attestationFile: file } }));
   }
 
+  const [downloadingId, setDownloadingId] = useState<string | null>(null);
+
+  async function downloadAttestation(studentId: string) {
+    setDownloadingId(studentId);
+    try {
+      const doc = await attendanceService.getAttestation(studentId, classId, date);
+      const link = document.createElement('a');
+      link.href = `data:application/pdf;base64,${doc.file_data}`;
+      link.download = doc.filename;
+      link.click();
+    } catch (err: any) {
+      setToast({ type: 'error', msg: err?.message ?? 'Erro ao baixar o atestado.' });
+    } finally {
+      setDownloadingId(null);
+    }
+  }
+
   async function confirm(id: string) {
     const entry = entries[id];
     // Atestado precisa de arquivo antes de confirmar
@@ -536,11 +553,19 @@ export function AttendancePage() {
                     </>
                   )}
 
-                  {/* Atestado já enviado (modo read) */}
+                  {/* Atestado já enviado — baixar PDF */}
                   {entry.confirmed && entry.status === 'attested' && entry.attestationUploaded && (
-                    <span className="flex items-center gap-1 text-xs text-primary">
-                      <FileText size={12} /> Atestado enviado
-                    </span>
+                    <button
+                      type="button"
+                      onClick={() => downloadAttestation(entry.student_id)}
+                      disabled={downloadingId === entry.student_id}
+                      className="flex items-center gap-1 text-xs font-medium text-primary hover:underline disabled:opacity-50"
+                    >
+                      {downloadingId === entry.student_id
+                        ? <Loader2 size={12} className="animate-spin" />
+                        : <FileText size={12} />}
+                      Baixar atestado
+                    </button>
                   )}
                   {/* Justificativa (modo read) */}
                   {entry.confirmed && entry.justification && entry.status !== 'attested' && (

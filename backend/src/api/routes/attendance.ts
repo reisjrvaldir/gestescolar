@@ -107,17 +107,16 @@ attendanceRouter.get('/attestation', async (req, res) => {
   }
   const row = await withTenant(req.ctx!, async (c) => {
     const { rows } = await c.query(
-      `select filename, file_data from public.attendance_attestations
+      `select filename, file_size, file_data from public.attendance_attestations
         where school_id=$1 and student_id=$2 and class_id=$3 and date=$4 limit 1`,
       [req.ctx!.schoolId, student_id, class_id, date],
     );
     return rows[0] ?? null;
   });
   if (!row) return res.status(404).json({ code: 'not_found' });
-  const buf = Buffer.from(row.file_data, 'base64');
-  res.setHeader('Content-Type', 'application/pdf');
-  res.setHeader('Content-Disposition', `inline; filename="${row.filename}"`);
-  res.send(buf);
+  // Retorna JSON com o base64 (não binário direto) — o front anexa o Bearer token
+  // via fetch e monta um data: URL, mesmo padrão usado em /staff-documents.
+  res.json({ ok: true, data: { filename: row.filename, file_size: row.file_size, file_data: row.file_data } });
 });
 
 attendanceRouter.post('/batch', requireRole('school_admin', 'teacher', 'superadmin'), async (req, res) => {
