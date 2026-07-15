@@ -349,7 +349,7 @@ E-mail do responsável: ${credentials.guardian_email}
                       </select>
                     </div>
                     <div>
-                      <label className="label">1ª mensalidade vence</label>
+                      <label className="label">Vencimento</label>
                       <select className="input" {...register('first_due')} defaultValue="30">
                         <option value="30">Matrícula + 30 dias</option>
                         <option value="05">Todo dia 05</option>

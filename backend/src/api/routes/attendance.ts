@@ -8,7 +8,7 @@ export const attendanceRouter = Router();
 const batchSchema = z.object({
   class_id: z.string().uuid(),
   date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
-  subject_id: z.string().uuid().optional(), // opcional: chamada por aula (null = por dia)
+  subject_id: z.string().uuid().optional(),
   entries: z.array(z.object({
     student_id: z.string().uuid(),
     status: z.enum(['present', 'absent', 'justified']),
@@ -20,11 +20,11 @@ attendanceRouter.use(requireAuth);
 
 attendanceRouter.get('/', async (req, res) => {
   const { class_id, date } = req.query;
-  const subjectId = (req.query.subject_id as string | undefined) || null; // null = chamada por dia
+  const subjectId = (req.query.subject_id as string | undefined) || null;
   if (!class_id || !date) {
     return res.status(400).json({ code: 'validation', message: 'class_id e date são obrigatórios' });
   }
-  const data = await withTenant(req.ctx!, async (c) => {
+  const result = await withTenant(req.ctx!, async (c) => {
     const { rows } = await c.query(
       `select a.id, a.student_id, a.status, a.justification, s.name as student_name
          from public.attendance a
@@ -37,6 +37,35 @@ attendanceRouter.get('/', async (req, res) => {
     );
     return rows;
   });
+  res.json({ ok: true, data: result, locked: result.length > 0 });
+});
+
+// GET /attendance/calendar?class_id=&year=&month= → dias com chamada registrada
+attendanceRouter.get('/calendar', async (req, res) => {
+  const { class_id, year, month } = req.query;
+  if (!class_id || !year || !month) {
+    return res.status(400).json({ code: 'validation', message: 'class_id, year e month são obrigatórios' });
+  }
+  const data = await withTenant(req.ctx!, async (c) => {
+    const { rows } = await c.query(
+      `select
+          a.date::text as date,
+          a.subject_id,
+          count(*) as total,
+          count(*) filter (where a.status = 'present') as present,
+          count(*) filter (where a.status = 'absent') as absent,
+          count(*) filter (where a.status = 'justified') as justified
+         from public.attendance a
+        where a.school_id = $1
+          and a.class_id = $2
+          and extract(year  from a.date) = $3
+          and extract(month from a.date) = $4
+        group by a.date, a.subject_id
+        order by a.date asc`,
+      [req.ctx!.schoolId, class_id, Number(year), Number(month)],
+    );
+    return rows;
+  });
   res.json({ ok: true, data });
 });
 
@@ -46,19 +75,31 @@ attendanceRouter.post('/batch', requireRole('school_admin', 'teacher', 'superadm
     return res.status(400).json({ code: 'validation', message: parsed.error.issues[0]?.message });
   }
   const { class_id, date, subject_id, entries } = parsed.data;
-  const subjectId = subject_id ?? null; // null = chamada por dia
+  const subjectId = subject_id ?? null;
+
   const result = await withTenant(req.ctx!, async (c) => {
-    // Turma e alunos precisam pertencer à escola (RLS inerte → defesa na app).
     const cls = await c.query(
       `select 1 from public.classes where id=$1 and school_id=$2 limit 1`,
       [class_id, req.ctx!.schoolId],
     );
     if (cls.rows.length === 0) return { error: 'class_not_found' as const };
 
-    // Se veio matéria, ela precisa pertencer à escola.
     if (subjectId) {
       const sub = await c.query(`select 1 from public.subjects where id=$1 and school_id=$2 limit 1`, [subjectId, req.ctx!.schoolId]);
       if (sub.rows.length === 0) return { error: 'invalid_subject' as const };
+    }
+
+    // Professor não pode substituir chamada já salva — só gestão pode
+    const role = req.ctx!.role;
+    if (role === 'teacher') {
+      const existing = await c.query(
+        `select 1 from public.attendance
+          where school_id=$1 and class_id=$2 and date=$3
+            and (($4::uuid is null and subject_id is null) or subject_id=$4)
+          limit 1`,
+        [req.ctx!.schoolId, class_id, date, subjectId],
+      );
+      if (existing.rows.length > 0) return { error: 'already_locked' as const };
     }
 
     const ids = [...new Set(entries.map((e) => e.student_id))];
@@ -70,7 +111,6 @@ attendanceRouter.post('/batch', requireRole('school_admin', 'teacher', 'superadm
       if (valid.rows[0].n !== ids.length) return { error: 'invalid_students' as const };
     }
 
-    // Substitui só a chamada daquele escopo (por dia OU por aquela matéria).
     await c.query(
       `delete from public.attendance
         where school_id = $1 and class_id = $2 and date = $3
@@ -91,7 +131,11 @@ attendanceRouter.post('/batch', requireRole('school_admin', 'teacher', 'superadm
     }
     return { ok: true as const };
   });
+
   if ('error' in result) {
+    if (result.error === 'already_locked') {
+      return res.status(403).json({ code: 'already_locked', message: 'Chamada já encerrada. Somente a gestão pode alterá-la.' });
+    }
     const msg = result.error === 'class_not_found' ? 'Turma não encontrada nesta escola.'
       : result.error === 'invalid_subject' ? 'Matéria inválida para esta escola.'
       : 'Aluno inválido para esta escola.';
