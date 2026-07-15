@@ -67,10 +67,10 @@ export function LoginPage() {
     <div className="grid min-h-screen lg:grid-cols-2">
       {/* Coluna esquerda — institucional */}
       <div className="hidden flex-col justify-between bg-primary p-10 text-white lg:flex">
-        <div className="flex items-center gap-2">
+        <Link to="/" className="flex items-center gap-2 hover:opacity-80 transition-opacity">
           <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-white/15"><GraduationCap size={20} /></div>
           <span className="text-lg font-extrabold">GestEscolar</span>
-        </div>
+        </Link>
         <div>
           <h1 className="text-3xl font-extrabold leading-tight">Gestão escolar simples, completa e integrada.</h1>
           <p className="mt-3 text-white/80">Acadêmico, financeiro e comunicação — tudo em um só lugar, com cobrança inteligente via PIX.</p>
