@@ -1,11 +1,12 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ClipboardCheck, Save, Check, Loader2, AlertTriangle,
-  Lock, CalendarDays, ChevronLeft, ChevronRight, CheckCircle2,
+  Lock, ChevronLeft, ChevronRight, CheckCircle2,
   Paperclip, FileText,
 } from 'lucide-react';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { EmptyState } from '@/components/ui/EmptyState';
+import { FinanceTabs } from '@/components/finance/FinanceTabs';
 import { classesService, type ClassSubject } from '@/services/classes';
 import { attendanceService, type AttendanceStatus, type CalendarDay } from '@/services/attendance';
 import { api } from '@/lib/api';
@@ -32,6 +33,12 @@ const PT_MONTHS = [
   'Janeiro','Fevereiro','Março','Abril','Maio','Junho',
   'Julho','Agosto','Setembro','Outubro','Novembro','Dezembro',
 ];
+const PT_WEEKDAYS = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
+
+const TABS = [
+  { key: 'chamada', label: 'Chamada' },
+  { key: 'status', label: 'Status por dia' },
+];
 
 interface EntryState {
   student_id: string;
@@ -56,6 +63,7 @@ export function AttendancePage() {
   const me = useMe();
   const isAdmin = me?.role === 'school_admin' || me?.role === 'superadmin';
 
+  const [tab, setTab] = useState('chamada');
   const [classes, setClasses] = useState<SchoolClass[]>([]);
   const [classId, setClassId] = useState('');
   const [subjects, setSubjects] = useState<ClassSubject[]>([]);
@@ -67,7 +75,6 @@ export function AttendancePage() {
   const [toast, setToast] = useState<{ type: 'success' | 'error'; msg: string } | null>(null);
   const [loading, setLoading] = useState(true);
 
-  const [showCalendar, setShowCalendar] = useState(false);
   const [calYear, setCalYear] = useState(new Date().getFullYear());
   const [calMonth, setCalMonth] = useState(new Date().getMonth() + 1);
   const [calDays, setCalDays] = useState<CalendarDay[]>([]);
@@ -124,12 +131,48 @@ export function AttendancePage() {
   useEffect(() => { loadContext(); }, [loadContext]);
 
   useEffect(() => {
-    if (!showCalendar || !classId) return;
+    if (tab !== 'status' || !classId) return;
     setCalLoading(true);
     attendanceService.calendar(classId, calYear, calMonth)
       .then(setCalDays)
       .finally(() => setCalLoading(false));
-  }, [showCalendar, classId, calYear, calMonth]);
+  }, [tab, classId, calYear, calMonth]);
+
+  // Mapa data → resumo, para lookup rápido na grade do calendário.
+  const calByDate = useMemo(() => {
+    const map: Record<string, CalendarDay> = {};
+    for (const d of calDays) {
+      // Se houver mais de uma matéria no mesmo dia, soma os totais.
+      const prev = map[d.date];
+      map[d.date] = prev ? {
+        date: d.date,
+        subject_id: null,
+        total: prev.total + d.total,
+        present: prev.present + d.present,
+        absent: prev.absent + d.absent,
+        justified: prev.justified + d.justified,
+        attested: prev.attested + d.attested,
+      } : { ...d };
+    }
+    return map;
+  }, [calDays]);
+
+  // Matriz do mês (semanas de domingo a sábado, com padding dos meses vizinhos).
+  const calWeeks = useMemo(() => {
+    const first = new Date(calYear, calMonth - 1, 1);
+    const startWeekday = first.getDay();
+    const daysInMonth = new Date(calYear, calMonth, 0).getDate();
+    const cells: { date: string; day: number; inMonth: boolean }[] = [];
+    for (let i = 0; i < startWeekday; i++) cells.push({ date: '', day: 0, inMonth: false });
+    for (let d = 1; d <= daysInMonth; d++) {
+      const iso = `${calYear}-${String(calMonth).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+      cells.push({ date: iso, day: d, inMonth: true });
+    }
+    while (cells.length % 7 !== 0) cells.push({ date: '', day: 0, inMonth: false });
+    const weeks: typeof cells[] = [];
+    for (let i = 0; i < cells.length; i += 7) weeks.push(cells.slice(i, i + 7));
+    return weeks;
+  }, [calYear, calMonth]);
 
   function setStatus(id: string, status: AttendanceStatus) {
     if (locked && !isAdmin) return;
@@ -258,84 +301,92 @@ export function AttendancePage() {
         title="Chamada"
         subtitle="Registre a frequência da turma por data."
         actions={
-          <div className="flex items-center gap-2">
+          tab === 'chamada' && !readOnly ? (
             <button
-              className={`btn-secondary flex items-center gap-2 ${showCalendar ? 'bg-primary-soft text-primary border-primary' : ''}`}
-              onClick={() => setShowCalendar(v => !v)}
+              className="btn-primary flex items-center gap-2"
+              onClick={save}
+              disabled={!canSave || saving}
+              title={!allConfirmed ? `${unconfirmedCount} aluno(s) aguardando confirmação` : undefined}
             >
-              <CalendarDays size={16} />
-              Status por dia
+              {saving ? <Loader2 size={16} className="animate-spin" /> : toast?.type === 'success' ? <Check size={16} /> : <Save size={16} />}
+              {saving ? 'Salvando…' : toast?.type === 'success' ? 'Salvo!' : 'Salvar chamada'}
             </button>
-            {!readOnly && (
-              <button
-                className="btn-primary flex items-center gap-2"
-                onClick={save}
-                disabled={!canSave || saving}
-                title={!allConfirmed ? `${unconfirmedCount} aluno(s) aguardando confirmação` : undefined}
-              >
-                {saving ? <Loader2 size={16} className="animate-spin" /> : toast?.type === 'success' ? <Check size={16} /> : <Save size={16} />}
-                {saving ? 'Salvando…' : toast?.type === 'success' ? 'Salvo!' : 'Salvar chamada'}
-              </button>
-            )}
-          </div>
+          ) : undefined
         }
       />
 
-      {/* Painel histórico por dia */}
-      {showCalendar && classId && (
-        <div className="card mb-6 p-4">
-          <div className="mb-3 flex items-center justify-between">
-            <h3 className="font-semibold text-ink">Chamadas registradas</h3>
-            <div className="flex items-center gap-2">
-              <button className="rounded-lg border border-border p-1.5 hover:bg-canvas" onClick={prevMonth}><ChevronLeft size={14} /></button>
-              <span className="text-sm font-medium text-ink">{PT_MONTHS[calMonth - 1]} {calYear}</span>
-              <button className="rounded-lg border border-border p-1.5 hover:bg-canvas" onClick={nextMonth}><ChevronRight size={14} /></button>
+      <FinanceTabs tabs={TABS} active={tab} onChange={setTab} />
+
+      {/* ===================== STATUS POR DIA (calendário) ===================== */}
+      {tab === 'status' && (
+        <div className="space-y-4">
+          <div className="card p-4">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <div>
+                <label className="label">Turma</label>
+                <select className="input" value={classId} onChange={(e) => setClassId(e.target.value)}>
+                  {classes.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+                </select>
+              </div>
+              <div className="flex items-end justify-between gap-3 sm:justify-end">
+                <div className="flex items-center gap-2">
+                  <button className="rounded-lg border border-border p-1.5 hover:bg-canvas" onClick={prevMonth}><ChevronLeft size={14} /></button>
+                  <span className="min-w-[9rem] text-center text-sm font-semibold text-ink">{PT_MONTHS[calMonth - 1]} {calYear}</span>
+                  <button className="rounded-lg border border-border p-1.5 hover:bg-canvas" onClick={nextMonth}><ChevronRight size={14} /></button>
+                </div>
+              </div>
             </div>
           </div>
-          {calLoading ? (
-            <div className="flex justify-center py-6 text-ink-muted"><Loader2 size={18} className="animate-spin" /></div>
-          ) : calDays.length === 0 ? (
-            <p className="py-4 text-center text-sm text-ink-muted">Nenhuma chamada registrada neste mês.</p>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b border-border text-left text-xs text-ink-muted">
-                    <th className="pb-2 pr-4 font-medium">Data</th>
-                    <th className="pb-2 pr-4 font-medium">Total</th>
-                    <th className="pb-2 pr-4 font-medium text-success">P</th>
-                    <th className="pb-2 pr-4 font-medium text-danger">F</th>
-                    <th className="pb-2 pr-4 font-medium text-warning">J</th>
-                    <th className="pb-2 font-medium text-primary">A</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-border">
-                  {calDays.map((d) => {
-                    const dt = new Date(d.date + 'T12:00:00');
-                    const label = dt.toLocaleDateString('pt-BR', { weekday: 'short', day: '2-digit', month: '2-digit' });
-                    return (
-                      <tr
-                        key={d.date + (d.subject_id ?? '')}
-                        className="cursor-pointer hover:bg-canvas"
-                        onClick={() => { setDate(d.date); setShowCalendar(false); }}
-                        title="Clique para abrir esta data"
-                      >
-                        <td className="py-2 pr-4 font-medium text-ink capitalize">{label}</td>
-                        <td className="py-2 pr-4 text-ink-muted">{d.total}</td>
-                        <td className="py-2 pr-4 text-success">{d.present}</td>
-                        <td className="py-2 pr-4 text-danger">{d.absent}</td>
-                        <td className="py-2 pr-4 text-warning">{d.justified}</td>
-                        <td className="py-2 text-primary">{d.attested}</td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          )}
+
+          <div className="card p-4">
+            {calLoading ? (
+              <div className="flex justify-center py-10 text-ink-muted"><Loader2 size={20} className="animate-spin" /></div>
+            ) : (
+              <>
+                <div className="mb-2 grid grid-cols-7 gap-1.5 text-center text-[11px] font-semibold uppercase text-ink-subtle">
+                  {PT_WEEKDAYS.map((w) => <div key={w}>{w}</div>)}
+                </div>
+                <div className="space-y-1.5">
+                  {calWeeks.map((week, wi) => (
+                    <div key={wi} className="grid grid-cols-7 gap-1.5">
+                      {week.map((cell, ci) => {
+                        if (!cell.inMonth) return <div key={ci} className="aspect-square rounded-lg" />;
+                        const info = calByDate[cell.date];
+                        const isToday = cell.date === today();
+                        return (
+                          <button
+                            key={ci}
+                            onClick={() => { setDate(cell.date); setTab('chamada'); }}
+                            className={`flex aspect-square flex-col items-center justify-center gap-0.5 rounded-lg border text-xs transition-colors ${
+                              info
+                                ? 'border-primary/30 bg-primary-soft hover:bg-primary/20'
+                                : 'border-border hover:bg-canvas'
+                            } ${isToday ? 'ring-2 ring-primary ring-offset-1' : ''}`}
+                            title={info ? `${info.total} aluno(s) registrado(s)` : 'Sem chamada registrada'}
+                          >
+                            <span className={`font-semibold ${info ? 'text-primary' : 'text-ink'}`}>{cell.day}</span>
+                            {info && (
+                              <span className="flex gap-0.5 text-[9px] font-bold leading-none">
+                                {info.present > 0 && <span className="text-success">{info.present}P</span>}
+                                {info.absent > 0 && <span className="text-danger">{info.absent}F</span>}
+                                {info.justified > 0 && <span className="text-warning">{info.justified}J</span>}
+                                {info.attested > 0 && <span className="text-primary">{info.attested}A</span>}
+                              </span>
+                            )}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  ))}
+                </div>
+                <p className="mt-4 text-xs text-ink-subtle">Clique em um dia com chamada registrada para abri-la na aba Chamada.</p>
+              </>
+            )}
+          </div>
         </div>
       )}
 
+      {tab === 'chamada' && <>
       {toast && (
         <div className={`mb-4 flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-medium ${
           toast.type === 'success' ? 'bg-success-soft text-success' : 'bg-danger-soft text-danger'
@@ -536,6 +587,7 @@ export function AttendancePage() {
           </button>
         </div>
       )}
+      </>}
     </>
   );
 }
