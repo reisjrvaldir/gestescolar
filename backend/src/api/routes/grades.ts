@@ -35,7 +35,31 @@ gradesRouter.get('/', async (req, res) => {
     );
     return rows;
   });
-  res.json({ ok: true, data });
+  res.json({ ok: true, data, locked: data.length > 0 });
+});
+
+// GET /grades/boletim?class_id= → todas as notas da turma (pivot: aluno × disciplina × período)
+gradesRouter.get('/boletim', async (req, res) => {
+  const { class_id } = req.query;
+  if (!class_id) return res.status(400).json({ code: 'validation', message: 'class_id é obrigatório' });
+  const result = await withTenant(req.ctx!, async (c) => {
+    const students = await c.query(
+      `select s.id, s.name, s.registration_number
+         from public.students s
+        where s.school_id = $1 and s.class_id = $2
+        order by s.name`,
+      [req.ctx!.schoolId, class_id],
+    );
+    const grades = await c.query(
+      `select g.student_id, g.subject, g.period, g.grade::float8 as grade
+         from public.grades g
+        where g.school_id = $1 and g.class_id = $2
+        order by g.period, g.subject`,
+      [req.ctx!.schoolId, class_id],
+    );
+    return { students: students.rows, grades: grades.rows };
+  });
+  res.json({ ok: true, data: result });
 });
 
 gradesRouter.post('/batch', requireRole('school_admin', 'teacher', 'superadmin'), async (req, res) => {
@@ -45,13 +69,20 @@ gradesRouter.post('/batch', requireRole('school_admin', 'teacher', 'superadmin')
   }
   const { class_id, subject, period, grades } = parsed.data;
   const result = await withTenant(req.ctx!, async (c) => {
-    // Turma e alunos precisam pertencer à escola (RLS inerte → sem estas
-    // checagens seria possível gravar/ler nome de aluno de outra escola).
     const cls = await c.query(
       `select 1 from public.classes where id=$1 and school_id=$2 limit 1`,
       [class_id, req.ctx!.schoolId],
     );
     if (cls.rows.length === 0) return { error: 'class_not_found' as const };
+
+    // Professor não pode sobrescrever notas já lançadas — só gestão pode.
+    if (req.ctx!.role === 'teacher') {
+      const existing = await c.query(
+        `select 1 from public.grades where school_id=$1 and class_id=$2 and period=$3 and subject=$4 limit 1`,
+        [req.ctx!.schoolId, class_id, period, subject],
+      );
+      if (existing.rows.length > 0) return { error: 'already_locked' as const };
+    }
 
     const ids = [...new Set(grades.map((g) => g.student_id))];
     if (ids.length > 0) {
@@ -63,8 +94,7 @@ gradesRouter.post('/batch', requireRole('school_admin', 'teacher', 'superadmin')
     }
 
     await c.query(
-      `delete from public.grades
-        where school_id = $1 and class_id = $2 and period = $3 and subject = $4`,
+      `delete from public.grades where school_id=$1 and class_id=$2 and period=$3 and subject=$4`,
       [req.ctx!.schoolId, class_id, period, subject],
     );
     for (const g of grades) {
@@ -76,8 +106,12 @@ gradesRouter.post('/batch', requireRole('school_admin', 'teacher', 'superadmin')
     }
     return { ok: true as const };
   });
+
   if ('error' in result) {
-    const msg = result.error === 'class_not_found' ? 'Turma não encontrada nesta escola.' : 'Aluno inválido para esta escola.';
+    if (result.error === 'already_locked') {
+      return res.status(403).json({ code: 'already_locked', message: 'Notas já lançadas. Somente a gestão pode alterá-las.' });
+    }
+    const msg = result.error === 'class_not_found' ? 'Turma não encontrada.' : 'Aluno inválido para esta escola.';
     return res.status(result.error === 'class_not_found' ? 404 : 400).json({ code: result.error, message: msg });
   }
   res.json({ ok: true });
