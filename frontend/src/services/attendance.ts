@@ -56,6 +56,9 @@ export interface MyChild {
   student_name: string;
   class_id: string | null;
   class_name: string | null;
+  class_year?: number;
+  registration_number?: string;
+  photo_url?: string;
 }
 
 export interface MyAttestation {

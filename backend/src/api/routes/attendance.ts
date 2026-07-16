@@ -218,10 +218,12 @@ attendanceRouter.get('/my-children', async (req, res) => {
     const g = await c.query(`select id from public.guardians where user_id=$1 limit 1`, [req.ctx!.profileId]);
     if (g.rows.length === 0) return [];
     const { rows } = await c.query(
-      `select s.id as student_id, s.name as student_name, s.class_id, cl.name as class_name
+      `select s.id as student_id, s.name as student_name, s.class_id,
+              cl.name as class_name, cl.year as class_year,
+              s.registration_number, s.photo_url
          from public.students s
          left join public.classes cl on cl.id = s.class_id
-        where s.guardian_id = $1 and s.school_id = $2
+        where s.guardian_id = $1 and s.school_id = $2 and s.status = 'active'
         order by s.name`,
       [g.rows[0].id, req.ctx!.schoolId],
     );
@@ -240,18 +242,20 @@ attendanceRouter.get('/my-calendar', async (req, res) => {
     const g = await c.query(`select id from public.guardians where user_id=$1 limit 1`, [req.ctx!.profileId]);
     if (g.rows.length === 0) return [];
     const stu = await c.query(
-      `select 1 from public.students where id=$1 and guardian_id=$2 and school_id=$3`,
+      `select class_id from public.students where id=$1 and guardian_id=$2 and school_id=$3`,
       [student_id, g.rows[0].id, req.ctx!.schoolId],
     );
     if (stu.rows.length === 0) return [];
+    const classId = stu.rows[0].class_id;
     const { rows } = await c.query(
       `select a.date::text as date, a.status
          from public.attendance a
         where a.school_id = $1 and a.student_id = $2
+          and ($5::uuid is null or a.class_id = $5)
           and extract(year from a.date) = $3
           and extract(month from a.date) = $4
         order by a.date asc`,
-      [req.ctx!.schoolId, student_id, Number(year), Number(month)],
+      [req.ctx!.schoolId, student_id, Number(year), Number(month), classId],
     );
     return rows;
   });
@@ -268,10 +272,11 @@ attendanceRouter.get('/my-summary', async (req, res) => {
     const g = await c.query(`select id from public.guardians where user_id=$1 limit 1`, [req.ctx!.profileId]);
     if (g.rows.length === 0) return { present: 0, absent: 0, justified: 0, attested: 0, excused: 0, total_school_days: 0 };
     const stu = await c.query(
-      `select 1 from public.students where id=$1 and guardian_id=$2 and school_id=$3`,
+      `select class_id from public.students where id=$1 and guardian_id=$2 and school_id=$3`,
       [student_id, g.rows[0].id, req.ctx!.schoolId],
     );
     if (stu.rows.length === 0) return { present: 0, absent: 0, justified: 0, attested: 0, excused: 0, total_school_days: 0 };
+    const classId = stu.rows[0].class_id;
     const { rows } = await c.query(
       `select
           count(*) filter (where status='present')::int as present,
@@ -282,8 +287,9 @@ attendanceRouter.get('/my-summary', async (req, res) => {
           count(distinct date)::int as total_school_days
          from public.attendance
         where school_id=$1 and student_id=$2
+          and ($3::uuid is null or class_id=$3)
           and date >= date_trunc('month', current_date) and date <= current_date`,
-      [req.ctx!.schoolId, student_id],
+      [req.ctx!.schoolId, student_id, classId],
     );
     return rows[0];
   });

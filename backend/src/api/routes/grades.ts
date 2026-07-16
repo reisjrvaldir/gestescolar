@@ -93,20 +93,22 @@ gradesRouter.get('/my-boletim', async (req, res) => {
     const g = await c.query(`select id from public.guardians where user_id=$1 limit 1`, [req.ctx!.profileId]);
     if (g.rows.length === 0) return { students: [], grades: [], settings: { passing_grade: 7, final_passing_grade: 5 } };
     const students = await c.query(
-      `select s.id, s.name, s.registration_number, s.class_id, cl.name as class_name
+      `select s.id, s.name, s.registration_number, s.class_id, cl.name as class_name, cl.year as class_year
          from public.students s
          left join public.classes cl on cl.id = s.class_id
-        where s.guardian_id = $1 and s.school_id = $2 order by s.name`,
+        where s.guardian_id = $1 and s.school_id = $2 and s.status = 'active' order by s.name`,
       [g.rows[0].id, req.ctx!.schoolId],
     );
     if (students.rows.length === 0) return { students: [], grades: [], settings: { passing_grade: 7, final_passing_grade: 5 } };
     const studentIds = students.rows.map((s: any) => s.id);
+    const classIds = students.rows.map((s: any) => s.class_id).filter(Boolean);
     const grades = await c.query(
       `select g.student_id, g.subject, g.period, g.assessment_type, g.grade::float8 as grade
          from public.grades g
         where g.school_id = $1 and g.student_id = any($2::uuid[])
+          and g.class_id = any($3::uuid[])
         order by g.subject, g.period`,
-      [req.ctx!.schoolId, studentIds],
+      [req.ctx!.schoolId, studentIds, classIds],
     );
     const settings = await c.query(
       `select passing_grade::float8, final_passing_grade::float8
@@ -117,12 +119,10 @@ gradesRouter.get('/my-boletim', async (req, res) => {
       `select g.student_id, avg(g.grade)::float8 as avg_grade, g.class_id
          from public.grades g
          join public.students s on s.id = g.student_id
-        where g.school_id = $1 and s.class_id = any(
-          select distinct class_id from public.students where id = any($2::uuid[]) and class_id is not null
-        )
+        where g.school_id = $1 and g.class_id = any($2::uuid[])
         group by g.student_id, g.class_id
         order by avg_grade desc`,
-      [req.ctx!.schoolId, studentIds],
+      [req.ctx!.schoolId, classIds],
     );
     return {
       students: students.rows,

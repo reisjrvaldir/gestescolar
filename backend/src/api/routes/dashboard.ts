@@ -31,19 +31,19 @@ dashboardRouter.get('/stats', async (req, res) => {
                 s.photo_url, s.birth_date::text, s.blood_type,
                 cl.name as class_name, cl.year as class_year,
                 (select count(*) from public.attendance a
-                   where a.student_id = s.id and a.status = 'present'
+                   where a.student_id = s.id and a.class_id = s.class_id and a.status = 'present'
                      and a.date >= date_trunc('month', now()))::int as present_month,
                 (select count(*) from public.attendance a
-                   where a.student_id = s.id and a.status = 'absent'
+                   where a.student_id = s.id and a.class_id = s.class_id and a.status = 'absent'
                      and a.date >= date_trunc('month', now()))::int as absent_month,
                 (select coalesce(avg(g.grade),0)::numeric(4,2)
                    from public.grades g where g.student_id = s.id
-                     and g.created_at >= date_trunc('year', now())) as avg_grade,
+                     and g.class_id = s.class_id) as avg_grade,
                 (select count(*)::int from public.invoices i
                    where i.student_id = s.id and i.status in ('pending','overdue')) as open_invoices
            from public.students s
            left join public.classes cl on cl.id = s.class_id
-          where s.guardian_id = $1 and s.school_id = $2`,
+          where s.guardian_id = $1 and s.school_id = $2 and s.status = 'active'`,
         [guardianId, schoolId],
       );
 

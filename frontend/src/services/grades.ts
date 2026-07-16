@@ -56,6 +56,7 @@ export interface MyBoletimStudent {
   registration_number?: string;
   class_id?: string;
   class_name?: string;
+  class_year?: number;
 }
 
 export interface MyBoletimRanking {
