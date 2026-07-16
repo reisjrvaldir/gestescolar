@@ -136,7 +136,6 @@ function GradesView({ isAdmin }: { isAdmin: boolean }) {
         student_name: s.name,
         registration_number: s.registration_number,
         av1: g.av1, av2: g.av2, final: g.final,
-        confirmed: gradeResult.locked,
         av1av2Locked: gradeResult.locked,
       };
     }
@@ -418,7 +417,7 @@ function GradesView({ isAdmin }: { isAdmin: boolean }) {
 
                             {/* AV1 */}
                             <div className="flex justify-center">
-                              {entry.confirmed || isLocked ? (
+                              {isLocked ? (
                                 <span className={`text-sm font-bold ${entry.av1 !== null && entry.av1 >= pg ? 'text-success' : entry.av1 !== null && entry.av1 < 5 ? 'text-danger' : 'text-warning'}`}>
                                   {fmt(entry.av1)}
                                 </span>
@@ -432,7 +431,7 @@ function GradesView({ isAdmin }: { isAdmin: boolean }) {
 
                             {/* AV2 */}
                             <div className="flex justify-center">
-                              {entry.confirmed || isLocked ? (
+                              {isLocked ? (
                                 <span className={`text-sm font-bold ${entry.av2 !== null && entry.av2 >= pg ? 'text-success' : entry.av2 !== null && entry.av2 < 5 ? 'text-danger' : 'text-warning'}`}>
                                   {fmt(entry.av2)}
                                 </span>
