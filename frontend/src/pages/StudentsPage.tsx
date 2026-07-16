@@ -2,8 +2,8 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { useLocation, useNavigate } from 'react-router-dom';
 import {
-  GraduationCap, Search, Loader2, Copy, Check, Save,
-  User, Phone, FileText, Link2,
+  GraduationCap, Search, Loader2, Copy, Check, Save, Plus,
+  User, Phone, FileText, Link2, Upload, Printer,
 } from 'lucide-react';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { EmptyState } from '@/components/ui/EmptyState';
@@ -11,6 +11,7 @@ import { StatusBadge } from '@/components/ui/StatusBadge';
 import { studentsService, type NewStudent, type CreatedStudent } from '@/services/students';
 import { classesService } from '@/services/classes';
 import { schoolPlansService, type SchoolPlan } from '@/services/schoolPlans';
+import { useMe } from '@/auth/AuthGate';
 import type { SchoolClass, Student } from '@/types/models';
 import { brl } from '@/lib/fees';
 
@@ -39,9 +40,73 @@ interface FormFields {
 
 type DetailTab = 'dados' | 'responsavel' | 'contatos' | 'documentos';
 
+function generatePdf(title: string, schoolName: string, student: Student) {
+  const formatDate = (d?: string) => {
+    if (!d) return '—';
+    return new Date(d + 'T00:00:00').toLocaleDateString('pt-BR');
+  };
+
+  const w = window.open('', '_blank');
+  if (!w) return;
+
+  let body = '';
+  if (title === 'Comprovante de Matrícula') {
+    body = `
+      <table><tbody>
+        <tr><td><strong>Nome:</strong></td><td>${student.name}</td></tr>
+        <tr><td><strong>Matrícula:</strong></td><td>${student.registration_number}</td></tr>
+        <tr><td><strong>CPF:</strong></td><td>${student.cpf ?? '—'}</td></tr>
+        <tr><td><strong>RG:</strong></td><td>${student.rg ?? '—'}</td></tr>
+        <tr><td><strong>Data de Nascimento:</strong></td><td>${formatDate(student.birth_date)}</td></tr>
+        <tr><td><strong>Tipo Sanguíneo:</strong></td><td>${student.blood_type ?? '—'}</td></tr>
+        <tr><td><strong>Turma:</strong></td><td>${student.class_name ?? '—'}</td></tr>
+        <tr><td><strong>Responsável:</strong></td><td>${student.guardian_name ?? '—'}</td></tr>
+        <tr><td><strong>Status:</strong></td><td>${student.status === 'active' ? 'Ativo' : 'Inativo'}</td></tr>
+      </tbody></table>
+      <p style="margin-top:40px;font-size:12px;color:#666">Documento gerado em ${new Date().toLocaleDateString('pt-BR')} às ${new Date().toLocaleTimeString('pt-BR')}</p>
+    `;
+  } else {
+    body = `
+      <table><tbody>
+        <tr><td><strong>Aluno:</strong></td><td>${student.name}</td></tr>
+        <tr><td><strong>Matrícula:</strong></td><td>${student.registration_number}</td></tr>
+        <tr><td><strong>Turma:</strong></td><td>${student.class_name ?? '—'}</td></tr>
+        <tr><td><strong>Mensalidade:</strong></td><td>${student.monthly_fee != null ? 'R$ ' + Number(student.monthly_fee).toFixed(2).replace('.', ',') : '—'}</td></tr>
+        <tr><td><strong>Responsável:</strong></td><td>${student.guardian_name ?? '—'}</td></tr>
+        <tr><td><strong>Status:</strong></td><td>${student.status === 'active' ? 'Ativo' : 'Inativo'}</td></tr>
+      </tbody></table>
+      <p style="margin-top:40px;font-size:12px;color:#666">Documento gerado em ${new Date().toLocaleDateString('pt-BR')} às ${new Date().toLocaleTimeString('pt-BR')}</p>
+    `;
+  }
+
+  w.document.write(`<!DOCTYPE html><html><head><title>${title}</title>
+    <style>
+      body { font-family: Arial, sans-serif; padding: 40px; color: #333; }
+      .header { text-align: center; margin-bottom: 30px; border-bottom: 2px solid #1a56db; padding-bottom: 20px; }
+      .header h1 { font-size: 20px; color: #1a56db; margin: 0 0 5px; }
+      .header p { font-size: 12px; color: #666; margin: 2px 0; }
+      h2 { font-size: 16px; color: #333; margin: 20px 0 10px; }
+      table { width: 100%; border-collapse: collapse; }
+      td { padding: 8px 12px; border-bottom: 1px solid #eee; font-size: 13px; }
+      td:first-child { width: 180px; color: #666; }
+      @media print { body { padding: 20px; } }
+    </style>
+  </head><body>
+    <div class="header">
+      <h1>${schoolName}</h1>
+    </div>
+    <h2>${title}</h2>
+    ${body}
+  </body></html>`);
+  w.document.close();
+  w.print();
+}
+
 export function StudentsPage() {
   const location = useLocation();
   const navigate = useNavigate();
+  const me = useMe();
+  const schoolName = me?.school_name ?? 'Escola';
   const isNewRoute = location.pathname.endsWith('/new');
 
   const [students, setStudents] = useState<Student[]>([]);
@@ -55,6 +120,7 @@ export function StudentsPage() {
   const [saving, setSaving] = useState(false);
   const [credentials, setCredentials] = useState<CreatedStudent | null>(null);
   const [copied, setCopied] = useState(false);
+  const [photoPreview, setPhotoPreview] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -172,6 +238,35 @@ export function StudentsPage() {
         )}
 
         <form className="space-y-6" onSubmit={handleSubmit(onSubmit)}>
+          {/* Foto do aluno */}
+          <div className="card p-6">
+            <h3 className="mb-4 text-sm font-bold uppercase tracking-wide text-ink-subtle">Foto do aluno</h3>
+            <div className="flex items-center gap-6">
+              <div className="relative">
+                {photoPreview ? (
+                  <img src={photoPreview} alt="Foto" className="h-24 w-24 rounded-full object-cover border-2 border-border" />
+                ) : (
+                  <div className="flex h-24 w-24 items-center justify-center rounded-full bg-canvas border-2 border-dashed border-border text-ink-subtle">
+                    <Upload size={24} />
+                  </div>
+                )}
+              </div>
+              <div>
+                <label className="btn-outline inline-flex cursor-pointer items-center gap-1.5 text-sm">
+                  <Upload size={14} /> Escolher foto
+                  <input type="file" accept="image/*" className="hidden" onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (!file) return;
+                    const reader = new FileReader();
+                    reader.onload = () => setPhotoPreview(reader.result as string);
+                    reader.readAsDataURL(file);
+                  }} />
+                </label>
+                <p className="mt-2 text-xs text-ink-muted">JPG ou PNG, máximo 2MB</p>
+              </div>
+            </div>
+          </div>
+
           {/* Dados do aluno */}
           <div className="card p-6">
             <h3 className="mb-4 text-sm font-bold uppercase tracking-wide text-ink-subtle">Dados do aluno</h3>
@@ -379,6 +474,11 @@ export function StudentsPage() {
       <PageHeader
         title="Alunos"
         subtitle="Gerencie os alunos da sua escola."
+        actions={
+          <button className="btn-primary flex items-center gap-1.5" onClick={() => navigate('/app/students/new')}>
+            <Plus size={16} /> Cadastrar Aluno
+          </button>
+        }
       />
 
       {error && <div className="mb-4 rounded-xl bg-danger-soft px-3 py-2 text-sm text-danger">{error}</div>}
@@ -526,23 +626,26 @@ export function StudentsPage() {
                   {detailTab === 'documentos' && (
                     <div className="space-y-3">
                       <p className="text-xs text-ink-muted mb-3">Gere e imprima documentos do aluno. O cabeçalho incluirá os dados da escola.</p>
-                      {[
-                        { label: 'Boletim', desc: 'Notas por disciplina e período' },
-                        { label: 'Comprovante de Matrícula', desc: 'Dados da matrícula e turma' },
-                        { label: 'Comprovante de Pagamento', desc: 'Histórico financeiro' },
-                      ].map(doc => (
-                        <button
-                          key={doc.label}
-                          className="flex w-full items-center gap-3 rounded-xl border border-border p-3 text-left transition-colors hover:bg-canvas"
-                          onClick={() => { /* PDF generation */ }}
-                        >
-                          <FileText size={18} className="shrink-0 text-primary" />
-                          <div>
-                            <p className="text-sm font-medium text-ink">{doc.label}</p>
-                            <p className="text-xs text-ink-muted">{doc.desc}</p>
-                          </div>
-                        </button>
-                      ))}
+                      <button
+                        className="flex w-full items-center gap-3 rounded-xl border border-border p-3 text-left transition-colors hover:bg-canvas"
+                        onClick={() => generatePdf('Comprovante de Matrícula', schoolName, selected)}
+                      >
+                        <Printer size={18} className="shrink-0 text-primary" />
+                        <div>
+                          <p className="text-sm font-medium text-ink">Comprovante de Matrícula</p>
+                          <p className="text-xs text-ink-muted">Dados completos da matrícula e turma</p>
+                        </div>
+                      </button>
+                      <button
+                        className="flex w-full items-center gap-3 rounded-xl border border-border p-3 text-left transition-colors hover:bg-canvas"
+                        onClick={() => generatePdf('Comprovante de Pagamento', schoolName, selected)}
+                      >
+                        <Printer size={18} className="shrink-0 text-primary" />
+                        <div>
+                          <p className="text-sm font-medium text-ink">Comprovante de Pagamento</p>
+                          <p className="text-xs text-ink-muted">Dados financeiros e responsável</p>
+                        </div>
+                      </button>
                     </div>
                   )}
                 </div>
