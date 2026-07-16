@@ -68,6 +68,7 @@ export default function App() {
           <Route path="/app" element={<AppLayout />}>
           <Route index element={<DashboardPage />} />
           <Route path="students" element={<Admin><StudentsPage /></Admin>} />
+          <Route path="students/new" element={<Admin><StudentsPage /></Admin>} />
           <Route path="staff" element={<Admin><StaffPage /></Admin>} />
           <Route path="classes" element={<Admin><ClassesPage /></Admin>} />
           <Route path="grades" element={<AdminTeacher><GradesPage /></AdminTeacher>} />

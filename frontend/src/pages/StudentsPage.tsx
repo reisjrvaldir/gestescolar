@@ -1,21 +1,28 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useForm } from 'react-hook-form';
-import { GraduationCap, Plus, Search, Trash2, Pencil, Loader2, Copy, Check } from 'lucide-react';
+import { useLocation, useNavigate } from 'react-router-dom';
+import {
+  GraduationCap, Search, Loader2, Copy, Check, Save,
+  User, Phone, FileText, Link2,
+} from 'lucide-react';
 import { PageHeader } from '@/components/ui/PageHeader';
-import { MetricCard } from '@/components/ui/MetricCard';
-import { StatusBadge } from '@/components/ui/StatusBadge';
-import { Modal } from '@/components/ui/Modal';
 import { EmptyState } from '@/components/ui/EmptyState';
+import { StatusBadge } from '@/components/ui/StatusBadge';
 import { studentsService, type NewStudent, type CreatedStudent } from '@/services/students';
 import { classesService } from '@/services/classes';
 import { schoolPlansService, type SchoolPlan } from '@/services/schoolPlans';
 import type { SchoolClass, Student } from '@/types/models';
 import { brl } from '@/lib/fees';
 
+const BLOOD_TYPES = ['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'] as const;
+
 interface FormFields {
   name: string;
   cpf: string;
+  rg: string;
   birth_date: string;
+  blood_type: string;
+  naturality: string;
   father_name: string;
   mother_name: string;
   class_id?: string;
@@ -27,22 +34,29 @@ interface FormFields {
   guardian_email: string;
   guardian_cpf: string;
   guardian_phone?: string;
+  guardian_phone2?: string;
 }
 
+type DetailTab = 'dados' | 'responsavel' | 'contatos' | 'documentos';
+
 export function StudentsPage() {
+  const location = useLocation();
+  const navigate = useNavigate();
+  const isNewRoute = location.pathname.endsWith('/new');
+
   const [students, setStudents] = useState<Student[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [query, setQuery] = useState('');
   const [classes, setClasses] = useState<SchoolClass[]>([]);
   const [plans, setPlans] = useState<SchoolPlan[]>([]);
-  const [open, setOpen] = useState(false);
-  const [editing, setEditing] = useState<Student | null>(null);
+  const [selected, setSelected] = useState<Student | null>(null);
+  const [detailTab, setDetailTab] = useState<DetailTab>('dados');
   const [saving, setSaving] = useState(false);
   const [credentials, setCredentials] = useState<CreatedStudent | null>(null);
   const [copied, setCopied] = useState(false);
 
-  async function load() {
+  const load = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
@@ -59,9 +73,9 @@ export function StudentsPage() {
     } finally {
       setLoading(false);
     }
-  }
+  }, []);
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => { load(); }, [load]);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -79,228 +93,125 @@ export function StudentsPage() {
   const previewMonthly = selectedPlan ? Math.round(Number(selectedPlan.monthly_fee) * factor * 100) / 100 : 0;
   const previewEnrollment = selectedPlan ? Math.round(Number(selectedPlan.enrollment_fee ?? 0) * factor * 100) / 100 : 0;
 
-  function openNew() {
-    setEditing(null);
-    reset({
-      name: '', cpf: '', birth_date: '', father_name: '', mother_name: '',
-      class_id: '', plan_id: '', guardian_name: '', guardian_email: '',
-      guardian_cpf: '', guardian_phone: '',
-    });
-    setOpen(true);
-  }
-
-  function openEdit(s: Student) {
-    setEditing(s);
-    reset({
-      name: s.name,
-      cpf: s.cpf ?? '',
-      birth_date: s.birth_date ?? '',
-      father_name: s.father_name ?? '',
-      mother_name: s.mother_name ?? '',
-      class_id: s.class_id ?? '',
-      plan_id: s.plan_id ?? '',
-      guardian_name: '', guardian_email: '', guardian_cpf: '', guardian_phone: '',
-    });
-    setOpen(true);
-  }
-
-  function closeModal() { reset(); setEditing(null); setOpen(false); }
+  useEffect(() => {
+    if (isNewRoute) {
+      setSelected(null);
+      reset({
+        name: '', cpf: '', rg: '', birth_date: '', blood_type: '', naturality: '',
+        father_name: '', mother_name: '', class_id: '', plan_id: '',
+        guardian_name: '', guardian_email: '', guardian_cpf: '', guardian_phone: '', guardian_phone2: '',
+      });
+    }
+  }, [isNewRoute, reset]);
 
   async function onSubmit(data: FormFields) {
     setSaving(true);
     setError(null);
     try {
-      if (editing) {
-        await studentsService.update(editing.id, {
-          name: data.name,
-          cpf: data.cpf,
-          birth_date: data.birth_date,
-          father_name: data.father_name,
-          mother_name: data.mother_name,
-          class_id: data.class_id || undefined,
-          plan_id: data.plan_id || undefined,
-        });
-      } else {
-        const payload: NewStudent = {
-          name: data.name,
-          cpf: data.cpf,
-          birth_date: data.birth_date,
-          father_name: data.father_name,
-          mother_name: data.mother_name,
-          class_id: data.class_id || undefined,
-          plan_id: data.plan_id,
-          discount_percentage: data.discount_percentage != null ? Number(data.discount_percentage) : undefined,
-          enrollment_payment_method: data.enrollment_payment_method || undefined,
-          first_due: data.first_due || undefined,
-          guardian: {
-            name: data.guardian_name,
-            email: data.guardian_email,
-            cpf: data.guardian_cpf,
-            phone: data.guardian_phone || undefined,
-          },
-        };
-        const created = await studentsService.create(payload);
-        setCredentials(created);
-      }
+      const payload: NewStudent = {
+        name: data.name,
+        cpf: data.cpf,
+        rg: data.rg || undefined,
+        birth_date: data.birth_date,
+        blood_type: data.blood_type || undefined,
+        naturality: data.naturality || undefined,
+        father_name: data.father_name,
+        mother_name: data.mother_name,
+        class_id: data.class_id || undefined,
+        plan_id: data.plan_id,
+        discount_percentage: data.discount_percentage != null ? Number(data.discount_percentage) : undefined,
+        enrollment_payment_method: data.enrollment_payment_method || undefined,
+        first_due: data.first_due || undefined,
+        guardian: {
+          name: data.guardian_name,
+          email: data.guardian_email,
+          cpf: data.guardian_cpf,
+          phone: data.guardian_phone || undefined,
+          phone2: data.guardian_phone2 || undefined,
+        },
+      };
+      const created = await studentsService.create(payload);
+      setCredentials(created);
       await load();
-      closeModal();
+      navigate('/app/students');
     } catch (e: any) {
-      setError(e?.message ?? 'Erro ao salvar aluno');
+      setError(e?.message ?? 'Erro ao cadastrar aluno');
     } finally {
       setSaving(false);
     }
   }
 
-  async function onRemove(id: string) {
-    await studentsService.remove(id);
-    await load();
-  }
-
   function copyCredentials() {
     if (!credentials) return;
-    const text = `Aluno: ${credentials.name}
-Login (matrícula): ${credentials.registration_number}
-Senha inicial: ${credentials.initial_password ?? '(temporária gerada no cadastro)'}
-E-mail do responsável: ${credentials.guardian_email}
-(troca de senha obrigatória no 1º acesso)`;
+    const text = `Aluno: ${credentials.name}\nLogin (matrícula): ${credentials.registration_number}\nSenha inicial: ${credentials.initial_password ?? '(temporária)'}\nE-mail do responsável: ${credentials.guardian_email}\n(troca de senha obrigatória no 1º acesso)`;
     navigator.clipboard.writeText(text);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   }
 
-  const active = students.filter((s) => s.status === 'active');
+  function initials(name: string) {
+    return name.split(' ').slice(0, 2).map(n => n[0]).join('').toUpperCase();
+  }
+
   const noPlans = plans.length === 0;
 
-  return (
-    <>
-      <PageHeader
-        title="Alunos"
-        subtitle="Gerencie os alunos da sua escola."
-        actions={
-          <button className="btn-primary" onClick={openNew}>
-            <Plus size={16} /> Cadastrar aluno
-          </button>
-        }
-      />
+  // =================== TELA DE CADASTRO ===================
+  if (isNewRoute) {
+    return (
+      <>
+        <PageHeader
+          title="Cadastrar Aluno"
+          subtitle="Preencha os dados para matricular um novo aluno."
+        />
 
-      {error && <div className="mb-4 rounded-xl bg-danger-soft px-3 py-2 text-sm text-danger">{error}</div>}
-      {noPlans && (
-        <div className="mb-4 rounded-xl bg-warning-soft px-3 py-2 text-sm text-warning">
-          Você precisa cadastrar pelo menos um <strong>plano de mensalidade</strong> em Configurações → Planos antes de cadastrar alunos.
-        </div>
-      )}
-
-      <div className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-3">
-        <MetricCard label="Total de alunos" value={students.length} icon={GraduationCap} tone="primary" />
-        <MetricCard label="Ativos" value={active.length} icon={GraduationCap} tone="success" />
-        <MetricCard label="Inativos" value={students.length - active.length} icon={GraduationCap} tone="warning" />
-      </div>
-
-      <div className="card overflow-hidden">
-        <div className="flex items-center gap-3 border-b border-border p-4">
-          <div className="relative flex-1 max-w-sm">
-            <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-ink-subtle" />
-            <input className="input pl-9" placeholder="Buscar por nome ou matrícula..." value={query} onChange={(e) => setQuery(e.target.value)} />
-          </div>
-          <span className="text-sm text-ink-muted">{filtered.length} aluno(s)</span>
-        </div>
-
-        {loading ? (
-          <div className="flex items-center justify-center gap-2 py-14 text-ink-muted">
-            <Loader2 className="animate-spin" size={18} /> Carregando...
-          </div>
-        ) : filtered.length === 0 ? (
-          <EmptyState
-            icon={GraduationCap}
-            title="Nenhum aluno encontrado"
-            description="Cadastre o primeiro aluno para começar."
-            action={<button className="btn-primary" onClick={openNew}><Plus size={16} /> Cadastrar aluno</button>}
-          />
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-border text-left text-xs font-semibold uppercase text-ink-subtle">
-                  <th className="px-4 py-3">Aluno</th>
-                  <th className="px-4 py-3">Matrícula</th>
-                  <th className="px-4 py-3">Turma</th>
-                  <th className="px-4 py-3">Mensalidade</th>
-                  <th className="px-4 py-3">Status</th>
-                  <th className="px-4 py-3 text-right">Ações</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filtered.map((s) => (
-                  <tr key={s.id} className="border-b border-border last:border-0 hover:bg-canvas">
-                    <td className="px-4 py-3">
-                      <div className="flex items-center gap-3">
-                        <div className="flex h-9 w-9 items-center justify-center rounded-full bg-primary-soft text-xs font-bold text-primary">
-                          {s.name.split(' ').slice(0, 2).map((n) => n[0]).join('')}
-                        </div>
-                        <span className="font-medium text-ink">{s.name}</span>
-                      </div>
-                    </td>
-                    <td className="px-4 py-3 font-mono text-ink-muted">{s.registration_number ?? '—'}</td>
-                    <td className="px-4 py-3 text-ink-muted">{s.class_name ?? '—'}</td>
-                    <td className="px-4 py-3 text-ink-muted">{s.monthly_fee != null ? brl(Number(s.monthly_fee)) : '—'}</td>
-                    <td className="px-4 py-3">
-                      <StatusBadge tone={s.status === 'active' ? 'success' : 'neutral'}>
-                        {s.status === 'active' ? 'Ativo' : 'Inativo'}
-                      </StatusBadge>
-                    </td>
-                    <td className="px-4 py-3 text-right">
-                      <div className="inline-flex gap-1">
-                        <button className="rounded-lg p-2 text-ink-muted hover:bg-primary-soft hover:text-primary" onClick={() => openEdit(s)} title="Editar">
-                          <Pencil size={15} />
-                        </button>
-                        <button className="rounded-lg p-2 text-ink-muted hover:bg-danger-soft hover:text-danger" onClick={() => onRemove(s.id)} title="Inativar">
-                          <Trash2 size={15} />
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+        {error && <div className="mb-4 rounded-xl bg-danger-soft px-3 py-2 text-sm text-danger">{error}</div>}
+        {noPlans && (
+          <div className="mb-4 rounded-xl bg-warning-soft px-3 py-2 text-sm text-warning">
+            Cadastre pelo menos um <strong>plano de mensalidade</strong> antes de matricular alunos.
           </div>
         )}
-      </div>
 
-      <Modal
-        open={open}
-        title={editing ? 'Editar aluno' : 'Cadastrar aluno'}
-        onClose={closeModal}
-        footer={
-          <>
-            <button className="btn-outline" onClick={closeModal}>Cancelar</button>
-            <button className="btn-primary" form="student-form" type="submit" disabled={saving || noPlans}>
-              {saving && <Loader2 size={16} className="animate-spin" />} {editing ? 'Salvar' : 'Cadastrar'}
-            </button>
-          </>
-        }
-      >
-        <form id="student-form" className="space-y-5" onSubmit={handleSubmit(onSubmit)}>
-          <div>
-            <h4 className="mb-3 text-xs font-bold uppercase tracking-wide text-ink-subtle">Dados do aluno</h4>
-            <div className="space-y-3">
-              <div>
-                <label className="label">Nome completo *</label>
-                <input className="input" {...register('name', { required: 'Informe o nome' })} />
-                {errors.name && <p className="mt-1 text-xs text-danger">{errors.name.message}</p>}
-              </div>
-              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+        <form className="space-y-6" onSubmit={handleSubmit(onSubmit)}>
+          {/* Dados do aluno */}
+          <div className="card p-6">
+            <h3 className="mb-4 text-sm font-bold uppercase tracking-wide text-ink-subtle">Dados do aluno</h3>
+
+            <div className="space-y-4">
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <div className="sm:col-span-2">
+                  <label className="label">Nome completo *</label>
+                  <input className="input" {...register('name', { required: 'Informe o nome' })} />
+                  {errors.name && <p className="mt-1 text-xs text-danger">{errors.name.message}</p>}
+                </div>
                 <div>
                   <label className="label">CPF *</label>
                   <input className="input" placeholder="000.000.000-00" {...register('cpf', { required: 'Informe o CPF' })} />
                   {errors.cpf && <p className="mt-1 text-xs text-danger">{errors.cpf.message}</p>}
                 </div>
                 <div>
+                  <label className="label">RG</label>
+                  <input className="input" {...register('rg')} />
+                </div>
+                <div>
                   <label className="label">Data de nascimento *</label>
                   <input type="date" className="input" {...register('birth_date', { required: 'Informe a data' })} />
                   {errors.birth_date && <p className="mt-1 text-xs text-danger">{errors.birth_date.message}</p>}
                 </div>
+                <div>
+                  <label className="label">Tipo sanguíneo *</label>
+                  <select className="input" {...register('blood_type', { required: 'Selecione o tipo sanguíneo' })}>
+                    <option value="">Selecione…</option>
+                    {BLOOD_TYPES.map(bt => <option key={bt} value={bt}>{bt}</option>)}
+                  </select>
+                  {errors.blood_type && <p className="mt-1 text-xs text-danger">{errors.blood_type.message}</p>}
+                </div>
+                <div>
+                  <label className="label">Naturalidade</label>
+                  <input className="input" placeholder="Ex.: Salvador - BA" {...register('naturality')} />
+                </div>
               </div>
-              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                 <div>
                   <label className="label">Nome do pai *</label>
                   <input className="input" {...register('father_name', { required: 'Informe o nome do pai' })} />
@@ -312,7 +223,8 @@ E-mail do responsável: ${credentials.guardian_email}
                   {errors.mother_name && <p className="mt-1 text-xs text-danger">{errors.mother_name.message}</p>}
                 </div>
               </div>
-              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                 <div>
                   <label className="label">Turma</label>
                   <select className="input" {...register('class_id')}>
@@ -330,9 +242,8 @@ E-mail do responsável: ${credentials.guardian_email}
                 </div>
               </div>
 
-              {/* Matrícula + cobrança (só no cadastro de novo aluno). */}
-              {!editing && selectedPlan && (
-                <div className="mt-4 rounded-xl border border-border bg-canvas p-4">
+              {selectedPlan && (
+                <div className="rounded-xl border border-border bg-canvas p-4">
                   <p className="mb-3 text-xs font-bold uppercase tracking-wide text-ink-subtle">Cobrança inicial</p>
                   <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
                     <div>
@@ -359,85 +270,319 @@ E-mail do responsável: ${credentials.guardian_email}
                     </div>
                   </div>
                   <div className="mt-3 flex flex-wrap gap-x-6 gap-y-1 text-xs text-ink-muted">
-                    <span>Matrícula: <strong className="text-ink">{brl(previewEnrollment)}</strong>{discountPct > 0 && previewEnrollment !== Number(selectedPlan.enrollment_fee ?? 0) ? ` (de ${brl(Number(selectedPlan.enrollment_fee ?? 0))})` : ''}</span>
-                    <span>Mensalidade: <strong className="text-ink">{brl(previewMonthly)}</strong>{discountPct > 0 ? ` (de ${brl(Number(selectedPlan.monthly_fee))})` : ''}</span>
+                    <span>Matrícula: <strong className="text-ink">{brl(previewEnrollment)}</strong></span>
+                    <span>Mensalidade: <strong className="text-ink">{brl(previewMonthly)}</strong></span>
                   </div>
                 </div>
               )}
             </div>
           </div>
 
-          {!editing && (
-            <div className="border-t border-border pt-4">
-              <h4 className="mb-3 text-xs font-bold uppercase tracking-wide text-ink-subtle">
-                Responsável (login)
-              </h4>
-              <p className="mb-3 text-xs text-ink-muted">
-                Uma conta de acesso será criada automaticamente para o responsável acompanhar o aluno.
-                Uma senha temporária será gerada automaticamente. No primeiro acesso o sistema obrigará a troca por uma senha intransferível.
-              </p>
-              <div className="space-y-3">
-                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                  <div>
-                    <label className="label">Nome do responsável *</label>
-                    <input className="input" {...register('guardian_name', { required: 'Informe o nome' })} />
-                    {errors.guardian_name && <p className="mt-1 text-xs text-danger">{errors.guardian_name.message}</p>}
-                  </div>
-                  <div>
-                    <label className="label">CPF do responsável *</label>
-                    <input className="input" placeholder="000.000.000-00" {...register('guardian_cpf', { required: 'Informe o CPF' })} />
-                    {errors.guardian_cpf && <p className="mt-1 text-xs text-danger">{errors.guardian_cpf.message}</p>}
-                  </div>
+          {/* Responsável */}
+          <div className="card p-6">
+            <h3 className="mb-4 text-sm font-bold uppercase tracking-wide text-ink-subtle">Responsável *</h3>
+            <p className="mb-4 text-xs text-ink-muted">
+              Uma conta de acesso será criada automaticamente. Senha temporária gerada — troca obrigatória no 1º acesso.
+            </p>
+            <div className="space-y-4">
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <div>
+                  <label className="label">Nome do responsável *</label>
+                  <input className="input" {...register('guardian_name', { required: 'Informe o nome' })} />
+                  {errors.guardian_name && <p className="mt-1 text-xs text-danger">{errors.guardian_name.message}</p>}
                 </div>
-                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                  <div>
-                    <label className="label">Email *</label>
-                    <input type="email" className="input" {...register('guardian_email', { required: 'Informe o email' })} />
-                    {errors.guardian_email && <p className="mt-1 text-xs text-danger">{errors.guardian_email.message}</p>}
-                  </div>
-                  <div>
-                    <label className="label">Telefone</label>
-                    <input className="input" placeholder="(00) 00000-0000" {...register('guardian_phone')} />
-                  </div>
+                <div>
+                  <label className="label">CPF do responsável *</label>
+                  <input className="input" placeholder="000.000.000-00" {...register('guardian_cpf', { required: 'Informe o CPF' })} />
+                  {errors.guardian_cpf && <p className="mt-1 text-xs text-danger">{errors.guardian_cpf.message}</p>}
+                </div>
+              </div>
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <div>
+                  <label className="label">Email *</label>
+                  <input type="email" className="input" {...register('guardian_email', { required: 'Informe o email' })} />
+                  {errors.guardian_email && <p className="mt-1 text-xs text-danger">{errors.guardian_email.message}</p>}
+                </div>
+                <div>
+                  <label className="label">Telefone *</label>
+                  <input className="input" placeholder="(00) 00000-0000" {...register('guardian_phone', { required: 'Informe o telefone' })} />
+                  {errors.guardian_phone && <p className="mt-1 text-xs text-danger">{errors.guardian_phone.message}</p>}
+                </div>
+              </div>
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <div>
+                  <label className="label">Telefone 2</label>
+                  <input className="input" placeholder="(00) 00000-0000" {...register('guardian_phone2')} />
                 </div>
               </div>
             </div>
-          )}
-        </form>
-      </Modal>
+          </div>
 
-      <Modal
-        open={!!credentials}
-        title="Aluno cadastrado com sucesso!"
-        onClose={() => setCredentials(null)}
-        footer={
-          <>
-            <button className="btn-outline" onClick={copyCredentials}>
-              {copied ? <Check size={16} /> : <Copy size={16} />} {copied ? 'Copiado!' : 'Copiar dados'}
+          {/* Ações */}
+          <div className="flex items-center justify-end gap-3">
+            <button type="button" className="btn-outline" onClick={() => navigate('/app/students')}>Cancelar</button>
+            <button type="submit" className="btn-primary flex items-center gap-2" disabled={saving || noPlans}>
+              {saving ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
+              {saving ? 'Cadastrando…' : 'Cadastrar Aluno'}
             </button>
-            <button className="btn-primary" onClick={() => setCredentials(null)}>Fechar</button>
-          </>
-        }
-      >
+          </div>
+        </form>
+
+        {/* Credenciais geradas */}
         {credentials && (
-          <div className="space-y-3 text-sm">
-            <div className="rounded-xl bg-success-soft p-4 text-success">
-              <p className="font-semibold">Conta do responsável criada.</p>
-              <p className="mt-1 text-xs">Anote ou envie estas credenciais ao responsável.</p>
-            </div>
-            <div className="space-y-2 rounded-xl border border-border p-4">
-              <div className="flex justify-between"><span className="text-ink-muted">Aluno:</span><span className="font-medium text-ink">{credentials.name}</span></div>
-              <div className="flex justify-between"><span className="text-ink-muted">Login (matrícula):</span><span className="font-mono font-bold text-primary">{credentials.registration_number}</span></div>
-              <div className="flex justify-between"><span className="text-ink-muted">Senha inicial:</span><span className="font-mono font-bold text-ink">{credentials.initial_password ?? '—'}</span></div>
-              {credentials.monthly_fee != null && (
-                <div className="flex justify-between"><span className="text-ink-muted">Mensalidade:</span><span className="font-bold text-ink">{brl(Number(credentials.monthly_fee))}</span></div>
-              )}
-              <div className="flex justify-between"><span className="text-ink-muted">E-mail do responsável:</span><span className="font-medium text-ink">{credentials.guardian_email}</span></div>
-              <p className="pt-1 text-xs text-ink-subtle">Senha temporária gerada automaticamente — anote e repasse ao responsável. Troca obrigatória no 1º acesso.</p>
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-ink/40">
+            <div className="w-full max-w-md rounded-2xl bg-surface p-6 shadow-xl">
+              <h3 className="mb-4 text-lg font-bold text-ink">Aluno cadastrado com sucesso!</h3>
+              <div className="space-y-3 text-sm">
+                <div className="rounded-xl bg-success-soft p-4 text-success">
+                  <p className="font-semibold">Conta do responsável criada.</p>
+                  <p className="mt-1 text-xs">Anote ou envie estas credenciais ao responsável.</p>
+                </div>
+                <div className="space-y-2 rounded-xl border border-border p-4">
+                  <div className="flex justify-between"><span className="text-ink-muted">Aluno:</span><span className="font-medium text-ink">{credentials.name}</span></div>
+                  <div className="flex justify-between"><span className="text-ink-muted">Login (matrícula):</span><span className="font-mono font-bold text-primary">{credentials.registration_number}</span></div>
+                  <div className="flex justify-between"><span className="text-ink-muted">Senha inicial:</span><span className="font-mono font-bold text-ink">{credentials.initial_password ?? '—'}</span></div>
+                  {credentials.guardian_email && (
+                    <div className="flex justify-between"><span className="text-ink-muted">E-mail:</span><span className="font-medium text-ink">{credentials.guardian_email}</span></div>
+                  )}
+                </div>
+              </div>
+              <div className="mt-4 flex justify-end gap-2">
+                <button className="btn-outline flex items-center gap-1.5" onClick={copyCredentials}>
+                  {copied ? <Check size={14} /> : <Copy size={14} />} {copied ? 'Copiado!' : 'Copiar dados'}
+                </button>
+                <button className="btn-primary" onClick={() => setCredentials(null)}>Fechar</button>
+              </div>
             </div>
           </div>
         )}
-      </Modal>
+      </>
+    );
+  }
+
+  // =================== TELA DE LISTAGEM 60/40 ===================
+  const DETAIL_TABS: { key: DetailTab; label: string; icon: typeof User }[] = [
+    { key: 'dados', label: 'Dados', icon: User },
+    { key: 'responsavel', label: 'Responsável', icon: GraduationCap },
+    { key: 'contatos', label: 'Contatos', icon: Phone },
+    { key: 'documentos', label: 'Documentos', icon: FileText },
+  ];
+
+  function formatDate(d?: string) {
+    if (!d) return '—';
+    const date = new Date(d + 'T00:00:00');
+    return date.toLocaleDateString('pt-BR');
+  }
+
+  return (
+    <>
+      <PageHeader
+        title="Alunos"
+        subtitle="Gerencie os alunos da sua escola."
+      />
+
+      {error && <div className="mb-4 rounded-xl bg-danger-soft px-3 py-2 text-sm text-danger">{error}</div>}
+
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-[6fr_4fr]">
+        {/* ===== Coluna 60% — Lista ===== */}
+        <div className="min-w-0 space-y-4">
+          <div className="card overflow-hidden">
+            <div className="flex items-center gap-3 border-b border-border p-4">
+              <div className="relative flex-1 max-w-sm">
+                <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-ink-subtle" />
+                <input className="input pl-9" placeholder="Buscar por nome ou matrícula…" value={query} onChange={(e) => setQuery(e.target.value)} />
+              </div>
+              <span className="text-sm text-ink-muted">{filtered.length} aluno(s)</span>
+            </div>
+
+            {loading ? (
+              <div className="flex items-center justify-center gap-2 py-14 text-ink-muted">
+                <Loader2 className="animate-spin" size={18} /> Carregando…
+              </div>
+            ) : filtered.length === 0 ? (
+              <EmptyState
+                icon={GraduationCap}
+                title="Nenhum aluno encontrado"
+                description="Cadastre o primeiro aluno para começar."
+              />
+            ) : (
+              <div className="divide-y divide-border">
+                {filtered.map((s) => (
+                  <button
+                    key={s.id}
+                    onClick={() => { setSelected(s); setDetailTab('dados'); }}
+                    className={`flex w-full items-center gap-4 px-4 py-3 text-left transition-colors hover:bg-canvas ${selected?.id === s.id ? 'bg-primary-soft/30' : ''}`}
+                  >
+                    {s.photo_url ? (
+                      <img src={s.photo_url} alt="" className="h-10 w-10 shrink-0 rounded-full object-cover" />
+                    ) : (
+                      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-primary-soft text-xs font-bold text-primary">
+                        {initials(s.name)}
+                      </div>
+                    )}
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate font-medium text-ink">{s.name}</p>
+                      <p className="text-xs text-ink-muted">Mat. {s.registration_number}</p>
+                    </div>
+                    <div className="hidden sm:flex flex-col items-end gap-1">
+                      <StatusBadge tone={s.status === 'active' ? 'success' : 'neutral'}>
+                        {s.status === 'active' ? 'Ativo' : 'Inativo'}
+                      </StatusBadge>
+                      <span className="text-[11px] text-ink-subtle">{s.class_name ?? 'Sem turma'}</span>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* ===== Coluna 40% — Detalhamento ===== */}
+        <div className="space-y-4">
+          {!selected ? (
+            <div className="card flex flex-col items-center justify-center py-16 text-center text-ink-muted">
+              <GraduationCap size={32} className="mb-2 opacity-30" />
+              <p className="text-sm">Selecione um aluno na lista para ver os detalhes.</p>
+            </div>
+          ) : (
+            <>
+              {/* Cabeçalho do aluno */}
+              <div className="card p-5">
+                <div className="flex items-center gap-4">
+                  {selected.photo_url ? (
+                    <img src={selected.photo_url} alt="" className="h-16 w-16 shrink-0 rounded-full object-cover" />
+                  ) : (
+                    <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-full bg-primary-soft text-lg font-bold text-primary">
+                      {initials(selected.name)}
+                    </div>
+                  )}
+                  <div className="min-w-0 flex-1">
+                    <h3 className="truncate text-lg font-bold text-ink">{selected.name}</h3>
+                    <div className="mt-1 flex flex-wrap gap-x-4 gap-y-1 text-xs text-ink-muted">
+                      <span>Mat. <strong className="text-ink">{selected.registration_number}</strong></span>
+                      <span>{formatDate(selected.birth_date)}</span>
+                      {selected.blood_type && <span>Sangue: <strong className="text-ink">{selected.blood_type}</strong></span>}
+                      <span>{selected.class_name ?? 'Sem turma'}</span>
+                    </div>
+                  </div>
+                  <StatusBadge tone={selected.status === 'active' ? 'success' : 'neutral'}>
+                    {selected.status === 'active' ? 'Ativo' : 'Inativo'}
+                  </StatusBadge>
+                </div>
+              </div>
+
+              {/* Abas */}
+              <div className="card overflow-hidden">
+                <div className="flex border-b border-border">
+                  {DETAIL_TABS.map(t => (
+                    <button
+                      key={t.key}
+                      onClick={() => setDetailTab(t.key)}
+                      className={`flex items-center gap-1.5 px-4 py-3 text-xs font-semibold transition-colors ${detailTab === t.key
+                        ? 'border-b-2 border-primary text-primary'
+                        : 'text-ink-muted hover:text-ink'
+                      }`}
+                    >
+                      <t.icon size={14} />
+                      {t.label}
+                    </button>
+                  ))}
+                </div>
+
+                <div className="p-5">
+                  {/* Dados */}
+                  {detailTab === 'dados' && (
+                    <div className="space-y-3 text-sm">
+                      <Row label="Nome completo" value={selected.name} />
+                      <Row label="CPF" value={selected.cpf} />
+                      <Row label="RG" value={selected.rg} />
+                      <Row label="Data de nascimento" value={formatDate(selected.birth_date)} />
+                      <Row label="Naturalidade" value={selected.naturality} />
+                      <Row label="Tipo sanguíneo" value={selected.blood_type} />
+                      <Row label="Nome do pai" value={selected.father_name} />
+                      <Row label="Nome da mãe" value={selected.mother_name} />
+                    </div>
+                  )}
+
+                  {/* Responsável */}
+                  {detailTab === 'responsavel' && (
+                    <div className="space-y-3 text-sm">
+                      <Row label="Nome" value={selected.guardian_name} />
+                      <Row label="CPF" value={selected.guardian_cpf} />
+                      <Row label="E-mail" value={selected.guardian_email} />
+                    </div>
+                  )}
+
+                  {/* Contatos */}
+                  {detailTab === 'contatos' && (
+                    <div className="space-y-3 text-sm">
+                      <Row label="Telefone 1" value={selected.guardian_phone} />
+                      <Row label="Telefone 2" value={selected.guardian_phone2} />
+                      <Row label="E-mail" value={selected.guardian_email} />
+                    </div>
+                  )}
+
+                  {/* Documentos */}
+                  {detailTab === 'documentos' && (
+                    <div className="space-y-3">
+                      <p className="text-xs text-ink-muted mb-3">Gere e imprima documentos do aluno. O cabeçalho incluirá os dados da escola.</p>
+                      {[
+                        { label: 'Boletim', desc: 'Notas por disciplina e período' },
+                        { label: 'Comprovante de Matrícula', desc: 'Dados da matrícula e turma' },
+                        { label: 'Comprovante de Pagamento', desc: 'Histórico financeiro' },
+                      ].map(doc => (
+                        <button
+                          key={doc.label}
+                          className="flex w-full items-center gap-3 rounded-xl border border-border p-3 text-left transition-colors hover:bg-canvas"
+                          onClick={() => { /* PDF generation */ }}
+                        >
+                          <FileText size={18} className="shrink-0 text-primary" />
+                          <div>
+                            <p className="text-sm font-medium text-ink">{doc.label}</p>
+                            <p className="text-xs text-ink-muted">{doc.desc}</p>
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Link de acesso */}
+              <div className="card p-5">
+                <div className="flex items-center gap-2 mb-3 text-sm font-bold text-ink">
+                  <Link2 size={16} className="text-primary" /> Link de acesso
+                </div>
+                <div className="space-y-2 text-sm">
+                  <Row label="Login (matrícula)" value={selected.registration_number} />
+                  <Row label="E-mail do responsável" value={selected.guardian_email} />
+                  <p className="text-xs text-ink-muted mt-2">Senha temporária foi gerada no cadastro — troca obrigatória no 1º acesso.</p>
+                </div>
+                <button
+                  className="mt-3 btn-outline flex items-center gap-1.5 text-xs"
+                  onClick={() => {
+                    const text = `Login (matrícula): ${selected.registration_number}\nE-mail: ${selected.guardian_email}\n(troca de senha obrigatória no 1º acesso)`;
+                    navigator.clipboard.writeText(text);
+                    setCopied(true);
+                    setTimeout(() => setCopied(false), 2000);
+                  }}
+                >
+                  {copied ? <Check size={14} /> : <Copy size={14} />} {copied ? 'Copiado!' : 'Copiar dados de acesso'}
+                </button>
+              </div>
+            </>
+          )}
+        </div>
+      </div>
     </>
+  );
+}
+
+function Row({ label, value }: { label: string; value?: string | null }) {
+  return (
+    <div className="flex items-center justify-between border-b border-border/50 pb-2 last:border-0">
+      <span className="text-ink-muted">{label}</span>
+      <span className="font-medium text-ink">{value || '—'}</span>
+    </div>
   );
 }

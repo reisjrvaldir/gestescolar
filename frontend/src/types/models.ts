@@ -5,7 +5,11 @@ export interface Student {
   name: string;
   registration_number: string;
   cpf?: string;
+  rg?: string;
   birth_date?: string;
+  blood_type?: string;
+  naturality?: string;
+  photo_url?: string;
   father_name?: string;
   mother_name?: string;
   monthly_fee?: number;
@@ -15,6 +19,9 @@ export interface Student {
   guardian_id?: string;
   guardian_name?: string;
   guardian_email?: string;
+  guardian_cpf?: string;
+  guardian_phone?: string;
+  guardian_phone2?: string;
   status: StudentStatus;
   created_at: string;
 }

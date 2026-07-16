@@ -11,7 +11,11 @@ export const studentsRouter = Router();
 const studentSchema = z.object({
   name: z.string().min(2, 'Nome do aluno obrigatório'),
   cpf: cpfSchema,
+  rg: z.string().optional(),
   birth_date: dateSchema,
+  blood_type: z.enum(['A+','A-','B+','B-','AB+','AB-','O+','O-']).optional(),
+  naturality: z.string().optional(),
+  photo_url: z.string().optional(),
   father_name: z.string().min(2, 'Nome do pai obrigatório'),
   mother_name: z.string().min(2, 'Nome da mãe obrigatório'),
   class_id: z.string().uuid().optional(),
@@ -24,6 +28,7 @@ const studentSchema = z.object({
     email: z.string().email('Email do responsável inválido'),
     cpf: cpfSchema,
     phone: z.string().optional(),
+    phone2: z.string().optional(),
   }),
 });
 
@@ -46,11 +51,13 @@ studentsRouter.get('/', async (req, res) => {
     const cpfCol = isAdmin ? 's.cpf' : "left(s.cpf,3) || '*****' || right(s.cpf,2) as cpf";
     const { rows } = await c.query(
       `select s.id, s.name, s.registration_number, s.status, s.class_id, s.guardian_id,
-              ${cpfCol}, s.birth_date, s.father_name, s.mother_name,
+              ${cpfCol}, s.rg, s.birth_date, s.father_name, s.mother_name,
+              s.blood_type, s.naturality, s.photo_url,
               s.monthly_fee::float8 as monthly_fee, s.plan_id,
               s.created_at,
               cl.name as class_name,
-              g.name as guardian_name, g.email as guardian_email
+              g.name as guardian_name, g.email as guardian_email,
+              g.cpf as guardian_cpf, g.phone as guardian_phone, g.phone2 as guardian_phone2
          from public.students s
          left join public.classes cl on cl.id = s.class_id
          left join public.guardians g on g.id = s.guardian_id
@@ -126,23 +133,26 @@ studentsRouter.post('/', requireRole('school_admin', 'superadmin'), async (req, 
 
       // 6) Criar guardian
       const guardianRow = await c.query(
-        `insert into public.guardians (school_id, user_id, name, email, phone, cpf, relationship)
-         values ($1, $2, $3, $4, $5, $6, 'responsavel')
+        `insert into public.guardians (school_id, user_id, name, email, phone, phone2, cpf, relationship)
+         values ($1, $2, $3, $4, $5, $6, $7, 'responsavel')
          returning id`,
         [req.ctx!.schoolId, profileId, s.guardian.name, s.guardian.email,
-         s.guardian.phone ?? null, s.guardian.cpf],
+         s.guardian.phone ?? null, s.guardian.phone2 ?? null, s.guardian.cpf],
       );
       const guardianId = guardianRow.rows[0].id;
 
       // 7) Criar aluno
       const studentRow = await c.query(
         `insert into public.students
-           (school_id, name, cpf, birth_date, registration_number, class_id, guardian_id,
+           (school_id, name, cpf, rg, birth_date, blood_type, naturality, photo_url,
+            registration_number, class_id, guardian_id,
             father_name, mother_name, monthly_fee, plan_id)
-         values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
+         values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)
          returning id, name, registration_number, status, monthly_fee`,
-        [req.ctx!.schoolId, s.name, s.cpf, s.birth_date, matricula,
-         s.class_id ?? null, guardianId, s.father_name, s.mother_name, monthlyFee, s.plan_id],
+        [req.ctx!.schoolId, s.name, s.cpf, s.rg ?? null, s.birth_date,
+         s.blood_type ?? null, s.naturality ?? null, s.photo_url ?? null,
+         matricula, s.class_id ?? null, guardianId,
+         s.father_name, s.mother_name, monthlyFee, s.plan_id],
       );
       const student = studentRow.rows[0];
 
@@ -210,19 +220,25 @@ studentsRouter.put('/:id', requireRole('school_admin', 'superadmin'), async (req
       `update public.students set
           name=coalesce($1,name),
           cpf=coalesce($2,cpf),
-          birth_date=coalesce($3,birth_date),
-          father_name=coalesce($4,father_name),
-          mother_name=coalesce($5,mother_name),
-          class_id=coalesce($6,class_id),
-          plan_id=coalesce($7,plan_id),
+          rg=coalesce($3,rg),
+          birth_date=coalesce($4,birth_date),
+          blood_type=coalesce($5,blood_type),
+          naturality=coalesce($6,naturality),
+          photo_url=coalesce($7,photo_url),
+          father_name=coalesce($8,father_name),
+          mother_name=coalesce($9,mother_name),
+          class_id=coalesce($10,class_id),
+          plan_id=coalesce($11,plan_id),
           monthly_fee=coalesce(
-            (select monthly_fee from public.school_plans where id=$7 and school_id=$9),
+            (select monthly_fee from public.school_plans where id=$11 and school_id=$13),
             monthly_fee
           )
-        where id=$8 and school_id=$9
+        where id=$12 and school_id=$13
         returning id, name, registration_number, status, class_id, monthly_fee, plan_id`,
-      [s.name ?? null, s.cpf ?? null, s.birth_date ?? null, s.father_name ?? null,
-       s.mother_name ?? null, s.class_id ?? null, s.plan_id ?? null,
+      [s.name ?? null, s.cpf ?? null, s.rg ?? null, s.birth_date ?? null,
+       s.blood_type ?? null, s.naturality ?? null, s.photo_url ?? null,
+       s.father_name ?? null, s.mother_name ?? null,
+       s.class_id ?? null, s.plan_id ?? null,
        req.params.id, req.ctx!.schoolId],
     );
     return rows[0];

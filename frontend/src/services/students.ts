@@ -4,7 +4,11 @@ import { api } from '@/lib/api';
 export interface NewStudent {
   name: string;
   cpf: string;
+  rg?: string;
   birth_date: string;
+  blood_type?: string;
+  naturality?: string;
+  photo_url?: string;
   father_name: string;
   mother_name: string;
   class_id?: string;
@@ -17,13 +21,18 @@ export interface NewStudent {
     email: string;
     cpf: string;
     phone?: string;
+    phone2?: string;
   };
 }
 
 export interface UpdateStudent {
   name?: string;
   cpf?: string;
+  rg?: string;
   birth_date?: string;
+  blood_type?: string;
+  naturality?: string;
+  photo_url?: string;
   father_name?: string;
   mother_name?: string;
   class_id?: string;
