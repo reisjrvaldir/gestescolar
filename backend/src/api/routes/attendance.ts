@@ -230,6 +230,66 @@ attendanceRouter.get('/my-children', async (req, res) => {
   res.json({ ok: true, data });
 });
 
+// GET /attendance/my-calendar?student_id=&year=&month= → calendário de presença do filho
+attendanceRouter.get('/my-calendar', async (req, res) => {
+  const { student_id, year, month } = req.query;
+  if (!student_id || !year || !month) {
+    return res.status(400).json({ code: 'validation', message: 'student_id, year e month são obrigatórios' });
+  }
+  const data = await withTenant(req.ctx!, async (c) => {
+    const g = await c.query(`select id from public.guardians where user_id=$1 limit 1`, [req.ctx!.profileId]);
+    if (g.rows.length === 0) return [];
+    const stu = await c.query(
+      `select 1 from public.students where id=$1 and guardian_id=$2 and school_id=$3`,
+      [student_id, g.rows[0].id, req.ctx!.schoolId],
+    );
+    if (stu.rows.length === 0) return [];
+    const { rows } = await c.query(
+      `select a.date::text as date, a.status
+         from public.attendance a
+        where a.school_id = $1 and a.student_id = $2
+          and extract(year from a.date) = $3
+          and extract(month from a.date) = $4
+        order by a.date asc`,
+      [req.ctx!.schoolId, student_id, Number(year), Number(month)],
+    );
+    return rows;
+  });
+  res.json({ ok: true, data });
+});
+
+// GET /attendance/my-summary?student_id= → resumo mensal de presença do filho
+attendanceRouter.get('/my-summary', async (req, res) => {
+  const { student_id } = req.query;
+  if (!student_id) {
+    return res.status(400).json({ code: 'validation', message: 'student_id é obrigatório' });
+  }
+  const data = await withTenant(req.ctx!, async (c) => {
+    const g = await c.query(`select id from public.guardians where user_id=$1 limit 1`, [req.ctx!.profileId]);
+    if (g.rows.length === 0) return { present: 0, absent: 0, justified: 0, attested: 0, excused: 0, total_school_days: 0 };
+    const stu = await c.query(
+      `select 1 from public.students where id=$1 and guardian_id=$2 and school_id=$3`,
+      [student_id, g.rows[0].id, req.ctx!.schoolId],
+    );
+    if (stu.rows.length === 0) return { present: 0, absent: 0, justified: 0, attested: 0, excused: 0, total_school_days: 0 };
+    const { rows } = await c.query(
+      `select
+          count(*) filter (where status='present')::int as present,
+          count(*) filter (where status='absent')::int as absent,
+          count(*) filter (where status='justified')::int as justified,
+          count(*) filter (where status='attested')::int as attested,
+          count(*) filter (where status='excused')::int as excused,
+          count(distinct date)::int as total_school_days
+         from public.attendance
+        where school_id=$1 and student_id=$2
+          and date >= date_trunc('month', current_date) and date <= current_date`,
+      [req.ctx!.schoolId, student_id],
+    );
+    return rows[0];
+  });
+  res.json({ ok: true, data });
+});
+
 // GET /attendance/attestation/mine → atestados enviados pelo responsável autenticado
 attendanceRouter.get('/attestation/mine', async (req, res) => {
   const data = await withTenant(req.ctx!, async (c) => {

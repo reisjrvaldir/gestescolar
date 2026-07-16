@@ -77,6 +77,20 @@ export interface SchoolEvent {
   event_type: 'holiday' | 'exam' | 'meeting' | 'event' | 'recess';
 }
 
+export interface MyCalendarDay {
+  date: string;
+  status: AttendanceStatus;
+}
+
+export interface MySummary {
+  present: number;
+  absent: number;
+  justified: number;
+  attested: number;
+  excused: number;
+  total_school_days: number;
+}
+
 export const attendanceService = {
   async forContext(classId: string, date: string, subjectId?: string): Promise<{ rows: AttendanceRow[]; locked: boolean }> {
     const q = `class_id=${classId}&date=${date}${subjectId ? `&subject_id=${subjectId}` : ''}`;
@@ -155,5 +169,15 @@ export const attendanceService = {
     file_data: string;
   }): Promise<void> {
     await api.post('/attendance/attestation/mine', params);
+  },
+  async myCalendar(studentId: string, year: number, month: number): Promise<MyCalendarDay[]> {
+    const r = await api.get<{ ok: boolean; data: MyCalendarDay[] }>(
+      `/attendance/my-calendar?student_id=${studentId}&year=${year}&month=${month}`,
+    );
+    return r.data;
+  },
+  async mySummary(studentId: string): Promise<MySummary> {
+    const r = await api.get<{ ok: boolean; data: MySummary }>(`/attendance/my-summary?student_id=${studentId}`);
+    return r.data;
   },
 };

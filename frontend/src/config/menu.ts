@@ -98,7 +98,7 @@ export const MENUS: Record<Role, MenuSection[]> = {
     { items: [{ to: '/app/messages', label: 'Mensagens', icon: Mail }] },
   ],
   guardian: [
-    { items: [{ to: '/app', label: 'Início', icon: LayoutDashboard }] },
+    { items: [{ to: '/app', label: 'Dashboard', icon: LayoutDashboard }] },
     {
       title: 'Acadêmico',
       items: [

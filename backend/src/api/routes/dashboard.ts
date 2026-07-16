@@ -28,7 +28,8 @@ dashboardRouter.get('/stats', async (req, res) => {
 
       const children = await c.query(
         `select s.id, s.name, s.registration_number, s.monthly_fee::float8 as monthly_fee,
-                cl.name as class_name,
+                s.photo_url, s.birth_date::text, s.blood_type,
+                cl.name as class_name, cl.year as class_year,
                 (select count(*) from public.attendance a
                    where a.student_id = s.id and a.status = 'present'
                      and a.date >= date_trunc('month', now()))::int as present_month,
@@ -52,10 +53,41 @@ dashboardRouter.get('/stats', async (req, res) => {
         [req.ctx!.profileId],
       );
 
+      const now = new Date();
+      const events = await c.query(
+        `select id, title, date_start::text, date_end::text, event_type
+           from public.school_calendar
+          where school_id = $1 and date_start >= current_date
+          order by date_start asc limit 6`,
+        [schoolId],
+      );
+
+      const pendingInvoices = await c.query(
+        `select i.id, i.student_name, i.amount::float8 as amount, i.due_date::text, i.status,
+                i.kind, i.reference_month
+           from public.invoices i
+           join public.students s on s.id = i.student_id
+          where s.guardian_id = $1 and i.school_id = $2 and i.status in ('pending','overdue')
+          order by i.due_date asc limit 10`,
+        [guardianId, schoolId],
+      );
+
+      const overdueInvoices = await c.query(
+        `select coalesce(sum(i.amount),0)::float8 as total, count(*)::int as count
+           from public.invoices i
+           join public.students s on s.id = i.student_id
+          where s.guardian_id = $1 and i.school_id = $2 and i.status = 'overdue'`,
+        [guardianId, schoolId],
+      );
+
       return {
         role: 'guardian',
         children: children.rows,
         unread_messages: unread.rows[0].total,
+        upcoming_events: events.rows,
+        pending_invoices: pendingInvoices.rows,
+        overdue_total: Number(overdueInvoices.rows[0].total),
+        overdue_count: overdueInvoices.rows[0].count,
       };
     }
 

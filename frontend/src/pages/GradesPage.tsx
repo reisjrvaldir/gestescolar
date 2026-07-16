@@ -9,6 +9,7 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { Modal } from '@/components/ui/Modal';
 import { classesService, type ClassSubject } from '@/services/classes';
 import { gradesService, type GradeSettings, type GradeSummary, type BoletimData } from '@/services/grades';
+import { GuardianBoletim } from '@/components/grades/GuardianBoletim';
 import { api } from '@/lib/api';
 import { useMe } from '@/auth/AuthGate';
 import type { SchoolClass, Student } from '@/types/models';
@@ -63,6 +64,7 @@ interface EntryState {
 
 export function GradesPage() {
   const me = useMe();
+  if (me?.role === 'guardian') return <GuardianBoletim />;
   const isAdmin = me?.role === 'school_admin' || me?.role === 'superadmin';
   return <GradesView isAdmin={isAdmin} />;
 }

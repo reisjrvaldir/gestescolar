@@ -50,6 +50,27 @@ export interface BoletimData {
   grades: BoletimGrade[];
 }
 
+export interface MyBoletimStudent {
+  id: string;
+  name: string;
+  registration_number?: string;
+  class_id?: string;
+  class_name?: string;
+}
+
+export interface MyBoletimRanking {
+  student_id: string;
+  avg_grade: number;
+  class_id: string;
+}
+
+export interface MyBoletimData {
+  students: MyBoletimStudent[];
+  grades: BoletimGrade[];
+  settings: GradeSettings;
+  ranking: MyBoletimRanking[];
+}
+
 export const gradesService = {
   async getSettings(): Promise<GradeSettings> {
     const r = await api.get<{ ok: boolean; data: GradeSettings }>('/grades/settings');
@@ -72,6 +93,10 @@ export const gradesService = {
   },
   async boletim(classId: string): Promise<BoletimData> {
     const r = await api.get<{ ok: boolean; data: BoletimData }>(`/grades/boletim?class_id=${classId}`);
+    return r.data;
+  },
+  async myBoletim(): Promise<MyBoletimData> {
+    const r = await api.get<{ ok: boolean; data: MyBoletimData }>('/grades/my-boletim');
     return r.data;
   },
   async saveBatch(

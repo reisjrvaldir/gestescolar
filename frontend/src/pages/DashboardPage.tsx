@@ -15,7 +15,9 @@ interface ChildStat {
   name: string;
   registration_number: string;
   monthly_fee: number;
+  photo_url?: string;
   class_name?: string;
+  class_year?: number;
   present_month: number;
   absent_month: number;
   avg_grade: number;
@@ -56,6 +58,9 @@ interface DashboardStats {
   // guardian
   children?: ChildStat[];
   unread_messages?: number;
+  upcoming_events?: any[];
+  pending_invoices?: any[];
+  overdue_total?: number;
 }
 
 function initials(name?: string) {
@@ -142,54 +147,149 @@ export function DashboardPage() {
 
   // -------------------- Dashboard do RESPONSÁVEL --------------------
   if (stats.role === 'guardian') {
-    return (
-      <>
-        <PageHeader
-          title="Início"
-          subtitle="Acompanhe o desempenho e a rotina do(s) seu(s) filho(s)."
-        />
-        {refreshIndicator}
+    const child = stats.children![0];
+    const events = stats.upcoming_events ?? [];
+    const pendingInv = stats.pending_invoices ?? [];
 
-        {stats.unread_messages! > 0 && (
-          <div className="mb-6 flex items-center gap-3 rounded-2xl border border-primary/30 bg-primary-soft px-4 py-3 text-sm text-primary">
-            <Mail size={18} />
-            <span>Você tem <strong>{stats.unread_messages}</strong> mensagem(ns) não lida(s) da escola.</span>
-          </div>
-        )}
-
-        {stats.children!.length === 0 ? (
+    if (!child) {
+      return (
+        <>
+          <PageHeader title="Dashboard" subtitle="Portal do responsável" />
           <div className="card p-8 text-center text-ink-muted">
             <GraduationCap size={48} className="mx-auto mb-2 text-ink-subtle" />
             <p>Nenhum aluno vinculado à sua conta.</p>
             <p className="mt-1 text-xs">Procure a secretaria da escola.</p>
           </div>
-        ) : (
-          <div className="space-y-4">
-            {stats.children!.map((child) => (
-              <div key={child.id} className="card p-5">
-                <div className="mb-4 flex items-start justify-between">
-                  <div>
-                    <h3 className="text-lg font-bold text-ink">{child.name}</h3>
-                    <p className="text-sm text-ink-muted">
-                      Matrícula <span className="font-mono">{child.registration_number}</span>
-                      {child.class_name && ` • Turma: ${child.class_name}`}
-                    </p>
-                  </div>
-                  <div className="text-right text-sm">
-                    <p className="text-ink-muted">Mensalidade</p>
-                    <p className="font-bold text-ink">{brl(Number(child.monthly_fee) || 0)}</p>
-                  </div>
-                </div>
-                <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-                  <MetricCard label="Presenças no mês" value={child.present_month} icon={ClipboardCheck} tone="success" />
-                  <MetricCard label="Faltas no mês" value={child.absent_month} icon={AlertTriangle} tone={child.absent_month > 0 ? 'warning' : 'primary'} />
-                  <MetricCard label="Média no ano" value={Number(child.avg_grade).toFixed(1)} icon={Star} tone="primary" />
-                  <MetricCard label="Faturas em aberto" value={child.open_invoices} icon={Wallet} tone={child.open_invoices > 0 ? 'danger' : 'success'} />
-                </div>
+        </>
+      );
+    }
+
+    const EVENT_COLORS: Record<string, string> = {
+      holiday: 'bg-danger-soft text-danger',
+      exam: 'bg-warning-soft text-warning',
+      meeting: 'bg-primary-soft text-primary',
+      event: 'bg-purple-soft text-purple',
+      recess: 'bg-success-soft text-success',
+    };
+    const EVENT_LABELS: Record<string, string> = {
+      holiday: 'Feriado', exam: 'Avaliação', meeting: 'Reunião', event: 'Evento', recess: 'Recesso',
+    };
+
+    return (
+      <>
+        <PageHeader title="Dashboard" subtitle="Acompanhe a rotina e o desempenho do seu filho(a)." />
+        {refreshIndicator}
+
+        {/* Cabeçalho do aluno */}
+        <div className="card mb-6 p-5">
+          <div className="flex items-center gap-4">
+            {child.photo_url ? (
+              <img src={child.photo_url} alt="" className="h-16 w-16 rounded-full object-cover" />
+            ) : (
+              <div className="flex h-16 w-16 items-center justify-center rounded-full bg-primary-soft text-xl font-bold text-primary">
+                {initials(child.name)}
               </div>
-            ))}
+            )}
+            <div className="min-w-0 flex-1">
+              <h2 className="text-xl font-extrabold text-ink">{child.name}</h2>
+              <div className="mt-1 flex flex-wrap gap-x-4 gap-y-1 text-sm text-ink-muted">
+                <span>Matrícula: <span className="font-mono font-semibold">{child.registration_number}</span></span>
+                {child.class_name && <span>Turma: <strong>{child.class_name}</strong></span>}
+                {child.class_year && <span>Ano letivo: <strong>{child.class_year}</strong></span>}
+                <span>Mensalidade: <strong className="text-ink">{brl(Number(child.monthly_fee) || 0)}</strong></span>
+              </div>
+            </div>
           </div>
-        )}
+        </div>
+
+        {/* Ações rápidas */}
+        <div className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-3">
+          <a href="/app/grades" className="card flex items-center gap-3 p-4 transition-shadow hover:shadow-md" style={{ background: 'rgba(59,130,246,0.08)' }}>
+            <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-blue-100 text-blue-600"><Star size={20} /></div>
+            <span className="text-sm font-bold text-blue-700">Ver Boletim</span>
+          </a>
+          <a href="/app/messages" className="card flex items-center gap-3 p-4 transition-shadow hover:shadow-md" style={{ background: 'rgba(34,197,94,0.08)' }}>
+            <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-green-100 text-green-600"><Mail size={20} /></div>
+            <div>
+              <span className="text-sm font-bold text-green-700">Abrir Mensagens</span>
+              {stats.unread_messages! > 0 && <span className="ml-2 rounded-full bg-green-600 px-2 py-0.5 text-xs font-bold text-white">{stats.unread_messages}</span>}
+            </div>
+          </a>
+          <a href="/app/faturas" className="card flex items-center gap-3 p-4 transition-shadow hover:shadow-md" style={{ background: 'rgba(234,179,8,0.08)' }}>
+            <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-yellow-100 text-yellow-600"><Wallet size={20} /></div>
+            <span className="text-sm font-bold text-yellow-700">Faturas</span>
+          </a>
+        </div>
+
+        {/* Próximos eventos + Resumo financeiro */}
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+          {/* Próximos eventos */}
+          <div className="card overflow-hidden">
+            <div className="border-b border-border px-5 py-3.5">
+              <h3 className="text-sm font-bold text-ink">Próximos eventos</h3>
+            </div>
+            {events.length === 0 ? (
+              <p className="px-5 py-8 text-center text-sm text-ink-subtle">Nenhum evento próximo.</p>
+            ) : (
+              <div className="divide-y divide-border">
+                {events.map((ev: any) => (
+                  <div key={ev.id} className="flex items-start gap-3 px-5 py-3">
+                    <div className={`mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-xs font-bold ${EVENT_COLORS[ev.event_type] ?? 'bg-canvas text-ink-muted'}`}>
+                      {new Date(ev.date_start + 'T12:00:00').toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' }).replace('.', '')}
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="font-medium text-ink">{ev.title}</p>
+                      <p className="text-xs text-ink-muted">
+                        {new Date(ev.date_start + 'T12:00:00').toLocaleDateString('pt-BR', { weekday: 'long' })}
+                        {ev.date_end && ev.date_end !== ev.date_start && ` — ${new Date(ev.date_end + 'T12:00:00').toLocaleDateString('pt-BR')}`}
+                      </p>
+                      <span className={`mt-1 inline-block rounded px-1.5 py-0.5 text-[10px] font-semibold ${EVENT_COLORS[ev.event_type] ?? 'bg-canvas text-ink-muted'}`}>
+                        {EVENT_LABELS[ev.event_type] ?? ev.event_type}
+                      </span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Resumo financeiro */}
+          <div className="card overflow-hidden">
+            <div className="border-b border-border px-5 py-3.5">
+              <h3 className="text-sm font-bold text-ink">Resumo financeiro</h3>
+            </div>
+            <div className="p-5 space-y-4">
+              <div>
+                <p className="text-xs font-semibold text-ink-muted uppercase tracking-wide">Próximas faturas</p>
+                {pendingInv.filter((i: any) => i.status === 'pending').length === 0 ? (
+                  <p className="mt-2 text-sm text-ink-subtle">Nenhuma fatura pendente.</p>
+                ) : (
+                  <div className="mt-2 space-y-2">
+                    {pendingInv.filter((i: any) => i.status === 'pending').slice(0, 3).map((inv: any) => (
+                      <div key={inv.id} className="flex items-center justify-between text-sm">
+                        <span className="text-ink-muted">
+                          {inv.kind === 'avulsa' ? 'Avulsa' : `Mensalidade${inv.reference_month ? ` ${inv.reference_month}` : ''}`}
+                        </span>
+                        <span className="font-bold text-ink">{brl(inv.amount)}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+              <div className="border-t border-border pt-4">
+                <p className="text-xs font-semibold text-ink-muted uppercase tracking-wide">Faturas em atraso</p>
+                {(stats.overdue_count ?? 0) === 0 ? (
+                  <p className="mt-2 text-sm text-success font-medium">Você não tem faturas atrasadas</p>
+                ) : (
+                  <div className="mt-2 flex items-center justify-between">
+                    <span className="text-sm text-danger font-medium">{stats.overdue_count} fatura(s) vencida(s)</span>
+                    <span className="text-lg font-extrabold text-danger">{brl(stats.overdue_total ?? 0)}</span>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
       </>
     );
   }
