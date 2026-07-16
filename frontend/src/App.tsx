@@ -49,8 +49,8 @@ const Admin = ({ children }: { children: React.ReactNode }) => (
 const AdminFinancial = ({ children }: { children: React.ReactNode }) => (
   <RoleGuard allowed={['school_admin', 'financial', 'superadmin']}>{children}</RoleGuard>
 );
-const AdminTeacher = ({ children }: { children: React.ReactNode }) => (
-  <RoleGuard allowed={['school_admin', 'teacher', 'superadmin']}>{children}</RoleGuard>
+const AdminTeacherGuardian = ({ children }: { children: React.ReactNode }) => (
+  <RoleGuard allowed={['school_admin', 'teacher', 'guardian', 'superadmin']}>{children}</RoleGuard>
 );
 
 export default function App() {
@@ -71,12 +71,12 @@ export default function App() {
           <Route path="students/new" element={<Admin><StudentsPage /></Admin>} />
           <Route path="staff" element={<Admin><StaffPage /></Admin>} />
           <Route path="classes" element={<Admin><ClassesPage /></Admin>} />
-          <Route path="grades" element={<AdminTeacher><GradesPage /></AdminTeacher>} />
-          <Route path="grades/boletim" element={<AdminTeacher><GradesPage /></AdminTeacher>} />
-          <Route path="attendance" element={<AdminTeacher><AttendancePage /></AdminTeacher>} />
+          <Route path="grades" element={<AdminTeacherGuardian><GradesPage /></AdminTeacherGuardian>} />
+          <Route path="grades/boletim" element={<AdminTeacherGuardian><GradesPage /></AdminTeacherGuardian>} />
+          <Route path="attendance" element={<AdminTeacherGuardian><AttendancePage /></AdminTeacherGuardian>} />
           <Route path="timeclock" element={<TimeclockPage />} />
           <Route path="journeys" element={<Admin><JourneysPage /></Admin>} />
-          <Route path="calendar" element={<AdminTeacher><CalendarPage /></AdminTeacher>} />
+          <Route path="calendar" element={<AdminTeacherGuardian><CalendarPage /></AdminTeacherGuardian>} />
           <Route path="finance" element={<AdminFinancial><FinancePage /></AdminFinancial>} />
           <Route path="finance/entries" element={<AdminFinancial><FinancePage /></AdminFinancial>} />
           <Route path="finance/expenses" element={<AdminFinancial><ExpensesPage /></AdminFinancial>} />
