@@ -375,10 +375,20 @@ function GradesView({ isAdmin }: { isAdmin: boolean }) {
                   </select>
                 </div>
               </div>
-              <div className="mt-2.5 flex items-center gap-2 text-xs text-ink-muted border-t border-border pt-2.5">
-                <span>Nota mínima de aprovação: <strong className="text-ink">{settings.passing_grade.toFixed(1)}</strong></span>
-                <span>·</span>
-                <span>Mínimo na Final: <strong className="text-ink">{settings.final_passing_grade.toFixed(1)}</strong></span>
+              <div className="mt-2.5 flex items-center justify-between gap-2 text-xs text-ink-muted border-t border-border pt-2.5">
+                <div className="flex items-center gap-2">
+                  <span>Nota mínima de aprovação: <strong className="text-ink">{settings.passing_grade.toFixed(1)}</strong></span>
+                  <span>·</span>
+                  <span>Mínimo na Final: <strong className="text-ink">{settings.final_passing_grade.toFixed(1)}</strong></span>
+                </div>
+                {isAdmin && (
+                  <button
+                    className="text-primary hover:underline font-semibold"
+                    onClick={() => { setSettingsForm(settings); setSettingsOpen(true); }}
+                  >
+                    Editar
+                  </button>
+                )}
               </div>
             </div>
 
