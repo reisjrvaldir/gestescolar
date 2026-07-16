@@ -3,6 +3,7 @@ import {
   Fingerprint, CalendarClock, CalendarDays, CreditCard,
   Headset, Crown, Mail,
   CalendarOff, FolderOpen, PiggyBank, ArrowUpRight, Wallet,
+  FileText,
   type LucideIcon,
 } from 'lucide-react';
 
@@ -36,7 +37,8 @@ export const MENUS: Record<Role, MenuSection[]> = {
       title: 'Acadêmico',
       items: [
         { to: '/app/calendar', label: 'Ano Letivo', icon: CalendarDays },
-        { to: '/app/grades', label: 'Avaliações', icon: Star },
+        { to: '/app/grades', label: 'Lançar Notas', icon: Star },
+        { to: '/app/grades/boletim', label: 'Boletim', icon: FileText },
         { to: '/app/attendance', label: 'Chamada', icon: ClipboardCheck },
       ],
     },
@@ -80,7 +82,8 @@ export const MENUS: Record<Role, MenuSection[]> = {
       title: 'Acadêmico',
       items: [
         { to: '/app/attendance', label: 'Chamada', icon: ClipboardCheck },
-        { to: '/app/grades', label: 'Avaliações', icon: Star },
+        { to: '/app/grades', label: 'Lançar Notas', icon: Star },
+        { to: '/app/grades/boletim', label: 'Boletim', icon: FileText },
         { to: '/app/calendar', label: 'Calendário', icon: CalendarDays },
       ],
     },

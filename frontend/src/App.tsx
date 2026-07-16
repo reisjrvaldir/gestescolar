@@ -71,6 +71,7 @@ export default function App() {
           <Route path="staff" element={<Admin><StaffPage /></Admin>} />
           <Route path="classes" element={<Admin><ClassesPage /></Admin>} />
           <Route path="grades" element={<AdminTeacher><GradesPage /></AdminTeacher>} />
+          <Route path="grades/boletim" element={<AdminTeacher><GradesPage /></AdminTeacher>} />
           <Route path="attendance" element={<AdminTeacher><AttendancePage /></AdminTeacher>} />
           <Route path="timeclock" element={<TimeclockPage />} />
           <Route path="journeys" element={<Admin><JourneysPage /></Admin>} />

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useLocation } from 'react-router-dom';
 import {
   Star, Save, Check, Loader2, AlertTriangle, Lock,
   Settings, PieChart, BarChart2,
@@ -6,7 +7,6 @@ import {
 import { PageHeader } from '@/components/ui/PageHeader';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Modal } from '@/components/ui/Modal';
-import { FinanceTabs } from '@/components/finance/FinanceTabs';
 import { classesService, type ClassSubject } from '@/services/classes';
 import { gradesService, type GradeSettings, type GradeSummary, type BoletimData } from '@/services/grades';
 import { api } from '@/lib/api';
@@ -68,12 +68,8 @@ export function GradesPage() {
 }
 
 function GradesView({ isAdmin }: { isAdmin: boolean }) {
-  const TABS = [
-    { key: 'notas',   label: 'Lançar Notas' },
-    { key: 'boletim', label: 'Boletim' },
-  ];
-
-  const [tab, setTab]       = useState('notas');
+  const location = useLocation();
+  const isBoletimRoute = location.pathname.endsWith('/boletim');
   const [classes, setClasses]   = useState<SchoolClass[]>([]);
   const [classId, setClassId]   = useState('');
   const [classSubjects, setClassSubjects] = useState<ClassSubject[]>([]);
@@ -147,16 +143,16 @@ function GradesView({ isAdmin }: { isAdmin: boolean }) {
   useEffect(() => { loadContext(); }, [loadContext]);
 
   useEffect(() => {
-    if (tab !== 'notas' || !classId) return;
+    if (isBoletimRoute || !classId) return;
     setSummaryLoading(true);
     gradesService.summary(classId, period).then(setSummary).finally(() => setSummaryLoading(false));
-  }, [tab, classId, period]);
+  }, [isBoletimRoute, classId, period]);
 
   useEffect(() => {
-    if (tab !== 'boletim' || !classId) return;
+    if (!isBoletimRoute || !classId) return;
     setBoletimLoading(true);
     gradesService.boletim(classId).then(setBoletim).finally(() => setBoletimLoading(false));
-  }, [tab, classId]);
+  }, [isBoletimRoute, classId]);
 
   function setField(studentId: string, field: 'av1' | 'av2' | 'final', raw: string) {
     const n = raw === '' ? null : Math.max(0, Math.min(10, Number(raw)));
@@ -290,8 +286,8 @@ function GradesView({ isAdmin }: { isAdmin: boolean }) {
   return (
     <>
       <PageHeader
-        title="Avaliações"
-        subtitle="Lance e acompanhe as notas dos alunos por disciplina e unidade."
+        title={isBoletimRoute ? 'Boletim' : 'Lançar Notas'}
+        subtitle={isBoletimRoute ? 'Visualize o desempenho dos alunos por disciplina e período.' : 'Lance e acompanhe as notas dos alunos por disciplina e unidade.'}
         actions={
           <div className="flex items-center gap-2">
             {isAdmin && (
@@ -302,21 +298,26 @@ function GradesView({ isAdmin }: { isAdmin: boolean }) {
                 <Settings size={15} /> Configurações
               </button>
             )}
-            {tab === 'notas' && !readOnly && !locked && (
+            {!isBoletimRoute && !readOnly && !locked && (
               <button className="btn-primary flex items-center gap-2" onClick={save}
                 disabled={!canSave || saving}>
                 {saving ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
                 {saving ? 'Salvando…' : 'Salvar AV1/AV2'}
               </button>
             )}
+            {!isBoletimRoute && isAdmin && locked && (
+              <button className="btn-primary flex items-center gap-2" onClick={save}
+                disabled={saving}>
+                {saving ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
+                {saving ? 'Salvando…' : 'Salvar Alteração'}
+              </button>
+            )}
           </div>
         }
       />
 
-      <FinanceTabs tabs={TABS} active={tab} onChange={setTab} />
-
       {/* =================== LANÇAR NOTAS =================== */}
-      {tab === 'notas' && (
+      {!isBoletimRoute && (
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-[7fr_3fr]">
 
           {/* Coluna principal 70% */}
@@ -558,7 +559,7 @@ function GradesView({ isAdmin }: { isAdmin: boolean }) {
       )}
 
       {/* =================== BOLETIM =================== */}
-      {tab === 'boletim' && (
+      {isBoletimRoute && (
         <div className="space-y-4">
           <div className="card p-4">
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
