@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Star, Save, Check, Loader2, AlertTriangle, Lock,
-  CheckCircle2, Settings, PieChart, BarChart2,
+  Settings, PieChart, BarChart2,
 } from 'lucide-react';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { EmptyState } from '@/components/ui/EmptyState';
@@ -58,7 +58,6 @@ interface EntryState {
   av1: number | null;
   av2: number | null;
   final: number | null;
-  confirmed: boolean;
   av1av2Locked: boolean;
 }
 
@@ -163,27 +162,16 @@ function GradesView({ isAdmin }: { isAdmin: boolean }) {
   function setField(studentId: string, field: 'av1' | 'av2' | 'final', raw: string) {
     const n = raw === '' ? null : Math.max(0, Math.min(10, Number(raw)));
     if (raw !== '' && !Number.isFinite(n)) return;
-    setEntries((e) => ({ ...e, [studentId]: { ...e[studentId], [field]: n, confirmed: false } }));
+    setEntries((e) => ({ ...e, [studentId]: { ...e[studentId], [field]: n } }));
     setToast(null);
-  }
-
-  function confirm(studentId: string) {
-    const e = entries[studentId];
-    if (e.av1 === null || e.av2 === null) {
-      setToast({ type: 'error', msg: `Preencha AV1 e AV2 de ${e.student_name.split(' ')[0]} antes de confirmar.` });
-      return;
-    }
-    setEntries((prev) => ({ ...prev, [studentId]: { ...prev[studentId], confirmed: true } }));
   }
 
   const studentList = Object.values(entries);
   const pg  = settings.passing_grade;
   const fpg = settings.final_passing_grade;
 
-  const allConfirmed    = studentList.length > 0 && studentList.every((e) => e.confirmed);
-  const unconfirmedCount = studentList.filter((e) => !e.confirmed).length;
-  const readOnly        = locked && !isAdmin;
-  const canSave         = allConfirmed && (!locked || isAdmin);
+  const readOnly = locked && !isAdmin;
+  const canSave  = studentList.length > 0 && (!locked || isAdmin);
 
   const recoveryStudents = studentList.filter((e) => {
     const s = studentStatus(e.av1, e.av2, e.final, pg, fpg);
@@ -203,7 +191,7 @@ function GradesView({ isAdmin }: { isAdmin: boolean }) {
       setLocked(true);
       setEntries((prev) => {
         const next = { ...prev };
-        for (const k of Object.keys(next)) next[k] = { ...next[k], confirmed: true, av1av2Locked: true };
+        for (const k of Object.keys(next)) next[k] = { ...next[k], av1av2Locked: true };
         return next;
       });
       setToast({ type: 'success', msg: `AV1/AV2 salvas para ${period} — ${subject}` });
@@ -317,8 +305,7 @@ function GradesView({ isAdmin }: { isAdmin: boolean }) {
             )}
             {tab === 'notas' && !readOnly && !locked && (
               <button className="btn-primary flex items-center gap-2" onClick={save}
-                disabled={!canSave || saving}
-                title={!allConfirmed ? `${unconfirmedCount} aluno(s) aguardando confirmação` : undefined}>
+                disabled={!canSave || saving}>
                 {saving ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
                 {saving ? 'Salvando…' : 'Salvar AV1/AV2'}
               </button>
@@ -399,13 +386,12 @@ function GradesView({ isAdmin }: { isAdmin: boolean }) {
               ) : (
                 <>
                   {/* Cabeçalho */}
-                  <div className="grid grid-cols-[1fr_7rem_7rem_6rem_8rem_auto] gap-x-3 border-b border-border bg-canvas px-4 py-2 text-xs font-bold uppercase tracking-wide text-ink-muted">
+                  <div className="grid grid-cols-[1fr_7rem_7rem_6rem_8rem] gap-x-3 border-b border-border bg-canvas px-4 py-2 text-xs font-bold uppercase tracking-wide text-ink-muted">
                     <span>Aluno</span>
                     <span className="text-center">AV1</span>
                     <span className="text-center">AV2</span>
                     <span className="text-center">Média</span>
                     <span className="text-center">Status</span>
-                    <span />
                   </div>
 
                   <div className="divide-y divide-border">
@@ -416,9 +402,9 @@ function GradesView({ isAdmin }: { isAdmin: boolean }) {
                       const isLocked   = entry.av1av2Locked && !isAdmin;
 
                       return (
-                        <div key={entry.student_id} className={entry.confirmed ? 'bg-success-soft/10' : 'hover:bg-canvas'}>
+                        <div key={entry.student_id} className="hover:bg-canvas">
                           {/* Linha principal AV1/AV2 */}
-                          <div className="grid grid-cols-[1fr_7rem_7rem_6rem_8rem_auto] items-center gap-x-3 px-4 py-3">
+                          <div className="grid grid-cols-[1fr_7rem_7rem_6rem_8rem] items-center gap-x-3 px-4 py-3">
                             {/* Nome */}
                             <div className="flex items-center gap-3 min-w-0">
                               <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary-soft text-xs font-bold text-primary">
@@ -471,21 +457,6 @@ function GradesView({ isAdmin }: { isAdmin: boolean }) {
                                 {STATUS_LABEL[st]}
                               </span>
                             </div>
-
-                            {/* Confirmar */}
-                            <div className="flex justify-end">
-                              {!readOnly && !isLocked && (
-                                entry.confirmed ? (
-                                  <CheckCircle2 size={18} className="text-success" />
-                                ) : (
-                                  <button onClick={() => confirm(entry.student_id)}
-                                    disabled={entry.av1 === null || entry.av2 === null}
-                                    className="rounded-lg border border-primary px-3 py-1 text-xs font-semibold text-primary hover:bg-primary hover:text-white transition-colors disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent disabled:hover:text-primary">
-                                    Confirmar
-                                  </button>
-                                )
-                              )}
-                            </div>
                           </div>
 
                           {/* Linha da Prova Final (só se em recuperação) */}
@@ -519,32 +490,17 @@ function GradesView({ isAdmin }: { isAdmin: boolean }) {
               )}
             </div>
 
-            {/* Rodapés de ação */}
-            {!readOnly && studentList.length > 0 && (
-              <div className="space-y-2">
-                {!locked && (
-                  <div className="flex items-center justify-between rounded-xl border border-border bg-canvas px-4 py-3">
-                    <span className="text-sm text-ink-muted">
-                      {allConfirmed ? 'Todas as notas confirmadas.' : `${unconfirmedCount} aluno(s) aguardando confirmação.`}
-                    </span>
-                    <button className="btn-primary flex items-center gap-2" onClick={save} disabled={!canSave || saving}>
-                      {saving ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
-                      {saving ? 'Salvando…' : 'Salvar AV1/AV2'}
-                    </button>
-                  </div>
-                )}
-                {hasFinalPhase && (
-                  <div className="flex items-center justify-between rounded-xl border border-warning/40 bg-warning-soft px-4 py-3">
-                    <span className="text-sm text-warning font-medium">
-                      {recoveryStudents.length} aluno(s) em recuperação — lance a Prova Final.
-                    </span>
-                    <button className="inline-flex items-center gap-2 rounded-lg bg-warning px-4 py-2 text-sm font-semibold text-white hover:bg-warning/90 disabled:opacity-50"
-                      onClick={saveFinal} disabled={savingFinal}>
-                      {savingFinal ? <Loader2 size={15} className="animate-spin" /> : <Save size={15} />}
-                      {savingFinal ? 'Salvando…' : 'Salvar Prova Final'}
-                    </button>
-                  </div>
-                )}
+            {/* Rodapé: Prova Final */}
+            {!readOnly && studentList.length > 0 && hasFinalPhase && (
+              <div className="flex items-center justify-between rounded-xl border border-warning/40 bg-warning-soft px-4 py-3">
+                <span className="text-sm text-warning font-medium">
+                  {recoveryStudents.length} aluno(s) em recuperação — lance a Prova Final.
+                </span>
+                <button className="inline-flex items-center gap-2 rounded-lg bg-warning px-4 py-2 text-sm font-semibold text-white hover:bg-warning/90 disabled:opacity-50"
+                  onClick={saveFinal} disabled={savingFinal}>
+                  {savingFinal ? <Loader2 size={15} className="animate-spin" /> : <Save size={15} />}
+                  {savingFinal ? 'Salvando…' : 'Salvar Prova Final'}
+                </button>
               </div>
             )}
           </div>
