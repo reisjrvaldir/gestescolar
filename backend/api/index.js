@@ -46090,7 +46090,19 @@ messagesRouter.get("/contacts", async (req, res) => {
 messagesRouter.post("/", async (req, res) => {
   const p2 = messageSchema.safeParse(req.body);
   if (!p2.success) return res.status(400).json({ code: "validation", message: p2.error.issues[0]?.message });
-  const created = await withTenant(req.ctx, async (c) => {
+  const result = await withTenant(req.ctx, async (c) => {
+    const recip = await c.query(
+      `select 1 from public.profiles where id=$1 and school_id=$2 and status='active' limit 1`,
+      [p2.data.recipient_id, req.ctx.schoolId]
+    );
+    if (recip.rows.length === 0) return { error: "invalid_recipient" };
+    if (p2.data.student_id) {
+      const stu = await c.query(
+        `select 1 from public.students where id=$1 and school_id=$2 limit 1`,
+        [p2.data.student_id, req.ctx.schoolId]
+      );
+      if (stu.rows.length === 0) return { error: "invalid_student" };
+    }
     const { rows } = await c.query(
       `insert into public.messages (school_id, sender_id, recipient_id, student_id, subject, body)
        values ($1,$2,$3,$4,$5,$6)
@@ -46104,9 +46116,13 @@ messagesRouter.post("/", async (req, res) => {
         p2.data.body
       ]
     );
-    return rows[0];
+    return { data: rows[0] };
   });
-  res.status(201).json({ ok: true, data: created });
+  if ("error" in result) {
+    const message2 = result.error === "invalid_recipient" ? "Destinat\xE1rio inv\xE1lido para esta escola." : "Aluno inv\xE1lido para esta escola.";
+    return res.status(400).json({ code: result.error, message: message2 });
+  }
+  res.status(201).json({ ok: true, data: result.data });
 });
 messagesRouter.patch("/:id/read", async (req, res) => {
   await withTenant(req.ctx, async (c) => {

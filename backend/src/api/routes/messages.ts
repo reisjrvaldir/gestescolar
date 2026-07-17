@@ -53,7 +53,23 @@ messagesRouter.get('/contacts', async (req, res) => {
 messagesRouter.post('/', async (req, res) => {
   const p = messageSchema.safeParse(req.body);
   if (!p.success) return res.status(400).json({ code: 'validation', message: p.error.issues[0]?.message });
-  const created = await withTenant(req.ctx!, async (c) => {
+  const result = await withTenant(req.ctx!, async (c) => {
+    // Destinatário precisa ser um perfil ativo da MESMA escola (isolamento de tenant).
+    const recip = await c.query(
+      `select 1 from public.profiles where id=$1 and school_id=$2 and status='active' limit 1`,
+      [p.data.recipient_id, req.ctx!.schoolId],
+    );
+    if (recip.rows.length === 0) return { error: 'invalid_recipient' as const };
+
+    // Se houver aluno vinculado, ele também precisa ser desta escola.
+    if (p.data.student_id) {
+      const stu = await c.query(
+        `select 1 from public.students where id=$1 and school_id=$2 limit 1`,
+        [p.data.student_id, req.ctx!.schoolId],
+      );
+      if (stu.rows.length === 0) return { error: 'invalid_student' as const };
+    }
+
     const { rows } = await c.query(
       `insert into public.messages (school_id, sender_id, recipient_id, student_id, subject, body)
        values ($1,$2,$3,$4,$5,$6)
@@ -61,9 +77,16 @@ messagesRouter.post('/', async (req, res) => {
       [req.ctx!.schoolId, req.ctx!.profileId, p.data.recipient_id,
        p.data.student_id ?? null, p.data.subject, p.data.body],
     );
-    return rows[0];
+    return { data: rows[0] };
   });
-  res.status(201).json({ ok: true, data: created });
+
+  if ('error' in result) {
+    const message = result.error === 'invalid_recipient'
+      ? 'Destinatário inválido para esta escola.'
+      : 'Aluno inválido para esta escola.';
+    return res.status(400).json({ code: result.error, message });
+  }
+  res.status(201).json({ ok: true, data: result.data });
 });
 
 messagesRouter.patch('/:id/read', async (req, res) => {
