@@ -2,6 +2,6 @@
 .env
 .env.*
 node_modules/
-backend/api/
+backend/api/index.js
 *.tsbuildinfo
 .env*
