@@ -150,7 +150,7 @@ export function GuardianAgenda() {
           {/* Grade de dias */}
           <div className="grid grid-cols-7 gap-1">
             {weeks.flat().map((day, i) => {
-              if (day === null) return <div key={i} className="aspect-square" />;
+              if (day === null) return <div key={i} className="h-12 sm:h-14" />;
               const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
               const evs = dayEvents[dateStr] ?? [];
               const isToday = dateStr === todayStr;
@@ -158,16 +158,14 @@ export function GuardianAgenda() {
               return (
                 <div
                   key={i}
-                  className={`aspect-square rounded-lg border p-1 sm:p-1.5 ${isToday ? 'border-primary bg-primary-soft/40' : 'border-border'} ${evs.length ? '' : 'bg-canvas/30'}`}
+                  className={`flex h-12 flex-col rounded-lg border p-1 sm:h-14 sm:p-1.5 ${isToday ? 'border-primary bg-primary-soft/40' : 'border-border'} ${evs.length ? '' : 'bg-canvas/30'}`}
                   title={evs.map((e) => e.title).join(', ')}
                 >
-                  <div className="flex h-full flex-col">
-                    <span className={`text-xs font-semibold ${isToday ? 'text-primary' : 'text-ink'}`}>{day}</span>
-                    <div className="mt-auto flex flex-wrap gap-0.5">
-                      {types.slice(0, 4).map((t) => (
-                        <span key={t} className={`h-1.5 w-1.5 rounded-full ${TYPE_DOT[t]}`} />
-                      ))}
-                    </div>
+                  <span className={`text-xs font-semibold ${isToday ? 'text-primary' : 'text-ink'}`}>{day}</span>
+                  <div className="mt-auto flex flex-wrap gap-0.5">
+                    {types.slice(0, 4).map((t) => (
+                      <span key={t} className={`h-1.5 w-1.5 rounded-full ${TYPE_DOT[t]}`} />
+                    ))}
                   </div>
                 </div>
               );
