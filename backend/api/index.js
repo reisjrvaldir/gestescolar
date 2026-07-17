@@ -45407,7 +45407,9 @@ dashboardRouter.get("/stats", async (req, res) => {
       const events = await c.query(
         `select id, title, date_start::text, date_end::text, event_type
            from public.school_calendar
-          where school_id = $1 and date_start >= current_date
+          where school_id = $1
+            and (date_start >= current_date
+                 or (date_end is not null and date_end >= current_date))
           order by date_start asc limit 6`,
         [schoolId]
       );
