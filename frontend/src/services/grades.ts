@@ -65,11 +65,17 @@ export interface MyBoletimRanking {
   class_id: string;
 }
 
+export interface MyBoletimClassSubject {
+  class_id: string;
+  subject: string;
+}
+
 export interface MyBoletimData {
   students: MyBoletimStudent[];
   grades: BoletimGrade[];
   settings: GradeSettings;
   ranking: MyBoletimRanking[];
+  class_subjects: MyBoletimClassSubject[];
 }
 
 export const gradesService = {

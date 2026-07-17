@@ -9,6 +9,8 @@ export interface CalendarEvent {
   date_end?: string;
   event_type: EventType;
   description?: string;
+  start_time?: string | null;
+  end_time?: string | null;
   created_at: string;
 }
 

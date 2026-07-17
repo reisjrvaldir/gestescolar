@@ -7,6 +7,7 @@ import { Modal } from '@/components/ui/Modal';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { listEvents, createEvent, removeEvent, EVENT_TYPE_LABELS, type CalendarEvent, type EventType } from '@/services/calendar';
 import { useMe } from '@/auth/AuthGate';
+import { GuardianAgenda } from '@/components/calendar/GuardianAgenda';
 
 const TYPE_TONE: Record<EventType, 'primary' | 'success' | 'warning' | 'danger'> = {
   holiday: 'danger',
@@ -38,10 +39,14 @@ interface FormFields {
   date_end: string;
   event_type: EventType;
   description: string;
+  start_time: string;
+  end_time: string;
 }
 
 export function CalendarPage() {
   const me = useMe();
+  // Responsável usa a Agenda dedicada (calendário 70/30).
+  if (me?.role === 'guardian') return <GuardianAgenda />;
   const isAdmin = me && ['school_admin', 'superadmin'].includes(me.role);
 
   const [events, setEvents] = useState<CalendarEvent[]>([]);
@@ -63,7 +68,12 @@ export function CalendarPage() {
 
   async function onCreate(data: FormFields) {
     try {
-      await createEvent({ ...data, date_end: data.date_end || undefined });
+      await createEvent({
+        ...data,
+        date_end: data.date_end || undefined,
+        start_time: data.start_time || undefined,
+        end_time: data.end_time || undefined,
+      });
       setToast({ type: 'success', msg: `Evento "${data.title}" criado` });
       await load();
       reset();
@@ -190,6 +200,11 @@ export function CalendarPage() {
                       <span className="w-24 shrink-0 text-xs font-mono text-ink-muted">{dateStr}</span>
                       <StatusBadge tone={TYPE_TONE[ev.event_type]}>{EVENT_TYPE_LABELS[ev.event_type]}</StatusBadge>
                       <span className="min-w-0 flex-1 truncate font-medium text-ink">{ev.title}</span>
+                      {ev.start_time && (
+                        <span className="shrink-0 text-xs font-semibold text-ink-muted">
+                          {ev.start_time}{ev.end_time ? `–${ev.end_time}` : ''}
+                        </span>
+                      )}
                       {ev.date_end && ev.date_end !== ev.date_start && (
                         <span className="text-xs text-ink-muted">até {new Date(ev.date_end + 'T12:00:00').toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })}</span>
                       )}
@@ -236,6 +251,16 @@ export function CalendarPage() {
               <label className="label">Data fim</label>
               <input type="date" className="input" {...register('date_end')} />
               <p className="mt-1 text-xs text-ink-muted">Deixe vazio se for apenas 1 dia.</p>
+            </div>
+          </div>
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <div>
+              <label className="label">Horário início</label>
+              <input type="time" className="input" {...register('start_time')} />
+            </div>
+            <div>
+              <label className="label">Horário fim</label>
+              <input type="time" className="input" {...register('end_time')} />
             </div>
           </div>
           <div>

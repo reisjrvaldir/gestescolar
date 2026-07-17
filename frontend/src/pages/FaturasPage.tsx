@@ -120,7 +120,16 @@ export function FaturasPage() {
 
   const paidTotal = useMemo(() => paidInvoices.reduce((s, i) => s + i.amount, 0), [paidInvoices]);
 
-  const proximasAPagar = useMemo(() => openInvoices.sort((a, b) => (a.due_date ?? '').localeCompare(b.due_date ?? '')), [openInvoices]);
+  // Próximas a pagar = mensalidades/matrícula em aberto (avulsas têm seção própria).
+  const proximasAPagar = useMemo(
+    () => openInvoices.filter((i) => i.kind !== 'avulsa').sort((a, b) => (a.due_date ?? '').localeCompare(b.due_date ?? '')),
+    [openInvoices],
+  );
+  // Faturas avulsas (todas — pagas e em aberto), sempre com seção visível.
+  const avulsas = useMemo(
+    () => invoices.filter((i) => i.kind === 'avulsa').sort((a, b) => (b.due_date ?? '').localeCompare(a.due_date ?? '')),
+    [invoices],
+  );
 
   function generatePaymentPdf(inv: MyInvoice) {
     const w = window.open('', '_blank');
@@ -226,10 +235,10 @@ export function FaturasPage() {
             {/* Próximas a pagar */}
             <div className="card overflow-hidden">
               <div className="border-b border-border px-5 py-3.5">
-                <h3 className="text-sm font-bold text-ink">Próximas a pagar</h3>
+                <h3 className="text-sm font-bold text-ink">Mensalidades a pagar</h3>
               </div>
               {proximasAPagar.length === 0 ? (
-                <p className="px-5 py-8 text-center text-sm text-ink-subtle">Nenhuma fatura pendente.</p>
+                <p className="px-5 py-8 text-center text-sm text-ink-subtle">Nenhuma mensalidade pendente.</p>
               ) : (
                 <div className="divide-y divide-border">
                   {proximasAPagar.map((inv) => (
@@ -257,6 +266,48 @@ export function FaturasPage() {
                       </div>
                     </div>
                   ))}
+                </div>
+              )}
+            </div>
+
+            {/* Faturas avulsas — sempre visível (mesmo sem cobrança) */}
+            <div className="card overflow-hidden">
+              <div className="flex items-center justify-between border-b border-border px-5 py-3.5">
+                <h3 className="text-sm font-bold text-ink">Faturas avulsas</h3>
+                <span className="text-[11px] text-ink-subtle">Materiais, passeios, taxas extras</span>
+              </div>
+              {avulsas.length === 0 ? (
+                <div className="px-5 py-8 text-center">
+                  <FileText size={24} className="mx-auto mb-2 text-ink-subtle" />
+                  <p className="text-sm text-ink-subtle">Nenhuma cobrança avulsa no momento.</p>
+                  <p className="mt-0.5 text-xs text-ink-subtle">Cobranças extras lançadas pela escola aparecerão aqui.</p>
+                </div>
+              ) : (
+                <div className="divide-y divide-border">
+                  {avulsas.map((inv) => {
+                    const isPaid = inv.status === 'paid';
+                    return (
+                      <div key={inv.id} className="flex flex-wrap items-center justify-between gap-2 px-5 py-3">
+                        <div className="min-w-0 flex-1">
+                          <p className="font-medium text-ink">{inv.charge_title ?? 'Cobrança avulsa'}</p>
+                          <p className="text-xs text-ink-muted">
+                            {inv.student_name}
+                            {inv.due_date && ` · Vence ${fmtDate(inv.due_date)}`}
+                            {isPaid && inv.paid_at && ` · Pago em ${fmtDate(inv.paid_at)}`}
+                          </p>
+                        </div>
+                        <div className="flex items-center gap-3">
+                          <span className="font-bold text-ink">{brl(inv.amount)}</span>
+                          <StatusBadge tone={STATUS[inv.status].tone}>{STATUS[inv.status].label}</StatusBadge>
+                          {!isPaid && (inv.pix_copy_paste || inv.checkout_url) && (
+                            <button className="btn-primary text-xs" onClick={() => setSelected(inv)}>
+                              <CreditCard size={13} /> Pagar
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
               )}
             </div>

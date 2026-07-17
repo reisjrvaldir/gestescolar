@@ -104,7 +104,7 @@ export const MENUS: Record<Role, MenuSection[]> = {
       items: [
         { to: '/app/attendance', label: 'Presenças', icon: ClipboardCheck },
         { to: '/app/grades', label: 'Boletim', icon: Star },
-        { to: '/app/calendar', label: 'Calendário', icon: CalendarDays },
+        { to: '/app/calendar', label: 'Agenda', icon: CalendarDays },
       ],
     },
     {
