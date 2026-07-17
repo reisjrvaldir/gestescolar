@@ -100,6 +100,8 @@ export function CalendarPage() {
     date_end: undefined as string | undefined,
     event_type: 'holiday' as EventType,
     description: 'Feriado Nacional',
+    start_time: undefined as string | undefined,
+    end_time: undefined as string | undefined,
     created_at: '',
     isNational: true,
   }));
