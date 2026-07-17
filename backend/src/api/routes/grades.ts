@@ -124,11 +124,23 @@ gradesRouter.get('/my-boletim', async (req, res) => {
         order by avg_grade desc`,
       [req.ctx!.schoolId, classIds],
     );
+    // Todas as matérias cadastradas nas turmas dos filhos (mesmo sem nota lançada).
+    const classSubjects = classIds.length > 0
+      ? await c.query(
+          `select cs.class_id, sub.name as subject
+             from public.class_subjects cs
+             join public.subjects sub on sub.id = cs.subject_id
+            where cs.school_id = $1 and cs.class_id = any($2::uuid[])
+            order by sub.name`,
+          [req.ctx!.schoolId, classIds],
+        )
+      : { rows: [] as any[] };
     return {
       students: students.rows,
       grades: grades.rows,
       settings: settings.rows[0] ?? { passing_grade: 7, final_passing_grade: 5 },
       ranking: ranking.rows,
+      class_subjects: classSubjects.rows,
     };
   });
   res.json({ ok: true, data });

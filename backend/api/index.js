@@ -44057,11 +44057,20 @@ gradesRouter.get("/my-boletim", async (req, res) => {
         order by avg_grade desc`,
       [req.ctx.schoolId, classIds]
     );
+    const classSubjects = classIds.length > 0 ? await c.query(
+      `select cs.class_id, sub.name as subject
+             from public.class_subjects cs
+             join public.subjects sub on sub.id = cs.subject_id
+            where cs.school_id = $1 and cs.class_id = any($2::uuid[])
+            order by sub.name`,
+      [req.ctx.schoolId, classIds]
+    ) : { rows: [] };
     return {
       students: students.rows,
       grades: grades.rows,
       settings: settings.rows[0] ?? { passing_grade: 7, final_passing_grade: 5 },
-      ranking: ranking.rows
+      ranking: ranking.rows,
+      class_subjects: classSubjects.rows
     };
   });
   res.json({ ok: true, data });
@@ -45405,16 +45414,20 @@ dashboardRouter.get("/stats", async (req, res) => {
       );
       const now = /* @__PURE__ */ new Date();
       const events = await c.query(
-        `select id, title, date_start::text, date_end::text, event_type
+        `select id, title, description, date_start::text, date_end::text, event_type,
+                to_char(start_time, 'HH24:MI') as start_time,
+                to_char(end_time,   'HH24:MI') as end_time
            from public.school_calendar
           where school_id = $1
             and (date_start >= current_date
                  or (date_end is not null and date_end >= current_date))
-          order by date_start asc limit 6`,
+          order by date_start asc, start_time asc nulls last limit 6`,
         [schoolId]
       );
       const pendingInvoices = await c.query(
-        `select i.id, i.student_name, i.amount::float8 as amount, i.due_date::text, i.status,
+        `select i.id, i.student_name, i.amount::float8 as amount, i.due_date::text,
+                case when i.status = 'pending' and i.due_date < current_date
+                     then 'overdue' else i.status end as status,
                 i.kind, i.reference_month
            from public.invoices i
            join public.students s on s.id = i.student_id
@@ -45426,7 +45439,9 @@ dashboardRouter.get("/stats", async (req, res) => {
         `select coalesce(sum(i.amount),0)::float8 as total, count(*)::int as count
            from public.invoices i
            join public.students s on s.id = i.student_id
-          where s.guardian_id = $1 and i.school_id = $2 and i.status = 'overdue'`,
+          where s.guardian_id = $1 and i.school_id = $2
+            and (i.status = 'overdue'
+                 or (i.status = 'pending' and i.due_date < current_date))`,
         [guardianId, schoolId]
       );
       return {
@@ -45770,30 +45785,36 @@ calendarRouter.get("/", async (req, res) => {
       params.push(Number(year2));
     }
     const { rows } = await c.query(
-      `select id, title, description, date_start, date_end, event_type, created_at
+      `select id, title, description, date_start, date_end, event_type,
+              to_char(start_time, 'HH24:MI') as start_time,
+              to_char(end_time,   'HH24:MI') as end_time,
+              created_at
          from public.school_calendar
         where school_id = $1${filter}
-        order by date_start asc`,
+        order by date_start asc, start_time asc nulls last`,
       params
     );
     return rows;
   });
   res.json({ ok: true, data });
 });
+var timeSchema = external_exports.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, "Hor\xE1rio inv\xE1lido");
 var eventSchema = external_exports.object({
   title: external_exports.string().min(2, "Informe o t\xEDtulo"),
   description: external_exports.string().optional(),
   date_start: dateSchema,
   date_end: dateSchema.optional(),
-  event_type: external_exports.enum(["holiday", "exam", "meeting", "event", "recess"]).optional()
+  event_type: external_exports.enum(["holiday", "exam", "meeting", "event", "recess"]).optional(),
+  start_time: timeSchema.optional(),
+  end_time: timeSchema.optional()
 });
 calendarRouter.post("/", requireRole("school_admin", "superadmin"), async (req, res) => {
   const p2 = eventSchema.safeParse(req.body);
   if (!p2.success) return res.status(400).json({ code: "validation", message: p2.error.issues[0]?.message });
   const created = await withTenant(req.ctx, async (c) => {
     const { rows } = await c.query(
-      `insert into public.school_calendar (school_id, title, description, date_start, date_end, event_type)
-       values ($1, $2, $3, $4, $5, $6)
+      `insert into public.school_calendar (school_id, title, description, date_start, date_end, event_type, start_time, end_time)
+       values ($1, $2, $3, $4, $5, $6, $7, $8)
        returning id, title, date_start, event_type`,
       [
         req.ctx.schoolId,
@@ -45801,7 +45822,9 @@ calendarRouter.post("/", requireRole("school_admin", "superadmin"), async (req, 
         p2.data.description ?? null,
         p2.data.date_start,
         p2.data.date_end ?? null,
-        p2.data.event_type ?? "event"
+        p2.data.event_type ?? "event",
+        p2.data.start_time ?? null,
+        p2.data.end_time ?? null
       ]
     );
     return rows[0];

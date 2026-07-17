@@ -55,17 +55,23 @@ dashboardRouter.get('/stats', async (req, res) => {
 
       const now = new Date();
       const events = await c.query(
-        `select id, title, date_start::text, date_end::text, event_type
+        `select id, title, description, date_start::text, date_end::text, event_type,
+                to_char(start_time, 'HH24:MI') as start_time,
+                to_char(end_time,   'HH24:MI') as end_time
            from public.school_calendar
           where school_id = $1
             and (date_start >= current_date
                  or (date_end is not null and date_end >= current_date))
-          order by date_start asc limit 6`,
+          order by date_start asc, start_time asc nulls last limit 6`,
         [schoolId],
       );
 
+      // Status efetivo em tempo real: fatura 'pending' com vencimento no passado
+      // conta como atrasada (independe do cron que roda 1x/dia).
       const pendingInvoices = await c.query(
-        `select i.id, i.student_name, i.amount::float8 as amount, i.due_date::text, i.status,
+        `select i.id, i.student_name, i.amount::float8 as amount, i.due_date::text,
+                case when i.status = 'pending' and i.due_date < current_date
+                     then 'overdue' else i.status end as status,
                 i.kind, i.reference_month
            from public.invoices i
            join public.students s on s.id = i.student_id
@@ -78,7 +84,9 @@ dashboardRouter.get('/stats', async (req, res) => {
         `select coalesce(sum(i.amount),0)::float8 as total, count(*)::int as count
            from public.invoices i
            join public.students s on s.id = i.student_id
-          where s.guardian_id = $1 and i.school_id = $2 and i.status = 'overdue'`,
+          where s.guardian_id = $1 and i.school_id = $2
+            and (i.status = 'overdue'
+                 or (i.status = 'pending' and i.due_date < current_date))`,
         [guardianId, schoolId],
       );
 
