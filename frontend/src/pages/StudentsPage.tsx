@@ -3,7 +3,7 @@ import { useForm } from 'react-hook-form';
 import { useLocation, useNavigate } from 'react-router-dom';
 import {
   GraduationCap, Search, Loader2, Copy, Check, Save, Plus,
-  User, Phone, FileText, Link2, Upload, Printer,
+  User, Phone, FileText, Link2, Upload, Printer, Pencil,
 } from 'lucide-react';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { EmptyState } from '@/components/ui/EmptyState';
@@ -14,6 +14,8 @@ import { schoolPlansService, type SchoolPlan } from '@/services/schoolPlans';
 import { useMe } from '@/auth/AuthGate';
 import type { SchoolClass, Student } from '@/types/models';
 import { brl } from '@/lib/fees';
+import { resizeImageToDataUrl } from '@/lib/image';
+import { StudentEditModal } from '@/components/students/StudentEditModal';
 
 const BLOOD_TYPES = ['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'] as const;
 
@@ -121,6 +123,7 @@ export function StudentsPage() {
   const [credentials, setCredentials] = useState<CreatedStudent | null>(null);
   const [copied, setCopied] = useState(false);
   const [photoPreview, setPhotoPreview] = useState<string | null>(null);
+  const [editing, setEditing] = useState<Student | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -181,6 +184,7 @@ export function StudentsPage() {
         birth_date: data.birth_date,
         blood_type: data.blood_type || undefined,
         naturality: data.naturality || undefined,
+        photo_url: photoPreview || undefined,
         father_name: data.father_name,
         mother_name: data.mother_name,
         class_id: data.class_id || undefined,
@@ -254,15 +258,14 @@ export function StudentsPage() {
               <div>
                 <label className="btn-outline inline-flex cursor-pointer items-center gap-1.5 text-sm">
                   <Upload size={14} /> Escolher foto
-                  <input type="file" accept="image/*" className="hidden" onChange={(e) => {
+                  <input type="file" accept="image/*" className="hidden" onChange={async (e) => {
                     const file = e.target.files?.[0];
                     if (!file) return;
-                    const reader = new FileReader();
-                    reader.onload = () => setPhotoPreview(reader.result as string);
-                    reader.readAsDataURL(file);
+                    try { setPhotoPreview(await resizeImageToDataUrl(file, 256, 0.8)); }
+                    catch { setError('Não foi possível processar a imagem.'); }
                   }} />
                 </label>
-                <p className="mt-2 text-xs text-ink-muted">JPG ou PNG, máximo 2MB</p>
+                <p className="mt-2 text-xs text-ink-muted">JPG ou PNG — redimensionada automaticamente</p>
               </div>
             </div>
           </div>
@@ -565,9 +568,14 @@ export function StudentsPage() {
                       <span>{selected.class_name ?? 'Sem turma'}</span>
                     </div>
                   </div>
-                  <StatusBadge tone={selected.status === 'active' ? 'success' : 'neutral'}>
-                    {selected.status === 'active' ? 'Ativo' : 'Inativo'}
-                  </StatusBadge>
+                  <div className="flex flex-col items-end gap-2">
+                    <StatusBadge tone={selected.status === 'active' ? 'success' : 'neutral'}>
+                      {selected.status === 'active' ? 'Ativo' : 'Inativo'}
+                    </StatusBadge>
+                    <button className="btn-outline flex items-center gap-1.5 text-xs" onClick={() => setEditing(selected)}>
+                      <Pencil size={13} /> Editar
+                    </button>
+                  </div>
                 </div>
               </div>
 
@@ -677,6 +685,21 @@ export function StudentsPage() {
           )}
         </div>
       </div>
+
+      {editing && (
+        <StudentEditModal
+          student={editing}
+          classes={classes}
+          plans={plans}
+          onClose={() => setEditing(null)}
+          onSaved={(updated) => {
+            setStudents((prev) => prev.map((s) => (s.id === updated.id ? { ...s, ...updated } : s)));
+            setSelected((prev) => (prev && prev.id === updated.id ? { ...prev, ...updated } : prev));
+            setEditing(null);
+            load();
+          }}
+        />
+      )}
     </>
   );
 }
