@@ -28,6 +28,22 @@ const TABS = [
   { key: 'inadimplencia', label: 'Inadimplência' },
 ];
 
+/** Exporta linhas para CSV (client-side, sem backend) e dispara o download. */
+function downloadCsv(filename: string, headers: string[], rows: (string | number)[][]) {
+  const esc = (v: string | number) => {
+    const s = String(v ?? '');
+    return /[",;\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+  };
+  const csv = [headers, ...rows].map((r) => r.map(esc).join(';')).join('\n');
+  const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
 const STATUS: Record<Invoice['status'], { tone: 'success' | 'warning' | 'danger'; label: string }> = {
   paid: { tone: 'success', label: 'Pago' },
   pending: { tone: 'warning', label: 'Pendente' },
@@ -118,7 +134,7 @@ export function FinancePage() {
         showToast('error', 'Registro manual de pagamento — disponível em breve.');
         break;
       case 'exportar-relatorio':
-        showToast('error', 'Exportação de relatório — disponível em breve.');
+        exportReceivables();
         break;
       default:
         showToast('error', 'Ação em breve.');
@@ -126,6 +142,32 @@ export function FinancePage() {
   }
 
   const goExpenses = () => navigate('/app/finance/expenses');
+
+  function exportReceivables() {
+    if (invoices.length === 0) { showToast('error', 'Nada a exportar ainda.'); return; }
+    downloadCsv(
+      `a-receber-${new Date().toISOString().slice(0, 10)}.csv`,
+      ['Aluno', 'Responsável', 'Turma', 'Valor', 'Vencimento', 'Referência', 'Status'],
+      invoices.map((i) => [
+        i.student_name, i.guardian_name ?? '', i.class_name ?? '',
+        i.amount.toFixed(2), i.due_date ?? '', i.reference_month ?? '', STATUS[i.status].label,
+      ]),
+    );
+    showToast('success', `Exportadas ${invoices.length} cobranças.`);
+  }
+
+  function exportDelinquency() {
+    if (delinquency.length === 0) { showToast('error', 'Nenhum inadimplente para exportar.'); return; }
+    downloadCsv(
+      `inadimplentes-${new Date().toISOString().slice(0, 10)}.csv`,
+      ['Aluno', 'Responsável', 'Plano', 'Valor', 'Vencimento', 'Dias em atraso'],
+      delinquency.map((d) => [
+        d.student_name, d.guardian_name ?? '', d.plan_name ?? '',
+        d.amount.toFixed(2), d.due_date ?? '', d.days_late,
+      ]),
+    );
+    showToast('success', `Exportados ${delinquency.length} inadimplentes.`);
+  }
 
   if (loading || !summary) {
     return <div className="flex items-center justify-center py-20 text-ink-muted"><Loader2 className="animate-spin" size={24} /> <span className="ml-2">Carregando…</span></div>;
@@ -263,7 +305,7 @@ export function FinancePage() {
 
       {/* ===================== INADIMPLÊNCIA ===================== */}
       {tab === 'inadimplencia' && (
-        <DelinquencyCard rows={delinquency} onViewAll={() => showToast('error', 'Exportação da lista completa — disponível em breve.')} />
+        <DelinquencyCard rows={delinquency} onViewAll={exportDelinquency} />
       )}
 
       <AdhocChargeModal
