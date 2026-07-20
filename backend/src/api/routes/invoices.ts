@@ -103,6 +103,60 @@ invoicesRouter.post('/:id/charge', requireRole('school_admin', 'financial', 'sup
   res.json({ ok: true, data: result.charge });
 });
 
+// POST /api/invoices/:id/manual-payment — registra pagamento recebido OFFLINE
+// (dinheiro/na escola). NÃO passou pelo gateway → NÃO entra no saldo sacável
+// (available_balance), pois a plataforma não recebeu esse valor. Apenas marca a
+// fatura como paga e registra auditoria. Mesmo padrão da matrícula paga em cash.
+invoicesRouter.post('/:id/manual-payment', requireRole('school_admin', 'financial', 'superadmin'), async (req, res) => {
+  const method = req.body?.payment_method;
+  const allowed = ['cash', 'pix', 'card', 'other'];
+  const payMethod = allowed.includes(method) ? method : 'cash';
+  // Data do pagamento: hoje por padrão; aceita YYYY-MM-DD (não pode ser futura).
+  const rawDate = typeof req.body?.paid_at === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(req.body.paid_at)
+    ? req.body.paid_at : null;
+
+  const result = await withTenant(req.ctx!, async (c) => {
+    const inv = await c.query(
+      `select id, status from public.invoices where id=$1 and school_id=$2 limit 1`,
+      [req.params.id, req.ctx!.schoolId],
+    );
+    if (inv.rows.length === 0) return { error: 'not_found' as const };
+    const status = inv.rows[0].status;
+    if (status === 'paid') return { error: 'already_paid' as const };
+    if (status === 'cancelled' || status === 'refunded') return { error: 'not_payable' as const };
+
+    const { rows } = await c.query(
+      `update public.invoices
+          set status='paid',
+              payment_method=$3,
+              paid_at = coalesce($4::timestamptz, now()),
+              updated_at = now()
+        where id=$1 and school_id=$2
+        returning id, status, amount::float8 as amount, paid_at, payment_method`,
+      [req.params.id, req.ctx!.schoolId, payMethod, rawDate ? `${rawDate}T12:00:00` : null],
+    );
+
+    await c.query(
+      `insert into public.audit_logs (school_id, user_id, action, entity_type, entity_id, metadata)
+       values ($1,$2,'PAYMENT_MANUAL','invoice',$3,$4)`,
+      [req.ctx!.schoolId, req.ctx!.profileId, req.params.id,
+       JSON.stringify({ payment_method: payMethod, paid_at: rawDate ?? 'now', offline: true })],
+    );
+    return { data: rows[0] };
+  });
+
+  if ('error' in result) {
+    const map: Record<string, [number, string]> = {
+      not_found: [404, 'Fatura não encontrada.'],
+      already_paid: [409, 'Esta fatura já está paga.'],
+      not_payable: [409, 'Fatura cancelada/estornada não pode ser baixada.'],
+    };
+    const [http, message] = map[result.error];
+    return res.status(http).json({ code: result.error, message });
+  }
+  res.json({ ok: true, data: result.data });
+});
+
 // GET /api/finance/balance — saldo da escola
 invoicesRouter.get('/balance/summary', requireRole('school_admin', 'financial', 'superadmin'), async (req, res) => {
   const data = await withTenant(req.ctx!, async (c) => {

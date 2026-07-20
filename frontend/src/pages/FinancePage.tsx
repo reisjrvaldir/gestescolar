@@ -66,6 +66,10 @@ export function FinancePage() {
   const [sendingId, setSendingId] = useState<string | null>(null);
   const [pixResult, setPixResult] = useState<{ studentName: string; copyPaste?: string } | null>(null);
   const [toast, setToast] = useState<{ type: 'success' | 'error'; msg: string } | null>(null);
+  const [manualFor, setManualFor] = useState<Invoice | null>(null);
+  const [manualMethod, setManualMethod] = useState<'cash' | 'pix' | 'card' | 'other'>('cash');
+  const [manualDate, setManualDate] = useState(new Date().toISOString().slice(0, 10));
+  const [manualSaving, setManualSaving] = useState(false);
 
   useEffect(() => { load(); }, []);
 
@@ -131,7 +135,8 @@ export function FinancePage() {
         setAdhocOpen(true);
         break;
       case 'registrar-pagamento':
-        showToast('error', 'Registro manual de pagamento — disponível em breve.');
+        setTab('receber');
+        showToast('success', 'Selecione a fatura em "A receber" e clique em "Registrar pagamento recebido".');
         break;
       case 'exportar-relatorio':
         exportReceivables();
@@ -142,6 +147,28 @@ export function FinancePage() {
   }
 
   const goExpenses = () => navigate('/app/finance/expenses');
+
+  function openManual(inv: Invoice) {
+    setManualFor(inv);
+    setManualMethod('cash');
+    setManualDate(new Date().toISOString().slice(0, 10));
+  }
+
+  async function confirmManualPayment() {
+    if (!manualFor) return;
+    setManualSaving(true);
+    try {
+      await invoicesService.registerManualPayment(manualFor.id, { payment_method: manualMethod, paid_at: manualDate });
+      showToast('success', `Pagamento de ${manualFor.student_name} registrado.`);
+      setManualFor(null);
+      setSelected(null);
+      await load();
+    } catch (e: any) {
+      showToast('error', e?.message ?? 'Falha ao registrar pagamento.');
+    } finally {
+      setManualSaving(false);
+    }
+  }
 
   function exportReceivables() {
     if (invoices.length === 0) { showToast('error', 'Nada a exportar ainda.'); return; }
@@ -297,7 +324,17 @@ export function FinancePage() {
             {!selected ? (
               <p className="text-sm text-ink-muted">Selecione uma fatura para ver o detalhamento da taxa de serviço e o valor líquido.</p>
             ) : (
-              <SplitDetail invoice={selected} />
+              <>
+                <SplitDetail invoice={selected} />
+                {selected.status !== 'paid' && selected.status !== 'cancelled' && (
+                  <button
+                    className="btn-outline mt-4 flex w-full items-center justify-center gap-1.5 text-xs"
+                    onClick={() => openManual(selected)}
+                  >
+                    <Check size={14} /> Registrar pagamento recebido (dinheiro / na escola)
+                  </button>
+                )}
+              </>
             )}
           </div>
         </div>
@@ -307,6 +344,50 @@ export function FinancePage() {
       {tab === 'inadimplencia' && (
         <DelinquencyCard rows={delinquency} onViewAll={exportDelinquency} />
       )}
+
+      {/* Registrar pagamento recebido offline */}
+      <Modal
+        open={!!manualFor}
+        onClose={() => !manualSaving && setManualFor(null)}
+        title="Registrar pagamento recebido"
+        footer={
+          <>
+            <button className="btn-outline" onClick={() => setManualFor(null)} disabled={manualSaving}>Cancelar</button>
+            <button className="btn-primary flex items-center gap-2" onClick={confirmManualPayment} disabled={manualSaving}>
+              {manualSaving ? <Loader2 size={16} className="animate-spin" /> : <Check size={16} />}
+              {manualSaving ? 'Registrando…' : 'Confirmar pagamento'}
+            </button>
+          </>
+        }
+      >
+        {manualFor && (
+          <div className="space-y-4">
+            <div className="rounded-xl border border-border bg-canvas p-3 text-sm">
+              <div className="flex justify-between"><span className="text-ink-muted">Aluno</span><span className="font-medium text-ink">{manualFor.student_name}</span></div>
+              <div className="mt-1 flex justify-between"><span className="text-ink-muted">Valor</span><span className="font-bold text-ink">{brl(manualFor.amount)}</span></div>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="label">Forma recebida</label>
+                <select className="input" value={manualMethod} onChange={(e) => setManualMethod(e.target.value as any)}>
+                  <option value="cash">Dinheiro</option>
+                  <option value="pix">PIX (fora do sistema)</option>
+                  <option value="card">Cartão (maquininha)</option>
+                  <option value="other">Outro</option>
+                </select>
+              </div>
+              <div>
+                <label className="label">Data do pagamento</label>
+                <input type="date" className="input" value={manualDate} max={new Date().toISOString().slice(0, 10)} onChange={(e) => setManualDate(e.target.value)} />
+              </div>
+            </div>
+            <div className="flex items-start gap-2 rounded-xl bg-warning-soft px-3 py-2 text-xs text-warning">
+              <AlertTriangle size={14} className="mt-0.5 shrink-0" />
+              <span>Baixa manual: a fatura será marcada como <strong>paga</strong>. Este valor <strong>não entra no saldo sacável</strong> (o dinheiro já está com a escola). Não gere/cobre o PIX desta fatura para evitar pagamento em dobro.</span>
+            </div>
+          </div>
+        )}
+      </Modal>
 
       <AdhocChargeModal
         open={adhocOpen}

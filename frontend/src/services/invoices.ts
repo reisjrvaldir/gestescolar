@@ -13,7 +13,7 @@ export interface Invoice {
   status: InvoiceStatus;
   kind?: InvoiceKind;
   reference_month?: string;
-  payment_method?: 'pix' | 'card';
+  payment_method?: 'pix' | 'card' | 'cash' | 'other';
   checkout_url?: string;
   paid_at?: string;
   created_at?: string;
@@ -57,6 +57,15 @@ export const invoicesService = {
   /** Gera uma cobrança PIX ou cartão para a fatura. */
   async charge(id: string, billingType: 'PIX' | 'CREDIT_CARD' = 'PIX'): Promise<ChargeResult> {
     const res = await api.post<{ ok: boolean; data: ChargeResult }>(`/invoices/${id}/charge`, { billingType });
+    return res.data;
+  },
+
+  /** Registra pagamento recebido offline (dinheiro/na escola). Não entra no saldo sacável. */
+  async registerManualPayment(
+    id: string,
+    input: { payment_method: 'cash' | 'pix' | 'card' | 'other'; paid_at?: string },
+  ): Promise<Invoice> {
+    const res = await api.post<{ ok: boolean; data: Invoice }>(`/invoices/${id}/manual-payment`, input);
     return res.data;
   },
 };

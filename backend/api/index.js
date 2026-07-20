@@ -44853,6 +44853,53 @@ invoicesRouter.post("/:id/charge", requireRole("school_admin", "financial", "sup
   }
   res.json({ ok: true, data: result.charge });
 });
+invoicesRouter.post("/:id/manual-payment", requireRole("school_admin", "financial", "superadmin"), async (req, res) => {
+  const method = req.body?.payment_method;
+  const allowed = ["cash", "pix", "card", "other"];
+  const payMethod = allowed.includes(method) ? method : "cash";
+  const rawDate = typeof req.body?.paid_at === "string" && /^\d{4}-\d{2}-\d{2}$/.test(req.body.paid_at) ? req.body.paid_at : null;
+  const result = await withTenant(req.ctx, async (c) => {
+    const inv = await c.query(
+      `select id, status from public.invoices where id=$1 and school_id=$2 limit 1`,
+      [req.params.id, req.ctx.schoolId]
+    );
+    if (inv.rows.length === 0) return { error: "not_found" };
+    const status = inv.rows[0].status;
+    if (status === "paid") return { error: "already_paid" };
+    if (status === "cancelled" || status === "refunded") return { error: "not_payable" };
+    const { rows } = await c.query(
+      `update public.invoices
+          set status='paid',
+              payment_method=$3,
+              paid_at = coalesce($4::timestamptz, now()),
+              updated_at = now()
+        where id=$1 and school_id=$2
+        returning id, status, amount::float8 as amount, paid_at, payment_method`,
+      [req.params.id, req.ctx.schoolId, payMethod, rawDate ? `${rawDate}T12:00:00` : null]
+    );
+    await c.query(
+      `insert into public.audit_logs (school_id, user_id, action, entity_type, entity_id, metadata)
+       values ($1,$2,'PAYMENT_MANUAL','invoice',$3,$4)`,
+      [
+        req.ctx.schoolId,
+        req.ctx.profileId,
+        req.params.id,
+        JSON.stringify({ payment_method: payMethod, paid_at: rawDate ?? "now", offline: true })
+      ]
+    );
+    return { data: rows[0] };
+  });
+  if ("error" in result) {
+    const map = {
+      not_found: [404, "Fatura n\xE3o encontrada."],
+      already_paid: [409, "Esta fatura j\xE1 est\xE1 paga."],
+      not_payable: [409, "Fatura cancelada/estornada n\xE3o pode ser baixada."]
+    };
+    const [http, message2] = map[result.error];
+    return res.status(http).json({ code: result.error, message: message2 });
+  }
+  res.json({ ok: true, data: result.data });
+});
 invoicesRouter.get("/balance/summary", requireRole("school_admin", "financial", "superadmin"), async (req, res) => {
   const data = await withTenant(req.ctx, async (c) => {
     const { rows } = await c.query(
