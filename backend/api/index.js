@@ -43646,7 +43646,8 @@ var staffSchema = external_exports.object({
   position: external_exports.string().optional(),
   admission_date: external_exports.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
   contract_type: external_exports.enum(["clt", "pj", "estagio", "temporario"]).optional(),
-  weekly_hours: external_exports.number().min(0).max(80).optional()
+  weekly_hours: external_exports.number().min(0).max(80).optional(),
+  timeclock_enabled: external_exports.boolean().optional()
 });
 var staffUpdateSchema = staffSchema.partial().extend({
   name: external_exports.string().min(2)
@@ -43659,6 +43660,7 @@ staffRouter.get("/", async (req, res) => {
     const { rows } = await c.query(
       `select id, name, email, phone, ${cpfCol}, registration_number, role_type, subject_teaches,
               position, admission_date::text as admission_date, contract_type, weekly_hours::float8 as weekly_hours,
+              coalesce(timeclock_enabled, true) as timeclock_enabled,
               status, created_at, user_id
          from public.teachers
         where school_id = $1
@@ -43703,11 +43705,11 @@ staffRouter.post("/", requireRole("school_admin", "superadmin"), async (req, res
       const tRow = await c.query(
         `insert into public.teachers
            (school_id, user_id, name, email, phone, cpf, registration_number, role_type, subject_teaches,
-            position, admission_date, contract_type, weekly_hours)
-         values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
+            position, admission_date, contract_type, weekly_hours, timeclock_enabled)
+         values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)
          returning id, name, email, phone, cpf, registration_number, role_type, subject_teaches,
                    position, admission_date::text as admission_date, contract_type, weekly_hours::float8 as weekly_hours,
-                   status, created_at`,
+                   timeclock_enabled, status, created_at`,
         [
           req.ctx.schoolId,
           profileId,
@@ -43721,7 +43723,8 @@ staffRouter.post("/", requireRole("school_admin", "superadmin"), async (req, res
           s.position ?? null,
           s.admission_date ?? null,
           s.contract_type ?? null,
-          s.weekly_hours ?? null
+          s.weekly_hours ?? null,
+          s.timeclock_enabled ?? true
         ]
       );
       return {
@@ -43758,11 +43761,12 @@ staffRouter.put("/:id", requireRole("school_admin", "superadmin"), async (req, r
           position=coalesce($9,position),
           admission_date=coalesce($10,admission_date),
           contract_type=coalesce($11,contract_type),
-          weekly_hours=coalesce($12,weekly_hours)
+          weekly_hours=coalesce($12,weekly_hours),
+          timeclock_enabled=coalesce($13,timeclock_enabled)
         where id=$7 and school_id=$8
         returning id, name, email, phone, cpf, role_type, subject_teaches,
                   position, admission_date::text as admission_date, contract_type, weekly_hours::float8 as weekly_hours,
-                  status, registration_number, user_id`,
+                  timeclock_enabled, status, registration_number, user_id`,
       [
         s.name ?? null,
         s.email ?? null,
@@ -43775,7 +43779,8 @@ staffRouter.put("/:id", requireRole("school_admin", "superadmin"), async (req, r
         s.position ?? null,
         s.admission_date ?? null,
         s.contract_type ?? null,
-        s.weekly_hours ?? null
+        s.weekly_hours ?? null,
+        s.timeclock_enabled ?? null
       ]
     );
     if (rows[0]?.user_id) {
@@ -45918,7 +45923,8 @@ timeclockRouter.get("/", async (req, res) => {
       params.push(month);
     }
     const { rows } = await c.query(
-      `select id, clock_in, clock_out, notes, created_at
+      `select id, clock_in, clock_out, notes, created_at,
+              approval_status, is_adjustment, justification
          from public.timeclock_entries
         where school_id = $1 and user_id = $2${filter}
         order by clock_in desc`,
@@ -45944,7 +45950,7 @@ timeclockRouter.get("/all", async (req, res) => {
   const data = await withTenant(req.ctx, async (c) => {
     if (!ADMIN_ROLES.includes(req.ctx.role)) return [];
     const { rows } = await c.query(
-      `select t.id, t.clock_in, t.clock_out, t.notes, p.name as user_name
+      `select t.id, t.clock_in, t.clock_out, t.notes, t.approval_status, t.is_adjustment, p.name as user_name
          from public.timeclock_entries t
          join public.profiles p on p.id = t.user_id
         where t.school_id = $1
@@ -45957,29 +45963,56 @@ timeclockRouter.get("/all", async (req, res) => {
   res.json({ ok: true, data });
 });
 timeclockRouter.get("/report", requireRole("school_admin", "superadmin", "financial"), async (req, res) => {
-  const from = typeof req.query.from === "string" && /^\d{4}-\d{2}-\d{2}$/.test(req.query.from) ? req.query.from : null;
-  const to2 = typeof req.query.to === "string" && /^\d{4}-\d{2}-\d{2}$/.test(req.query.to) ? req.query.to : null;
+  const valid = (v2) => typeof v2 === "string" && /^\d{4}-\d{2}-\d{2}$/.test(v2);
+  const now = /* @__PURE__ */ new Date();
+  const defFrom = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-01`;
+  const defTo = now.toISOString().slice(0, 10);
+  const from = valid(req.query.from) ? req.query.from : defFrom;
+  const to2 = valid(req.query.to) ? req.query.to : defTo;
   const data = await withTenant(req.ctx, async (c) => {
-    const params = [req.ctx.schoolId];
-    let range = `t.clock_in >= date_trunc('month', now() at time zone '${TZ}')`;
-    if (from && to2) {
-      range = `(t.clock_in at time zone '${TZ}')::date between $2 and $3`;
-      params.push(from, to2);
-    }
     const { rows } = await c.query(
-      `select p.id as user_id, p.name as user_name, tc.role_type, tc.position,
-              coalesce(sum(extract(epoch from (t.clock_out - t.clock_in)) / 3600.0)
-                       filter (where t.clock_out is not null), 0)::float8 as total_hours,
-              count(*) filter (where t.clock_out is not null)::int as closed_entries,
-              count(*) filter (where t.clock_out is null)::int as open_entries,
-              count(distinct (t.clock_in at time zone '${TZ}')::date)::int as days_worked
-         from public.timeclock_entries t
-         join public.profiles p on p.id = t.user_id
-         left join public.teachers tc on tc.user_id = p.id and tc.school_id = t.school_id
-        where t.school_id = $1 and ${range}
-        group by p.id, p.name, tc.role_type, tc.position
+      `with days as (
+         select gd::date as day, extract(dow from gd)::int as wd
+           from generate_series($2::date, $3::date, interval '1 day') gd
+       ),
+       expected as (
+         select ws.user_id,
+                coalesce(sum(extract(epoch from (ws.end_time - ws.start_time)) / 3600.0), 0)::float8 as expected_hours
+           from days
+           join public.work_schedules ws on ws.school_id = $1 and ws.weekday = days.wd
+          group by ws.user_id
+       ),
+       worked as (
+         select t.user_id,
+                coalesce(sum(extract(epoch from (t.clock_out - t.clock_in)) / 3600.0)
+                         filter (where t.clock_out is not null and t.approval_status in ('auto','approved')), 0)::float8 as total_hours,
+                count(*) filter (where t.clock_out is not null and t.approval_status in ('auto','approved'))::int as closed_entries,
+                count(*) filter (where t.clock_out is null and t.approval_status in ('auto','approved'))::int as open_entries,
+                count(*) filter (where t.approval_status = 'pending')::int as pending_adjustments,
+                count(distinct (t.clock_in at time zone '${TZ}')::date)
+                  filter (where t.approval_status in ('auto','approved'))::int as days_worked
+           from public.timeclock_entries t
+          where t.school_id = $1
+            and (t.clock_in at time zone '${TZ}')::date between $2::date and $3::date
+          group by t.user_id
+       )
+       select p.id as user_id, p.name as user_name, tc.role_type, tc.position,
+              tc.weekly_hours::float8 as weekly_hours,
+              coalesce(w.total_hours, 0)::float8 as total_hours,
+              coalesce(w.closed_entries, 0)::int as closed_entries,
+              coalesce(w.open_entries, 0)::int as open_entries,
+              coalesce(w.pending_adjustments, 0)::int as pending_adjustments,
+              coalesce(w.days_worked, 0)::int as days_worked,
+              coalesce(e.expected_hours, 0)::float8 as expected_hours,
+              (coalesce(w.total_hours, 0) - coalesce(e.expected_hours, 0))::float8 as balance_hours
+         from public.teachers tc
+         join public.profiles p on p.id = tc.user_id
+         left join worked w on w.user_id = p.id
+         left join expected e on e.user_id = p.id
+        where tc.school_id = $1 and tc.status = 'active'
+          and (w.user_id is not null or e.user_id is not null)
         order by p.name asc`,
-      params
+      [req.ctx.schoolId, from, to2]
     );
     return rows;
   });
@@ -45993,6 +46026,12 @@ timeclockRouter.post("/clock-in", async (req, res) => {
     });
   }
   const result = await withTenant(req.ctx, async (c) => {
+    const enabled = await c.query(
+      `select coalesce(timeclock_enabled, true) as en from public.teachers
+        where user_id=$1 and school_id=$2 limit 1`,
+      [req.ctx.profileId, req.ctx.schoolId]
+    );
+    if (enabled.rows.length > 0 && enabled.rows[0].en === false) return { error: "not_enabled" };
     const open = await c.query(
       `select id from public.timeclock_entries
         where school_id=$1 and user_id=$2 and clock_out is null limit 1`,
@@ -46028,23 +46067,28 @@ timeclockRouter.post("/clock-in", async (req, res) => {
       };
     }
     const { rows } = await c.query(
-      `insert into public.timeclock_entries (school_id, user_id)
-       values ($1, $2) returning id, clock_in`,
+      `insert into public.timeclock_entries (school_id, user_id, approval_status)
+       values ($1, $2, 'auto') returning id, clock_in`,
       [req.ctx.schoolId, req.ctx.profileId]
     );
     return rows[0];
   });
   if ("error" in result) {
     const map = {
+      not_enabled: { http: 403, message: "Voc\xEA n\xE3o est\xE1 habilitado para bater ponto. Fale com a gest\xE3o da escola." },
       already_clocked_in: { http: 409, message: "Voc\xEA j\xE1 tem um ponto em aberto. Registre a sa\xEDda primeiro." },
       no_schedule: { http: 403, message: "Voc\xEA n\xE3o possui jornada cadastrada para hoje. Fale com a gest\xE3o da escola." },
       outside_schedule: {
-        http: 403,
-        message: `Fora do hor\xE1rio da sua jornada (${String(result.start).slice(0, 5)}\u2013${String(result.end).slice(0, 5)}). Solicite o registro \xE0 gest\xE3o.`
+        http: 422,
+        message: `Fora do hor\xE1rio da sua jornada (${String(result.start).slice(0, 5)}\u2013${String(result.end).slice(0, 5)}). Registre como esquecimento de ponto para aprova\xE7\xE3o da gest\xE3o.`
       }
     };
     const m2 = map[result.error];
-    return res.status(m2.http).json({ code: result.error, message: m2.message });
+    return res.status(m2.http).json({
+      code: result.error,
+      message: m2.message,
+      ...result.error === "outside_schedule" ? { start: String(result.start).slice(0, 5), end: String(result.end).slice(0, 5) } : {}
+    });
   }
   res.status(201).json({ ok: true, data: result });
 });
@@ -46098,6 +46142,67 @@ timeclockRouter.post("/manual", requireRole("school_admin", "superadmin"), async
     return res.status(400).json({ code: created.error, message: "Colaborador inv\xE1lido para esta escola." });
   }
   res.status(201).json({ ok: true, data: created });
+});
+var adjustmentSchema = external_exports.object({
+  date: external_exports.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Data AAAA-MM-DD"),
+  clock_in: external_exports.string().regex(/^\d{2}:\d{2}$/, "Entrada HH:MM"),
+  clock_out: external_exports.string().regex(/^\d{2}:\d{2}$/, "Sa\xEDda HH:MM").optional(),
+  justification: external_exports.string().min(3, "Descreva o motivo").max(280)
+});
+timeclockRouter.post("/adjustment", async (req, res) => {
+  if (ADMIN_ROLES.includes(req.ctx.role)) {
+    return res.status(403).json({ code: "admin_no_adjustment", message: 'Gest\xE3o lan\xE7a ponto direto em "Lan\xE7ar ponto".' });
+  }
+  const p2 = adjustmentSchema.safeParse(req.body);
+  if (!p2.success) return res.status(400).json({ code: "validation", message: p2.error.issues[0]?.message });
+  const { date, clock_in, clock_out, justification } = p2.data;
+  const created = await withTenant(req.ctx, async (c) => {
+    const { rows } = await c.query(
+      `insert into public.timeclock_entries
+         (school_id, user_id, clock_in, clock_out, justification, is_adjustment, approval_status)
+       values (
+         $1, $2,
+         ($3 || ' ' || $4)::timestamp at time zone '${TZ}',
+         case when $5 <> '' then ($3 || ' ' || $5)::timestamp at time zone '${TZ}' else null end,
+         $6, true, 'pending'
+       )
+       returning id, clock_in, clock_out, justification, approval_status`,
+      [req.ctx.schoolId, req.ctx.profileId, date, clock_in, clock_out ?? "", justification]
+    );
+    return rows[0];
+  });
+  res.status(201).json({ ok: true, data: created });
+});
+timeclockRouter.get("/adjustments/pending", requireRole("school_admin", "superadmin"), async (req, res) => {
+  const data = await withTenant(req.ctx, async (c) => {
+    const { rows } = await c.query(
+      `select t.id, t.clock_in, t.clock_out, t.justification, p.name as user_name
+         from public.timeclock_entries t
+         join public.profiles p on p.id = t.user_id
+        where t.school_id=$1 and t.is_adjustment = true and t.approval_status = 'pending'
+        order by t.clock_in asc`,
+      [req.ctx.schoolId]
+    );
+    return rows;
+  });
+  res.json({ ok: true, data });
+});
+timeclockRouter.post("/adjustment/:id/review", requireRole("school_admin", "superadmin"), async (req, res) => {
+  const action = req.body?.action === "approve" ? "approved" : req.body?.action === "reject" ? "rejected" : null;
+  if (!action) return res.status(400).json({ code: "validation", message: "A\xE7\xE3o inv\xE1lida (approve|reject)." });
+  const result = await withTenant(req.ctx, async (c) => {
+    const { rows } = await c.query(
+      `update public.timeclock_entries
+          set approval_status=$3, reviewed_by=$4, reviewed_at=now()
+        where id=$1 and school_id=$2 and is_adjustment = true and approval_status='pending'
+        returning id, approval_status`,
+      [req.params.id, req.ctx.schoolId, action, req.ctx.profileId]
+    );
+    if (rows.length === 0) return { error: "not_found" };
+    return rows[0];
+  });
+  if ("error" in result) return res.status(404).json({ code: "not_found", message: "Solicita\xE7\xE3o n\xE3o encontrada ou j\xE1 decidida." });
+  res.json({ ok: true, data: result });
 });
 
 // src/api/routes/schedules.ts

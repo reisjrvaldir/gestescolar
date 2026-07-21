@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
-import { Clock, LogIn, LogOut, Loader2, Check, AlertTriangle, Plus, Users } from 'lucide-react';
+import { Clock, LogIn, LogOut, Loader2, Check, AlertTriangle, Plus, Users, X, FileClock } from 'lucide-react';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { MetricCard } from '@/components/ui/MetricCard';
 import { StatusBadge } from '@/components/ui/StatusBadge';
@@ -8,8 +8,8 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { Modal } from '@/components/ui/Modal';
 import {
   listMyEntries, listAllEntries, clockIn, clockOut, getOpenEntry, createManualEntry,
-  timeclockReport,
-  type TimeclockEntry, type OpenEntry, type TimeclockReportRow,
+  timeclockReport, submitAdjustment, listPendingAdjustments, reviewAdjustment,
+  type TimeclockEntry, type OpenEntry, type TimeclockReportRow, type PendingAdjustment,
 } from '@/services/timeclock';
 import { api } from '@/lib/api';
 import { useMe } from '@/auth/AuthGate';
@@ -60,6 +60,13 @@ export function TimeclockPage() {
   const [repTo, setRepTo] = useState(() => new Date().toISOString().slice(0, 10));
   const [report, setReport] = useState<TimeclockReportRow[]>([]);
 
+  // Esquecimento de ponto
+  const [pending, setPending] = useState<PendingAdjustment[]>([]);      // gestão
+  const [adjOpen, setAdjOpen] = useState(false);                        // colaborador
+  const { register: regAdj, handleSubmit: handleAdj, reset: resetAdj, formState: { errors: adjErrors } } = useForm<{
+    date: string; clock_in: string; clock_out: string; justification: string;
+  }>();
+
   const { register, handleSubmit, reset, formState: { errors } } = useForm<{
     user_id: string; date: string; clock_in: string; clock_out: string; notes: string;
   }>();
@@ -76,12 +83,14 @@ export function TimeclockPage() {
     setLoading(true);
     try {
       if (isAdmin) {
-        const [all, staff] = await Promise.all([
+        const [all, staff, pend] = await Promise.all([
           listAllEntries(),
           api.get<{ data: StaffOption[] }>('/staff'),
+          listPendingAdjustments(),
         ]);
         setAllEntries(all);
         setStaffList(staff.data);
+        setPending(pend);
       } else {
         const [mine, open] = await Promise.all([listMyEntries(month), getOpenEntry()]);
         setEntries(mine);
@@ -103,8 +112,43 @@ export function TimeclockPage() {
       showToast('success', 'Entrada registrada com sucesso.');
       await load();
     } catch (e: any) {
-      showToast('error', e?.message ?? 'Erro ao registrar entrada.');
+      // Fora da janela da jornada → oferece registrar esquecimento (aprovação).
+      if (e?.code === 'outside_schedule') {
+        resetAdj({ date: new Date().toISOString().slice(0, 10), clock_in: '', clock_out: '', justification: '' });
+        setAdjOpen(true);
+        showToast('error', e?.message ?? 'Fora do horário — registre como esquecimento.');
+      } else {
+        showToast('error', e?.message ?? 'Erro ao registrar entrada.');
+      }
     } finally { setBusy(false); }
+  }
+
+  async function onAdjSubmit(data: { date: string; clock_in: string; clock_out: string; justification: string }) {
+    setBusy(true);
+    try {
+      await submitAdjustment({
+        date: data.date, clock_in: data.clock_in,
+        clock_out: data.clock_out || undefined, justification: data.justification,
+      });
+      showToast('success', 'Esquecimento enviado. Aguarde a aprovação da gestão.');
+      setAdjOpen(false);
+      resetAdj();
+      await load();
+    } catch (e: any) {
+      showToast('error', e?.message ?? 'Erro ao enviar esquecimento.');
+    } finally { setBusy(false); }
+  }
+
+  async function onReview(id: string, action: 'approve' | 'reject') {
+    try {
+      await reviewAdjustment(id, action);
+      showToast('success', action === 'approve' ? 'Esquecimento aprovado.' : 'Esquecimento recusado.');
+      setPending((prev) => prev.filter((p) => p.id !== id));
+      // Atualiza o espelho (horas passam a contar após aprovar).
+      timeclockReport(repFrom, repTo).then(setReport).catch(() => {});
+    } catch (e: any) {
+      showToast('error', e?.message ?? 'Erro ao decidir.');
+    }
   }
 
   async function onClockOut() {
@@ -202,9 +246,10 @@ export function TimeclockPage() {
                     <th className="px-4 py-2.5">Funcionário</th>
                     <th className="px-4 py-2.5">Cargo</th>
                     <th className="px-4 py-2.5 text-center">Dias</th>
-                    <th className="px-4 py-2.5 text-center">Registros</th>
-                    <th className="px-4 py-2.5 text-center">Em aberto</th>
-                    <th className="px-4 py-2.5 text-right">Total de horas</th>
+                    <th className="px-4 py-2.5 text-right">Trabalhadas</th>
+                    <th className="px-4 py-2.5 text-right">Previstas</th>
+                    <th className="px-4 py-2.5 text-right">Saldo (banco)</th>
+                    <th className="px-4 py-2.5 text-center">Pendências</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -213,11 +258,18 @@ export function TimeclockPage() {
                       <td className="px-4 py-2.5 font-medium text-ink">{r.user_name}</td>
                       <td className="px-4 py-2.5 text-ink-muted">{r.position ?? '—'}</td>
                       <td className="px-4 py-2.5 text-center text-ink-muted">{r.days_worked}</td>
-                      <td className="px-4 py-2.5 text-center text-ink-muted">{r.closed_entries}</td>
-                      <td className="px-4 py-2.5 text-center">
-                        {r.open_entries > 0 ? <span className="font-semibold text-warning">{r.open_entries}</span> : <span className="text-ink-subtle">0</span>}
-                      </td>
                       <td className="px-4 py-2.5 text-right font-mono font-bold text-ink">{r.total_hours.toFixed(1)}h</td>
+                      <td className="px-4 py-2.5 text-right font-mono text-ink-muted">{r.expected_hours.toFixed(1)}h</td>
+                      <td className="px-4 py-2.5 text-right font-mono font-semibold">
+                        <span className={r.balance_hours >= 0 ? 'text-success' : 'text-danger'}>
+                          {r.balance_hours >= 0 ? '+' : ''}{r.balance_hours.toFixed(1)}h
+                        </span>
+                      </td>
+                      <td className="px-4 py-2.5 text-center">
+                        {r.pending_adjustments > 0
+                          ? <span className="rounded-full bg-warning-soft px-2 py-0.5 text-xs font-semibold text-warning">{r.pending_adjustments}</span>
+                          : <span className="text-ink-subtle">—</span>}
+                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -225,6 +277,38 @@ export function TimeclockPage() {
             </div>
           )}
         </div>
+
+        {/* Esquecimentos aguardando aprovação */}
+        {pending.length > 0 && (
+          <div className="card mb-6 overflow-hidden border-warning/40">
+            <div className="flex items-center gap-2 border-b border-border bg-warning-soft px-5 py-3">
+              <FileClock size={16} className="text-warning" />
+              <h3 className="text-sm font-bold text-warning">Esquecimentos aguardando aprovação ({pending.length})</h3>
+            </div>
+            <div className="divide-y divide-border">
+              {pending.map((p) => (
+                <div key={p.id} className="flex flex-wrap items-center justify-between gap-3 px-5 py-3">
+                  <div className="min-w-0 flex-1">
+                    <p className="font-medium text-ink">{p.user_name}</p>
+                    <p className="text-xs text-ink-muted">
+                      {formatWeekday(p.clock_in)} {formatDate(p.clock_in)} · {formatTime(p.clock_in)}
+                      {p.clock_out ? `–${formatTime(p.clock_out)}` : ' (sem saída)'}
+                    </p>
+                    <p className="mt-0.5 text-xs italic text-ink-subtle">"{p.justification}"</p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button className="inline-flex items-center gap-1 rounded-lg bg-success-soft px-3 py-1.5 text-xs font-semibold text-success hover:bg-success hover:text-white" onClick={() => onReview(p.id, 'approve')}>
+                      <Check size={13} /> Aprovar
+                    </button>
+                    <button className="inline-flex items-center gap-1 rounded-lg bg-danger-soft px-3 py-1.5 text-xs font-semibold text-danger hover:bg-danger hover:text-white" onClick={() => onReview(p.id, 'reject')}>
+                      <X size={13} /> Recusar
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
 
         {Object.keys(groupedByUser).length === 0 ? (
           <div className="card">
@@ -333,6 +417,13 @@ export function TimeclockPage() {
         actions={
           <div className="flex items-center gap-2">
             <input type="month" className="input w-auto" value={month} onChange={(e) => setMonth(e.target.value)} />
+            <button
+              className="btn-outline inline-flex items-center gap-1 text-sm"
+              onClick={() => { resetAdj({ date: new Date().toISOString().slice(0, 10), clock_in: '', clock_out: '', justification: '' }); setAdjOpen(true); }}
+              disabled={busy}
+            >
+              <FileClock size={16} /> Esquecimento
+            </button>
             {openEntry ? (
               <button className="rounded-lg bg-danger px-4 py-2 text-sm font-medium text-white hover:bg-danger/90 inline-flex items-center gap-1 disabled:opacity-50" onClick={onClockOut} disabled={busy}>
                 <LogOut size={16} /> Registrar saída
@@ -378,21 +469,79 @@ export function TimeclockPage() {
               </tr>
             </thead>
             <tbody>
-              {entries.map((e) => (
-                <tr key={e.id} className="border-b border-border last:border-0 hover:bg-canvas">
-                  <td className="px-4 py-3 text-ink-muted">{formatWeekday(e.clock_in)} {formatDate(e.clock_in)}</td>
-                  <td className="px-4 py-3 font-mono text-ink-muted">{formatTime(e.clock_in)}</td>
-                  <td className="px-4 py-3 font-mono text-ink-muted">{e.clock_out ? formatTime(e.clock_out) : '—'}</td>
-                  <td className="px-4 py-3 font-semibold text-ink">{calcHours(e)}</td>
-                  <td className="px-4 py-3">
-                    <StatusBadge tone={e.clock_out ? 'success' : 'warning'}>{e.clock_out ? 'Completo' : 'Aberto'}</StatusBadge>
-                  </td>
-                </tr>
-              ))}
+              {entries.map((e) => {
+                const adj = e.is_adjustment;
+                const st = e.approval_status;
+                return (
+                  <tr key={e.id} className="border-b border-border last:border-0 hover:bg-canvas">
+                    <td className="px-4 py-3 text-ink-muted">
+                      {formatWeekday(e.clock_in)} {formatDate(e.clock_in)}
+                      {adj && <span className="ml-1 rounded bg-canvas px-1.5 py-0.5 text-[10px] font-semibold text-ink-muted">esquecimento</span>}
+                    </td>
+                    <td className="px-4 py-3 font-mono text-ink-muted">{formatTime(e.clock_in)}</td>
+                    <td className="px-4 py-3 font-mono text-ink-muted">{e.clock_out ? formatTime(e.clock_out) : '—'}</td>
+                    <td className="px-4 py-3 font-semibold text-ink">{calcHours(e)}</td>
+                    <td className="px-4 py-3">
+                      {adj && st === 'pending' ? (
+                        <StatusBadge tone="warning">Aguardando aprovação</StatusBadge>
+                      ) : adj && st === 'rejected' ? (
+                        <StatusBadge tone="danger">Recusado</StatusBadge>
+                      ) : adj && st === 'approved' ? (
+                        <StatusBadge tone="success">Aprovado</StatusBadge>
+                      ) : (
+                        <StatusBadge tone={e.clock_out ? 'success' : 'warning'}>{e.clock_out ? 'Completo' : 'Aberto'}</StatusBadge>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         )}
       </div>
+
+      {/* Modal — registrar esquecimento de ponto */}
+      <Modal
+        open={adjOpen}
+        title="Registrar esquecimento de ponto"
+        onClose={() => { resetAdj(); setAdjOpen(false); }}
+        footer={
+          <>
+            <button className="btn-outline" onClick={() => { resetAdj(); setAdjOpen(false); }}>Cancelar</button>
+            <button className="btn-primary flex items-center gap-2" form="adj-form" type="submit" disabled={busy}>
+              {busy ? <Loader2 size={16} className="animate-spin" /> : <FileClock size={16} />} Enviar para aprovação
+            </button>
+          </>
+        }
+      >
+        <form id="adj-form" className="space-y-4" onSubmit={handleAdj(onAdjSubmit)}>
+          <div className="flex items-start gap-2 rounded-xl bg-warning-soft px-3 py-2 text-xs text-warning">
+            <AlertTriangle size={14} className="mt-0.5 shrink-0" />
+            <span>Use quando bateu fora do horário da jornada ou esqueceu de registrar. Fica pendente até a gestão aprovar — não vence.</span>
+          </div>
+          <div>
+            <label className="label">Data *</label>
+            <input type="date" className="input" max={new Date().toISOString().slice(0, 10)} {...regAdj('date', { required: 'Informe a data' })} />
+            {adjErrors.date && <p className="mt-1 text-xs text-danger">{adjErrors.date.message}</p>}
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="label">Entrada *</label>
+              <input type="time" className="input" {...regAdj('clock_in', { required: 'Informe a entrada' })} />
+              {adjErrors.clock_in && <p className="mt-1 text-xs text-danger">{adjErrors.clock_in.message}</p>}
+            </div>
+            <div>
+              <label className="label">Saída</label>
+              <input type="time" className="input" {...regAdj('clock_out')} />
+            </div>
+          </div>
+          <div>
+            <label className="label">Motivo *</label>
+            <input className="input" placeholder="Ex.: esqueci de bater a saída; cheguei antes do horário" {...regAdj('justification', { required: 'Descreva o motivo' })} />
+            {adjErrors.justification && <p className="mt-1 text-xs text-danger">{adjErrors.justification.message}</p>}
+          </div>
+        </form>
+      </Modal>
     </>
   );
 }

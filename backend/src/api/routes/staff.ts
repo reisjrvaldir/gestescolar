@@ -18,6 +18,7 @@ const staffSchema = z.object({
   admission_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
   contract_type: z.enum(['clt', 'pj', 'estagio', 'temporario']).optional(),
   weekly_hours: z.number().min(0).max(80).optional(),
+  timeclock_enabled: z.boolean().optional(),
 });
 
 const staffUpdateSchema = staffSchema.partial().extend({
@@ -33,6 +34,7 @@ staffRouter.get('/', async (req, res) => {
     const { rows } = await c.query(
       `select id, name, email, phone, ${cpfCol}, registration_number, role_type, subject_teaches,
               position, admission_date::text as admission_date, contract_type, weekly_hours::float8 as weekly_hours,
+              coalesce(timeclock_enabled, true) as timeclock_enabled,
               status, created_at, user_id
          from public.teachers
         where school_id = $1
@@ -80,14 +82,15 @@ staffRouter.post('/', requireRole('school_admin', 'superadmin'), async (req, res
       const tRow = await c.query(
         `insert into public.teachers
            (school_id, user_id, name, email, phone, cpf, registration_number, role_type, subject_teaches,
-            position, admission_date, contract_type, weekly_hours)
-         values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
+            position, admission_date, contract_type, weekly_hours, timeclock_enabled)
+         values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)
          returning id, name, email, phone, cpf, registration_number, role_type, subject_teaches,
                    position, admission_date::text as admission_date, contract_type, weekly_hours::float8 as weekly_hours,
-                   status, created_at`,
+                   timeclock_enabled, status, created_at`,
         [req.ctx!.schoolId, profileId, s.name, s.email, s.phone ?? null, s.cpf,
          matricula, s.role_type, s.subject_teaches ?? null,
-         s.position ?? null, s.admission_date ?? null, s.contract_type ?? null, s.weekly_hours ?? null],
+         s.position ?? null, s.admission_date ?? null, s.contract_type ?? null, s.weekly_hours ?? null,
+         s.timeclock_enabled ?? true],
       );
 
       return {
@@ -125,14 +128,16 @@ staffRouter.put('/:id', requireRole('school_admin', 'superadmin'), async (req, r
           position=coalesce($9,position),
           admission_date=coalesce($10,admission_date),
           contract_type=coalesce($11,contract_type),
-          weekly_hours=coalesce($12,weekly_hours)
+          weekly_hours=coalesce($12,weekly_hours),
+          timeclock_enabled=coalesce($13,timeclock_enabled)
         where id=$7 and school_id=$8
         returning id, name, email, phone, cpf, role_type, subject_teaches,
                   position, admission_date::text as admission_date, contract_type, weekly_hours::float8 as weekly_hours,
-                  status, registration_number, user_id`,
+                  timeclock_enabled, status, registration_number, user_id`,
       [s.name ?? null, s.email ?? null, s.phone ?? null, s.cpf ?? null,
        s.role_type ?? null, s.subject_teaches ?? null, req.params.id, req.ctx!.schoolId,
-       s.position ?? null, s.admission_date ?? null, s.contract_type ?? null, s.weekly_hours ?? null],
+       s.position ?? null, s.admission_date ?? null, s.contract_type ?? null, s.weekly_hours ?? null,
+       s.timeclock_enabled ?? null],
     );
     if (rows[0]?.user_id) {
       await c.query(

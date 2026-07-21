@@ -64,6 +64,7 @@ export interface Staff {
   admission_date?: string;
   contract_type?: 'clt' | 'pj' | 'estagio' | 'temporario';
   weekly_hours?: number;
+  timeclock_enabled?: boolean;
   status: 'active' | 'inactive';
   created_at: string;
 }

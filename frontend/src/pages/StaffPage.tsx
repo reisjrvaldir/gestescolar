@@ -42,7 +42,7 @@ export function StaffPage() {
   function openNew() {
     setEditing(null);
     reset({ name: '', cpf: '', email: '', phone: '', role_type: 'teacher', subject_teaches: '',
-      position: '', admission_date: '', contract_type: undefined, weekly_hours: undefined });
+      position: '', admission_date: '', contract_type: undefined, weekly_hours: undefined, timeclock_enabled: true });
     setOpen(true);
   }
 
@@ -56,6 +56,7 @@ export function StaffPage() {
       admission_date: s.admission_date ? s.admission_date.slice(0, 10) : '',
       contract_type: s.contract_type,
       weekly_hours: s.weekly_hours,
+      timeclock_enabled: s.timeclock_enabled ?? true,
     });
     setOpen(true);
   }
@@ -281,6 +282,11 @@ E-mail: ${credentials.email}
                 <input type="number" step="0.5" min="0" max="80" className="input" placeholder="Ex.: 40" {...register('weekly_hours', { valueAsNumber: true })} />
               </div>
             </div>
+            <label className="mt-3 flex items-center gap-2 text-sm text-ink">
+              <input type="checkbox" className="h-4 w-4 rounded border-border" {...register('timeclock_enabled')} />
+              Habilitado para bater ponto
+            </label>
+            <p className="mt-1 text-xs text-ink-muted">O funcionário só registra ponto se estiver habilitado e tiver jornada cadastrada.</p>
           </div>
           {!editing && (
             <div className="rounded-xl border border-border bg-canvas p-3 text-xs text-ink-muted">

@@ -14,6 +14,7 @@ export interface NewStaff {
   admission_date?: string;
   contract_type?: ContractType;
   weekly_hours?: number;
+  timeclock_enabled?: boolean;
 }
 
 export interface UpdateStaff {
@@ -27,6 +28,7 @@ export interface UpdateStaff {
   admission_date?: string;
   contract_type?: ContractType;
   weekly_hours?: number;
+  timeclock_enabled?: boolean;
 }
 
 export interface CreatedStaff extends Staff {
