@@ -49,3 +49,21 @@ export async function createManualEntry(input: ManualEntryInput): Promise<Timecl
   const r = await api.post<{ data: TimeclockEntry }>('/timeclock/manual', input);
   return r.data;
 }
+
+// Espelho de ponto — total de horas por funcionário no período.
+export interface TimeclockReportRow {
+  user_id: string;
+  user_name: string;
+  role_type?: string;
+  position?: string;
+  total_hours: number;
+  closed_entries: number;
+  open_entries: number;
+  days_worked: number;
+}
+
+export async function timeclockReport(from?: string, to?: string): Promise<TimeclockReportRow[]> {
+  const q = from && to ? `?from=${from}&to=${to}` : '';
+  const r = await api.get<{ data: TimeclockReportRow[] }>(`/timeclock/report${q}`);
+  return r.data;
+}

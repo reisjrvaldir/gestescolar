@@ -41,7 +41,8 @@ export function StaffPage() {
 
   function openNew() {
     setEditing(null);
-    reset({ name: '', cpf: '', email: '', phone: '', role_type: 'teacher', subject_teaches: '' });
+    reset({ name: '', cpf: '', email: '', phone: '', role_type: 'teacher', subject_teaches: '',
+      position: '', admission_date: '', contract_type: undefined, weekly_hours: undefined });
     setOpen(true);
   }
 
@@ -51,6 +52,10 @@ export function StaffPage() {
       name: s.name, cpf: s.cpf ?? '', email: s.email, phone: s.phone ?? '',
       role_type: (s.role_type ?? s.role) as FormFields['role_type'],
       subject_teaches: s.subject_teaches ?? '',
+      position: s.position ?? '',
+      admission_date: s.admission_date ? s.admission_date.slice(0, 10) : '',
+      contract_type: s.contract_type,
+      weekly_hours: s.weekly_hours,
     });
     setOpen(true);
   }
@@ -61,10 +66,21 @@ export function StaffPage() {
     setSaving(true);
     setError(null);
     try {
+      // Normaliza opcionais: '' → undefined; horas → número (ou undefined).
+      const hours = data.weekly_hours != null && !Number.isNaN(Number(data.weekly_hours))
+        ? Number(data.weekly_hours) : undefined;
+      const payload = {
+        ...data,
+        subject_teaches: data.subject_teaches || undefined,
+        position: data.position || undefined,
+        admission_date: data.admission_date || undefined,
+        contract_type: data.contract_type || undefined,
+        weekly_hours: hours,
+      };
       if (editing) {
-        await staffService.update(editing.id, data);
+        await staffService.update(editing.id, payload);
       } else {
-        const created = await staffService.create(data);
+        const created = await staffService.create(payload);
         setCredentials(created);
       }
       await load();
@@ -237,6 +253,35 @@ E-mail: ${credentials.email}
               </p>
             </div>
           )}
+
+          {/* Dados trabalhistas */}
+          <div className="border-t border-border pt-4">
+            <p className="mb-3 text-xs font-bold uppercase tracking-wide text-ink-subtle">Dados trabalhistas</p>
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <div>
+                <label className="label">Cargo</label>
+                <input className="input" placeholder="Ex.: Professor(a) titular" {...register('position')} />
+              </div>
+              <div>
+                <label className="label">Data de admissão</label>
+                <input type="date" className="input" {...register('admission_date')} />
+              </div>
+              <div>
+                <label className="label">Tipo de contrato</label>
+                <select className="input" {...register('contract_type')}>
+                  <option value="">—</option>
+                  <option value="clt">CLT</option>
+                  <option value="pj">PJ</option>
+                  <option value="estagio">Estágio</option>
+                  <option value="temporario">Temporário</option>
+                </select>
+              </div>
+              <div>
+                <label className="label">Jornada semanal (h)</label>
+                <input type="number" step="0.5" min="0" max="80" className="input" placeholder="Ex.: 40" {...register('weekly_hours', { valueAsNumber: true })} />
+              </div>
+            </div>
+          </div>
           {!editing && (
             <div className="rounded-xl border border-border bg-canvas p-3 text-xs text-ink-muted">
               Uma conta de acesso será criada automaticamente com uma senha temporária gerada pelo sistema. No primeiro acesso o sistema obrigará a troca por uma senha intransferível.

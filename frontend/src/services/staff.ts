@@ -1,6 +1,8 @@
 import type { Staff } from '@/types/models';
 import { api } from '@/lib/api';
 
+export type ContractType = 'clt' | 'pj' | 'estagio' | 'temporario';
+
 export interface NewStaff {
   name: string;
   cpf: string;
@@ -8,6 +10,10 @@ export interface NewStaff {
   phone?: string;
   role_type: 'school_admin' | 'financial' | 'teacher' | 'coordinator';
   subject_teaches?: string;
+  position?: string;
+  admission_date?: string;
+  contract_type?: ContractType;
+  weekly_hours?: number;
 }
 
 export interface UpdateStaff {
@@ -17,6 +23,10 @@ export interface UpdateStaff {
   phone?: string;
   role_type?: NewStaff['role_type'];
   subject_teaches?: string;
+  position?: string;
+  admission_date?: string;
+  contract_type?: ContractType;
+  weekly_hours?: number;
 }
 
 export interface CreatedStaff extends Staff {

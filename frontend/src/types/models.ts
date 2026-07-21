@@ -60,6 +60,10 @@ export interface Staff {
   role: StaffRole;
   role_type?: StaffRole;
   subject_teaches?: string;
+  position?: string;
+  admission_date?: string;
+  contract_type?: 'clt' | 'pj' | 'estagio' | 'temporario';
+  weekly_hours?: number;
   status: 'active' | 'inactive';
   created_at: string;
 }

@@ -8,7 +8,8 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { Modal } from '@/components/ui/Modal';
 import {
   listMyEntries, listAllEntries, clockIn, clockOut, getOpenEntry, createManualEntry,
-  type TimeclockEntry, type OpenEntry,
+  timeclockReport,
+  type TimeclockEntry, type OpenEntry, type TimeclockReportRow,
 } from '@/services/timeclock';
 import { api } from '@/lib/api';
 import { useMe } from '@/auth/AuthGate';
@@ -53,11 +54,23 @@ export function TimeclockPage() {
     return `${d.getFullYear()}-${(d.getMonth() + 1).toString().padStart(2, '0')}`;
   });
 
+  // Espelho de ponto (gestão) — período padrão: mês corrente.
+  const monthStart = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-01`; };
+  const [repFrom, setRepFrom] = useState(monthStart());
+  const [repTo, setRepTo] = useState(() => new Date().toISOString().slice(0, 10));
+  const [report, setReport] = useState<TimeclockReportRow[]>([]);
+
   const { register, handleSubmit, reset, formState: { errors } } = useForm<{
     user_id: string; date: string; clock_in: string; clock_out: string; notes: string;
   }>();
 
   useEffect(() => { load(); /* eslint-disable-next-line */ }, [month, isAdmin]);
+
+  // Espelho de ponto: recarrega ao mudar o período (só gestão).
+  useEffect(() => {
+    if (!isAdmin) return;
+    timeclockReport(repFrom, repTo).then(setReport).catch(() => setReport([]));
+  }, [repFrom, repTo, isAdmin]);
 
   async function load() {
     setLoading(true);
@@ -166,6 +179,51 @@ export function TimeclockPage() {
           <MetricCard label="Registros no mês" value={String(allEntries.length)} icon={Clock} tone="primary" />
           <MetricCard label="Colaboradores com ponto" value={String(Object.keys(groupedByUser).length)} icon={Users} tone="success" />
           <MetricCard label="Em aberto agora" value={String(openNow)} icon={Clock} tone={openNow > 0 ? 'warning' : 'primary'} />
+        </div>
+
+        {/* Espelho de ponto — total de horas por funcionário no período */}
+        <div className="card mb-6 overflow-hidden">
+          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border px-5 py-3.5">
+            <h3 className="text-sm font-bold text-ink">Espelho de ponto</h3>
+            <div className="flex items-center gap-2 text-xs">
+              <label className="text-ink-muted">De</label>
+              <input type="date" className="input w-auto py-1.5" value={repFrom} max={repTo} onChange={(e) => setRepFrom(e.target.value)} />
+              <label className="text-ink-muted">até</label>
+              <input type="date" className="input w-auto py-1.5" value={repTo} min={repFrom} max={new Date().toISOString().slice(0, 10)} onChange={(e) => setRepTo(e.target.value)} />
+            </div>
+          </div>
+          {report.length === 0 ? (
+            <p className="px-5 py-8 text-center text-sm text-ink-subtle">Nenhuma marcação no período selecionado.</p>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-border text-left text-[11px] font-semibold uppercase text-ink-subtle">
+                    <th className="px-4 py-2.5">Funcionário</th>
+                    <th className="px-4 py-2.5">Cargo</th>
+                    <th className="px-4 py-2.5 text-center">Dias</th>
+                    <th className="px-4 py-2.5 text-center">Registros</th>
+                    <th className="px-4 py-2.5 text-center">Em aberto</th>
+                    <th className="px-4 py-2.5 text-right">Total de horas</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {report.map((r) => (
+                    <tr key={r.user_id} className="border-b border-border last:border-0 hover:bg-canvas">
+                      <td className="px-4 py-2.5 font-medium text-ink">{r.user_name}</td>
+                      <td className="px-4 py-2.5 text-ink-muted">{r.position ?? '—'}</td>
+                      <td className="px-4 py-2.5 text-center text-ink-muted">{r.days_worked}</td>
+                      <td className="px-4 py-2.5 text-center text-ink-muted">{r.closed_entries}</td>
+                      <td className="px-4 py-2.5 text-center">
+                        {r.open_entries > 0 ? <span className="font-semibold text-warning">{r.open_entries}</span> : <span className="text-ink-subtle">0</span>}
+                      </td>
+                      <td className="px-4 py-2.5 text-right font-mono font-bold text-ink">{r.total_hours.toFixed(1)}h</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
         </div>
 
         {Object.keys(groupedByUser).length === 0 ? (

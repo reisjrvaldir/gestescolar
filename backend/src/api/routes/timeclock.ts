@@ -67,6 +67,40 @@ timeclockRouter.get('/all', async (req, res) => {
   res.json({ ok: true, data });
 });
 
+// ---------- Espelho de ponto: total de horas por funcionário no período ----------
+// GET /timeclock/report?from=YYYY-MM-DD&to=YYYY-MM-DD  (gestão)
+// Consolida as batidas fechadas em total de horas + dias + registros em aberto.
+timeclockRouter.get('/report', requireRole('school_admin', 'superadmin', 'financial'), async (req, res) => {
+  const from = typeof req.query.from === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(req.query.from) ? req.query.from : null;
+  const to = typeof req.query.to === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(req.query.to) ? req.query.to : null;
+  const data = await withTenant(req.ctx!, async (c) => {
+    // Janela padrão: mês corrente (no fuso da escola).
+    const params: unknown[] = [req.ctx!.schoolId];
+    let range = `t.clock_in >= date_trunc('month', now() at time zone '${TZ}')`;
+    if (from && to) {
+      range = `(t.clock_in at time zone '${TZ}')::date between $2 and $3`;
+      params.push(from, to);
+    }
+    const { rows } = await c.query(
+      `select p.id as user_id, p.name as user_name, tc.role_type, tc.position,
+              coalesce(sum(extract(epoch from (t.clock_out - t.clock_in)) / 3600.0)
+                       filter (where t.clock_out is not null), 0)::float8 as total_hours,
+              count(*) filter (where t.clock_out is not null)::int as closed_entries,
+              count(*) filter (where t.clock_out is null)::int as open_entries,
+              count(distinct (t.clock_in at time zone '${TZ}')::date)::int as days_worked
+         from public.timeclock_entries t
+         join public.profiles p on p.id = t.user_id
+         left join public.teachers tc on tc.user_id = p.id and tc.school_id = t.school_id
+        where t.school_id = $1 and ${range}
+        group by p.id, p.name, tc.role_type, tc.position
+        order by p.name asc`,
+      params,
+    );
+    return rows;
+  });
+  res.json({ ok: true, data });
+});
+
 // ---------- Registrar entrada (professor/colaborador) ----------
 // Regras:
 //  - Gestor/admin NÃO registra ponto próprio (apenas gerencia/lança).
