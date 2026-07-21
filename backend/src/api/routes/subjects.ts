@@ -5,7 +5,7 @@
 import { Router } from 'express';
 import type { PoolClient } from '@neondatabase/serverless';
 import { withTenant } from '../../db/withTenant';
-import { requireAuth } from '../../middleware/auth';
+import { requireAuth, requireRole } from '../../middleware/auth';
 
 export const subjectsRouter = Router();
 subjectsRouter.use(requireAuth);
@@ -31,7 +31,7 @@ async function ensureCatalog(c: PoolClient, schoolId: string): Promise<void> {
 }
 
 // GET /api/subjects — matérias da escola (semeia catálogo por nível se vazio).
-subjectsRouter.get('/', async (req, res) => {
+subjectsRouter.get('/', requireRole('school_admin', 'financial', 'teacher', 'superadmin'), async (req, res) => {
   const data = await withTenant(req.ctx!, async (c) => {
     await ensureCatalog(c, req.ctx!.schoolId!);
     const { rows } = await c.query(

@@ -6,7 +6,7 @@ import { requireAuth, requireRole } from '../../middleware/auth';
 export const schedulesRouter = Router();
 schedulesRouter.use(requireAuth);
 
-schedulesRouter.get('/', async (req, res) => {
+schedulesRouter.get('/', requireRole('school_admin', 'financial', 'teacher', 'superadmin'), async (req, res) => {
   const userId = req.query.user_id as string | undefined;
   const data = await withTenant(req.ctx!, async (c) => {
     const params: unknown[] = [req.ctx!.schoolId];

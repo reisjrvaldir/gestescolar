@@ -27,7 +27,7 @@ const staffUpdateSchema = staffSchema.partial().extend({
 
 staffRouter.use(requireAuth);
 
-staffRouter.get('/', async (req, res) => {
+staffRouter.get('/', requireRole('school_admin', 'financial', 'teacher', 'superadmin'), async (req, res) => {
   const data = await withTenant(req.ctx!, async (c) => {
     const isAdmin = ['school_admin', 'superadmin', 'financial'].includes(req.ctx!.role);
     const cpfCol = isAdmin ? 'cpf' : "left(cpf,3) || '*****' || right(cpf,2) as cpf";

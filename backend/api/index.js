@@ -43415,7 +43415,7 @@ var studentUpdateSchema = studentSchema.omit({ guardian: true }).partial().exten
   name: external_exports.string().min(2)
 });
 studentsRouter.use(requireAuth);
-studentsRouter.get("/", async (req, res) => {
+studentsRouter.get("/", requireRole("school_admin", "financial", "teacher", "superadmin"), async (req, res) => {
   const classId = req.query.class_id;
   const data = await withTenant(req.ctx, async (c) => {
     const params = [req.ctx.schoolId];
@@ -43653,7 +43653,7 @@ var staffUpdateSchema = staffSchema.partial().extend({
   name: external_exports.string().min(2)
 });
 staffRouter.use(requireAuth);
-staffRouter.get("/", async (req, res) => {
+staffRouter.get("/", requireRole("school_admin", "financial", "teacher", "superadmin"), async (req, res) => {
   const data = await withTenant(req.ctx, async (c) => {
     const isAdmin = ["school_admin", "superadmin", "financial"].includes(req.ctx.role);
     const cpfCol = isAdmin ? "cpf" : "left(cpf,3) || '*****' || right(cpf,2) as cpf";
@@ -43846,14 +43846,15 @@ var CLASS_SELECT = `
          coalesce((select array_agg(cs.subject_id) from public.class_subjects cs where cs.class_id = c.id), '{}') as subject_ids
     from public.classes c
     left join public.teachers t on t.id = c.teacher_id`;
-classesRouter.get("/", async (req, res) => {
+var STAFF = ["school_admin", "financial", "teacher", "superadmin"];
+classesRouter.get("/", requireRole(...STAFF), async (req, res) => {
   const data = await withTenant(req.ctx, async (c) => {
     const { rows } = await c.query(`${CLASS_SELECT} where c.school_id = $1 order by c.name asc`, [req.ctx.schoolId]);
     return rows;
   });
   res.json({ ok: true, data });
 });
-classesRouter.get("/:id/students", async (req, res) => {
+classesRouter.get("/:id/students", requireRole(...STAFF), async (req, res) => {
   const data = await withTenant(req.ctx, async (c) => {
     const { rows } = await c.query(
       `select s.id, s.name, s.registration_number, s.status
@@ -43866,7 +43867,7 @@ classesRouter.get("/:id/students", async (req, res) => {
   });
   res.json({ ok: true, data });
 });
-classesRouter.get("/:id/subjects", async (req, res) => {
+classesRouter.get("/:id/subjects", requireRole(...STAFF), async (req, res) => {
   const data = await withTenant(req.ctx, async (c) => {
     const { rows } = await c.query(
       `select sub.id, sub.name
@@ -43950,7 +43951,7 @@ async function ensureCatalog(c, schoolId) {
     }
   }
 }
-subjectsRouter.get("/", async (req, res) => {
+subjectsRouter.get("/", requireRole("school_admin", "financial", "teacher", "superadmin"), async (req, res) => {
   const data = await withTenant(req.ctx, async (c) => {
     await ensureCatalog(c, req.ctx.schoolId);
     const { rows } = await c.query(
@@ -44913,7 +44914,7 @@ invoicesRouter.post("/:id/manual-payment", requireRole("school_admin", "financia
       already_paid: [409, "Esta fatura j\xE1 est\xE1 paga."],
       not_payable: [409, "Fatura cancelada/estornada n\xE3o pode ser baixada."]
     };
-    const [http, message2] = map[result.error];
+    const [http, message2] = map[String(result.error)] ?? [400, "N\xE3o foi poss\xEDvel registrar o pagamento."];
     return res.status(http).json({ code: result.error, message: message2 });
   }
   res.json({ ok: true, data: result.data });
@@ -46209,7 +46210,7 @@ timeclockRouter.post("/adjustment/:id/review", requireRole("school_admin", "supe
 var import_express19 = __toESM(require_express2());
 var schedulesRouter = (0, import_express19.Router)();
 schedulesRouter.use(requireAuth);
-schedulesRouter.get("/", async (req, res) => {
+schedulesRouter.get("/", requireRole("school_admin", "financial", "teacher", "superadmin"), async (req, res) => {
   const userId = req.query.user_id;
   const data = await withTenant(req.ctx, async (c) => {
     const params = [req.ctx.schoolId];

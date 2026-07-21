@@ -39,7 +39,9 @@ const CLASS_SELECT = `
     from public.classes c
     left join public.teachers t on t.id = c.teacher_id`;
 
-classesRouter.get('/', async (req, res) => {
+const STAFF = ['school_admin', 'financial', 'teacher', 'superadmin'] as const;
+
+classesRouter.get('/', requireRole(...STAFF), async (req, res) => {
   const data = await withTenant(req.ctx!, async (c) => {
     const { rows } = await c.query(`${CLASS_SELECT} where c.school_id = $1 order by c.name asc`, [req.ctx!.schoolId]);
     return rows;
@@ -48,7 +50,7 @@ classesRouter.get('/', async (req, res) => {
 });
 
 // GET /api/classes/:id/students — alunos da turma.
-classesRouter.get('/:id/students', async (req, res) => {
+classesRouter.get('/:id/students', requireRole(...STAFF), async (req, res) => {
   const data = await withTenant(req.ctx!, async (c) => {
     const { rows } = await c.query(
       `select s.id, s.name, s.registration_number, s.status
@@ -63,7 +65,7 @@ classesRouter.get('/:id/students', async (req, res) => {
 });
 
 // GET /api/classes/:id/subjects — matérias da turma (para chamada/notas).
-classesRouter.get('/:id/subjects', async (req, res) => {
+classesRouter.get('/:id/subjects', requireRole(...STAFF), async (req, res) => {
   const data = await withTenant(req.ctx!, async (c) => {
     const { rows } = await c.query(
       `select sub.id, sub.name

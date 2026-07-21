@@ -38,7 +38,7 @@ const studentUpdateSchema = studentSchema.omit({ guardian: true }).partial().ext
 
 studentsRouter.use(requireAuth);
 
-studentsRouter.get('/', async (req, res) => {
+studentsRouter.get('/', requireRole('school_admin', 'financial', 'teacher', 'superadmin'), async (req, res) => {
   const classId = req.query.class_id as string | undefined;
   const data = await withTenant(req.ctx!, async (c) => {
     const params: unknown[] = [req.ctx!.schoolId];

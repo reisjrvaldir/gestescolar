@@ -151,7 +151,7 @@ invoicesRouter.post('/:id/manual-payment', requireRole('school_admin', 'financia
       already_paid: [409, 'Esta fatura já está paga.'],
       not_payable: [409, 'Fatura cancelada/estornada não pode ser baixada.'],
     };
-    const [http, message] = map[result.error];
+    const [http, message] = map[String(result.error)] ?? [400, 'Não foi possível registrar o pagamento.'];
     return res.status(http).json({ code: result.error, message });
   }
   res.json({ ok: true, data: result.data });
