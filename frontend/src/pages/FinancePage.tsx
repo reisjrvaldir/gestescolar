@@ -266,14 +266,14 @@ export function FinancePage() {
             <div className="flex items-center justify-between border-b border-border px-5 py-4">
               <div>
                 <h3 className="text-sm font-bold text-ink">A receber</h3>
-                <p className="mt-0.5 text-xs text-ink-muted">Mensalidades e cobranças avulsas dos alunos.</p>
+                <p className="mt-0.5 text-xs text-ink-muted">Mensalidades e cobranças avulsas dos alunos. As mensalidades começam no mês seguinte à matrícula — meses anteriores não geram fatura.</p>
               </div>
               <button className="inline-flex items-center gap-1 rounded-lg border border-border px-2.5 py-1.5 text-xs font-semibold text-ink hover:bg-canvas" onClick={() => setAdhocOpen(true)}>
                 <Plus size={14} /> Nova cobrança avulsa
               </button>
             </div>
             {invoices.length === 0 ? (
-              <div className="px-5 py-10 text-center text-sm text-ink-muted">Nenhuma fatura cadastrada ainda.</div>
+              <div className="px-5 py-10 text-center text-sm text-ink-muted">Não existe fatura cadastrada ainda.</div>
             ) : (
               <table className="w-full text-sm">
                 <thead>

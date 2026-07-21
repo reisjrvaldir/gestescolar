@@ -10,30 +10,26 @@ import type { TenantContext } from '../../db/withTenant';
 import { withTenant } from '../../db/withTenant';
 import { buildChargeForInvoice } from '../payments';
 
-// Regra do 1º vencimento: '30' = matrícula + 30 dias; '05'/'10'/'15' = próximo
-// dia fixo do mês. As mensalidades seguintes usam o mesmo dia, até dezembro.
+// Regra do dia de vencimento: '30' = mesmo dia da matrícula (≈1 mês depois);
+// '05'/'10'/'15' = dia fixo do mês.
 export type FirstDueRule = '30' | '05' | '10' | '15';
 
-/** Calcula o cronograma de vencimentos das mensalidades a partir da matrícula. */
+/**
+ * Cronograma de vencimentos das mensalidades.
+ * REGRA: a 1ª mensalidade é sempre no MÊS SEGUINTE ao da matrícula — o mês da
+ * matrícula (e anteriores) não geram mensalidade (são cobertos pela matrícula).
+ * Gera do mês seguinte até dezembro do ano letivo da matrícula.
+ */
 function monthlyDueSchedule(enrollment: Date, rule: FirstDueRule): { referenceMonth: string; due: string }[] {
-  let first: Date;
-  if (rule === '30') {
-    first = new Date(enrollment);
-    first.setDate(first.getDate() + 30);
-  } else {
-    const day = Number(rule);
-    first = new Date(enrollment.getFullYear(), enrollment.getMonth(), day, 12);
-    if (first <= enrollment) first = new Date(enrollment.getFullYear(), enrollment.getMonth() + 1, day, 12);
-  }
-  const dueDay = first.getDate();
-  const endYear = first.getFullYear();
+  const year = enrollment.getFullYear();
+  const startMonth = enrollment.getMonth() + 1;              // mês seguinte (0-based)
+  const dueDay = rule === '30' ? enrollment.getDate() : Number(rule);
   const out: { referenceMonth: string; due: string }[] = [];
-  let y = endYear;
-  let m = first.getMonth();
-  while (y === endYear && m <= 11) {
-    const d = new Date(y, m, dueDay, 12);
-    out.push({ referenceMonth: `${y}-${String(m + 1).padStart(2, '0')}`, due: d.toISOString().slice(0, 10) });
-    m++;
+  for (let m = startMonth; m <= 11; m++) {
+    const lastDay = new Date(year, m + 1, 0).getDate();       // último dia do mês
+    const day = Math.min(dueDay, lastDay);                    // evita "31 de fev"
+    const d = new Date(year, m, day, 12);
+    out.push({ referenceMonth: `${year}-${String(m + 1).padStart(2, '0')}`, due: d.toISOString().slice(0, 10) });
   }
   return out;
 }

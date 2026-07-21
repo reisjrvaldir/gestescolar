@@ -236,9 +236,10 @@ export function FaturasPage() {
             <div className="card overflow-hidden">
               <div className="border-b border-border px-5 py-3.5">
                 <h3 className="text-sm font-bold text-ink">Mensalidades a pagar</h3>
+                <p className="mt-0.5 text-[11px] text-ink-subtle">As mensalidades começam no mês seguinte à matrícula — meses anteriores não possuem fatura.</p>
               </div>
               {proximasAPagar.length === 0 ? (
-                <p className="px-5 py-8 text-center text-sm text-ink-subtle">Nenhuma mensalidade pendente.</p>
+                <p className="px-5 py-8 text-center text-sm text-ink-subtle">Não existe fatura pendente no momento.</p>
               ) : (
                 <div className="divide-y divide-border">
                   {proximasAPagar.map((inv) => (

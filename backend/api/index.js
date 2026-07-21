@@ -43324,24 +43324,15 @@ function toStoredPassword(visible6) {
 
 // src/lib/billing/studentInvoices.ts
 function monthlyDueSchedule(enrollment, rule) {
-  let first;
-  if (rule === "30") {
-    first = new Date(enrollment);
-    first.setDate(first.getDate() + 30);
-  } else {
-    const day2 = Number(rule);
-    first = new Date(enrollment.getFullYear(), enrollment.getMonth(), day2, 12);
-    if (first <= enrollment) first = new Date(enrollment.getFullYear(), enrollment.getMonth() + 1, day2, 12);
-  }
-  const dueDay = first.getDate();
-  const endYear = first.getFullYear();
+  const year2 = enrollment.getFullYear();
+  const startMonth = enrollment.getMonth() + 1;
+  const dueDay = rule === "30" ? enrollment.getDate() : Number(rule);
   const out = [];
-  let y2 = endYear;
-  let m2 = first.getMonth();
-  while (y2 === endYear && m2 <= 11) {
-    const d = new Date(y2, m2, dueDay, 12);
-    out.push({ referenceMonth: `${y2}-${String(m2 + 1).padStart(2, "0")}`, due: d.toISOString().slice(0, 10) });
-    m2++;
+  for (let m2 = startMonth; m2 <= 11; m2++) {
+    const lastDay = new Date(year2, m2 + 1, 0).getDate();
+    const day2 = Math.min(dueDay, lastDay);
+    const d = new Date(year2, m2, day2, 12);
+    out.push({ referenceMonth: `${year2}-${String(m2 + 1).padStart(2, "0")}`, due: d.toISOString().slice(0, 10) });
   }
   return out;
 }
