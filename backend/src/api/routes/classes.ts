@@ -75,7 +75,8 @@ classesRouter.get('/', requireRole(...STAFF), async (req, res) => {
   res.json({ ok: true, data });
 });
 
-// GET /api/classes/mine — turmas do professor logado (onde ele é o regente).
+// GET /api/classes/mine — turmas do professor logado (regente ou por matéria).
+// Retorna também is_regente e my_subject_ids para filtrar matérias no frontend.
 classesRouter.get('/mine', requireRole('teacher', 'coordinator', 'school_admin', 'superadmin'), async (req, res) => {
   const data = await withTenant(req.ctx!, async (c) => {
     const t = await c.query(
@@ -83,14 +84,22 @@ classesRouter.get('/mine', requireRole('teacher', 'coordinator', 'school_admin',
       [req.ctx!.profileId, req.ctx!.schoolId],
     );
     if (t.rows.length === 0) return [];
-    // Turma onde é regente OU leciona alguma matéria (professor por matéria).
+    const teacherId = t.rows[0].id;
     const { rows } = await c.query(
-      `${CLASS_SELECT} where c.school_id = $1 and c.status = 'active'
-         and (c.teacher_id = $2
-              or exists (select 1 from public.class_subjects cs
-                          where cs.class_id = c.id and cs.teacher_id = $2))
-        order by c.name asc`,
-      [req.ctx!.schoolId, t.rows[0].id],
+      `select base.*,
+              (base.teacher_id = $2) as is_regente,
+              coalesce((
+                select array_agg(cs2.subject_id)
+                  from public.class_subjects cs2
+                 where cs2.class_id = base.id and cs2.teacher_id = $2
+              ), '{}') as my_subject_ids
+         from (${CLASS_SELECT}
+               where c.school_id = $1 and c.status = 'active'
+                 and (c.teacher_id = $2
+                      or exists (select 1 from public.class_subjects cs
+                                  where cs.class_id = c.id and cs.teacher_id = $2))) base
+        order by base.name asc`,
+      [req.ctx!.schoolId, teacherId],
     );
     return rows;
   });

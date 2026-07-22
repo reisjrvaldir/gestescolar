@@ -41,6 +41,9 @@ export interface SchoolClass {
   created_at: string;
   subject_ids?: string[];
   subjects?: { subject_id: string; subject_name?: string; teacher_id?: string | null; teacher_name?: string }[];
+  /** Presente apenas no retorno de /classes/mine */
+  is_regente?: boolean;
+  my_subject_ids?: string[];
 }
 
 export const SHIFT_LABELS: Record<Shift, string> = {

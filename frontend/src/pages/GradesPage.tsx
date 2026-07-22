@@ -66,10 +66,11 @@ export function GradesPage() {
   const me = useMe();
   if (me?.role === 'guardian') return <GuardianBoletim />;
   const isAdmin = me?.role === 'school_admin' || me?.role === 'superadmin';
-  return <GradesView isAdmin={isAdmin} />;
+  const isTeacher = me?.role === 'teacher';
+  return <GradesView isAdmin={isAdmin} isTeacher={isTeacher} />;
 }
 
-function GradesView({ isAdmin }: { isAdmin: boolean }) {
+function GradesView({ isAdmin, isTeacher }: { isAdmin: boolean; isTeacher: boolean }) {
   const location = useLocation();
   const isBoletimRoute = location.pathname.endsWith('/boletim');
   const [classes, setClasses]   = useState<SchoolClass[]>([]);
@@ -99,22 +100,32 @@ function GradesView({ isAdmin }: { isAdmin: boolean }) {
   const [boletimLoading, setBoletimLoading] = useState(false);
 
   useEffect(() => {
-    Promise.all([classesService.list(), gradesService.getSettings()]).then(([c, s]) => {
+    const loadClasses = isTeacher ? classesService.mine() : classesService.list();
+    Promise.all([loadClasses, gradesService.getSettings()]).then(([c, s]) => {
       setClasses(c);
       if (c.length > 0) setClassId(c[0].id);
       setSettings(s);
       setSettingsForm(s);
       setLoading(false);
     });
-  }, []);
+  }, [isTeacher]);
 
   useEffect(() => {
     if (!classId) { setClassSubjects([]); return; }
-    classesService.subjects(classId).then((subs) => {
-      setClassSubjects(subs);
-      setSubject(subs.length > 0 ? subs[0].name : SUBJECTS[0]);
+    classesService.subjects(classId).then((allSubs) => {
+      if (isTeacher) {
+        const cls = classes.find((c) => c.id === classId);
+        if (cls && !cls.is_regente && cls.my_subject_ids?.length) {
+          const filtered = allSubs.filter((s) => cls.my_subject_ids!.includes(s.id));
+          setClassSubjects(filtered);
+          setSubject(filtered.length > 0 ? filtered[0].name : SUBJECTS[0]);
+          return;
+        }
+      }
+      setClassSubjects(allSubs);
+      setSubject(allSubs.length > 0 ? allSubs[0].name : SUBJECTS[0]);
     }).catch(() => setClassSubjects([]));
-  }, [classId]);
+  }, [classId, isTeacher, classes]);
 
   const loadContext = useCallback(async () => {
     if (!classId) return;

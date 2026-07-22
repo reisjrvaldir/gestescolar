@@ -66,12 +66,13 @@ function toBase64(file: File): Promise<string> {
 
 export function AttendancePage() {
   const me = useMe();
-  // Portal do responsável tem uma experiência própria e bem mais simples.
   if (me?.role === 'guardian') return <GuardianAttestations />;
-  return <TeacherAttendanceView isAdmin={me?.role === 'school_admin' || me?.role === 'superadmin'} />;
+  const isAdmin = me?.role === 'school_admin' || me?.role === 'superadmin';
+  const isTeacher = me?.role === 'teacher';
+  return <TeacherAttendanceView isAdmin={isAdmin} isTeacher={isTeacher} />;
 }
 
-function TeacherAttendanceView({ isAdmin }: { isAdmin: boolean }) {
+function TeacherAttendanceView({ isAdmin, isTeacher }: { isAdmin: boolean; isTeacher: boolean }) {
   const TABS = [
     { key: 'chamada', label: 'Chamada' },
     { key: 'status', label: 'Status por dia' },
@@ -107,18 +108,29 @@ function TeacherAttendanceView({ isAdmin }: { isAdmin: boolean }) {
   const fileInputRefs = useRef<Record<string, HTMLInputElement | null>>({});
 
   useEffect(() => {
-    classesService.list().then((c) => {
+    const load = isTeacher ? classesService.mine() : classesService.list();
+    load.then((c) => {
       setClasses(c);
       if (c.length > 0) setClassId(c[0].id);
       setLoading(false);
     });
-  }, []);
+  }, [isTeacher]);
 
   useEffect(() => {
     if (!classId) { setSubjects([]); setSubjectId(''); return; }
     setSubjectId('');
-    classesService.subjects(classId).then(setSubjects).catch(() => setSubjects([]));
-  }, [classId]);
+    classesService.subjects(classId).then((allSubs) => {
+      if (isTeacher) {
+        const cls = classes.find((c) => c.id === classId);
+        // Professor não-regente com matérias atribuídas: mostra só as dele
+        if (cls && !cls.is_regente && cls.my_subject_ids?.length) {
+          setSubjects(allSubs.filter((s) => cls.my_subject_ids!.includes(s.id)));
+          return;
+        }
+      }
+      setSubjects(allSubs);
+    }).catch(() => setSubjects([]));
+  }, [classId, isTeacher, classes]);
 
   const loadContext = useCallback(async () => {
     if (!classId) return;

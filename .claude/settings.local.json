@@ -165,7 +165,9 @@
       "Bash(npx --yes -p typescript@5.4.5 tsc --noEmit -p tsconfig.json)",
       "Bash(python3 -c \"import yaml; yaml.safe_load\\(open\\('.github/workflows/ci.yml'\\)\\); yaml.safe_load\\(open\\('.github/workflows/commit-lint.yml'\\)\\); print\\('YAMLs válidos'\\)\")",
       "Bash(python -c \"import yaml; yaml.safe_load\\(open\\('.github/workflows/ci.yml'\\)\\); yaml.safe_load\\(open\\('.github/workflows/commit-lint.yml'\\)\\); print\\('YAMLs válidos'\\)\")",
-      "Bash(node -e ' *)"
+      "Bash(node -e ' *)",
+      "mcp__mcp-registry__search_mcp_registry",
+      "Bash(rm -f /tmp/supabase_win.tar.gz /tmp/supabase.exe /tmp/README.md /tmp/LICENSE 2>/dev/null *)"
     ]
   }
 }
