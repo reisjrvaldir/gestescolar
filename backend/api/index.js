@@ -43854,6 +43854,21 @@ classesRouter.get("/", requireRole(...STAFF), async (req, res) => {
   });
   res.json({ ok: true, data });
 });
+classesRouter.get("/mine", requireRole("teacher", "coordinator", "school_admin", "superadmin"), async (req, res) => {
+  const data = await withTenant(req.ctx, async (c) => {
+    const t = await c.query(
+      `select id from public.teachers where user_id=$1 and school_id=$2 limit 1`,
+      [req.ctx.profileId, req.ctx.schoolId]
+    );
+    if (t.rows.length === 0) return [];
+    const { rows } = await c.query(
+      `${CLASS_SELECT} where c.school_id = $1 and c.teacher_id = $2 and c.status = 'active' order by c.name asc`,
+      [req.ctx.schoolId, t.rows[0].id]
+    );
+    return rows;
+  });
+  res.json({ ok: true, data });
+});
 classesRouter.get("/:id/students", requireRole(...STAFF), async (req, res) => {
   const data = await withTenant(req.ctx, async (c) => {
     const { rows } = await c.query(

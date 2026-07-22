@@ -9,6 +9,8 @@ import { MetricCard } from '@/components/ui/MetricCard';
 import { StatusBadge } from '@/components/ui/StatusBadge';
 import { api } from '@/lib/api';
 import { brl } from '@/lib/fees';
+import { classesService } from '@/services/classes';
+import { SHIFT_LABELS, type SchoolClass } from '@/types/models';
 
 interface ChildStat {
   id: string;
@@ -95,6 +97,7 @@ export function DashboardPage() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
+  const [myClasses, setMyClasses] = useState<SchoolClass[] | null>(null);
 
   const fetchStats = useCallback(async (silent = false) => {
     if (!silent) setRefreshing(true);
@@ -122,6 +125,13 @@ export function DashboardPage() {
       window.removeEventListener('focus', onFocus);
     };
   }, [fetchStats]);
+
+  // Professor/coordenador: carrega as turmas onde ele é o regente.
+  useEffect(() => {
+    if (stats && ['teacher', 'coordinator'].includes(stats.role)) {
+      classesService.mine().then(setMyClasses).catch(() => setMyClasses([]));
+    }
+  }, [stats?.role]);
 
   if (loading || !stats) {
     return <div className="flex items-center justify-center py-20 text-ink-muted"><Loader2 className="animate-spin" size={24} /> <span className="ml-2">Carregando…</span></div>;
@@ -342,6 +352,47 @@ export function DashboardPage() {
           <MetricCard label="Alunos ativos" value={stats.students ?? 0} icon={GraduationCap} tone="primary" />
           <MetricCard label="Turmas ativas" value={stats.classes ?? 0} icon={School2} tone="primary" hint={`${stats.teachers ?? 0} professor(es)`} />
           <MetricCard label="Presenças hoje" value={stats.attendance_today ?? 0} icon={ClipboardCheck} tone="success" hint="turmas com chamada" />
+        </div>
+      )}
+
+      {/* Minhas turmas — professor/coordenador */}
+      {['teacher', 'coordinator'].includes(stats.role) && myClasses !== null && (
+        <div className="mt-4 card overflow-hidden">
+          <div className="flex items-center justify-between border-b border-border px-5 py-3.5">
+            <h3 className="text-sm font-bold text-ink">Minhas turmas</h3>
+            <span className="text-xs text-ink-subtle">{myClasses.length} turma(s)</span>
+          </div>
+          {myClasses.length === 0 ? (
+            <p className="px-5 py-8 text-center text-sm text-ink-subtle">
+              Você ainda não é regente de nenhuma turma. A gestão vincula o professor à turma no cadastro da turma.
+            </p>
+          ) : (
+            <div className="grid grid-cols-1 gap-3 p-4 sm:grid-cols-2 xl:grid-cols-3">
+              {myClasses.map((c) => (
+                <div key={c.id} className="rounded-xl border border-border p-4 transition-shadow hover:shadow-md">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <p className="truncate font-bold text-ink">{c.name}</p>
+                      <p className="text-xs text-ink-muted">
+                        {c.year ?? '—'}{c.shift ? ` · ${SHIFT_LABELS[c.shift] ?? c.shift}` : ''}{c.level ? ` · ${c.level}` : ''}
+                      </p>
+                    </div>
+                    <span className="inline-flex shrink-0 items-center gap-1 rounded-lg bg-primary-soft px-2 py-1 text-xs font-semibold text-primary">
+                      <GraduationCap size={12} /> {c.student_count ?? 0}
+                    </span>
+                  </div>
+                  <div className="mt-3 flex gap-2">
+                    <a href="/app/attendance" className="btn-outline flex-1 justify-center text-xs">
+                      <ClipboardCheck size={13} /> Chamada
+                    </a>
+                    <a href="/app/grades" className="btn-outline flex-1 justify-center text-xs">
+                      <Star size={13} /> Notas
+                    </a>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
 

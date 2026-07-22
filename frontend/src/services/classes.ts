@@ -27,6 +27,11 @@ export const classesService = {
     const r = await api.get<{ ok: boolean; data: SchoolClass[] }>('/classes');
     return r.data;
   },
+  /** Turmas do professor logado (onde ele é o regente). */
+  async mine(): Promise<SchoolClass[]> {
+    const r = await api.get<{ ok: boolean; data: SchoolClass[] }>('/classes/mine');
+    return r.data;
+  },
   async create(input: NewClass): Promise<SchoolClass> {
     const r = await api.post<{ ok: boolean; data: SchoolClass }>('/classes', input);
     return r.data;
