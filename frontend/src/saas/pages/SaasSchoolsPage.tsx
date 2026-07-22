@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
   Search, RefreshCw, Loader2, CalendarClock, PauseCircle, PlayCircle,
-  Users, GraduationCap, MoreHorizontal, Check,
+  Users, GraduationCap, MoreHorizontal, Check, Pencil, CreditCard, AlertCircle, MinusCircle,
 } from 'lucide-react';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { StatusBadge } from '@/components/ui/StatusBadge';
@@ -28,6 +28,20 @@ const FILTERS: { key: 'todas' | SchoolDerivedStatus; label: string }[] = [
 
 type ActionKind = 'extend' | 'suspend' | 'reactivate';
 
+// Prontidão de pagamento embutido (subconta ASAAS + documentos).
+function paymentInfo(s: SaasSchool): { tone: 'success' | 'warning' | 'neutral'; label: string; icon: typeof CreditCard } {
+  if (s.payment_ready) return { tone: 'success', label: 'Apto a receber', icon: CreditCard };
+  if (s.has_subaccount) {
+    const st = s.payout_status ?? '';
+    const label = st === 'under_review' ? 'Docs em análise'
+      : st === 'pending' || st === '' ? 'Enviar documentos'
+      : st === 'rejected' ? 'Docs recusados'
+      : `Subconta: ${st}`;
+    return { tone: 'warning', label, icon: AlertCircle };
+  }
+  return { tone: 'neutral', label: 'Sem subconta', icon: MinusCircle };
+}
+
 export function SaasSchoolsPage() {
   const [schools, setSchools] = useState<SaasSchool[]>([]);
   const [loading, setLoading] = useState(true);
@@ -36,6 +50,7 @@ export function SaasSchoolsPage() {
   const [filter, setFilter] = useState<'todas' | SchoolDerivedStatus>('todas');
   const [menuFor, setMenuFor] = useState<string | null>(null);
   const [action, setAction] = useState<{ kind: ActionKind; school: SaasSchool } | null>(null);
+  const [editing, setEditing] = useState<SaasSchool | null>(null);
   const [toast, setToast] = useState<string | null>(null);
 
   function showToast(msg: string) {
@@ -140,6 +155,7 @@ export function SaasSchoolsPage() {
                   <th className="px-5 py-3">Escola</th>
                   <th className="hidden px-5 py-3 md:table-cell">Plano</th>
                   <th className="px-5 py-3">Status</th>
+                  <th className="px-5 py-3">Pagamento</th>
                   <th className="hidden px-5 py-3 lg:table-cell">Cadastro</th>
                   <th className="hidden px-5 py-3 lg:table-cell">Vencimento</th>
                   <th className="px-5 py-3 text-center">Usuários</th>
@@ -158,6 +174,14 @@ export function SaasSchoolsPage() {
                       </td>
                       <td className="hidden px-5 py-3 text-ink-muted md:table-cell">{s.plan}</td>
                       <td className="px-5 py-3"><StatusBadge tone={st.tone}>{st.label}</StatusBadge></td>
+                      <td className="px-5 py-3">
+                        {(() => { const pi = paymentInfo(s); const Icon = pi.icon; return (
+                          <span className="inline-flex items-center gap-1.5" title={pi.label}>
+                            <Icon size={14} className={pi.tone === 'success' ? 'text-success' : pi.tone === 'warning' ? 'text-warning' : 'text-ink-subtle'} />
+                            <StatusBadge tone={pi.tone}>{pi.label}</StatusBadge>
+                          </span>
+                        ); })()}
+                      </td>
                       <td className="hidden px-5 py-3 text-ink-muted lg:table-cell">{fmtDate(s.created_at)}</td>
                       <td className="hidden px-5 py-3 text-ink-muted lg:table-cell">
                         {s.trial_ends_at ? fmtDate(s.trial_ends_at) : '—'}
@@ -180,6 +204,12 @@ export function SaasSchoolsPage() {
                             <>
                               <div className="fixed inset-0 z-10" onClick={() => setMenuFor(null)} />
                               <div className="absolute right-0 z-20 mt-1 w-52 overflow-hidden rounded-xl border border-border bg-surface py-1 shadow-card-hover">
+                                <button
+                                  className="flex w-full items-center gap-2 px-4 py-2 text-left text-sm text-ink hover:bg-canvas"
+                                  onClick={() => { setMenuFor(null); setEditing(s); }}
+                                >
+                                  <Pencil size={15} className="text-primary" /> Editar dados
+                                </button>
                                 <button
                                   className="flex w-full items-center gap-2 px-4 py-2 text-left text-sm text-ink hover:bg-canvas"
                                   onClick={() => { setMenuFor(null); setAction({ kind: 'extend', school: s }); }}
@@ -210,7 +240,7 @@ export function SaasSchoolsPage() {
                   );
                 })}
                 {filtered.length === 0 && (
-                  <tr><td colSpan={8} className="px-5 py-12 text-center text-sm text-ink-subtle">Nenhuma escola encontrada.</td></tr>
+                  <tr><td colSpan={9} className="px-5 py-12 text-center text-sm text-ink-subtle">Nenhuma escola encontrada.</td></tr>
                 )}
               </tbody>
             </table>
@@ -226,7 +256,89 @@ export function SaasSchoolsPage() {
           onDone={onDone}
         />
       )}
+
+      {editing && (
+        <EditSchoolModal
+          school={editing}
+          onClose={() => setEditing(null)}
+          onDone={(updated) => { onDone(updated, `Dados de ${updated.name} atualizados.`); setEditing(null); }}
+        />
+      )}
     </>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Modal de edição de dados da escola (nome, e-mail, telefone, CNPJ)
+// ---------------------------------------------------------------------------
+function EditSchoolModal({
+  school, onClose, onDone,
+}: {
+  school: SaasSchool;
+  onClose: () => void;
+  onDone: (s: SaasSchool) => void;
+}) {
+  const [name, setName] = useState(school.name ?? '');
+  const [email, setEmail] = useState(school.email ?? '');
+  const [phone, setPhone] = useState(school.phone ?? '');
+  const [cnpj, setCnpj] = useState(school.cnpj ?? '');
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+
+  async function submit() {
+    setErr(null);
+    setBusy(true);
+    try {
+      const updated = await saasService.updateSchool(school.id, {
+        name: name.trim(), email: email.trim() || undefined, phone: phone.trim() || undefined, cnpj: cnpj.trim() || undefined,
+      });
+      onDone({ ...school, ...updated });
+    } catch (e: any) {
+      setErr(e?.message ?? 'Não foi possível salvar.');
+      setBusy(false);
+    }
+  }
+
+  return (
+    <Modal
+      open
+      title="Editar escola"
+      onClose={onClose}
+      footer={
+        <>
+          <button className="btn-outline" onClick={onClose} disabled={busy}>Cancelar</button>
+          <button className="btn-primary" onClick={submit} disabled={busy || name.trim().length < 2}>
+            {busy ? <Loader2 size={15} className="animate-spin" /> : null} Salvar
+          </button>
+        </>
+      }
+    >
+      <div className="space-y-4">
+        <label className="block text-sm">
+          <span className="mb-1 block font-medium text-ink">Nome da escola *</span>
+          <input value={name} onChange={(e) => setName(e.target.value)}
+            className="w-full rounded-xl border border-border bg-surface px-3 py-2 text-ink outline-none focus:border-primary" />
+        </label>
+        <label className="block text-sm">
+          <span className="mb-1 block font-medium text-ink">E-mail</span>
+          <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="contato@escola.com.br"
+            className="w-full rounded-xl border border-border bg-surface px-3 py-2 text-ink outline-none focus:border-primary" />
+        </label>
+        <div className="grid grid-cols-2 gap-3">
+          <label className="block text-sm">
+            <span className="mb-1 block font-medium text-ink">Telefone</span>
+            <input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="(00) 00000-0000"
+              className="w-full rounded-xl border border-border bg-surface px-3 py-2 text-ink outline-none focus:border-primary" />
+          </label>
+          <label className="block text-sm">
+            <span className="mb-1 block font-medium text-ink">CNPJ</span>
+            <input value={cnpj} onChange={(e) => setCnpj(e.target.value)} placeholder="00.000.000/0000-00"
+              className="w-full rounded-xl border border-border bg-surface px-3 py-2 text-ink outline-none focus:border-primary" />
+          </label>
+        </div>
+        {err && <p className="text-sm text-danger">{err}</p>}
+      </div>
+    </Modal>
   );
 }
 

@@ -47091,13 +47091,45 @@ saasRouter.get("/schools", async (req, res) => {
       `select s.id, s.name, s.cnpj, s.email, s.phone, s.created_at, s.trial_ends_at,
               s.subscription_status, s.status as school_status,
               coalesce(p.name,'\u2014') as plan, ${DERIVED} as derived_status,
+              (s.asaas_wallet_id is not null) as has_subaccount,
+              na.status as payout_status,
+              (s.asaas_wallet_id is not null
+                 and coalesce(na.status,'') in ('under_review','approved','active')) as payment_ready,
               (select count(*)::int from public.profiles pr where pr.school_id = s.id) as users_count,
               (select count(*)::int from public.students st where st.school_id = s.id and st.status='active') as students_count
-         from public.schools s left join public.plans p on p.id = s.plan_id
+         from public.schools s
+         left join public.plans p on p.id = s.plan_id
+         left join public.nuvende_accounts na on na.school_id = s.id
         order by s.created_at desc`
     );
     return rows;
   });
+  res.json({ ok: true, data });
+});
+saasRouter.put("/schools/:id", async (req, res) => {
+  const name = typeof req.body?.name === "string" ? req.body.name.trim() : "";
+  const email = typeof req.body?.email === "string" ? req.body.email.trim() : "";
+  const phone = typeof req.body?.phone === "string" ? req.body.phone.trim() : "";
+  const cnpj = typeof req.body?.cnpj === "string" ? req.body.cnpj.trim() : "";
+  if (name.length < 2) return res.status(400).json({ code: "name_required", message: "Informe o nome da escola." });
+  if (email && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) return res.status(400).json({ code: "bad_email", message: "E-mail inv\xE1lido." });
+  const data = await withTenant(req.ctx, async (c) => {
+    const upd = await c.query(
+      `update public.schools
+          set name=$2, email=nullif($3,''), phone=nullif($4,''), cnpj=nullif($5,''), updated_at=now()
+        where id=$1
+        returning id, name, email, phone, cnpj`,
+      [req.params.id, name, email, phone, cnpj]
+    );
+    if (upd.rowCount === 0) return null;
+    await c.query(
+      `insert into public.audit_logs (school_id, user_id, action, entity_type, entity_id, metadata)
+       values ($1,$2,'SCHOOL_UPDATED','school',$1,$3)`,
+      [req.params.id, req.ctx.profileId, JSON.stringify({ name, email, phone, cnpj, actor: req.identity?.email ?? null })]
+    );
+    return upd.rows[0];
+  });
+  if (!data) return res.status(404).json({ code: "not_found", message: "Escola n\xE3o encontrada." });
   res.json({ ok: true, data });
 });
 saasRouter.get("/revenue", async (req, res) => {

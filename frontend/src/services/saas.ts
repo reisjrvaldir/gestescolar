@@ -45,6 +45,9 @@ export interface SaasSchool {
   subscription_status?: string; school_status?: string;
   plan: string; derived_status: SchoolDerivedStatus;
   users_count: number; students_count: number;
+  has_subaccount?: boolean;
+  payout_status?: string | null;
+  payment_ready?: boolean;
 }
 
 export interface SaasRevenue {
@@ -223,6 +226,10 @@ export const saasService = {
   },
   async reactivateSchool(id: string, body: { reason?: string; trial_days?: number }) {
     const r = await api.post<{ ok: boolean; data: SaasSchool }>(`/saas/schools/${id}/reactivate`, body);
+    return r.data;
+  },
+  async updateSchool(id: string, body: { name: string; email?: string; phone?: string; cnpj?: string }) {
+    const r = await api.put<{ ok: boolean; data: SaasSchool }>(`/saas/schools/${id}`, body);
     return r.data;
   },
 };
