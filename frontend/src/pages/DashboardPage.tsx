@@ -7,6 +7,7 @@ import {
 import { PageHeader } from '@/components/ui/PageHeader';
 import { MetricCard } from '@/components/ui/MetricCard';
 import { StatusBadge } from '@/components/ui/StatusBadge';
+import { OnboardingChecklist } from '@/components/onboarding/OnboardingChecklist';
 import { api } from '@/lib/api';
 import { brl } from '@/lib/fees';
 import { classesService } from '@/services/classes';
@@ -332,6 +333,8 @@ export function DashboardPage() {
           </span>
         </div>
       )}
+
+      {stats.role === 'school_admin' && <OnboardingChecklist />}
 
       {/* Cards principais */}
       {finance ? (
