@@ -1,9 +1,9 @@
 import { useState } from 'react';
 import { Outlet, NavLink, useNavigate } from 'react-router-dom';
 import {
-  LayoutDashboard, School2, ClipboardList, Package, CalendarClock, ShieldCheck,
-  Users, KeyRound, Activity, Wallet, ArrowLeftRight, Receipt, CreditCard,
-  Settings, Palette, Plug, Bell, Lock, LifeBuoy, Search,
+  LayoutDashboard, School2, Package, CalendarClock,
+  Users, Activity, Wallet, ArrowLeftRight, Receipt,
+  LifeBuoy, Search,
   Bell as BellIcon, HelpCircle, Menu, X, ChevronDown, LogOut, Crown,
   ArrowLeft, type LucideIcon,
 } from 'lucide-react';
@@ -17,7 +17,6 @@ const NAV: NavGroup[] = [
     title: 'Visão geral',
     items: [
       { to: '/saas', label: 'Dashboard', icon: LayoutDashboard },
-      { to: '/saas/resumo', label: 'Resumo executivo', icon: ClipboardList },
     ],
   },
   {
@@ -26,15 +25,12 @@ const NAV: NavGroup[] = [
       { to: '/saas/escolas', label: 'Todas as escolas', icon: School2 },
       { to: '/saas/planos', label: 'Planos e assinaturas', icon: Package },
       { to: '/saas/vencimentos', label: 'Vencimentos', icon: CalendarClock },
-      { to: '/saas/status', label: 'Status das contas', icon: ShieldCheck },
     ],
   },
   {
     title: 'Usuários',
     items: [
-      { to: '/saas/admins', label: 'Administradores', icon: Users },
       { to: '/saas/usuarios-escolas', label: 'Usuários das escolas', icon: Users },
-      { to: '/saas/permissoes', label: 'Perfis e permissões', icon: KeyRound },
       { to: '/saas/logs-acesso', label: 'Logs de acesso', icon: Activity },
     ],
   },
@@ -44,18 +40,12 @@ const NAV: NavGroup[] = [
       { to: '/saas/receitas', label: 'Receitas do SaaS', icon: Wallet },
       { to: '/saas/repasses', label: 'Repasses para escolas', icon: ArrowLeftRight },
       { to: '/saas/transacoes', label: 'Cobranças e transações', icon: Receipt },
-      { to: '/saas/gateway', label: 'Gateway de pagamento', icon: CreditCard },
     ],
   },
   {
     title: 'Configurações',
     items: [
       { to: '/saas/config/planos', label: 'Planos', icon: Package },
-      { to: '/saas/config/recursos', label: 'Recursos do sistema', icon: Settings },
-      { to: '/saas/config/personalizacoes', label: 'Personalizações', icon: Palette },
-      { to: '/saas/config/integracoes', label: 'Integrações', icon: Plug },
-      { to: '/saas/config/notificacoes', label: 'Notificações', icon: Bell },
-      { to: '/saas/config/seguranca', label: 'Segurança', icon: Lock },
     ],
   },
 ];

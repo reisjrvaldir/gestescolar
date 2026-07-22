@@ -96,25 +96,15 @@ export default function App() {
           <Route path="/saas" element={<SaasAdminGuard />}>
             <Route element={<SaasAdminLayout />}>
               <Route index element={<SaasDashboardPage />} />
-              <Route path="resumo"           element={<SaasPlaceholderPage title="Resumo executivo" subtitle="Indicadores consolidados da operação SaaS." />} />
               <Route path="escolas"          element={<SaasSchoolsPage />} />
               <Route path="planos"           element={<SaasSubscriptionsPage />} />
               <Route path="vencimentos"      element={<SaasExpirationsPage />} />
-              <Route path="status"           element={<SaasPlaceholderPage title="Status das contas" subtitle="Contas ativas, suspensas, canceladas e trials." />} />
-              <Route path="admins"           element={<SaasPlaceholderPage title="Administradores do SaaS" subtitle="Time de operação e suporte." />} />
               <Route path="usuarios-escolas" element={<SaasUsersPage />} />
-              <Route path="permissoes"       element={<SaasPlaceholderPage title="Perfis e permissões" subtitle="Papéis do time SaaS e permissões granulares." />} />
               <Route path="logs-acesso"      element={<SaasAuditLogsPage />} />
               <Route path="receitas"         element={<SaasRevenuePage />} />
               <Route path="repasses"         element={<SaasPayoutsPage />} />
               <Route path="transacoes"       element={<SaasTransactionsPage />} />
-              <Route path="gateway"          element={<SaasPlaceholderPage title="Gateway de pagamento" subtitle="Integração, chaves, webhooks e ambiente." />} />
               <Route path="config/planos"           element={<SaasPlansConfigPage />} />
-              <Route path="config/recursos"         element={<SaasPlaceholderPage title="Recursos do sistema" subtitle="Feature flags globais e por escola." />} />
-              <Route path="config/personalizacoes"  element={<SaasPlaceholderPage title="Personalizações" subtitle="Branding e textos institucionais." />} />
-              <Route path="config/integracoes"      element={<SaasPlaceholderPage title="Integrações" subtitle="Gateway, e-mail, WhatsApp, storage e webhooks." />} />
-              <Route path="config/notificacoes"     element={<SaasPlaceholderPage title="Notificações" subtitle="Templates, disparos e avisos globais." />} />
-              <Route path="config/seguranca"        element={<SaasPlaceholderPage title="Segurança" subtitle="Políticas de senha, sessão, 2FA e IP allowlist." />} />
               <Route path="suporte"          element={<SaasSupportPage />} />
               <Route path="*" element={<SaasPlaceholderPage title="Página não encontrada" />} />
             </Route>
