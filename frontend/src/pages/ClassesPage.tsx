@@ -18,6 +18,7 @@ export function ClassesPage() {
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<SchoolClass | null>(null);
   const [selectedSubjects, setSelectedSubjects] = useState<string[]>([]);
+  const [subjectTeacher, setSubjectTeacher] = useState<Record<string, string>>({}); // subject_id → teacher_id
   const [saving, setSaving] = useState(false);
 
   // Modal de lista de alunos da turma.
@@ -43,6 +44,7 @@ export function ClassesPage() {
   function openNew() {
     setEditing(null);
     setSelectedSubjects([]);
+    setSubjectTeacher({});
     reset({ name: '', year: new Date().getFullYear(), shift: 'morning', level: '', teacher_id: '' });
     setOpen(true);
   }
@@ -50,22 +52,32 @@ export function ClassesPage() {
   function openEdit(c: SchoolClass) {
     setEditing(c);
     setSelectedSubjects(c.subject_ids ?? []);
-    const teacherId = teachers.find((t) => t.name === c.teacher_name)?.id ?? '';
+    // Mapa matéria → professor (novo formato); cai pro vazio se ainda não tiver.
+    const map: Record<string, string> = {};
+    for (const s of c.subjects ?? []) if (s.teacher_id) map[s.subject_id] = s.teacher_id;
+    setSubjectTeacher(map);
+    const teacherId = c.teacher_id ?? teachers.find((t) => t.name === c.teacher_name)?.id ?? '';
     reset({ name: c.name, year: c.year, shift: c.shift, level: c.level ?? '', teacher_id: teacherId });
     setOpen(true);
   }
 
-  function closeModal() { reset(); setEditing(null); setSelectedSubjects([]); setOpen(false); }
+  function closeModal() { reset(); setEditing(null); setSelectedSubjects([]); setSubjectTeacher({}); setOpen(false); }
 
   function toggleSubject(id: string) {
     setSelectedSubjects((prev) => prev.includes(id) ? prev.filter((s) => s !== id) : [...prev, id]);
+    setSubjectTeacher((prev) => { const n = { ...prev }; delete n[id]; return n; }); // limpa prof. ao desmarcar
   }
 
   async function onSubmit(data: NewClass) {
     if (saving) return;
     setSaving(true);
     try {
-      const payload = { ...data, year: Number(data.year), teacher_id: data.teacher_id || undefined, subject_ids: selectedSubjects };
+      const payload = {
+        ...data,
+        year: Number(data.year),
+        teacher_id: data.teacher_id || undefined,
+        subjects: selectedSubjects.map((sid) => ({ subject_id: sid, teacher_id: subjectTeacher[sid] || null })),
+      };
       if (editing) {
         await classesService.update(editing.id, payload);
       } else {
@@ -148,11 +160,20 @@ export function ClassesPage() {
                   <Clock size={15} /> Turno: <span className="font-medium text-ink">{SHIFT_LABELS[c.shift]}</span>
                 </div>
                 <div className="flex items-center gap-2 text-ink-muted">
-                  <UserCog size={15} /> Professor: <span className="font-medium text-ink">{c.teacher_name ?? '—'}</span>
+                  <UserCog size={15} /> Regente: <span className="font-medium text-ink">{c.teacher_name ?? '—'}</span>
                 </div>
                 <div className="flex items-center gap-2 text-ink-muted">
                   <BookOpen size={15} /> Matérias: <span className="font-medium text-ink">{c.subject_ids?.length ?? 0}</span>
                 </div>
+                {(() => {
+                  const profs = Array.from(new Set((c.subjects ?? []).map((s) => s.teacher_name).filter(Boolean)));
+                  return profs.length > 0 ? (
+                    <div className="flex items-start gap-2 text-ink-muted">
+                      <Users size={15} className="mt-0.5 shrink-0" />
+                      <span>Professores: <span className="font-medium text-ink">{profs.join(', ')}</span></span>
+                    </div>
+                  ) : null;
+                })()}
               </div>
 
               <div className="mt-4 flex items-center justify-between border-t border-border pt-3">
@@ -220,25 +241,39 @@ export function ClassesPage() {
           </div>
 
           <div>
-            <label className="label">Matérias da turma</label>
-            <p className="mb-2 text-xs text-ink-subtle">Marque as matérias desta turma. Elas aparecem na chamada e nas avaliações.</p>
-            <div className="max-h-64 space-y-3 overflow-y-auto rounded-xl border border-border p-3">
+            <label className="label">Matérias e professores da turma</label>
+            <p className="mb-2 text-xs text-ink-subtle">
+              Marque as matérias desta turma e, em cada uma, escolha o professor. Assim vários professores
+              podem atuar na mesma turma (um por disciplina).
+            </p>
+            <div className="max-h-72 space-y-3 overflow-y-auto rounded-xl border border-border p-3">
               {grouped.length === 0 ? (
                 <p className="text-xs text-ink-muted">Nenhuma matéria disponível.</p>
               ) : grouped.map((g) => (
                 <div key={g.lvl}>
                   <p className="mb-1 text-xs font-bold uppercase tracking-wide text-ink-subtle">{LEVEL_LABELS[g.lvl] ?? g.lvl}</p>
-                  <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-2">
-                    {g.items.map((s) => (
-                      <label key={s.id} className="flex items-center gap-2 text-sm text-ink">
-                        <input
-                          type="checkbox"
-                          checked={selectedSubjects.includes(s.id)}
-                          onChange={() => toggleSubject(s.id)}
-                        />
-                        {s.name}
-                      </label>
-                    ))}
+                  <div className="space-y-1.5">
+                    {g.items.map((s) => {
+                      const checked = selectedSubjects.includes(s.id);
+                      return (
+                        <div key={s.id} className="flex items-center gap-2">
+                          <label className="flex flex-1 items-center gap-2 text-sm text-ink">
+                            <input type="checkbox" checked={checked} onChange={() => toggleSubject(s.id)} />
+                            {s.name}
+                          </label>
+                          {checked && (
+                            <select
+                              className="input w-44 py-1 text-xs"
+                              value={subjectTeacher[s.id] ?? ''}
+                              onChange={(e) => setSubjectTeacher((prev) => ({ ...prev, [s.id]: e.target.value }))}
+                            >
+                              <option value="">Professor…</option>
+                              {teachers.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
+                            </select>
+                          )}
+                        </div>
+                      );
+                    })}
                   </div>
                 </div>
               ))}

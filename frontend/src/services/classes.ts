@@ -1,6 +1,11 @@
 import type { SchoolClass, Shift } from '@/types/models';
 import { api } from '@/lib/api';
 
+export interface ClassSubjectAssignment {
+  subject_id: string;
+  teacher_id?: string | null;
+}
+
 export interface NewClass {
   name: string;
   year: number;
@@ -8,6 +13,7 @@ export interface NewClass {
   shift: Shift;
   teacher_id?: string;
   subject_ids?: string[];
+  subjects?: ClassSubjectAssignment[];
 }
 
 export interface ClassStudent {

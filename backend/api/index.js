@@ -43824,26 +43824,47 @@ var classSchema = external_exports.object({
   level: external_exports.string().optional(),
   shift: external_exports.enum(["morning", "afternoon", "night", "full"]),
   teacher_id: external_exports.string().uuid().optional(),
-  subject_ids: external_exports.array(external_exports.string().uuid()).optional()
+  // subject_ids: formato antigo (só matérias). subjects: novo formato com
+  // professor por matéria (permite vários professores na mesma turma).
+  subject_ids: external_exports.array(external_exports.string().uuid()).optional(),
+  subjects: external_exports.array(external_exports.object({
+    subject_id: external_exports.string().uuid(),
+    teacher_id: external_exports.string().uuid().optional().nullable()
+  })).optional()
 });
 classesRouter.use(requireAuth);
-async function saveClassSubjects(c, schoolId, classId, subjectIds) {
-  if (!subjectIds) return;
+async function saveClassSubjects(c, schoolId, classId, items) {
+  if (!items) return;
   await c.query("delete from public.class_subjects where class_id=$1 and school_id=$2", [classId, schoolId]);
-  for (const sid of subjectIds) {
+  for (const it of items) {
     await c.query(
-      `insert into public.class_subjects (school_id, class_id, subject_id)
-       select $1,$2,$3 where exists (select 1 from public.subjects where id=$3 and school_id=$1)
-       on conflict (class_id, subject_id) do nothing`,
-      [schoolId, classId, sid]
+      `insert into public.class_subjects (school_id, class_id, subject_id, teacher_id)
+       select $1, $2, $3, (select id from public.teachers where id=$4 and school_id=$1)
+        where exists (select 1 from public.subjects where id=$3 and school_id=$1)
+       on conflict (class_id, subject_id) do update set teacher_id = excluded.teacher_id`,
+      [schoolId, classId, it.subject_id, it.teacher_id ?? null]
     );
   }
 }
+function subjectItems(d) {
+  if (d.subjects) return d.subjects;
+  if (d.subject_ids) return d.subject_ids.map((id) => ({ subject_id: id, teacher_id: null }));
+  return void 0;
+}
 var CLASS_SELECT = `
-  select c.id, c.name, c.year, c.level, c.shift, c.status, c.created_at,
+  select c.id, c.name, c.year, c.level, c.shift, c.status, c.created_at, c.teacher_id,
          t.name as teacher_name,
          (select count(*)::int from public.students s where s.class_id = c.id and s.status = 'active') as student_count,
-         coalesce((select array_agg(cs.subject_id) from public.class_subjects cs where cs.class_id = c.id), '{}') as subject_ids
+         coalesce((select array_agg(cs.subject_id) from public.class_subjects cs where cs.class_id = c.id), '{}') as subject_ids,
+         coalesce((
+           select json_agg(json_build_object(
+             'subject_id', cs.subject_id, 'subject_name', sub.name,
+             'teacher_id', cs.teacher_id, 'teacher_name', tt.name))
+           from public.class_subjects cs
+           left join public.subjects sub on sub.id = cs.subject_id
+           left join public.teachers tt on tt.id = cs.teacher_id
+          where cs.class_id = c.id
+         ), '[]'::json) as subjects
     from public.classes c
     left join public.teachers t on t.id = c.teacher_id`;
 var STAFF = ["school_admin", "financial", "teacher", "superadmin"];
@@ -43862,7 +43883,11 @@ classesRouter.get("/mine", requireRole("teacher", "coordinator", "school_admin",
     );
     if (t.rows.length === 0) return [];
     const { rows } = await c.query(
-      `${CLASS_SELECT} where c.school_id = $1 and c.teacher_id = $2 and c.status = 'active' order by c.name asc`,
+      `${CLASS_SELECT} where c.school_id = $1 and c.status = 'active'
+         and (c.teacher_id = $2
+              or exists (select 1 from public.class_subjects cs
+                          where cs.class_id = c.id and cs.teacher_id = $2))
+        order by c.name asc`,
       [req.ctx.schoolId, t.rows[0].id]
     );
     return rows;
@@ -43910,7 +43935,7 @@ classesRouter.post("/", requireRole("school_admin", "superadmin"), async (req, r
       [req.ctx.schoolId, d.name, d.year, d.level ?? null, d.shift, d.teacher_id ?? null]
     );
     const id = rows[0].id;
-    await saveClassSubjects(c, req.ctx.schoolId, id, d.subject_ids);
+    await saveClassSubjects(c, req.ctx.schoolId, id, subjectItems(d));
     const { rows: full } = await c.query(`${CLASS_SELECT} where c.id = $1 and c.school_id = $2`, [id, req.ctx.schoolId]);
     return full[0];
   });
@@ -43928,7 +43953,7 @@ classesRouter.put("/:id", requireRole("school_admin", "superadmin"), async (req,
         where id=$6 and school_id=$7`,
       [d.name, d.year, d.level ?? null, d.shift, d.teacher_id ?? null, req.params.id, req.ctx.schoolId]
     );
-    await saveClassSubjects(c, req.ctx.schoolId, req.params.id, d.subject_ids);
+    await saveClassSubjects(c, req.ctx.schoolId, req.params.id, subjectItems(d));
     const { rows } = await c.query(`${CLASS_SELECT} where c.id = $1 and c.school_id = $2`, [req.params.id, req.ctx.schoolId]);
     return rows[0];
   });

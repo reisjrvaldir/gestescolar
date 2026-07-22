@@ -34,11 +34,13 @@ export interface SchoolClass {
   year: number;
   level?: string;
   shift: Shift;
+  teacher_id?: string;
   teacher_name?: string;
   student_count: number;
   status: 'active' | 'inactive';
   created_at: string;
   subject_ids?: string[];
+  subjects?: { subject_id: string; subject_name?: string; teacher_id?: string | null; teacher_name?: string }[];
 }
 
 export const SHIFT_LABELS: Record<Shift, string> = {
