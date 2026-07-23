@@ -84,7 +84,7 @@ staffRouter.post('/', requireRole('school_admin', 'superadmin'), async (req, res
            (school_id, user_id, name, email, phone, cpf, registration_number, role_type, subject_teaches,
             position, admission_date, contract_type, weekly_hours, timeclock_enabled)
          values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)
-         returning id, name, email, phone, cpf, registration_number, role_type, subject_teaches,
+         returning id, user_id, name, email, phone, cpf, registration_number, role_type, subject_teaches,
                    position, admission_date::text as admission_date, contract_type, weekly_hours::float8 as weekly_hours,
                    timeclock_enabled, status, created_at`,
         [req.ctx!.schoolId, profileId, s.name, s.email, s.phone ?? null, s.cpf,

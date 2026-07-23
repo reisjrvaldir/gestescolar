@@ -57,6 +57,7 @@ export type StaffRole = 'school_admin' | 'financial' | 'teacher' | 'coordinator'
 
 export interface Staff {
   id: string;
+  user_id?: string;
   name: string;
   email: string;
   phone?: string;

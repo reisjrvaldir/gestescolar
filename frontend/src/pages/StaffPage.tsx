@@ -7,6 +7,7 @@ import { StatusBadge } from '@/components/ui/StatusBadge';
 import { Modal } from '@/components/ui/Modal';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { staffService, type NewStaff, type CreatedStaff } from '@/services/staff';
+import { createSchedule } from '@/services/schedules';
 import { STAFF_ROLE_LABELS, type Staff, type StaffRole } from '@/types/models';
 
 const ROLE_TONE: Record<StaffRole, 'primary' | 'success' | 'warning'> = {
@@ -15,6 +16,26 @@ const ROLE_TONE: Record<StaffRole, 'primary' | 'success' | 'warning'> = {
   teacher: 'primary',
   coordinator: 'warning',
 };
+
+const WEEKDAYS = [
+  { wd: 0, label: 'Dom' },
+  { wd: 1, label: 'Seg' },
+  { wd: 2, label: 'Ter' },
+  { wd: 3, label: 'Qua' },
+  { wd: 4, label: 'Qui' },
+  { wd: 5, label: 'Sex' },
+  { wd: 6, label: 'Sáb' },
+];
+
+interface SlotState { enabled: boolean; start: string; end: string }
+
+function defaultSlots(): SlotState[] {
+  return WEEKDAYS.map(({ wd }) => ({
+    enabled: wd >= 1 && wd <= 5, // Seg–Sex
+    start: '08:00',
+    end: '17:00',
+  }));
+}
 
 interface FormFields extends NewStaff {}
 
@@ -27,6 +48,8 @@ export function StaffPage() {
   const [error, setError] = useState<string | null>(null);
   const [credentials, setCredentials] = useState<CreatedStaff | null>(null);
   const [copied, setCopied] = useState(false);
+  const [slots, setSlots] = useState<SlotState[]>(defaultSlots());
+  const [schedError, setSchedError] = useState<string | null>(null);
 
   const { register, handleSubmit, reset, watch, formState: { errors } } = useForm<FormFields>();
   const watchRole = watch('role_type');
@@ -41,6 +64,8 @@ export function StaffPage() {
 
   function openNew() {
     setEditing(null);
+    setSlots(defaultSlots());
+    setSchedError(null);
     reset({ name: '', cpf: '', email: '', phone: '', role_type: 'teacher', subject_teaches: '',
       position: '', admission_date: '', contract_type: undefined, weekly_hours: undefined, timeclock_enabled: true });
     setOpen(true);
@@ -61,13 +86,36 @@ export function StaffPage() {
     setOpen(true);
   }
 
-  function closeModal() { reset(); setEditing(null); setOpen(false); }
+  function closeModal() { reset(); setEditing(null); setSlots(defaultSlots()); setSchedError(null); setOpen(false); }
+
+  function toggleDay(i: number) {
+    setSlots((prev) => prev.map((s, idx) => idx === i ? { ...s, enabled: !s.enabled } : s));
+  }
+
+  function updateSlot(i: number, field: 'start' | 'end', val: string) {
+    setSlots((prev) => prev.map((s, idx) => idx === i ? { ...s, [field]: val } : s));
+  }
 
   async function onSubmit(data: FormFields) {
+    // Valida jornada somente para novos cadastros
+    if (!editing) {
+      const activeDays = slots.filter((s) => s.enabled);
+      if (activeDays.length === 0) {
+        setSchedError('Selecione pelo menos um dia de trabalho.');
+        return;
+      }
+      for (const slot of activeDays) {
+        if (slot.start >= slot.end) {
+          setSchedError('O horário de saída deve ser depois da entrada em todos os dias.');
+          return;
+        }
+      }
+      setSchedError(null);
+    }
+
     setSaving(true);
     setError(null);
     try {
-      // Normaliza opcionais: '' → undefined; horas → número (ou undefined).
       const hours = data.weekly_hours != null && !Number.isNaN(Number(data.weekly_hours))
         ? Number(data.weekly_hours) : undefined;
       const payload = {
@@ -82,6 +130,21 @@ export function StaffPage() {
         await staffService.update(editing.id, payload);
       } else {
         const created = await staffService.create(payload);
+        // Salva a jornada de trabalho logo após criar o colaborador
+        const userId = created.user_id;
+        if (userId) {
+          const activeDays = slots.filter((s) => s.enabled);
+          await Promise.all(
+            activeDays.map((s, i) =>
+              createSchedule({
+                user_id: userId,
+                weekday: slots.indexOf(s),
+                start_time: s.start,
+                end_time: s.end,
+              }).catch(() => {}) // falha silenciosa — jornada pode ser ajustada depois
+            ),
+          );
+        }
         setCredentials(created);
       }
       await load();
@@ -278,7 +341,7 @@ E-mail: ${credentials.email}
                 </select>
               </div>
               <div>
-                <label className="label">Jornada semanal (h)</label>
+                <label className="label">Carga horária semanal (h)</label>
                 <input type="number" step="0.5" min="0" max="80" className="input" placeholder="Ex.: 40" {...register('weekly_hours', { valueAsNumber: true })} />
               </div>
             </div>
@@ -286,8 +349,67 @@ E-mail: ${credentials.email}
               <input type="checkbox" className="h-4 w-4 rounded border-border" {...register('timeclock_enabled')} />
               Habilitado para bater ponto
             </label>
-            <p className="mt-1 text-xs text-ink-muted">O funcionário só registra ponto se estiver habilitado e tiver jornada cadastrada.</p>
           </div>
+
+          {/* Jornada de trabalho — apenas no cadastro */}
+          {!editing && (
+            <div className="border-t border-border pt-4">
+              <div className="mb-3 flex items-center justify-between">
+                <p className="text-xs font-bold uppercase tracking-wide text-ink-subtle">
+                  Jornada de trabalho <span className="text-danger">*</span>
+                </p>
+                <button
+                  type="button"
+                  className="text-xs text-primary hover:underline"
+                  onClick={() => setSlots(defaultSlots())}
+                >
+                  Seg–Sex 08:00–17:00
+                </button>
+              </div>
+
+              <div className="space-y-2">
+                {WEEKDAYS.map(({ wd, label }, i) => (
+                  <div key={wd} className={`flex items-center gap-3 rounded-lg border px-3 py-2 transition-colors ${
+                    slots[i].enabled ? 'border-primary/30 bg-primary-soft/20' : 'border-border bg-canvas'
+                  }`}>
+                    <label className="flex items-center gap-2 w-20 shrink-0 cursor-pointer select-none">
+                      <input
+                        type="checkbox"
+                        className="h-4 w-4 rounded border-border"
+                        checked={slots[i].enabled}
+                        onChange={() => toggleDay(i)}
+                      />
+                      <span className={`text-sm font-semibold ${slots[i].enabled ? 'text-primary' : 'text-ink-muted'}`}>
+                        {label}
+                      </span>
+                    </label>
+                    {slots[i].enabled ? (
+                      <div className="flex items-center gap-2 flex-1">
+                        <input
+                          type="time"
+                          className="input py-1 text-sm w-28"
+                          value={slots[i].start}
+                          onChange={(e) => updateSlot(i, 'start', e.target.value)}
+                        />
+                        <span className="text-xs text-ink-muted shrink-0">às</span>
+                        <input
+                          type="time"
+                          className="input py-1 text-sm w-28"
+                          value={slots[i].end}
+                          onChange={(e) => updateSlot(i, 'end', e.target.value)}
+                        />
+                      </div>
+                    ) : (
+                      <span className="text-xs text-ink-subtle">Folga</span>
+                    )}
+                  </div>
+                ))}
+              </div>
+
+              {schedError && <p className="mt-2 text-xs text-danger">{schedError}</p>}
+            </div>
+          )}
+
           {!editing && (
             <div className="rounded-xl border border-border bg-canvas p-3 text-xs text-ink-muted">
               Uma conta de acesso será criada automaticamente com uma senha temporária gerada pelo sistema. No primeiro acesso o sistema obrigará a troca por uma senha intransferível.
