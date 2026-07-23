@@ -135,7 +135,7 @@ export function StaffPage() {
         if (userId) {
           const activeDays = slots.filter((s) => s.enabled);
           await Promise.all(
-            activeDays.map((s, i) =>
+            activeDays.map((s) =>
               createSchedule({
                 user_id: userId,
                 weekday: slots.indexOf(s),
