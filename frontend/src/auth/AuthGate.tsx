@@ -6,6 +6,7 @@ import { api } from '@/lib/api';
 import type { Role } from '@/config/menu';
 
 export interface Me {
+  profile_id: string;
   name: string;
   email: string;
   role: Role;

@@ -7,6 +7,7 @@ import { Modal } from '@/components/ui/Modal';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { listSchedules, createSchedule, removeSchedule, WEEKDAY_LABELS, type Schedule } from '@/services/schedules';
 import { api } from '@/lib/api';
+import { useMe } from '@/auth/AuthGate';
 
 interface StaffOption { id: string; name: string; user_id?: string }
 
@@ -22,7 +23,78 @@ function calcWeeklyHours(items: Schedule[]): string {
   return `${total.toFixed(0)}h`;
 }
 
+// ==================== VISÃO COLABORADOR (somente leitura) ====================
+function MyJourneyView({ profileId }: { profileId: string }) {
+  const [schedules, setSchedules] = useState<Schedule[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    listSchedules(profileId)
+      .then(setSchedules)
+      .catch(() => setSchedules([]))
+      .finally(() => setLoading(false));
+  }, [profileId]);
+
+  if (loading) {
+    return <div className="flex items-center justify-center py-20 text-ink-muted"><Loader2 className="animate-spin" size={24} /><span className="ml-2">Carregando…</span></div>;
+  }
+
+  const sorted = [...schedules].sort((a, b) => a.weekday - b.weekday);
+  const weeklyHours = calcWeeklyHours(sorted);
+
+  return (
+    <>
+      <PageHeader
+        title="Minha Jornada"
+        subtitle="Horários de trabalho cadastrados pela gestão para você."
+      />
+
+      {schedules.length === 0 ? (
+        <div className="card">
+          <EmptyState
+            icon={ClipboardList}
+            title="Sem jornada cadastrada"
+            description="A gestão ainda não definiu sua jornada de trabalho. Fale com a coordenação."
+          />
+        </div>
+      ) : (
+        <div className="card overflow-hidden">
+          <div className="flex items-center justify-between border-b border-border bg-canvas px-4 py-3">
+            <h3 className="text-sm font-bold text-ink">Jornada semanal</h3>
+            <span className="text-xs text-ink-muted">{weeklyHours}/semana — {sorted.length} dia(s)</span>
+          </div>
+          <div className="flex flex-wrap gap-2 p-4">
+            {WEEKDAY_SHORT.map((day, i) => {
+              const slot = sorted.find((s) => s.weekday === i);
+              return (
+                <div key={i} className={`flex flex-col items-center rounded-xl border px-3 py-2 text-center min-w-[72px] ${
+                  slot ? 'border-primary bg-primary-soft/30' : 'border-border bg-canvas'
+                }`}>
+                  <span className={`text-xs font-bold ${slot ? 'text-primary' : 'text-ink-subtle'}`}>{day}</span>
+                  {slot ? (
+                    <>
+                      <span className="mt-1 text-xs font-mono text-ink">{slot.start_time.slice(0, 5)}</span>
+                      <span className="text-[10px] text-ink-muted">às</span>
+                      <span className="text-xs font-mono text-ink">{slot.end_time.slice(0, 5)}</span>
+                    </>
+                  ) : (
+                    <span className="mt-1 text-[10px] text-ink-subtle">Folga</span>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+    </>
+  );
+}
+
+// ==================== VISÃO GESTÃO ====================
 export function JourneysPage() {
+  const me = useMe();
+  const isAdmin = !!me && ['school_admin', 'superadmin'].includes(me.role);
+
   const [schedules, setSchedules] = useState<Schedule[]>([]);
   const [staffList, setStaffList] = useState<StaffOption[]>([]);
   const [loading, setLoading] = useState(true);
@@ -33,7 +105,10 @@ export function JourneysPage() {
     user_id: string; weekday: string; start_time: string; end_time: string;
   }>();
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => {
+    if (!isAdmin) return;
+    load();
+  }, [isAdmin]);
 
   async function load() {
     setLoading(true);
@@ -71,6 +146,11 @@ export function JourneysPage() {
     } catch (err: any) {
       setToast({ type: 'error', msg: err?.message ?? 'Erro ao remover jornada' });
     }
+  }
+
+  // Colaborador/professor vê somente a própria jornada
+  if (!isAdmin && me) {
+    return <MyJourneyView profileId={me.profile_id} />;
   }
 
   const grouped = schedules.reduce<Record<string, Schedule[]>>((acc, s) => {

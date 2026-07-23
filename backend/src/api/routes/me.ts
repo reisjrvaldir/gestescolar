@@ -14,7 +14,7 @@ meRouter.get('/', requireIdentity, async (req, res) => {
   }
   const rows = await withSystem(async (c) => {
     const r = await c.query(
-      `select p.name, p.email, p.role, p.password_change_required,
+      `select p.id as profile_id, p.name, p.email, p.role, p.password_change_required,
               s.id as school_id, s.name as school_name,
               s.status as school_status, s.subscription_status, s.trial_ends_at
          from public.profiles p

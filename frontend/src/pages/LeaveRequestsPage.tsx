@@ -62,9 +62,11 @@ export function LeaveRequestsPage() {
         title="Folgas, Licenças e Férias"
         subtitle={isAdmin ? 'Solicitações da equipe.' : 'Solicite e acompanhe suas folgas, licenças e férias.'}
         actions={
-          <button className="btn-primary" onClick={() => { reset(); setOpen(true); }}>
-            <Plus size={16} /> Nova solicitação
-          </button>
+          !isAdmin && (
+            <button className="btn-primary" onClick={() => { reset(); setOpen(true); }}>
+              <Plus size={16} /> Nova solicitação
+            </button>
+          )
         }
       />
 
