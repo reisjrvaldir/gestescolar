@@ -51,7 +51,7 @@ studentsRouter.get('/', requireRole('school_admin', 'financial', 'teacher', 'sup
     const cpfCol = isAdmin ? 's.cpf' : "left(s.cpf,3) || '*****' || right(s.cpf,2) as cpf";
     const { rows } = await c.query(
       `select s.id, s.name, s.registration_number, s.status, s.class_id, s.guardian_id,
-              ${cpfCol}, s.rg, s.birth_date, s.father_name, s.mother_name,
+              ${cpfCol}, s.rg, s.birth_date::text as birth_date, s.father_name, s.mother_name,
               s.blood_type, s.naturality, s.photo_url,
               s.monthly_fee::float8 as monthly_fee, s.plan_id,
               s.created_at,
