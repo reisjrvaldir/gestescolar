@@ -21,7 +21,6 @@ import { TicketsPage } from '@/pages/TicketsPage';
 import { LgpdPage } from '@/pages/LgpdPage';
 import { CalendarPage } from '@/pages/CalendarPage';
 import { TimeclockPage } from '@/pages/TimeclockPage';
-import { JourneysPage } from '@/pages/JourneysPage';
 import { MessagesPage } from '@/pages/MessagesPage';
 import { LeaveRequestsPage } from '@/pages/LeaveRequestsPage';
 import { StaffDocumentsPage } from '@/pages/StaffDocumentsPage';
@@ -75,7 +74,6 @@ export default function App() {
           <Route path="grades/boletim" element={<AdminTeacherGuardian><GradesPage /></AdminTeacherGuardian>} />
           <Route path="attendance" element={<AdminTeacherGuardian><AttendancePage /></AdminTeacherGuardian>} />
           <Route path="timeclock" element={<TimeclockPage />} />
-          <Route path="journeys" element={<Admin><JourneysPage /></Admin>} />
           <Route path="calendar" element={<AdminTeacherGuardian><CalendarPage /></AdminTeacherGuardian>} />
           <Route path="finance" element={<AdminFinancial><FinancePage /></AdminFinancial>} />
           <Route path="finance/entries" element={<AdminFinancial><FinancePage /></AdminFinancial>} />

@@ -1,6 +1,6 @@
 import {
   LayoutDashboard, GraduationCap, Users, School2, Star, ClipboardCheck,
-  Fingerprint, CalendarClock, CalendarDays, CreditCard,
+  Fingerprint, CalendarDays, CreditCard,
   Headset, Crown, Mail,
   CalendarOff, FolderOpen, PiggyBank, ArrowUpRight, Wallet,
   FileText,
@@ -45,7 +45,6 @@ export const MENUS: Record<Role, MenuSection[]> = {
     {
       title: 'Recursos Humanos',
       items: [
-        { to: '/app/journeys', label: 'Jornadas', icon: CalendarClock },
         { to: '/app/timeclock', label: 'Ponto', icon: Fingerprint },
         { to: '/app/leave-requests', label: 'Folgas e Férias', icon: CalendarOff },
       ],
