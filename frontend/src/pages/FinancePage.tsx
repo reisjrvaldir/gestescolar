@@ -1,7 +1,7 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { QRCodeSVG } from 'qrcode.react';
-import { Plus, Loader2, Info, Check, AlertTriangle, Copy } from 'lucide-react';
+import { Plus, Loader2, Info, Check, AlertTriangle, Copy, ChevronLeft, ChevronRight, Calendar } from 'lucide-react';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { StatusBadge } from '@/components/ui/StatusBadge';
 import { Modal } from '@/components/ui/Modal';
@@ -20,6 +20,7 @@ import { expensesService, type Expense } from '@/services/expenses';
 import { financeService, type FinanceSummary, type MonthlyBalancePoint, type DelinquentInvoice } from '@/services/finance';
 import { calculatePixSplit, brl } from '@/lib/fees';
 import { fmtDate } from '@/lib/dates';
+import { currentMonthKey, monthKeyOf, monthLabel, shiftMonth } from '@/lib/months';
 
 const TABS = [
   { key: 'visao', label: 'Visão geral' },
@@ -70,6 +71,27 @@ export function FinancePage() {
   const [manualMethod, setManualMethod] = useState<'cash' | 'pix' | 'card' | 'other'>('cash');
   const [manualDate, setManualDate] = useState(new Date().toISOString().slice(0, 10));
   const [manualSaving, setManualSaving] = useState(false);
+  /** Filtro de mês da aba "A receber". null = todos os meses. Padrão = mês atual. */
+  const [receberMonthKey, setReceberMonthKey] = useState<string | null>(currentMonthKey());
+
+  /** Mês de referência da fatura: usa reference_month; senão o mês do vencimento. */
+  const invoiceMonthKey = (r: Invoice): string | null =>
+    r.reference_month ? String(r.reference_month).slice(0, 7) : monthKeyOf(r.due_date);
+
+  const visibleInvoices = useMemo(() => {
+    if (!receberMonthKey) return invoices;
+    return invoices.filter((r) => invoiceMonthKey(r) === receberMonthKey);
+  }, [invoices, receberMonthKey]);
+
+  const receberTotals = useMemo(() => {
+    const pending = visibleInvoices
+      .filter((r) => r.status === 'pending' || r.status === 'overdue')
+      .reduce((s, r) => s + Number(r.amount), 0);
+    const paid = visibleInvoices
+      .filter((r) => r.status === 'paid')
+      .reduce((s, r) => s + Number(r.amount), 0);
+    return { pending, paid };
+  }, [visibleInvoices]);
 
   useEffect(() => { load(); }, []);
 
@@ -263,17 +285,77 @@ export function FinancePage() {
       {tab === 'receber' && (
         <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
           <div className="card overflow-hidden lg:col-span-2">
-            <div className="flex items-center justify-between border-b border-border px-5 py-4">
+            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border px-5 py-4">
               <div>
                 <h3 className="text-sm font-bold text-ink">A receber</h3>
                 <p className="mt-0.5 text-xs text-ink-muted">Mensalidades e cobranças avulsas dos alunos. As mensalidades começam no mês seguinte à matrícula — meses anteriores não geram fatura.</p>
               </div>
-              <button className="inline-flex items-center gap-1 rounded-lg border border-border px-2.5 py-1.5 text-xs font-semibold text-ink hover:bg-canvas" onClick={() => setAdhocOpen(true)}>
+              <button type="button" className="inline-flex items-center gap-1 rounded-lg border border-border px-2.5 py-1.5 text-xs font-semibold text-ink hover:bg-canvas" onClick={() => setAdhocOpen(true)}>
                 <Plus size={14} /> Nova cobrança avulsa
               </button>
             </div>
-            {invoices.length === 0 ? (
-              <div className="px-5 py-10 text-center text-sm text-ink-muted">Não existe fatura cadastrada ainda.</div>
+
+            <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border bg-canvas/40 px-5 py-2.5">
+              <div className="flex items-center gap-1.5">
+                <button
+                  type="button"
+                  className="rounded-lg border border-border bg-surface p-1 text-ink-muted hover:bg-canvas hover:text-ink disabled:opacity-40"
+                  onClick={() => setReceberMonthKey((k) => shiftMonth(k ?? currentMonthKey(), -1))}
+                  disabled={!receberMonthKey}
+                  title="Mês anterior"
+                >
+                  <ChevronLeft size={14} />
+                </button>
+                <div className="flex min-w-[170px] items-center justify-center gap-1.5 rounded-lg bg-surface px-2.5 py-1 text-xs font-semibold text-ink">
+                  <Calendar size={12} className="text-ink-muted" />
+                  {receberMonthKey
+                    ? <span className="capitalize">{monthLabel(receberMonthKey)}</span>
+                    : <span>Todos os meses</span>}
+                </div>
+                <button
+                  type="button"
+                  className="rounded-lg border border-border bg-surface p-1 text-ink-muted hover:bg-canvas hover:text-ink disabled:opacity-40"
+                  onClick={() => setReceberMonthKey((k) => shiftMonth(k ?? currentMonthKey(), 1))}
+                  disabled={!receberMonthKey}
+                  title="Próximo mês"
+                >
+                  <ChevronRight size={14} />
+                </button>
+              </div>
+              <div className="flex items-center gap-2 text-xs">
+                <span className="text-ink-muted">Pendente:</span>
+                <span className="font-semibold text-warning">{brl(receberTotals.pending)}</span>
+                <span className="mx-1 text-ink-subtle">•</span>
+                <span className="text-ink-muted">Recebido:</span>
+                <span className="font-semibold text-success">{brl(receberTotals.paid)}</span>
+                {receberMonthKey !== currentMonthKey() && (
+                  <button
+                    type="button"
+                    className="ml-2 rounded-lg border border-border bg-surface px-2 py-0.5 text-[11px] font-semibold text-ink-muted hover:bg-canvas"
+                    onClick={() => setReceberMonthKey(currentMonthKey())}
+                  >
+                    Mês atual
+                  </button>
+                )}
+                <button
+                  type="button"
+                  className={`rounded-lg border border-border px-2 py-0.5 text-[11px] font-semibold ${!receberMonthKey ? 'bg-primary text-white border-primary' : 'bg-surface text-ink-muted hover:bg-canvas'}`}
+                  onClick={() => setReceberMonthKey((k) => (k ? null : currentMonthKey()))}
+                  title="Alternar entre o mês e todas as cobranças"
+                >
+                  {receberMonthKey ? 'Todos' : 'Filtrar por mês'}
+                </button>
+              </div>
+            </div>
+
+            {visibleInvoices.length === 0 ? (
+              <div className="px-5 py-10 text-center text-sm text-ink-muted">
+                {invoices.length === 0
+                  ? 'Não existe fatura cadastrada ainda.'
+                  : receberMonthKey
+                    ? `Nenhuma cobrança em ${monthLabel(receberMonthKey)}. Use as setas para navegar entre os meses.`
+                    : 'Nenhuma cobrança encontrada.'}
+              </div>
             ) : (
               <table className="w-full text-sm">
                 <thead>
@@ -286,7 +368,7 @@ export function FinancePage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {invoices.map((inv) => (
+                  {visibleInvoices.map((inv) => (
                     <tr
                       key={inv.id}
                       className={`cursor-pointer border-b border-border last:border-0 hover:bg-canvas ${selected?.id === inv.id ? 'bg-primary-soft/40' : ''}`}
