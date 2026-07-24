@@ -21,32 +21,9 @@ import {
 } from '@/services/expenses';
 import { brl } from '@/lib/money';
 import { useSubmitOnce } from '@/lib/useSubmitOnce';
+import { currentMonthKey, monthKeyOf, monthLabel, shiftMonth } from '@/lib/months';
 
 type Tab = 'ativas' | 'lixeira' | 'auditoria';
-
-/** "YYYY-MM" do mês atual (horário local). */
-function currentMonthKey(): string {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
-}
-/** "YYYY-MM" extraído de uma data ISO (YYYY-MM-DD). */
-function monthKeyOf(iso?: string | null): string | null {
-  if (!iso) return null;
-  const s = String(iso).slice(0, 7);
-  return /^\d{4}-\d{2}$/.test(s) ? s : null;
-}
-/** Rótulo "julho de 2026" a partir de "YYYY-MM". */
-function monthLabel(key: string): string {
-  const [y, m] = key.split('-').map(Number);
-  const d = new Date(y, (m ?? 1) - 1, 1);
-  return d.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
-}
-/** Move a chave YYYY-MM em N meses. */
-function shiftMonth(key: string, delta: number): string {
-  const [y, m] = key.split('-').map(Number);
-  const d = new Date(y, (m - 1) + delta, 1);
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
-}
 
 const STATUS: Record<ExpenseStatus, { tone: 'success' | 'warning' | 'danger'; label: string }> = {
   paid: { tone: 'success', label: 'Pago' },
