@@ -22282,7 +22282,7 @@ var require_application = __commonJS({
   "../node_modules/express/lib/application.js"(exports2, module2) {
     "use strict";
     var finalhandler = require_finalhandler();
-    var Router30 = require_router();
+    var Router31 = require_router();
     var methods = require_methods();
     var middleware = require_init();
     var query = require_query();
@@ -22347,7 +22347,7 @@ var require_application = __commonJS({
     };
     app2.lazyrouter = function lazyrouter() {
       if (!this._router) {
-        this._router = new Router30({
+        this._router = new Router31({
           caseSensitive: this.enabled("case sensitive routing"),
           strict: this.enabled("strict routing")
         });
@@ -24209,7 +24209,7 @@ var require_express = __commonJS({
     var mixin = require_merge_descriptors();
     var proto = require_application();
     var Route = require_route();
-    var Router30 = require_router();
+    var Router31 = require_router();
     var req = require_request();
     var res = require_response();
     exports2 = module2.exports = createApplication;
@@ -24232,7 +24232,7 @@ var require_express = __commonJS({
     exports2.request = req;
     exports2.response = res;
     exports2.Route = Route;
-    exports2.Router = Router30;
+    exports2.Router = Router31;
     exports2.json = bodyParser.json;
     exports2.query = require_query();
     exports2.raw = bodyParser.raw;
@@ -30171,7 +30171,7 @@ module.exports = __toCommonJS(api_src_exports);
 })();
 
 // src/api/app.ts
-var import_express30 = __toESM(require_express2());
+var import_express31 = __toESM(require_express2());
 var import_cors = __toESM(require_lib3());
 
 // ../node_modules/helmet/index.mjs
@@ -43428,7 +43428,7 @@ studentsRouter.get("/", requireRole("school_admin", "financial", "teacher", "sup
     const cpfCol = isAdmin ? "s.cpf" : "left(s.cpf,3) || '*****' || right(s.cpf,2) as cpf";
     const { rows } = await c.query(
       `select s.id, s.name, s.registration_number, s.status, s.class_id, s.guardian_id,
-              ${cpfCol}, s.rg, s.birth_date, s.father_name, s.mother_name,
+              ${cpfCol}, s.rg, s.birth_date::text as birth_date, s.father_name, s.mother_name,
               s.blood_type, s.naturality, s.photo_url,
               s.monthly_fee::float8 as monthly_fee, s.plan_id,
               s.created_at,
@@ -43707,7 +43707,7 @@ staffRouter.post("/", requireRole("school_admin", "superadmin"), async (req, res
            (school_id, user_id, name, email, phone, cpf, registration_number, role_type, subject_teaches,
             position, admission_date, contract_type, weekly_hours, timeclock_enabled)
          values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)
-         returning id, name, email, phone, cpf, registration_number, role_type, subject_teaches,
+         returning id, user_id, name, email, phone, cpf, registration_number, role_type, subject_teaches,
                    position, admission_date::text as admission_date, contract_type, weekly_hours::float8 as weekly_hours,
                    timeclock_enabled, status, created_at`,
         [
@@ -43882,13 +43882,22 @@ classesRouter.get("/mine", requireRole("teacher", "coordinator", "school_admin",
       [req.ctx.profileId, req.ctx.schoolId]
     );
     if (t.rows.length === 0) return [];
+    const teacherId = t.rows[0].id;
     const { rows } = await c.query(
-      `${CLASS_SELECT} where c.school_id = $1 and c.status = 'active'
-         and (c.teacher_id = $2
-              or exists (select 1 from public.class_subjects cs
-                          where cs.class_id = c.id and cs.teacher_id = $2))
-        order by c.name asc`,
-      [req.ctx.schoolId, t.rows[0].id]
+      `select base.*,
+              (base.teacher_id = $2) as is_regente,
+              coalesce((
+                select array_agg(cs2.subject_id)
+                  from public.class_subjects cs2
+                 where cs2.class_id = base.id and cs2.teacher_id = $2
+              ), '{}') as my_subject_ids
+         from (${CLASS_SELECT}
+               where c.school_id = $1 and c.status = 'active'
+                 and (c.teacher_id = $2
+                      or exists (select 1 from public.class_subjects cs
+                                  where cs.class_id = c.id and cs.teacher_id = $2))) base
+        order by base.name asc`,
+      [req.ctx.schoolId, teacherId]
     );
     return rows;
   });
@@ -44712,7 +44721,7 @@ meRouter.get("/", requireIdentity, async (req, res) => {
   }
   const rows = await withSystem(async (c) => {
     const r = await c.query(
-      `select p.name, p.email, p.role, p.password_change_required,
+      `select p.id as profile_id, p.name, p.email, p.role, p.password_change_required,
               s.id as school_id, s.name as school_name,
               s.status as school_status, s.subscription_status, s.trial_ends_at
          from public.profiles p
@@ -44985,58 +44994,353 @@ invoicesRouter.get("/balance/summary", requireRole("school_admin", "financial", 
 
 // src/api/routes/expenses.ts
 var import_express10 = __toESM(require_express2());
+var import_crypto3 = require("crypto");
 var expensesRouter = (0, import_express10.Router)();
 expensesRouter.use(requireAuth);
-expensesRouter.get("/", requireRole("school_admin", "financial", "superadmin"), async (req, res) => {
+var ROLES = ["school_admin", "financial", "superadmin"];
+var TRASH_TTL_DAYS = 60;
+var SELECT_COLS = `
+  id, supplier_name, description, category,
+  amount::float8 as amount,
+  due_date, status,
+  paid_at, deleted_at,
+  installment_group_id, installment_number, installment_total,
+  created_at, updated_at
+`;
+async function logAudit(c, args) {
+  await c.query(
+    `insert into public.expense_audit_log
+       (school_id, expense_id, action, actor_id, actor_role, before, after)
+     values ($1,$2,$3,$4,$5,$6,$7)`,
+    [
+      args.schoolId,
+      args.expenseId,
+      args.action,
+      args.actorId ?? null,
+      args.actorRole ?? null,
+      args.before ? JSON.stringify(args.before) : null,
+      args.after ? JSON.stringify(args.after) : null
+    ]
+  );
+}
+expensesRouter.get("/", requireRole(...ROLES), async (req, res) => {
+  const trash = req.query.trash === "true";
+  const status = typeof req.query.status === "string" ? req.query.status : void 0;
+  const category = typeof req.query.category === "string" ? req.query.category : void 0;
+  const supplier = typeof req.query.supplier === "string" ? req.query.supplier : void 0;
+  const from = typeof req.query.from === "string" ? req.query.from : void 0;
+  const to2 = typeof req.query.to === "string" ? req.query.to : void 0;
   const data = await withTenant(req.ctx, async (c) => {
+    const params = [req.ctx.schoolId];
+    let where = "school_id = $1";
+    where += trash ? " and deleted_at is not null" : " and deleted_at is null";
+    if (status) {
+      params.push(status);
+      where += ` and status = $${params.length}`;
+    }
+    if (category) {
+      params.push(category);
+      where += ` and category = $${params.length}`;
+    }
+    if (supplier) {
+      params.push(`%${supplier}%`);
+      where += ` and supplier_name ilike $${params.length}`;
+    }
+    if (from) {
+      params.push(from);
+      where += ` and due_date >= $${params.length}`;
+    }
+    if (to2) {
+      params.push(to2);
+      where += ` and due_date <= $${params.length}`;
+    }
     const { rows } = await c.query(
-      `select id, supplier_name, description, category, amount::float8 as amount, due_date, status, created_at
-         from public.expenses
-        where school_id = $1
-        order by due_date desc nulls last`,
-      [req.ctx.schoolId]
+      `select ${SELECT_COLS} from public.expenses
+        where ${where}
+        order by ${trash ? "deleted_at desc" : "due_date desc nulls last"}`,
+      params
     );
     return rows;
   });
   res.json({ ok: true, data });
 });
-var expenseSchema = external_exports.object({
+var baseExpense = external_exports.object({
   supplier_name: external_exports.string().min(1, "Informe o fornecedor"),
   description: external_exports.string().optional(),
   category: external_exports.string().optional(),
   amount: external_exports.number().positive("Valor deve ser positivo"),
   due_date: dateSchema.optional()
 });
-expensesRouter.post("/", requireRole("school_admin", "financial", "superadmin"), async (req, res) => {
-  const p2 = expenseSchema.safeParse(req.body);
+var createSchema = baseExpense.extend({
+  installments: external_exports.number().int().min(1).max(60).optional(),
+  installment_mode: external_exports.enum(["total", "each"]).optional()
+});
+function addMonthsIso(iso, months) {
+  const [y2, m2, d] = iso.split("-").map(Number);
+  const base = new Date(Date.UTC(y2, m2 - 1 + months, d));
+  return base.toISOString().slice(0, 10);
+}
+expensesRouter.post("/", requireRole(...ROLES), async (req, res) => {
+  const p2 = createSchema.safeParse(req.body);
   if (!p2.success) return res.status(400).json({ code: "validation", message: p2.error.issues[0]?.message });
+  const inst = p2.data.installments && p2.data.installments > 1 ? p2.data.installments : 1;
+  const perInstallment = inst > 1 && p2.data.installment_mode === "total" ? Math.round(p2.data.amount / inst * 100) / 100 : p2.data.amount;
   const created = await withTenant(req.ctx, async (c) => {
-    const { rows } = await c.query(
-      `insert into public.expenses (school_id, supplier_name, description, category, amount, due_date, status)
-       values ($1, $2, $3, $4, $5, $6, 'pending') returning id, supplier_name, category, amount, status`,
-      [req.ctx.schoolId, p2.data.supplier_name, p2.data.description ?? null, p2.data.category ?? null, p2.data.amount, p2.data.due_date ?? null]
-    );
-    return rows[0];
+    const groupId = inst > 1 ? (0, import_crypto3.randomUUID)() : null;
+    const rows = [];
+    for (let i = 1; i <= inst; i++) {
+      const due = p2.data.due_date ? addMonthsIso(p2.data.due_date, i - 1) : null;
+      const { rows: r } = await c.query(
+        `insert into public.expenses
+           (school_id, supplier_name, description, category, amount, due_date, status,
+            installment_group_id, installment_number, installment_total)
+         values ($1,$2,$3,$4,$5,$6,'pending',$7,$8,$9)
+         returning ${SELECT_COLS}`,
+        [
+          req.ctx.schoolId,
+          p2.data.supplier_name,
+          p2.data.description ?? null,
+          p2.data.category ?? null,
+          perInstallment,
+          due,
+          groupId,
+          inst > 1 ? i : null,
+          inst > 1 ? inst : null
+        ]
+      );
+      rows.push(r[0]);
+      await logAudit(c, {
+        schoolId: req.ctx.schoolId,
+        expenseId: r[0].id,
+        action: "create",
+        actorId: req.ctx.profileId,
+        actorRole: req.ctx.role,
+        after: r[0]
+      });
+    }
+    return rows;
   });
   res.status(201).json({ ok: true, data: created });
 });
-expensesRouter.patch("/:id/pay", requireRole("school_admin", "financial", "superadmin"), async (req, res) => {
-  await withTenant(req.ctx, async (c) => {
-    await c.query(
-      `update public.expenses set status = 'paid', updated_at = now() where id = $1 and school_id = $2`,
+var editSchema = baseExpense.partial();
+expensesRouter.patch("/:id", requireRole(...ROLES), async (req, res) => {
+  const p2 = editSchema.safeParse(req.body);
+  if (!p2.success) return res.status(400).json({ code: "validation", message: p2.error.issues[0]?.message });
+  const updated = await withTenant(req.ctx, async (c) => {
+    const before = (await c.query(
+      `select ${SELECT_COLS} from public.expenses where id = $1 and school_id = $2 and deleted_at is null`,
       [req.params.id, req.ctx.schoolId]
+    )).rows[0];
+    if (!before) return null;
+    const next = {
+      supplier_name: p2.data.supplier_name ?? before.supplier_name,
+      description: p2.data.description ?? before.description,
+      category: p2.data.category ?? before.category,
+      amount: p2.data.amount ?? Number(before.amount),
+      due_date: p2.data.due_date ?? before.due_date
+    };
+    const { rows } = await c.query(
+      `update public.expenses set
+         supplier_name = $1, description = $2, category = $3,
+         amount = $4, due_date = $5, updated_at = now()
+       where id = $6 and school_id = $7
+       returning ${SELECT_COLS}`,
+      [
+        next.supplier_name,
+        next.description,
+        next.category,
+        next.amount,
+        next.due_date,
+        req.params.id,
+        req.ctx.schoolId
+      ]
     );
+    await logAudit(c, {
+      schoolId: req.ctx.schoolId,
+      expenseId: req.params.id,
+      action: "update",
+      actorId: req.ctx.profileId,
+      actorRole: req.ctx.role,
+      before,
+      after: rows[0]
+    });
+    return rows[0];
   });
-  res.json({ ok: true });
+  if (!updated) return res.status(404).json({ code: "not_found", message: "Despesa n\xE3o encontrada" });
+  res.json({ ok: true, data: updated });
 });
-expensesRouter.delete("/:id", requireRole("school_admin", "financial", "superadmin"), async (req, res) => {
-  await withTenant(req.ctx, async (c) => {
-    await c.query(
-      `delete from public.expenses where id = $1 and school_id = $2`,
+expensesRouter.patch("/:id/pay", requireRole(...ROLES), async (req, res) => {
+  const updated = await withTenant(req.ctx, async (c) => {
+    const before = (await c.query(
+      `select ${SELECT_COLS} from public.expenses where id = $1 and school_id = $2 and deleted_at is null`,
+      [req.params.id, req.ctx.schoolId]
+    )).rows[0];
+    if (!before) return null;
+    const { rows } = await c.query(
+      `update public.expenses
+          set status = 'paid', paid_at = now(), updated_at = now()
+        where id = $1 and school_id = $2
+        returning ${SELECT_COLS}`,
       [req.params.id, req.ctx.schoolId]
     );
+    await logAudit(c, {
+      schoolId: req.ctx.schoolId,
+      expenseId: req.params.id,
+      action: "pay",
+      actorId: req.ctx.profileId,
+      actorRole: req.ctx.role,
+      before,
+      after: rows[0]
+    });
+    return rows[0];
+  });
+  if (!updated) return res.status(404).json({ code: "not_found", message: "Despesa n\xE3o encontrada" });
+  res.json({ ok: true, data: updated });
+});
+expensesRouter.patch("/:id/unpay", requireRole(...ROLES), async (req, res) => {
+  const updated = await withTenant(req.ctx, async (c) => {
+    const before = (await c.query(
+      `select ${SELECT_COLS} from public.expenses where id = $1 and school_id = $2 and deleted_at is null`,
+      [req.params.id, req.ctx.schoolId]
+    )).rows[0];
+    if (!before) return null;
+    const { rows } = await c.query(
+      `update public.expenses
+          set status = 'pending', paid_at = null, updated_at = now()
+        where id = $1 and school_id = $2
+        returning ${SELECT_COLS}`,
+      [req.params.id, req.ctx.schoolId]
+    );
+    await logAudit(c, {
+      schoolId: req.ctx.schoolId,
+      expenseId: req.params.id,
+      action: "unpay",
+      actorId: req.ctx.profileId,
+      actorRole: req.ctx.role,
+      before,
+      after: rows[0]
+    });
+    return rows[0];
+  });
+  if (!updated) return res.status(404).json({ code: "not_found", message: "Despesa n\xE3o encontrada" });
+  res.json({ ok: true, data: updated });
+});
+expensesRouter.delete("/:id", requireRole(...ROLES), async (req, res) => {
+  const ok = await withTenant(req.ctx, async (c) => {
+    await c.query(
+      `delete from public.expenses
+        where school_id = $1
+          and deleted_at is not null
+          and deleted_at < now() - interval '${TRASH_TTL_DAYS} days'`,
+      [req.ctx.schoolId]
+    );
+    const before = (await c.query(
+      `select ${SELECT_COLS} from public.expenses where id = $1 and school_id = $2 and deleted_at is null`,
+      [req.params.id, req.ctx.schoolId]
+    )).rows[0];
+    if (!before) return false;
+    const { rows } = await c.query(
+      `update public.expenses
+          set deleted_at = now(), deleted_by = $3, updated_at = now()
+        where id = $1 and school_id = $2
+        returning ${SELECT_COLS}`,
+      [req.params.id, req.ctx.schoolId, req.ctx.profileId]
+    );
+    await logAudit(c, {
+      schoolId: req.ctx.schoolId,
+      expenseId: req.params.id,
+      action: "delete",
+      actorId: req.ctx.profileId,
+      actorRole: req.ctx.role,
+      before,
+      after: rows[0]
+    });
+    return true;
+  });
+  if (!ok) return res.status(404).json({ code: "not_found", message: "Despesa n\xE3o encontrada" });
+  res.status(204).end();
+});
+expensesRouter.post("/:id/restore", requireRole(...ROLES), async (req, res) => {
+  const updated = await withTenant(req.ctx, async (c) => {
+    const before = (await c.query(
+      `select ${SELECT_COLS} from public.expenses where id = $1 and school_id = $2 and deleted_at is not null`,
+      [req.params.id, req.ctx.schoolId]
+    )).rows[0];
+    if (!before) return null;
+    const { rows } = await c.query(
+      `update public.expenses
+          set deleted_at = null, deleted_by = null, updated_at = now()
+        where id = $1 and school_id = $2
+        returning ${SELECT_COLS}`,
+      [req.params.id, req.ctx.schoolId]
+    );
+    await logAudit(c, {
+      schoolId: req.ctx.schoolId,
+      expenseId: req.params.id,
+      action: "restore",
+      actorId: req.ctx.profileId,
+      actorRole: req.ctx.role,
+      before,
+      after: rows[0]
+    });
+    return rows[0];
+  });
+  if (!updated) return res.status(404).json({ code: "not_found", message: "Item n\xE3o encontrado na lixeira" });
+  res.json({ ok: true, data: updated });
+});
+expensesRouter.delete("/:id/purge", requireRole(...ROLES), async (req, res) => {
+  await withTenant(req.ctx, async (c) => {
+    await c.query(
+      `delete from public.expenses where id = $1 and school_id = $2 and deleted_at is not null`,
+      [req.params.id, req.ctx.schoolId]
+    );
+    await logAudit(c, {
+      schoolId: req.ctx.schoolId,
+      expenseId: req.params.id,
+      action: "purge",
+      actorId: req.ctx.profileId,
+      actorRole: req.ctx.role
+    });
   });
   res.status(204).end();
+});
+expensesRouter.get("/audit", requireRole(...ROLES), async (req, res) => {
+  const from = typeof req.query.from === "string" ? req.query.from : void 0;
+  const to2 = typeof req.query.to === "string" ? req.query.to : void 0;
+  const action = typeof req.query.action === "string" ? req.query.action : void 0;
+  const expenseId = typeof req.query.expense_id === "string" ? req.query.expense_id : void 0;
+  const data = await withTenant(req.ctx, async (c) => {
+    const params = [req.ctx.schoolId];
+    let where = "l.school_id = $1";
+    if (from) {
+      params.push(from);
+      where += ` and l.created_at >= $${params.length}`;
+    }
+    if (to2) {
+      params.push(to2);
+      where += ` and l.created_at <= ($${params.length}::date + interval '1 day')`;
+    }
+    if (action) {
+      params.push(action);
+      where += ` and l.action = $${params.length}`;
+    }
+    if (expenseId) {
+      params.push(expenseId);
+      where += ` and l.expense_id = $${params.length}`;
+    }
+    const { rows } = await c.query(
+      `select l.id, l.expense_id, l.action, l.actor_role, l.before, l.after, l.created_at,
+              p.name as actor_name
+         from public.expense_audit_log l
+         left join public.profiles p on p.id = l.actor_id
+        where ${where}
+        order by l.created_at desc
+        limit 500`,
+      params
+    );
+    return rows;
+  });
+  res.json({ ok: true, data });
 });
 
 // src/api/routes/settings.ts
@@ -46568,12 +46872,12 @@ staffDocumentsRouter.delete("/:id", async (req, res) => {
 
 // src/api/routes/cron.ts
 var import_express23 = __toESM(require_express2());
-var import_crypto3 = require("crypto");
+var import_crypto4 = require("crypto");
 var cronRouter = (0, import_express23.Router)();
 function safeEqual2(a2, b) {
   const ba = Buffer.from(a2);
   const bb = Buffer.from(b);
-  return ba.length === bb.length && (0, import_crypto3.timingSafeEqual)(ba, bb);
+  return ba.length === bb.length && (0, import_crypto4.timingSafeEqual)(ba, bb);
 }
 cronRouter.get("/overdue-invoices", async (req, res) => {
   const secret = req.headers["authorization"] ?? "";
@@ -47569,8 +47873,32 @@ saasRouter.get("/subscriptions", async (req, res) => {
   res.json({ ok: true, data });
 });
 
+// src/api/routes/onboarding.ts
+var import_express30 = __toESM(require_express2());
+var onboardingRouter = (0, import_express30.Router)();
+onboardingRouter.use(requireAuth);
+onboardingRouter.get("/status", requireRole("school_admin", "superadmin"), async (req, res) => {
+  const data = await withTenant(req.ctx, async (c) => {
+    const [plans, classes, staff, students, settings] = await Promise.all([
+      c.query(`select 1 from public.school_plans where school_id=$1 limit 1`, [req.ctx.schoolId]),
+      c.query(`select 1 from public.classes where school_id=$1 and status='active' limit 1`, [req.ctx.schoolId]),
+      c.query(`select 1 from public.teachers where school_id=$1 and status='active' limit 1`, [req.ctx.schoolId]),
+      c.query(`select 1 from public.students where school_id=$1 and status='active' limit 1`, [req.ctx.schoolId]),
+      c.query(`select asaas_account_id from public.schools where id=$1`, [req.ctx.schoolId])
+    ]);
+    const has_plan = plans.rows.length > 0;
+    const has_class = classes.rows.length > 0;
+    const has_staff = staff.rows.length > 0;
+    const has_student = students.rows.length > 0;
+    const payment_ready = !!settings.rows[0]?.asaas_account_id;
+    const complete = has_plan && has_class && has_staff && has_student && payment_ready;
+    return { has_plan, has_class, has_staff, has_student, payment_ready, complete };
+  });
+  res.json({ ok: true, data });
+});
+
 // src/api/app.ts
-var app = (0, import_express30.default)();
+var app = (0, import_express31.default)();
 app.use(helmet({ contentSecurityPolicy: false }));
 var ALLOWED_ORIGINS = [
   process.env.FRONTEND_URL || "https://gestescolar.com.br",
@@ -47589,7 +47917,7 @@ var authLimiter = rate_limit_default({ windowMs: 6e4, max: 5, message: { code: "
 app.use("/api/me/onboarding", authLimiter);
 var publicLimiter = rate_limit_default({ windowMs: 6e4, max: 12, message: { code: "rate_limit", message: "Muitas tentativas. Aguarde 1 minuto." } });
 app.use("/api/public", publicLimiter);
-app.use(import_express30.default.json({ limit: "10mb" }));
+app.use(import_express31.default.json({ limit: "10mb" }));
 app.get("/api/health", (_req, res) => {
   res.json({ ok: true, service: "gestescolar-backend", dbConfigured: isDbConfigured, paymentProvider: activeProviderName() });
 });
@@ -47622,6 +47950,7 @@ app.use("/api/charges", chargesRouter);
 app.use("/api/finance", financeRouter);
 app.use("/api/billing", billingRouter);
 app.use("/api/saas", saasRouter);
+app.use("/api/onboarding", onboardingRouter);
 app.use((_req, res) => res.status(404).json({ code: "not_found", message: "Rota n\xE3o encontrada" }));
 app.use((err, _req, res, _next) => {
   console.error("[API] erro:", err);
