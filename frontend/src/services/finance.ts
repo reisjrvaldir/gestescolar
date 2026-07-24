@@ -7,6 +7,7 @@ export interface ExpenseCategorySlice {
 
 export interface FinanceSummary {
   month: string;
+  range?: { from: string; to: string };
   forecast_month: number;
   forecast_delta_pct: number | null;
   expenses_month: number;
@@ -36,8 +37,11 @@ export interface DelinquentInvoice {
 }
 
 export const financeService = {
-  async summary(month?: string): Promise<FinanceSummary> {
-    const q = month ? `?month=${month}` : '';
+  /** Aceita mês YYYY-MM OU janela livre {from,to} em YYYY-MM-DD. */
+  async summary(input?: string | { from: string; to: string }): Promise<FinanceSummary> {
+    let q = '';
+    if (typeof input === 'string') q = `?month=${input}`;
+    else if (input) q = `?from=${input.from}&to=${input.to}`;
     const r = await api.get<{ ok: boolean; data: FinanceSummary }>(`/finance/summary${q}`);
     return r.data;
   },

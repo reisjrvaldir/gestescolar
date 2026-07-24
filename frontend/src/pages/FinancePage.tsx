@@ -14,6 +14,8 @@ import { ReceivablesCard } from '@/components/finance/ReceivablesCard';
 import { DelinquencyCard } from '@/components/finance/DelinquencyCard';
 import { QuickActionsGrid } from '@/components/finance/QuickActionsGrid';
 import { AdhocChargeModal } from '@/components/finance/AdhocChargeModal';
+import { PeriodPicker } from '@/components/finance/PeriodPicker';
+import { todayRange, type Range as PeriodRange } from '@/lib/period';
 import { quickActionsData } from '@/data/finance/quickActionsData';
 import { invoicesService, type Invoice } from '@/services/invoices';
 import { expensesService, type Expense } from '@/services/expenses';
@@ -73,6 +75,8 @@ export function FinancePage() {
   const [manualSaving, setManualSaving] = useState(false);
   /** Filtro de mês da aba "A receber". null = todos os meses. Padrão = mês atual. */
   const [receberMonthKey, setReceberMonthKey] = useState<string | null>(currentMonthKey());
+  /** Período da Visão geral (mês por padrão; usuário pode trocar para trim/sem/ano). */
+  const [visaoRange, setVisaoRange] = useState<PeriodRange>(() => todayRange('month'));
 
   /** Mês de referência da fatura: usa reference_month; senão o mês do vencimento. */
   const invoiceMonthKey = (r: Invoice): string | null =>
@@ -95,13 +99,23 @@ export function FinancePage() {
 
   useEffect(() => { load(); }, []);
 
+  // Recarrega apenas o summary quando o período da Visão geral muda.
+  useEffect(() => {
+    let cancel = false;
+    financeService
+      .summary({ from: visaoRange.from, to: visaoRange.to })
+      .then((s) => { if (!cancel) setSummary(s); })
+      .catch((e) => console.error(e));
+    return () => { cancel = true; };
+  }, [visaoRange.from, visaoRange.to]);
+
   async function load() {
     setLoading(true);
     try {
       const [inv, exp, summ, mon, delq] = await Promise.all([
         invoicesService.list(),
         expensesService.list(),
-        financeService.summary(),
+        financeService.summary({ from: visaoRange.from, to: visaoRange.to }),
         financeService.monthly(),
         financeService.delinquency(),
       ]);
@@ -263,7 +277,8 @@ export function FinancePage() {
       {/* ===================== VISÃO GERAL ===================== */}
       {tab === 'visao' && (
         <div className="space-y-6">
-          <FinanceSummaryCards summary={summary} />
+          <PeriodPicker value={visaoRange} onChange={setVisaoRange} />
+          <FinanceSummaryCards summary={summary} periodLabel={visaoRange.label} periodKind={visaoRange.period} />
           <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
             <RevenueExpenseChart data={monthly} />
             <ExpensesByCategoryChart data={summary.expenses_by_category} />

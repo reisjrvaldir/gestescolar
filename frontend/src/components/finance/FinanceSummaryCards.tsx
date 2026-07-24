@@ -4,18 +4,30 @@ import type { FinanceSummary } from '@/services/finance';
 
 interface Props {
   summary: FinanceSummary;
+  /** Rótulo humano do período (ex.: "julho de 2026", "3º trimestre de 2026", "2026"). */
+  periodLabel?: string;
+  /** Tipo do período — controla a palavra usada nos títulos (mês/trimestre/…). */
+  periodKind?: 'month' | 'quarter' | 'half' | 'year';
 }
 
-/** 4 cards principais de resumo da Visão geral, com dados reais do mês. */
-export function FinanceSummaryCards({ summary }: Props) {
+const KIND_WORD: Record<NonNullable<Props['periodKind']>, string> = {
+  month: 'mês',
+  quarter: 'trimestre',
+  half: 'semestre',
+  year: 'ano',
+};
+
+/** 4 cards principais de resumo da Visão geral, com dados reais do período. */
+export function FinanceSummaryCards({ summary, periodLabel, periodKind = 'month' }: Props) {
   const delta = summary.forecast_delta_pct;
   const deltaPositive = delta == null || delta >= 0;
+  const word = KIND_WORD[periodKind];
 
   return (
     <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
       <div className="card p-5">
         <div className="flex items-start justify-between">
-          <p className="text-sm font-medium text-ink-muted">Previsão de receita do mês</p>
+          <p className="text-sm font-medium text-ink-muted">Previsão de receita — {periodLabel ?? word}</p>
           <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-success-soft text-success">
             <TrendingUp size={18} />
           </div>
@@ -27,24 +39,24 @@ export function FinanceSummaryCards({ summary }: Props) {
             {Math.abs(delta).toFixed(1)}% vs mês anterior
           </p>
         ) : (
-          <p className="mt-1 text-xs text-ink-subtle">Soma das mensalidades e cobranças previstas para o mês.</p>
+          <p className="mt-1 text-xs text-ink-subtle">Soma das mensalidades e cobranças previstas para o {word}.</p>
         )}
       </div>
 
       <div className="card p-5">
         <div className="flex items-start justify-between">
-          <p className="text-sm font-medium text-ink-muted">Despesas do mês</p>
+          <p className="text-sm font-medium text-ink-muted">Despesas — {periodLabel ?? word}</p>
           <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-danger-soft text-danger">
             <TrendingDown size={18} />
           </div>
         </div>
         <p className="mt-2 text-2xl font-extrabold text-ink">{brl(summary.expenses_month)}</p>
-        <p className="mt-1 text-xs text-ink-subtle">Contas a pagar com vencimento neste mês.</p>
+        <p className="mt-1 text-xs text-ink-subtle">Contas a pagar com vencimento no {word}.</p>
       </div>
 
       <div className="card p-5">
         <div className="flex items-start justify-between">
-          <p className="text-sm font-medium text-ink-muted">Saldo do mês</p>
+          <p className="text-sm font-medium text-ink-muted">Saldo — {periodLabel ?? word}</p>
           <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary-soft text-primary">
             <Wallet size={18} />
           </div>
