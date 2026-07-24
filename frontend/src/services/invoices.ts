@@ -60,6 +60,14 @@ export const invoicesService = {
     return res.data;
   },
 
+  /** Gera PIX (se preciso) e envia o copia-e-cola ao responsável via mensagem interna. */
+  async sendChargeToGuardian(id: string): Promise<{ sent_to: string; copy_paste: string }> {
+    const res = await api.post<{ ok: boolean; data: { sent_to: string; copy_paste: string } }>(
+      `/invoices/${id}/send-to-guardian`,
+    );
+    return res.data;
+  },
+
   /** Registra pagamento recebido offline (dinheiro/na escola). Não entra no saldo sacável. */
   async registerManualPayment(
     id: string,

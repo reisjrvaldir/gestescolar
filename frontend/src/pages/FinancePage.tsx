@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { QRCodeSVG } from 'qrcode.react';
-import { Plus, Loader2, Info, Check, AlertTriangle, Copy, ChevronLeft, ChevronRight, Calendar } from 'lucide-react';
+import { Plus, Loader2, Info, Check, AlertTriangle, Copy, ChevronLeft, ChevronRight, Calendar, QrCode, Send, MessageSquare } from 'lucide-react';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { StatusBadge } from '@/components/ui/StatusBadge';
 import { Modal } from '@/components/ui/Modal';
@@ -119,17 +119,33 @@ export function FinancePage() {
     setTimeout(() => setToast(null), 6000);
   }
 
-  // Gera (ou renova) a cobrança PIX real da fatura — endpoint real do gateway.
+  // Envia o código PIX (copia-e-cola) para o chat do responsável.
+  // O backend gera o PIX quando ainda não existe; requer conta ASAAS habilitada.
   async function handleSendCharge(id: string) {
+    setSendingId(id);
+    try {
+      await invoicesService.sendChargeToGuardian(id);
+      const inv = invoices.find((i) => i.id === id);
+      showToast('success', `Cobrança enviada para o chat do responsável de ${inv?.student_name ?? 'aluno'}.`);
+      await load();
+    } catch (e: any) {
+      showToast('error', e?.message ?? 'Erro ao enviar a cobrança para o responsável.');
+    } finally {
+      setSendingId(null);
+    }
+  }
+
+  // Gera/atualiza o PIX da fatura e abre o modal com QR + copia-e-cola,
+  // para casos em que o gestor precisa mostrar o código na tela (caixa).
+  async function handleShowQr(id: string) {
     setSendingId(id);
     try {
       const charge = await invoicesService.generatePix(id);
       const inv = invoices.find((i) => i.id === id);
       setPixResult({ studentName: inv?.student_name ?? '—', copyPaste: charge.pixCopyPaste });
-      showToast('success', 'Cobrança PIX gerada com sucesso — disponível no portal do responsável.');
       await load();
     } catch (e: any) {
-      showToast('error', e?.message ?? 'Erro ao gerar a cobrança PIX.');
+      showToast('error', e?.message ?? 'Erro ao gerar o QR Code.');
     } finally {
       setSendingId(null);
     }
@@ -379,14 +395,39 @@ export function FinancePage() {
                       <td className="px-5 py-3 text-ink-muted">{fmtDate(inv.due_date)}</td>
                       <td className="px-5 py-3"><StatusBadge tone={STATUS[inv.status].tone}>{STATUS[inv.status].label}</StatusBadge></td>
                       <td className="px-5 py-3 text-right">
-                        {inv.status !== 'paid' && (
-                          <button
-                            className="inline-flex items-center gap-1 rounded-lg bg-primary-soft px-2.5 py-1.5 text-xs font-semibold text-primary hover:bg-primary hover:text-white disabled:opacity-50"
-                            onClick={(e) => { e.stopPropagation(); handleSendCharge(inv.id); }}
-                            disabled={sendingId === inv.id}
-                          >
-                            {sendingId === inv.id ? <Loader2 size={13} className="animate-spin" /> : null} Enviar cobrança
-                          </button>
+                        {inv.status === 'paid' ? (
+                          <span className="inline-flex items-center gap-1 rounded-lg bg-success-soft px-2.5 py-1.5 text-xs font-semibold text-success">
+                            <Check size={13} /> Pago
+                          </span>
+                        ) : (
+                          <div className="inline-flex items-center gap-1.5">
+                            <button
+                              type="button"
+                              className="inline-flex items-center gap-1 rounded-lg border border-border bg-surface px-2.5 py-1.5 text-xs font-semibold text-ink-muted hover:bg-canvas hover:text-ink disabled:opacity-50"
+                              onClick={(e) => { e.stopPropagation(); handleShowQr(inv.id); }}
+                              disabled={sendingId === inv.id}
+                              title="Gerar/mostrar o QR Code PIX"
+                            >
+                              {sendingId === inv.id ? <Loader2 size={13} className="animate-spin" /> : <QrCode size={13} />} QR Code
+                            </button>
+                            <button
+                              type="button"
+                              className="inline-flex items-center gap-1 rounded-lg bg-success px-2.5 py-1.5 text-xs font-semibold text-white hover:bg-success/90"
+                              onClick={(e) => { e.stopPropagation(); openManual(inv); }}
+                              title="Registrar pagamento no caixa (dinheiro / cartão)"
+                            >
+                              <Check size={13} /> Pago
+                            </button>
+                            <button
+                              type="button"
+                              className="inline-flex items-center gap-1 rounded-lg bg-primary-soft px-2.5 py-1.5 text-xs font-semibold text-primary hover:bg-primary hover:text-white disabled:opacity-50"
+                              onClick={(e) => { e.stopPropagation(); handleSendCharge(inv.id); }}
+                              disabled={sendingId === inv.id}
+                              title="Enviar o código copia-e-cola para o chat do responsável"
+                            >
+                              {sendingId === inv.id ? <Loader2 size={13} className="animate-spin" /> : <Send size={13} />} Enviar cobrança
+                            </button>
+                          </div>
                         )}
                       </td>
                     </tr>
@@ -394,9 +435,11 @@ export function FinancePage() {
                 </tbody>
               </table>
             )}
-            <p className="border-t border-border px-5 py-3 text-[11px] text-ink-subtle">
-              Ao clicar em “Enviar cobrança”, o código PIX é gerado e fica disponível no portal do responsável.
-            </p>
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-1 border-t border-border px-5 py-3 text-[11px] text-ink-subtle">
+              <span className="inline-flex items-center gap-1"><QrCode size={12} /> <b>QR Code</b>: gera e mostra o código para o cliente escanear.</span>
+              <span className="inline-flex items-center gap-1"><Check size={12} /> <b>Pago</b>: registra pagamento no caixa (dinheiro/cartão).</span>
+              <span className="inline-flex items-center gap-1"><MessageSquare size={12} /> <b>Enviar cobrança</b>: envia o copia-e-cola pro chat do responsável.</span>
+            </div>
           </div>
 
           <div className="card p-5">

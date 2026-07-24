@@ -44910,6 +44910,69 @@ invoicesRouter.post("/:id/pix", requireRole("school_admin", "financial", "supera
   }
   res.json({ ok: true, data: result.charge });
 });
+invoicesRouter.post("/:id/send-to-guardian", requireRole("school_admin", "financial", "superadmin"), async (req, res) => {
+  const outcome = await withTenant(req.ctx, async (c) => {
+    const cur = await c.query(
+      `select pix_copy_paste, student_name, student_id, amount::float8 as amount, due_date, kind
+         from public.invoices where id=$1 and school_id=$2`,
+      [req.params.id, req.ctx.schoolId]
+    );
+    if (cur.rows.length === 0) return { error: "not_found" };
+    let copyPaste = cur.rows[0].pix_copy_paste ?? null;
+    const invRow = cur.rows[0];
+    if (!copyPaste) {
+      const r = await buildChargeForInvoice(c, req.ctx.schoolId, req.params.id, "PIX");
+      if ("error" in r) return { error: r.error };
+      copyPaste = r.charge.pixCopyPaste ?? null;
+    }
+    if (!copyPaste) return { error: "no_copy_paste" };
+    const g = await c.query(
+      `select g.user_id
+         from public.students st
+         join public.guardians g on g.id = st.guardian_id
+        where st.id = $1 and st.school_id = $2`,
+      [invRow.student_id, req.ctx.schoolId]
+    );
+    const guardianProfileId = g.rows[0]?.user_id;
+    if (!guardianProfileId) return { error: "guardian_without_login" };
+    const dueLabel = invRow.due_date ? new Date(invRow.due_date).toLocaleDateString("pt-BR") : "\u2014";
+    const amountLabel = Number(invRow.amount).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+    const kindLabel = invRow.kind === "avulsa" ? "Cobran\xE7a avulsa" : "Mensalidade";
+    const body = `${kindLabel} \u2014 ${invRow.student_name}
+Valor: ${amountLabel}
+Vencimento: ${dueLabel}
+
+Copie o c\xF3digo PIX abaixo e cole no app do seu banco:
+
+${copyPaste}
+`;
+    await c.query(
+      `insert into public.messages (school_id, sender_id, recipient_id, student_id, subject, body)
+       values ($1,$2,$3,$4,$5,$6)`,
+      [
+        req.ctx.schoolId,
+        req.ctx.profileId,
+        guardianProfileId,
+        invRow.student_id,
+        `Cobran\xE7a PIX \u2014 ${invRow.student_name}`,
+        body
+      ]
+    );
+    return { data: { sent_to: guardianProfileId, copy_paste: copyPaste } };
+  });
+  if ("error" in outcome) {
+    const map = {
+      not_found: [404, "Fatura n\xE3o encontrada."],
+      already_paid: [409, "Esta fatura j\xE1 est\xE1 paga."],
+      payout_not_ready: [409, "Envie os documentos da conta de recebimento antes de gerar cobran\xE7as."],
+      guardian_without_login: [409, "Este respons\xE1vel ainda n\xE3o tem acesso ao portal para receber mensagens."],
+      no_copy_paste: [502, "N\xE3o foi poss\xEDvel obter o c\xF3digo PIX do provedor. Tente novamente."]
+    };
+    const [http, message2] = map[String(outcome.error)] ?? [400, "N\xE3o foi poss\xEDvel enviar a cobran\xE7a ao respons\xE1vel."];
+    return res.status(http).json({ code: outcome.error, message: message2 });
+  }
+  res.json({ ok: true, data: outcome.data });
+});
 invoicesRouter.post("/:id/charge", requireRole("school_admin", "financial", "superadmin"), async (req, res) => {
   const billingType = req.body?.billingType === "CREDIT_CARD" ? "CREDIT_CARD" : "PIX";
   const result = await withTenant(req.ctx, (c) => buildChargeForInvoice(c, req.ctx.schoolId, req.params.id, billingType));
