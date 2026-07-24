@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { View, Text, ActivityIndicator, TouchableOpacity, Alert } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { Screen } from '@/components/ui/Screen';
 import { Card } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
@@ -53,11 +54,13 @@ export default function AdminFerias() {
               </View>
               {r.status === 'pending' && (
                 <View className="flex-row gap-2 mt-2">
-                  <TouchableOpacity onPress={() => decide(r.id, 'approved')} className="flex-1 bg-success-soft border border-success/30 rounded-lg py-2 items-center">
-                    <Text className="text-success font-semibold text-sm">✓ Aprovar</Text>
+                  <TouchableOpacity onPress={() => decide(r.id, 'approved')} className="flex-1 flex-row justify-center items-center gap-1.5 bg-success-soft border border-success/30 rounded-lg py-2">
+                    <Ionicons name="checkmark" size={16} color="#16A34A" />
+                    <Text className="text-success font-semibold text-sm">Aprovar</Text>
                   </TouchableOpacity>
-                  <TouchableOpacity onPress={() => decide(r.id, 'rejected')} className="flex-1 bg-danger-soft border border-danger/30 rounded-lg py-2 items-center">
-                    <Text className="text-danger font-semibold text-sm">✗ Rejeitar</Text>
+                  <TouchableOpacity onPress={() => decide(r.id, 'rejected')} className="flex-1 flex-row justify-center items-center gap-1.5 bg-danger-soft border border-danger/30 rounded-lg py-2">
+                    <Ionicons name="close" size={16} color="#DC2626" />
+                    <Text className="text-danger font-semibold text-sm">Rejeitar</Text>
                   </TouchableOpacity>
                 </View>
               )}

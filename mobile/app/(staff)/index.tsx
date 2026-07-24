@@ -9,7 +9,7 @@ export default function StaffHome() {
   return (
     <Screen title="Início">
       <Card>
-        <Text className="text-ink-muted text-sm">Olá, {me?.name?.split(' ')[0]} 👋</Text>
+        <Text className="text-ink-muted text-sm">Olá, {me?.name?.split(' ')[0]}</Text>
         <Text className="text-ink-muted text-xs mt-0.5">{me?.school_name}</Text>
       </Card>
       <Text className="text-ink-subtle text-xs mt-2 mb-2">Use as abas abaixo para registrar ponto e solicitar férias.</Text>

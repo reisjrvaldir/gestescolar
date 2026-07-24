@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { View, Text, TouchableOpacity, ActivityIndicator, Alert } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { Screen } from '@/components/ui/Screen';
 import { Card } from '@/components/ui/Card';
 import { api } from '@/lib/api';
@@ -26,7 +27,7 @@ export default function TeacherChamada() {
   useEffect(() => {
     if (!selectedClass) return;
     setLoading(true);
-    api.get<{ data: Student[] }>(`/api/students?class_id=${selectedClass}`)
+    api.get<{ data: Student[] }>(`/api/classes/${selectedClass}/students`)
       .then(r => {
         const st = r.data ?? [];
         setStudents(st);
@@ -45,10 +46,13 @@ export default function TeacherChamada() {
   async function save() {
     setSaving(true);
     try {
-      await api.post('/api/attendance/bulk', {
+      await api.post('/api/attendance/batch', {
         class_id: selectedClass,
         date: today,
-        records: students.map(s => ({ student_id: s.id, present: attendance[s.id] ?? true })),
+        entries: students.map(s => ({
+          student_id: s.id,
+          status: (attendance[s.id] !== false ? 'present' : 'absent') as 'present' | 'absent',
+        })),
       });
       Alert.alert('Chamada salva!', 'A presença foi registrada com sucesso.');
     } catch (e: any) {
@@ -94,7 +98,12 @@ export default function TeacherChamada() {
             <View className={`flex-row items-center p-3 rounded-xl mb-2 border ${
               attendance[s.id] !== false ? 'bg-success-soft border-success/30' : 'bg-danger-soft border-danger/30'
             }`}>
-              <Text className="text-xl mr-3">{attendance[s.id] !== false ? '✅' : '❌'}</Text>
+              <Ionicons
+                name={attendance[s.id] !== false ? 'checkmark-circle' : 'close-circle'}
+                size={24}
+                color={attendance[s.id] !== false ? '#16A34A' : '#DC2626'}
+                style={{ marginRight: 12 }}
+              />
               <Text className="text-ink font-medium flex-1">{s.name}</Text>
               <Text className={`text-xs font-semibold ${attendance[s.id] !== false ? 'text-success' : 'text-danger'}`}>
                 {attendance[s.id] !== false ? 'Presente' : 'Falta'}

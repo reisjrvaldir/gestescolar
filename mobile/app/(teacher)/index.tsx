@@ -13,7 +13,7 @@ export default function TeacherHome() {
   return (
     <Screen title="Início">
       <Card>
-        <Text className="text-ink-muted text-sm">{greeting} 👋</Text>
+        <Text className="text-ink-muted text-sm">{greeting}</Text>
         <Text className="text-ink text-xl font-bold mt-1">{me?.name?.split(' ')[0]}</Text>
         <Text className="text-ink-muted text-sm mt-0.5">{me?.school_name}</Text>
       </Card>
