@@ -4,13 +4,26 @@ export const API_URL = 'https://backend-pi-snowy-15.vercel.app';
 export const AUTH_URL = 'https://ep-red-dew-ac308bfw.neonauth.sa-east-1.aws.neon.tech/neondb/auth';
 
 /**
- * Troca a sessão Better Auth (cookie persistido pela camada nativa do RN) por um
- * JWT curto. O backend valida esse JWT via JWKS. Guardamos o JWT para reuso e
- * renovamos quando expira (401).
+ * Monta os headers de autenticação contra o Neon Auth.
+ * Não dependemos do cookie automático do RN: enviamos explicitamente o cookie
+ * capturado no sign-in e o token de sessão como Bearer (Better Auth aceita ambos).
+ */
+async function authHeaders(): Promise<Record<string, string>> {
+  const [cookie, session] = await Promise.all([storage.getCookie(), storage.getSession()]);
+  const h: Record<string, string> = {};
+  if (cookie) h['Cookie'] = cookie;
+  if (session) h['Authorization'] = `Bearer ${session}`;
+  return h;
+}
+
+/**
+ * Troca a sessão Better Auth por um JWT curto (plugin JWT → GET /token).
+ * O backend valida esse JWT via JWKS. Guardamos o JWT para reuso e renovamos
+ * quando expira (401).
  */
 export async function refreshJwt(): Promise<string | null> {
   try {
-    const res = await fetch(`${AUTH_URL}/token`);
+    const res = await fetch(`${AUTH_URL}/token`, { headers: await authHeaders() });
     if (!res.ok) return null;
     const data = await res.json().catch(() => ({}));
     const jwt: string | undefined = data?.token;
