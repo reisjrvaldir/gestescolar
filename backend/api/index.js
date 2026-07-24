@@ -43311,6 +43311,7 @@ function isValidCpf(cpf) {
 var cpfSchema = external_exports.string().transform(cpfDigits).refine((v2) => isValidCpf(v2), "CPF inv\xE1lido");
 var dateSchema = external_exports.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Data deve estar no formato AAAA-MM-DD");
 var optionalDateSchema = dateSchema.optional();
+var DEFAULT_GUARDIAN_PASSWORD = "Escola@2026";
 var TEMP_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789";
 function initialPassword() {
   const bytes = (0, import_crypto2.randomBytes)(10);
@@ -43480,7 +43481,7 @@ studentsRouter.post("/", requireRole("school_admin", "superadmin"), async (req, 
       console.log("[students.create] plano=", s.plan_id, "monthly=", monthlyFee, "matricula=", enrollmentFee, "desconto%=", discountPct);
       const matRow = await c.query(`select public.next_matricula() as matricula`);
       const matricula = matRow.rows[0].matricula;
-      const visiblePassword = initialPassword();
+      const visiblePassword = DEFAULT_GUARDIAN_PASSWORD;
       const authResult = await signUpGuardian({
         email: s.guardian.email,
         password: toStoredPassword(visiblePassword),
@@ -43559,7 +43560,7 @@ studentsRouter.post("/", requireRole("school_admin", "superadmin"), async (req, 
         guardian_email: s.guardian.email,
         login_matricula: matricula,
         initial_password: visiblePassword,
-        login_password_hint: "Login: matr\xEDcula do aluno \u2022 Senha inicial: tempor\xE1ria gerada automaticamente (anote e repasse ao respons\xE1vel). Troca obrigat\xF3ria no 1\xBA acesso.",
+        login_password_hint: "Login: e-mail do respons\xE1vel \u2022 Senha inicial padr\xE3o: Escola@2026 \u2014 troca obrigat\xF3ria no 1\xBA acesso.",
         invoice_ids: chargeableIds
       };
     });

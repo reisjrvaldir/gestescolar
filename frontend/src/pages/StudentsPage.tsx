@@ -19,6 +19,12 @@ import { StudentEditModal } from '@/components/students/StudentEditModal';
 
 const BLOOD_TYPES = ['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'] as const;
 
+/** Senha inicial padrão para todos os responsáveis novos — a troca é obrigatória
+ *  no 1º acesso. Espelha o valor definido no backend (validation.ts). */
+const DEFAULT_GUARDIAN_PASSWORD = 'Escola@2026';
+
+type StatusFilter = 'all' | 'active' | 'inactive';
+
 interface FormFields {
   name: string;
   cpf: string;
@@ -119,6 +125,7 @@ export function StudentsPage() {
   const [plans, setPlans] = useState<SchoolPlan[]>([]);
   const [selected, setSelected] = useState<Student | null>(null);
   const [detailTab, setDetailTab] = useState<DetailTab>('dados');
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
   const [saving, setSaving] = useState(false);
   const [credentials, setCredentials] = useState<CreatedStudent | null>(null);
   const [copied, setCopied] = useState(false);
@@ -146,13 +153,18 @@ export function StudentsPage() {
 
   useEffect(() => { load(); }, [load]);
 
+  const counts = useMemo(() => ({
+    all: students.length,
+    active: students.filter((s) => s.status === 'active').length,
+    inactive: students.filter((s) => s.status === 'inactive').length,
+  }), [students]);
+
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
-    if (!q) return students;
-    return students.filter(
-      (s) => s.name.toLowerCase().includes(q) || (s.registration_number ?? '').includes(q),
-    );
-  }, [students, query]);
+    return students
+      .filter((s) => statusFilter === 'all' ? true : s.status === statusFilter)
+      .filter((s) => !q || s.name.toLowerCase().includes(q) || (s.registration_number ?? '').includes(q));
+  }, [students, query, statusFilter]);
 
   const { register, handleSubmit, reset, watch, formState: { errors } } = useForm<FormFields>();
   const selectedPlanId = watch('plan_id');
@@ -213,7 +225,12 @@ export function StudentsPage() {
 
   function copyCredentials() {
     if (!credentials) return;
-    const text = `Aluno: ${credentials.name}\nLogin (matrícula): ${credentials.registration_number}\nSenha inicial: ${credentials.initial_password ?? '(temporária)'}\nE-mail do responsável: ${credentials.guardian_email}\n(troca de senha obrigatória no 1º acesso)`;
+    const text =
+      `Aluno: ${credentials.name}\n` +
+      `Login (e-mail): ${credentials.guardian_email ?? '—'}\n` +
+      `Matrícula (alternativa): ${credentials.registration_number}\n` +
+      `Senha inicial: ${credentials.initial_password ?? DEFAULT_GUARDIAN_PASSWORD}\n` +
+      `(troca de senha obrigatória no 1º acesso)`;
     navigator.clipboard.writeText(text);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
@@ -438,12 +455,13 @@ export function StudentsPage() {
                 </div>
                 <div className="space-y-2 rounded-xl border border-border p-4">
                   <div className="flex justify-between"><span className="text-ink-muted">Aluno:</span><span className="font-medium text-ink">{credentials.name}</span></div>
-                  <div className="flex justify-between"><span className="text-ink-muted">Login (matrícula):</span><span className="font-mono font-bold text-primary">{credentials.registration_number}</span></div>
-                  <div className="flex justify-between"><span className="text-ink-muted">Senha inicial:</span><span className="font-mono font-bold text-ink">{credentials.initial_password ?? '—'}</span></div>
-                  {credentials.guardian_email && (
-                    <div className="flex justify-between"><span className="text-ink-muted">E-mail:</span><span className="font-medium text-ink">{credentials.guardian_email}</span></div>
-                  )}
+                  <div className="flex justify-between"><span className="text-ink-muted">Login (e-mail):</span><span className="font-medium text-primary">{credentials.guardian_email ?? '—'}</span></div>
+                  <div className="flex justify-between"><span className="text-ink-muted">Matrícula (alternativa):</span><span className="font-mono text-ink-muted">{credentials.registration_number}</span></div>
+                  <div className="flex justify-between"><span className="text-ink-muted">Senha inicial:</span><span className="font-mono font-bold text-ink">{credentials.initial_password ?? DEFAULT_GUARDIAN_PASSWORD}</span></div>
                 </div>
+                <p className="text-xs text-ink-muted">
+                  Senha padrão da plataforma — <b className="font-mono">{DEFAULT_GUARDIAN_PASSWORD}</b>. O responsável será obrigado a trocar no 1º acesso.
+                </p>
               </div>
               <div className="mt-4 flex justify-end gap-2">
                 <button className="btn-outline flex items-center gap-1.5" onClick={copyCredentials}>
@@ -489,6 +507,29 @@ export function StudentsPage() {
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-[6fr_4fr]">
         {/* ===== Coluna 60% — Lista ===== */}
         <div className="min-w-0 space-y-4">
+          {/* Abas Todos / Ativos / Inativos */}
+          <div className="inline-flex rounded-xl border border-border bg-surface p-1 shadow-card">
+            {([
+              { key: 'all', label: 'Alunos', count: counts.all },
+              { key: 'active', label: 'Ativos', count: counts.active },
+              { key: 'inactive', label: 'Inativos', count: counts.inactive },
+            ] as { key: StatusFilter; label: string; count: number }[]).map((t) => (
+              <button
+                key={t.key}
+                type="button"
+                className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold ${
+                  statusFilter === t.key ? 'bg-primary text-white' : 'text-ink-muted hover:bg-canvas hover:text-ink'
+                }`}
+                onClick={() => setStatusFilter(t.key)}
+              >
+                {t.label}
+                <span className={`rounded-full px-1.5 text-[10px] font-bold ${
+                  statusFilter === t.key ? 'bg-white/20 text-white' : 'bg-canvas text-ink-muted'
+                }`}>{t.count}</span>
+              </button>
+            ))}
+          </div>
+
           <div className="card overflow-hidden">
             <div className="flex items-center gap-3 border-b border-border p-4">
               <div className="relative flex-1 max-w-sm">
@@ -505,36 +546,52 @@ export function StudentsPage() {
             ) : filtered.length === 0 ? (
               <EmptyState
                 icon={GraduationCap}
-                title="Nenhum aluno encontrado"
-                description="Cadastre o primeiro aluno para começar."
+                title={statusFilter === 'inactive' ? 'Nenhum aluno inativo' : 'Nenhum aluno encontrado'}
+                description={statusFilter === 'inactive'
+                  ? 'Alunos removidos aparecem aqui.'
+                  : 'Cadastre o primeiro aluno para começar.'}
               />
             ) : (
-              <div className="divide-y divide-border">
-                {filtered.map((s) => (
-                  <button
-                    key={s.id}
-                    onClick={() => { setSelected(s); setDetailTab('dados'); }}
-                    className={`flex w-full items-center gap-4 px-4 py-3 text-left transition-colors hover:bg-canvas ${selected?.id === s.id ? 'bg-primary-soft/30' : ''}`}
-                  >
-                    {s.photo_url ? (
-                      <img src={s.photo_url} alt="" className="h-10 w-10 shrink-0 rounded-full object-cover" />
-                    ) : (
-                      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-primary-soft text-xs font-bold text-primary">
-                        {initials(s.name)}
-                      </div>
-                    )}
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate font-medium text-ink">{s.name}</p>
-                      <p className="text-xs text-ink-muted">Mat. {s.registration_number}</p>
-                    </div>
-                    <div className="hidden sm:flex flex-col items-end gap-1">
-                      <StatusBadge tone={s.status === 'active' ? 'success' : 'neutral'}>
-                        {s.status === 'active' ? 'Ativo' : 'Inativo'}
-                      </StatusBadge>
-                      <span className="text-[11px] text-ink-subtle">{s.class_name ?? 'Sem turma'}</span>
-                    </div>
-                  </button>
-                ))}
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-border text-left text-[11px] font-semibold uppercase text-ink-subtle">
+                      <th className="px-4 py-2.5">Nome</th>
+                      <th className="px-4 py-2.5">Matrícula</th>
+                      <th className="px-4 py-2.5">Ano</th>
+                      <th className="px-4 py-2.5">Status</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filtered.map((s) => (
+                      <tr
+                        key={s.id}
+                        onClick={() => { setSelected(s); setDetailTab('dados'); }}
+                        className={`cursor-pointer border-b border-border last:border-0 hover:bg-canvas ${selected?.id === s.id ? 'bg-primary-soft/30' : ''}`}
+                      >
+                        <td className="px-4 py-2.5">
+                          <div className="flex items-center gap-3">
+                            {s.photo_url ? (
+                              <img src={s.photo_url} alt="" className="h-8 w-8 shrink-0 rounded-full object-cover" />
+                            ) : (
+                              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary-soft text-[11px] font-bold text-primary">
+                                {initials(s.name)}
+                              </div>
+                            )}
+                            <span className="truncate font-medium text-ink">{s.name}</span>
+                          </div>
+                        </td>
+                        <td className="whitespace-nowrap px-4 py-2.5 font-mono text-xs text-ink-muted">{s.registration_number ?? '—'}</td>
+                        <td className="px-4 py-2.5 text-ink-muted">{s.class_name ?? 'Sem turma'}</td>
+                        <td className="px-4 py-2.5">
+                          <StatusBadge tone={s.status === 'active' ? 'success' : 'neutral'}>
+                            {s.status === 'active' ? 'Ativo' : 'Inativo'}
+                          </StatusBadge>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               </div>
             )}
           </div>
@@ -662,17 +719,26 @@ export function StudentsPage() {
               {/* Link de acesso */}
               <div className="card p-5">
                 <div className="flex items-center gap-2 mb-3 text-sm font-bold text-ink">
-                  <Link2 size={16} className="text-primary" /> Link de acesso
+                  <Link2 size={16} className="text-primary" /> Link de acesso do responsável
                 </div>
                 <div className="space-y-2 text-sm">
-                  <Row label="Login (matrícula)" value={selected.registration_number} />
-                  <Row label="E-mail do responsável" value={selected.guardian_email} />
-                  <p className="text-xs text-ink-muted mt-2">Senha temporária foi gerada no cadastro — troca obrigatória no 1º acesso.</p>
+                  <Row label="Login (e-mail)" value={selected.guardian_email ?? '—'} />
+                  <Row label="Matrícula (alternativa)" value={selected.registration_number ?? '—'} />
+                  <Row label="Senha inicial padrão" value={DEFAULT_GUARDIAN_PASSWORD} />
+                  <p className="text-xs text-ink-muted mt-2">
+                    Todos os responsáveis recebem <b className="font-mono">{DEFAULT_GUARDIAN_PASSWORD}</b> como senha inicial —
+                    a troca é obrigatória no 1º acesso. Se o responsável já trocou, essa senha não vale mais.
+                  </p>
                 </div>
                 <button
                   className="mt-3 btn-outline flex items-center gap-1.5 text-xs"
                   onClick={() => {
-                    const text = `Login (matrícula): ${selected.registration_number}\nE-mail: ${selected.guardian_email}\n(troca de senha obrigatória no 1º acesso)`;
+                    const text =
+                      `Aluno: ${selected.name}\n` +
+                      `Login (e-mail): ${selected.guardian_email ?? '—'}\n` +
+                      `Matrícula (alternativa): ${selected.registration_number}\n` +
+                      `Senha inicial: ${DEFAULT_GUARDIAN_PASSWORD}\n` +
+                      `(troca obrigatória no 1º acesso)`;
                     navigator.clipboard.writeText(text);
                     setCopied(true);
                     setTimeout(() => setCopied(false), 2000);

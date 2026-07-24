@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { withTenant } from '../../db/withTenant';
 import { requireAuth, requireRole } from '../../middleware/auth';
 import { signUpGuardian } from '../../lib/authSignup';
-import { cpfSchema, dateSchema, initialPassword, toStoredPassword } from '../../lib/validation';
+import { cpfSchema, dateSchema, DEFAULT_GUARDIAN_PASSWORD, toStoredPassword } from '../../lib/validation';
 import { insertMonthlyInvoices, insertEnrollmentInvoice, generatePixForNewInvoices, type FirstDueRule } from '../../lib/billing/studentInvoices';
 
 export const studentsRouter = Router();
@@ -111,8 +111,9 @@ studentsRouter.post('/', requireRole('school_admin', 'superadmin'), async (req, 
       const matRow = await c.query(`select public.next_matricula() as matricula`);
       const matricula: string = matRow.rows[0].matricula;
 
-      // Login = matrícula do aluno; senha inicial = temporária aleatória (repasse ao responsável).
-      const visiblePassword = initialPassword();
+      // Login primário = e-mail do responsável (matrícula também funciona via publicAuth).
+      // Senha inicial = padrão único da plataforma (troca obrigatória no 1º acesso).
+      const visiblePassword = DEFAULT_GUARDIAN_PASSWORD;
 
       // 4) Criar usuário no Neon Auth (público — sign-up); guarda versão de 8 chars.
       const authResult = await signUpGuardian({
@@ -186,7 +187,7 @@ studentsRouter.post('/', requireRole('school_admin', 'superadmin'), async (req, 
         guardian_email: s.guardian.email,
         login_matricula: matricula,
         initial_password: visiblePassword,
-        login_password_hint: 'Login: matrícula do aluno • Senha inicial: temporária gerada automaticamente (anote e repasse ao responsável). Troca obrigatória no 1º acesso.',
+        login_password_hint: 'Login: e-mail do responsável • Senha inicial padrão: Escola@2026 — troca obrigatória no 1º acesso.',
         invoice_ids: chargeableIds,
       };
     });
