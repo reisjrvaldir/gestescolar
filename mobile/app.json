@@ -1,0 +1,37 @@
+{
+  "expo": {
+    "name": "GestEscolar",
+    "slug": "gestescolar",
+    "version": "1.0.0",
+    "scheme": "gestescolar",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "automatic",
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "br.com.gestescolar.app"
+    },
+    "android": {
+      "package": "br.com.gestescolar.app",
+      "adaptiveIcon": {
+        "backgroundColor": "#1A56DB",
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "backgroundImage": "./assets/android-icon-background.png",
+        "monochromeImage": "./assets/android-icon-monochrome.png"
+      },
+      "predictiveBackGestureEnabled": false
+    },
+    "web": {
+      "favicon": "./assets/favicon.png",
+      "bundler": "metro"
+    },
+    "plugins": [
+      "expo-router",
+      "expo-status-bar",
+      "expo-secure-store"
+    ],
+    "experiments": {
+      "typedRoutes": true
+    }
+  }
+}
