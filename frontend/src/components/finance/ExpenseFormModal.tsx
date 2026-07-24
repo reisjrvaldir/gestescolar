@@ -86,25 +86,30 @@ export function ExpenseFormModal({ open, expense, onClose, onCreate, onEdit }: P
     if (isEdit && expense) {
       await onEdit(expense.id, payloadBase);
     } else {
+      const n = Math.max(1, Math.min(60, Math.floor(Number(form.installments) || 1)));
       await onCreate({
         ...payloadBase,
-        installments: form.installments > 1 ? form.installments : undefined,
-        installment_mode: form.installments > 1 ? form.installment_mode : undefined,
+        installments: n > 1 ? n : undefined,
+        installment_mode: n > 1 ? form.installment_mode : undefined,
       });
     }
     onClose();
   });
 
+  const handleClose = () => { if (!submitting) onClose(); };
+
   return (
     <Modal
       open={open}
       title={isEdit ? 'Editar despesa' : 'Nova despesa'}
-      onClose={onClose}
+      onClose={handleClose}
       footer={
         <>
-          <button className="btn-outline" onClick={onClose} disabled={submitting}>Cancelar</button>
+          <button type="button" className="btn-outline" onClick={handleClose} disabled={submitting}>Cancelar</button>
           <button
+            type="button"
             className="btn-primary"
+            aria-busy={submitting}
             onClick={() => void submit()}
             disabled={submitting}
           >

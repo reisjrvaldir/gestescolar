@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
   CreditCard, Plus, Check, Trash2, Loader2, Pencil, Undo2,
-  Download, Filter, X, RotateCcw, History,
+  Download, Filter, X, RotateCcw, History, ChevronLeft, ChevronRight, Calendar,
 } from 'lucide-react';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { MetricCard } from '@/components/ui/MetricCard';
@@ -23,6 +23,30 @@ import { brl } from '@/lib/money';
 import { useSubmitOnce } from '@/lib/useSubmitOnce';
 
 type Tab = 'ativas' | 'lixeira' | 'auditoria';
+
+/** "YYYY-MM" do mês atual (horário local). */
+function currentMonthKey(): string {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+}
+/** "YYYY-MM" extraído de uma data ISO (YYYY-MM-DD). */
+function monthKeyOf(iso?: string | null): string | null {
+  if (!iso) return null;
+  const s = String(iso).slice(0, 7);
+  return /^\d{4}-\d{2}$/.test(s) ? s : null;
+}
+/** Rótulo "julho de 2026" a partir de "YYYY-MM". */
+function monthLabel(key: string): string {
+  const [y, m] = key.split('-').map(Number);
+  const d = new Date(y, (m ?? 1) - 1, 1);
+  return d.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
+}
+/** Move a chave YYYY-MM em N meses. */
+function shiftMonth(key: string, delta: number): string {
+  const [y, m] = key.split('-').map(Number);
+  const d = new Date(y, (m - 1) + delta, 1);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+}
 
 const STATUS: Record<ExpenseStatus, { tone: 'success' | 'warning' | 'danger'; label: string }> = {
   paid: { tone: 'success', label: 'Pago' },
@@ -74,6 +98,8 @@ export function ExpensesPage() {
   const [loading, setLoading] = useState(true);
   const [filters, setFilters] = useState<ListFilters>({});
   const [showFilters, setShowFilters] = useState(false);
+  /** null = "todos os meses". Padrão = mês atual. */
+  const [monthKey, setMonthKey] = useState<string | null>(currentMonthKey());
 
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState<Expense | null>(null);
@@ -95,16 +121,23 @@ export function ExpensesPage() {
 
   useEffect(() => { void reload(tab, filters); /* eslint-disable-next-line */ }, [tab]);
 
+  /** Itens visíveis (aplicando o filtro de mês). Só filtra nas abas Ativas/Lixeira;
+   *  na aba Auditoria não usamos `items`. */
+  const visibleItems = useMemo(() => {
+    if (!monthKey) return items;
+    return items.filter((e) => monthKeyOf(e.due_date) === monthKey);
+  }, [items, monthKey]);
+
   const totals = useMemo(() => {
-    const pending = items.filter((e) => e.status === 'pending');
-    const paid = items.filter((e) => e.status === 'paid');
+    const pending = visibleItems.filter((e) => e.status === 'pending');
+    const paid = visibleItems.filter((e) => e.status === 'paid');
     return {
       pending,
       paid,
       totalPending: pending.reduce((s, e) => s + Number(e.amount), 0),
       totalPaid: paid.reduce((s, e) => s + Number(e.amount), 0),
     };
-  }, [items]);
+  }, [visibleItems]);
 
   // ---------------- Handlers (atualização otimista) ----------------
 
@@ -148,8 +181,9 @@ export function ExpensesPage() {
   const { run: onRestoreClick } = useSubmitOnce(handleRestore);
 
   function onExport() {
-    const filename = `saidas-de-recursos-${new Date().toISOString().slice(0, 10)}.csv`;
-    downloadCSV(filename, toCSV(items));
+    const suffix = monthKey ?? new Date().toISOString().slice(0, 10);
+    const filename = `saidas-de-recursos-${suffix}.csv`;
+    downloadCSV(filename, toCSV(visibleItems));
   }
 
   function applyFilters() { void reload(tab, filters); }
@@ -253,11 +287,70 @@ export function ExpensesPage() {
         </div>
       )}
 
+      {tab !== 'auditoria' && (
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-border bg-surface px-4 py-3 shadow-card">
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              className="rounded-lg border border-border bg-surface p-1.5 text-ink-muted hover:bg-canvas hover:text-ink disabled:opacity-40"
+              onClick={() => setMonthKey((k) => shiftMonth(k ?? currentMonthKey(), -1))}
+              disabled={!monthKey}
+              title="Mês anterior"
+            >
+              <ChevronLeft size={16} />
+            </button>
+            <div className="flex min-w-[190px] items-center justify-center gap-2 rounded-lg bg-canvas px-3 py-1.5 text-sm font-semibold text-ink">
+              <Calendar size={14} className="text-ink-muted" />
+              {monthKey ? <span className="capitalize">{monthLabel(monthKey)}</span> : <span>Todos os meses</span>}
+            </div>
+            <button
+              type="button"
+              className="rounded-lg border border-border bg-surface p-1.5 text-ink-muted hover:bg-canvas hover:text-ink disabled:opacity-40"
+              onClick={() => setMonthKey((k) => shiftMonth(k ?? currentMonthKey(), 1))}
+              disabled={!monthKey}
+              title="Próximo mês"
+            >
+              <ChevronRight size={16} />
+            </button>
+          </div>
+          <div className="flex items-center gap-2">
+            {monthKey !== currentMonthKey() && (
+              <button
+                type="button"
+                className="btn-outline !h-8 !px-3 !py-0 text-xs"
+                onClick={() => setMonthKey(currentMonthKey())}
+              >
+                Ir para o mês atual
+              </button>
+            )}
+            <button
+              type="button"
+              className={`btn-outline !h-8 !px-3 !py-0 text-xs ${!monthKey ? '!bg-primary !text-white !border-primary' : ''}`}
+              onClick={() => setMonthKey((k) => (k ? null : currentMonthKey()))}
+              title="Alternar entre visão do mês e todas as despesas"
+            >
+              {monthKey ? 'Ver todos os meses' : 'Voltar ao mês atual'}
+            </button>
+          </div>
+        </div>
+      )}
+
       {tab !== 'auditoria' && !isTrash && (
         <div className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-3">
-          <MetricCard label="Total pendente" value={brl(totals.totalPending)} icon={CreditCard} tone="warning" hint={`${totals.pending.length} conta(s)`} />
-          <MetricCard label="Total pago" value={brl(totals.totalPaid)} icon={CreditCard} tone="success" hint={`${totals.paid.length} conta(s)`} />
-          <MetricCard label="Total geral" value={brl(totals.totalPending + totals.totalPaid)} icon={CreditCard} tone="primary" />
+          <MetricCard
+            label={monthKey ? 'Pendente no mês' : 'Total pendente'}
+            value={brl(totals.totalPending)} icon={CreditCard} tone="warning"
+            hint={`${totals.pending.length} conta(s)`}
+          />
+          <MetricCard
+            label={monthKey ? 'Pago no mês' : 'Total pago'}
+            value={brl(totals.totalPaid)} icon={CreditCard} tone="success"
+            hint={`${totals.paid.length} conta(s)`}
+          />
+          <MetricCard
+            label={monthKey ? 'Total do mês' : 'Total geral'}
+            value={brl(totals.totalPending + totals.totalPaid)} icon={CreditCard} tone="primary"
+          />
         </div>
       )}
 
@@ -268,14 +361,22 @@ export function ExpensesPage() {
         </div>
       ) : tab === 'auditoria' ? (
         <AuditTable rows={audit} />
-      ) : items.length === 0 ? (
+      ) : visibleItems.length === 0 ? (
         <div className="card overflow-hidden">
           <EmptyState
             icon={isTrash ? Trash2 : CreditCard}
-            title={isTrash ? 'Lixeira vazia' : 'Nenhuma despesa cadastrada'}
+            title={
+              isTrash
+                ? 'Lixeira vazia'
+                : monthKey
+                  ? `Nenhuma despesa em ${monthLabel(monthKey)}`
+                  : 'Nenhuma despesa cadastrada'
+            }
             description={isTrash
               ? 'Itens excluídos aparecem aqui e são apagados definitivamente após 60 dias.'
-              : 'Registre a primeira conta a pagar.'}
+              : monthKey
+                ? 'Troque o mês pelas setas ou clique em "Ver todos os meses" para ver o histórico completo.'
+                : 'Registre a primeira conta a pagar.'}
             action={!isTrash
               ? <button className="btn-primary" onClick={() => { setEditing(null); setFormOpen(true); }}><Plus size={16} /> Nova despesa</button>
               : undefined}
@@ -297,7 +398,7 @@ export function ExpensesPage() {
                 </tr>
               </thead>
               <tbody>
-                {items.map((e) => (
+                {visibleItems.map((e) => (
                   <tr key={e.id} className="border-b border-border last:border-0 hover:bg-canvas">
                     <td className="px-4 py-3 font-medium text-ink">
                       {e.supplier_name}
@@ -377,7 +478,7 @@ export function ExpensesPage() {
         </div>
       )}
 
-      {isTrash && !loading && items.length > 0 && (
+      {isTrash && !loading && visibleItems.length > 0 && (
         <p className="mt-3 text-xs text-ink-subtle">
           A lixeira mantém itens por 60 dias antes de excluí-los definitivamente.
         </p>
