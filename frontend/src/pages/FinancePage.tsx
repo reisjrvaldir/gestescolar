@@ -212,9 +212,9 @@ export function FinancePage() {
     if (invoices.length === 0) { showToast('error', 'Nada a exportar ainda.'); return; }
     downloadCsv(
       `a-receber-${new Date().toISOString().slice(0, 10)}.csv`,
-      ['Aluno', 'Responsável', 'Turma', 'Valor', 'Vencimento', 'Referência', 'Status'],
+      ['Aluno', 'Matrícula', 'Responsável', 'Turma', 'Valor', 'Vencimento', 'Referência', 'Status'],
       invoices.map((i) => [
-        i.student_name, i.guardian_name ?? '', i.class_name ?? '',
+        i.student_name, i.registration_number ?? '', i.guardian_name ?? '', i.class_name ?? '',
         i.amount.toFixed(2), i.due_date ?? '', i.reference_month ?? '', STATUS[i.status].label,
       ]),
     );
@@ -373,10 +373,13 @@ export function FinancePage() {
                     : 'Nenhuma cobrança encontrada.'}
               </div>
             ) : (
+              <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-border text-left text-[11px] font-semibold uppercase text-ink-subtle">
                     <th className="px-5 py-3">Aluno</th>
+                    <th className="px-5 py-3">Matrícula</th>
+                    <th className="px-5 py-3">Turma</th>
                     <th className="px-5 py-3 text-right">Valor</th>
                     <th className="px-5 py-3">Vencimento</th>
                     <th className="px-5 py-3">Status</th>
@@ -391,6 +394,8 @@ export function FinancePage() {
                       onClick={() => setSelected(inv)}
                     >
                       <td className="px-5 py-3 font-medium text-ink">{inv.student_name}</td>
+                      <td className="whitespace-nowrap px-5 py-3 font-mono text-xs text-ink-muted">{inv.registration_number ?? '—'}</td>
+                      <td className="px-5 py-3 text-ink-muted">{inv.class_name ?? '—'}</td>
                       <td className="whitespace-nowrap px-5 py-3 text-right text-ink-muted">{brl(inv.amount)}</td>
                       <td className="px-5 py-3 text-ink-muted">{fmtDate(inv.due_date)}</td>
                       <td className="px-5 py-3"><StatusBadge tone={STATUS[inv.status].tone}>{STATUS[inv.status].label}</StatusBadge></td>
@@ -434,6 +439,7 @@ export function FinancePage() {
                   ))}
                 </tbody>
               </table>
+              </div>
             )}
             <div className="flex flex-wrap items-center gap-x-4 gap-y-1 border-t border-border px-5 py-3 text-[11px] text-ink-subtle">
               <span className="inline-flex items-center gap-1"><QrCode size={12} /> <b>QR Code</b>: gera e mostra o código para o cliente escanear.</span>

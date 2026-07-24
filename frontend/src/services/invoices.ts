@@ -8,6 +8,7 @@ export interface Invoice {
   student_name: string;
   guardian_name?: string;
   class_name?: string;
+  registration_number?: string;
   amount: number;
   due_date: string;
   status: InvoiceStatus;

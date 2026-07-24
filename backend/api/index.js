@@ -44842,7 +44842,8 @@ invoicesRouter.get("/", requireRole("school_admin", "financial", "superadmin"), 
     const { rows } = await c.query(
       `select i.id, i.student_name, i.amount::float8 as amount, i.due_date, i.status, i.payment_method,
               i.kind, i.reference_month, i.checkout_url, i.paid_at, i.created_at,
-              g.name as guardian_name, cl.name as class_name
+              g.name as guardian_name, cl.name as class_name,
+              st.registration_number as registration_number
          from public.invoices i
          left join public.students st on st.id = i.student_id
          left join public.guardians g on g.id = st.guardian_id
