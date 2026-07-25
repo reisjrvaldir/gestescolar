@@ -1,13 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import {
   ClipboardCheck, Save, Check, Loader2, AlertTriangle,
   Lock, ChevronLeft, ChevronRight, CheckCircle2,
-  Paperclip, FileText, Download, ShieldCheck,
+  Paperclip, FileText, Download, ShieldCheck, CalendarDays,
 } from 'lucide-react';
-import { PageHeader } from '@/components/ui/PageHeader';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Modal } from '@/components/ui/Modal';
-import { FinanceTabs } from '@/components/finance/FinanceTabs';
 import { AttendanceSummaryChart } from '@/components/attendance/AttendanceSummaryChart';
 import { AttendanceAlertsCard } from '@/components/attendance/AttendanceAlertsCard';
 import { ApprovalQueue } from '@/components/attendance/ApprovalQueue';
@@ -73,13 +72,10 @@ export function AttendancePage() {
 }
 
 function TeacherAttendanceView({ isAdmin, isTeacher }: { isAdmin: boolean; isTeacher: boolean }) {
-  const TABS = [
-    { key: 'chamada', label: 'Chamada' },
-    { key: 'status', label: 'Status por dia' },
-    ...(isAdmin ? [{ key: 'aprovar', label: 'Aprovar Atestados' }] : []),
-  ];
-
-  const [tab, setTab] = useState('chamada');
+  const location = useLocation();
+  const nav = useNavigate();
+  const view = location.pathname.endsWith('/calendar') ? 'status' :
+               location.pathname.endsWith('/approvals') ? 'aprovar' : 'chamada';
   const [classes, setClasses] = useState<SchoolClass[]>([]);
   const [classId, setClassId] = useState('');
   const [subjects, setSubjects] = useState<ClassSubject[]>([]);
@@ -168,7 +164,7 @@ function TeacherAttendanceView({ isAdmin, isTeacher }: { isAdmin: boolean; isTea
   useEffect(() => { loadContext(); }, [loadContext]);
 
   useEffect(() => {
-    if (tab !== 'status' || !classId) return;
+    if (view !== 'status' || !classId) return;
     setCalLoading(true);
     Promise.all([
       attendanceService.calendar(classId, calYear, calMonth),
@@ -177,7 +173,7 @@ function TeacherAttendanceView({ isAdmin, isTeacher }: { isAdmin: boolean; isTea
       setCalDays(days);
       setSchoolEvents(events);
     }).finally(() => setCalLoading(false));
-  }, [tab, classId, calYear, calMonth]);
+  }, [view, classId, calYear, calMonth]);
 
   // Mapa data → resumo, para lookup rápido na grade do calendário.
   const calByDate = useMemo(() => {
@@ -264,7 +260,7 @@ function TeacherAttendanceView({ isAdmin, isTeacher }: { isAdmin: boolean; isTea
   // Clique num dia com chamada → abre painel detalhado do dia.
   // Dias sem chamada → navega para a aba Chamada naquela data.
   async function onCalendarDayClick(iso: string, info: CalendarDay | undefined) {
-    if (!info) { setDate(iso); setTab('chamada'); return; }
+    if (!info) { setDate(iso); nav('/app/attendance'); return; }
     setDayModalLoading(true);
     setDayModal(null);
     setDayPdfMap({});
@@ -411,28 +407,42 @@ function TeacherAttendanceView({ isAdmin, isTeacher }: { isAdmin: boolean; isTea
 
   return (
     <>
-      <PageHeader
-        title="Chamada"
-        subtitle="Registre a frequência da turma por data."
-        actions={
-          tab === 'chamada' && !readOnly ? (
-            <button
-              className="btn-primary flex items-center gap-2"
-              onClick={save}
-              disabled={!canSave || saving}
-              title={!allConfirmed ? `${unconfirmedCount} aluno(s) aguardando confirmação` : undefined}
-            >
-              {saving ? <Loader2 size={16} className="animate-spin" /> : toast?.type === 'success' ? <Check size={16} /> : <Save size={16} />}
-              {saving ? 'Salvando…' : toast?.type === 'success' ? 'Salvo!' : 'Salvar chamada'}
-            </button>
-          ) : undefined
-        }
-      />
-
-      <FinanceTabs tabs={TABS} active={tab} onChange={setTab} />
+      {/* ===== HERO ===== */}
+      <div className="mb-6 overflow-hidden rounded-2xl bg-gradient-to-r from-primary-soft to-primary-soft/40 p-6 sm:p-8">
+        <div className="flex items-start justify-between gap-6">
+          <div className="max-w-xl">
+            <h1 className="text-3xl font-extrabold text-ink sm:text-4xl">
+              {view === 'status' ? 'Frequência' : view === 'aprovar' ? 'Aprovar Atestados' : 'Chamada'}
+            </h1>
+            <p className="mt-2 text-sm text-ink-muted">
+              {view === 'status'
+                ? 'Visualize a frequência diária da turma no calendário mensal.'
+                : view === 'aprovar'
+                ? 'Revise e aprove atestados médicos enviados pelos responsáveis.'
+                : 'Registre e acompanhe a presença dos alunos por turma e data de forma rápida e organizada.'}
+            </p>
+            {view === 'chamada' && !readOnly && (
+              <button
+                className="mt-5 inline-flex items-center gap-2 rounded-xl bg-primary px-5 py-2.5 text-sm font-semibold text-white shadow-card hover:bg-primary/90"
+                onClick={save}
+                disabled={!canSave || saving}
+                title={!allConfirmed ? `${unconfirmedCount} aluno(s) aguardando confirmação` : undefined}
+              >
+                {saving ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
+                {saving ? 'Salvando…' : 'Salvar chamada'}
+              </button>
+            )}
+          </div>
+          <div className="hidden shrink-0 items-center justify-center sm:flex">
+            <div className="grid h-32 w-32 place-items-center rounded-full bg-white/40 text-primary shadow-inner">
+              {view === 'status' ? <CalendarDays size={64} /> : view === 'aprovar' ? <ShieldCheck size={64} /> : <ClipboardCheck size={64} />}
+            </div>
+          </div>
+        </div>
+      </div>
 
       {/* ===================== APROVAR ATESTADOS (só gestão) ===================== */}
-      {tab === 'aprovar' && isAdmin && (
+      {view === 'aprovar' && isAdmin && (
         <div className="space-y-4">
           <div className="flex items-center gap-2 rounded-xl bg-primary-soft px-4 py-2.5 text-sm font-medium text-primary">
             <ShieldCheck size={16} />
@@ -443,7 +453,7 @@ function TeacherAttendanceView({ isAdmin, isTeacher }: { isAdmin: boolean; isTea
       )}
 
       {/* ===================== STATUS POR DIA (calendário) ===================== */}
-      {tab === 'status' && (
+      {view === 'status' && (
         <div className="space-y-3">
           {/* Filtros + navegação */}
           <div className="flex flex-wrap items-center justify-between gap-3">
@@ -547,7 +557,7 @@ function TeacherAttendanceView({ isAdmin, isTeacher }: { isAdmin: boolean; isTea
         </div>
       )}
 
-      {tab === 'chamada' && (
+      {view === 'chamada' && (
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-[7fr_3fr]">
           {/* ===================== COLUNA ESQUERDA (70%) — CHAMADA ===================== */}
           <div className="min-w-0">

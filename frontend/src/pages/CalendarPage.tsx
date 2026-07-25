@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { CalendarDays, Plus, Trash2, Loader2, Check, AlertTriangle } from 'lucide-react';
-import { PageHeader } from '@/components/ui/PageHeader';
 import { StatusBadge } from '@/components/ui/StatusBadge';
 import { Modal } from '@/components/ui/Modal';
 import { EmptyState } from '@/components/ui/EmptyState';
@@ -130,22 +129,35 @@ export function CalendarPage() {
 
   return (
     <>
-      <PageHeader
-        title="Ano Letivo / Calendário"
-        subtitle="Gerencie feriados, provas, reuniões e eventos do calendário escolar."
-        actions={
-          <div className="flex items-center gap-2">
-            <select className="input w-auto" value={year} onChange={(e) => setYear(Number(e.target.value))}>
-              {[year - 1, year, year + 1].map((y) => <option key={y} value={y}>{y}</option>)}
-            </select>
-            {isAdmin && (
-              <button className="btn-primary" onClick={() => setOpen(true)}>
-                <Plus size={16} /> Novo evento
-              </button>
-            )}
+      {/* ===== HERO ===== */}
+      <div className="mb-6 overflow-hidden rounded-2xl bg-gradient-to-r from-primary-soft to-primary-soft/40 p-6 sm:p-8">
+        <div className="flex items-start justify-between gap-6">
+          <div className="max-w-xl">
+            <h1 className="text-3xl font-extrabold text-ink sm:text-4xl">Ano Letivo</h1>
+            <p className="mt-2 text-sm text-ink-muted">
+              Organize períodos, calendário, recessos e eventos do ano letivo da sua escola.
+            </p>
+            <div className="mt-5 flex flex-wrap items-center gap-2">
+              <select className="rounded-xl border border-border bg-white px-4 py-2.5 text-sm font-semibold text-ink" value={year} onChange={(e) => setYear(Number(e.target.value))}>
+                {[year - 1, year, year + 1].map((y) => <option key={y} value={y}>{y}</option>)}
+              </select>
+              {isAdmin && (
+                <button
+                  className="inline-flex items-center gap-2 rounded-xl bg-primary px-5 py-2.5 text-sm font-semibold text-white shadow-card hover:bg-primary/90"
+                  onClick={() => setOpen(true)}
+                >
+                  <Plus size={18} /> Novo evento
+                </button>
+              )}
+            </div>
           </div>
-        }
-      />
+          <div className="hidden shrink-0 items-center justify-center sm:flex">
+            <div className="grid h-32 w-32 place-items-center rounded-full bg-white/40 text-primary shadow-inner">
+              <CalendarDays size={64} />
+            </div>
+          </div>
+        </div>
+      </div>
 
       {toast && (
         <div className={`mb-4 flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-medium ${

@@ -75,6 +75,8 @@ export default function App() {
           <Route path="grades" element={<AdminTeacherGuardian><GradesPage /></AdminTeacherGuardian>} />
           <Route path="grades/boletim" element={<AdminTeacherGuardian><GradesPage /></AdminTeacherGuardian>} />
           <Route path="attendance" element={<AdminTeacherGuardian><AttendancePage /></AdminTeacherGuardian>} />
+          <Route path="attendance/calendar" element={<AdminTeacherGuardian><AttendancePage /></AdminTeacherGuardian>} />
+          <Route path="attendance/approvals" element={<Admin><AttendancePage /></Admin>} />
           <Route path="timeclock" element={<TimeclockPage />} />
           <Route path="calendar" element={<AdminTeacherGuardian><CalendarPage /></AdminTeacherGuardian>} />
           <Route path="finance" element={<AdminFinancial><FinancePage /></AdminFinancial>} />

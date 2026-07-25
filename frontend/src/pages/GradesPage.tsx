@@ -2,9 +2,8 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useLocation } from 'react-router-dom';
 import {
   Star, Save, Check, Loader2, AlertTriangle, Lock,
-  Settings, PieChart, BarChart2,
+  Settings, PieChart, BarChart2, BookOpen,
 } from 'lucide-react';
-import { PageHeader } from '@/components/ui/PageHeader';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Modal } from '@/components/ui/Modal';
 import { classesService, type ClassSubject } from '@/services/classes';
@@ -298,36 +297,54 @@ function GradesView({ isAdmin, isTeacher }: { isAdmin: boolean; isTeacher: boole
 
   return (
     <>
-      <PageHeader
-        title={isBoletimRoute ? 'Boletim' : 'Lançar Notas'}
-        subtitle={isBoletimRoute ? 'Visualize o desempenho dos alunos por disciplina e período.' : 'Lance e acompanhe as notas dos alunos por disciplina e unidade.'}
-        actions={
-          <div className="flex items-center gap-2">
-            {isAdmin && (
-              <button
-                className="btn-outline flex items-center gap-1.5"
-                onClick={() => { setSettingsForm(settings); setSettingsOpen(true); }}
-              >
-                <Settings size={15} /> Configurações
-              </button>
-            )}
-            {!isBoletimRoute && !readOnly && !locked && (
-              <button className="btn-primary flex items-center gap-2" onClick={save}
-                disabled={!canSave || saving}>
-                {saving ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
-                {saving ? 'Salvando…' : 'Salvar AV1/AV2'}
-              </button>
-            )}
-            {!isBoletimRoute && isAdmin && locked && (
-              <button className="btn-primary flex items-center gap-2" onClick={save}
-                disabled={saving}>
-                {saving ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
-                {saving ? 'Salvando…' : 'Salvar Alteração'}
-              </button>
-            )}
+      {/* ===== HERO ===== */}
+      <div className="mb-6 overflow-hidden rounded-2xl bg-gradient-to-r from-primary-soft to-primary-soft/40 p-6 sm:p-8">
+        <div className="flex items-start justify-between gap-6">
+          <div className="max-w-xl">
+            <h1 className="text-3xl font-extrabold text-ink sm:text-4xl">
+              {isBoletimRoute ? 'Boletim Escolar' : 'Lançamento de Notas'}
+            </h1>
+            <p className="mt-2 text-sm text-ink-muted">
+              {isBoletimRoute
+                ? 'Acompanhe notas, frequência, pareceres e situação final do aluno.'
+                : 'Registre notas por turma, disciplina e bimestre com rapidez e segurança.'}
+            </p>
+            <div className="mt-5 flex flex-wrap items-center gap-2">
+              {isAdmin && (
+                <button
+                  className="inline-flex items-center gap-2 rounded-xl border border-border bg-white px-4 py-2.5 text-sm font-semibold text-ink hover:bg-canvas"
+                  onClick={() => { setSettingsForm(settings); setSettingsOpen(true); }}
+                >
+                  <Settings size={16} /> Configurações
+                </button>
+              )}
+              {!isBoletimRoute && !readOnly && !locked && (
+                <button
+                  className="inline-flex items-center gap-2 rounded-xl bg-primary px-5 py-2.5 text-sm font-semibold text-white shadow-card hover:bg-primary/90"
+                  onClick={save} disabled={!canSave || saving}
+                >
+                  {saving ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
+                  {saving ? 'Salvando…' : 'Salvar lançamentos'}
+                </button>
+              )}
+              {!isBoletimRoute && isAdmin && locked && (
+                <button
+                  className="inline-flex items-center gap-2 rounded-xl bg-primary px-5 py-2.5 text-sm font-semibold text-white shadow-card hover:bg-primary/90"
+                  onClick={save} disabled={saving}
+                >
+                  {saving ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
+                  {saving ? 'Salvando…' : 'Salvar Alteração'}
+                </button>
+              )}
+            </div>
           </div>
-        }
-      />
+          <div className="hidden shrink-0 items-center justify-center sm:flex">
+            <div className="grid h-32 w-32 place-items-center rounded-full bg-white/40 text-primary shadow-inner">
+              {isBoletimRoute ? <BookOpen size={64} /> : <Star size={64} />}
+            </div>
+          </div>
+        </div>
+      </div>
 
       {/* =================== LANÇAR NOTAS =================== */}
       {!isBoletimRoute && (
