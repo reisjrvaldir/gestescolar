@@ -81,15 +81,27 @@ export function ClassesPage() {
   // Distinct values for filter dropdowns
   const distinctYears = useMemo(() =>
     Array.from(new Set(classes.map((c) => c.year))).sort((a, b) => b - a), [classes]);
-  const distinctLevels = useMemo(() =>
-    Array.from(new Set(classes.map((c) => c.level).filter(Boolean) as string[])).sort(), [classes]);
+
+  /** Extrai a série do nome da turma: "9º Ano A" → "9º Ano" */
+  const serieOf = (name: string) => name.replace(/\s*[A-Z]$/i, '').trim();
+
+  /** Lista unificada de séries + níveis para o dropdown */
+  const distinctSeries = useMemo(() => {
+    const set = new Set<string>();
+    classes.forEach((c) => {
+      const serie = serieOf(c.name);
+      if (serie) set.add(serie);
+      if (c.level) set.add(c.level);
+    });
+    return Array.from(set).sort();
+  }, [classes]);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
     return classes
       .filter((c) => !yearFilter || c.year === Number(yearFilter))
       .filter((c) => !shiftFilter || c.shift === shiftFilter)
-      .filter((c) => !levelFilter || c.level === levelFilter)
+      .filter((c) => !levelFilter || c.level === levelFilter || serieOf(c.name) === levelFilter)
       .filter((c) => !q || c.name.toLowerCase().includes(q) || (c.teacher_name ?? '').toLowerCase().includes(q));
   }, [classes, query, yearFilter, shiftFilter, levelFilter]);
 
@@ -233,7 +245,7 @@ export function ClassesPage() {
                 <label className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-ink-subtle">Nível / Série</label>
                 <select className="input" value={levelFilter} onChange={(e) => setLevelFilter(e.target.value)}>
                   <option value="">Todas as séries</option>
-                  {distinctLevels.map((l) => <option key={l} value={l}>{l}</option>)}
+                  {distinctSeries.map((l) => <option key={l} value={l}>{l}</option>)}
                 </select>
               </div>
             </div>

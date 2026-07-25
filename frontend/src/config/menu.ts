@@ -3,7 +3,7 @@ import {
   Fingerprint, CalendarDays, CreditCard,
   Headset, Crown, Mail,
   CalendarOff, FolderOpen, PiggyBank, ArrowUpRight, Wallet,
-  FileText,
+  FileText, ArrowDownRight, AlertTriangle,
   type LucideIcon,
 } from 'lucide-react';
 
@@ -54,6 +54,8 @@ export const MENUS: Record<Role, MenuSection[]> = {
       items: [
         { to: '/app/finance', label: 'Financeiro', icon: Wallet },
         { to: '/app/finance/expenses', label: 'Contas a Pagar', icon: CreditCard },
+        { to: '/app/finance/receivables', label: 'A Receber', icon: ArrowDownRight },
+        { to: '/app/finance/delinquency', label: 'Inadimplência', icon: AlertTriangle },
       ],
     },
     {

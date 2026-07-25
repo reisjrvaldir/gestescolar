@@ -13,6 +13,8 @@ import { ClassesPage } from '@/pages/ClassesPage';
 import { GradesPage } from '@/pages/GradesPage';
 import { AttendancePage } from '@/pages/AttendancePage';
 import { FinancePage } from '@/pages/FinancePage';
+import { ReceivablesPage } from '@/pages/ReceivablesPage';
+import { DelinquencyPage } from '@/pages/DelinquencyPage';
 import { FaturasPage } from '@/pages/FaturasPage';
 import { ExpensesPage } from '@/pages/ExpensesPage';
 import { BalancePage } from '@/pages/BalancePage';
@@ -78,8 +80,10 @@ export default function App() {
           <Route path="finance" element={<AdminFinancial><FinancePage /></AdminFinancial>} />
           <Route path="finance/entries" element={<AdminFinancial><FinancePage /></AdminFinancial>} />
           <Route path="finance/expenses" element={<AdminFinancial><ExpensesPage /></AdminFinancial>} />
+          <Route path="finance/receivables" element={<AdminFinancial><ReceivablesPage /></AdminFinancial>} />
+          <Route path="finance/delinquency" element={<AdminFinancial><DelinquencyPage /></AdminFinancial>} />
           <Route path="finance/balance" element={<AdminFinancial><BalancePage /></AdminFinancial>} />
-          <Route path="invoices" element={<AdminFinancial><FinancePage /></AdminFinancial>} />
+          <Route path="invoices" element={<AdminFinancial><ReceivablesPage /></AdminFinancial>} />
           <Route path="faturas" element={<FaturasPage />} />
           <Route path="messages" element={<MessagesPage />} />
           <Route path="leave-requests" element={<LeaveRequestsPage />} />
