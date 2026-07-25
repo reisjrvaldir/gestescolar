@@ -4,6 +4,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import {
   GraduationCap, Search, Loader2, Copy, Check, Save, Plus,
   User, Phone, FileText, Link2, Upload, Printer, Pencil,
+  Users, UserPlus, Gift, AlertTriangle, Eye, MoreVertical,
 } from 'lucide-react';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { EmptyState } from '@/components/ui/EmptyState';
@@ -47,6 +48,39 @@ interface FormFields {
 }
 
 type DetailTab = 'dados' | 'responsavel' | 'contatos' | 'documentos';
+
+/** Card colorido de KPI usado no dashboard da página de alunos. */
+function KpiCard({
+  icon: Icon, tone, label, value, hint,
+}: {
+  icon: typeof User;
+  tone: 'primary' | 'success' | 'warning' | 'danger';
+  label: string;
+  value: string;
+  hint?: string;
+}) {
+  const toneCls: Record<typeof tone, { bg: string; text: string }> = {
+    primary: { bg: 'bg-primary-soft', text: 'text-primary' },
+    success: { bg: 'bg-success-soft', text: 'text-success' },
+    warning: { bg: 'bg-warning-soft', text: 'text-warning' },
+    danger:  { bg: 'bg-danger-soft',  text: 'text-danger'  },
+  };
+  const t = toneCls[tone];
+  return (
+    <div className="card p-5">
+      <div className="flex items-start gap-3">
+        <div className={`grid h-11 w-11 shrink-0 place-items-center rounded-xl ${t.bg} ${t.text}`}>
+          <Icon size={20} />
+        </div>
+        <div className="min-w-0 flex-1">
+          <p className="truncate text-xs font-medium text-ink-muted">{label}</p>
+          <p className="mt-1 text-2xl font-extrabold text-ink">{value}</p>
+          {hint && <p className="mt-1 text-[11px] text-ink-subtle">{hint}</p>}
+        </div>
+      </div>
+    </div>
+  );
+}
 
 function generatePdf(title: string, schoolName: string, student: Student) {
   const formatDate = (d?: string) => {
@@ -126,6 +160,8 @@ export function StudentsPage() {
   const [selected, setSelected] = useState<Student | null>(null);
   const [detailTab, setDetailTab] = useState<DetailTab>('dados');
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
+  const [classFilter, setClassFilter] = useState<string>('');
+  const [serieFilter, setSerieFilter] = useState<string>('');
   const [saving, setSaving] = useState(false);
   const [credentials, setCredentials] = useState<CreatedStudent | null>(null);
   const [copied, setCopied] = useState(false);
@@ -159,12 +195,44 @@ export function StudentsPage() {
     inactive: students.filter((s) => s.status === 'inactive').length,
   }), [students]);
 
+  /** Extrai "9º Ano" de "9º Ano A" (série sem a turma). */
+  const serieOf = (className?: string) =>
+    (className ?? '').replace(/\s*[A-Z]$/i, '').trim();
+
+  /** Lista de séries distintas presentes nos alunos, para o dropdown. */
+  const distinctSeries = useMemo(() => {
+    const set = new Set<string>();
+    students.forEach((s) => { const v = serieOf(s.class_name); if (v) set.add(v); });
+    return Array.from(set).sort();
+  }, [students]);
+
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
     return students
       .filter((s) => statusFilter === 'all' ? true : s.status === statusFilter)
+      .filter((s) => !classFilter || s.class_id === classFilter)
+      .filter((s) => !serieFilter || serieOf(s.class_name) === serieFilter)
       .filter((s) => !q || s.name.toLowerCase().includes(q) || (s.registration_number ?? '').includes(q));
-  }, [students, query, statusFilter]);
+  }, [students, query, statusFilter, classFilter, serieFilter]);
+
+  /** KPI: aniversariantes do mês atual (usa birth_date se disponível). */
+  const birthdaysMonth = useMemo(() => {
+    const m = new Date().getMonth() + 1;
+    return students.filter((s) => {
+      if (!s.birth_date) return false;
+      const bm = Number(String(s.birth_date).slice(5, 7));
+      return bm === m;
+    }).length;
+  }, [students]);
+
+  /** KPI: novos cadastros nos últimos 30 dias (aproximação de "novas matrículas"). */
+  const newLast30 = useMemo(() => {
+    const cutoff = Date.now() - 30 * 24 * 60 * 60 * 1000;
+    return students.filter((s) => {
+      if (!s.created_at) return false;
+      return new Date(s.created_at).getTime() >= cutoff;
+    }).length;
+  }, [students]);
 
   const { register, handleSubmit, reset, watch, formState: { errors } } = useForm<FormFields>();
   const selectedPlanId = watch('plan_id');
@@ -492,53 +560,102 @@ export function StudentsPage() {
 
   return (
     <>
-      <PageHeader
-        title="Alunos"
-        subtitle="Gerencie os alunos da sua escola."
-        actions={
-          <button className="btn-primary flex items-center gap-1.5" onClick={() => navigate('/app/students/new')}>
-            <Plus size={16} /> Cadastrar Aluno
-          </button>
-        }
-      />
-
       {error && <div className="mb-4 rounded-xl bg-danger-soft px-3 py-2 text-sm text-danger">{error}</div>}
 
+      {/* ===== HERO ===== */}
+      <div className="mb-6 overflow-hidden rounded-2xl bg-gradient-to-r from-primary-soft to-primary-soft/40 p-6 sm:p-8">
+        <div className="flex items-start justify-between gap-6">
+          <div className="max-w-xl">
+            <h1 className="text-3xl font-extrabold text-ink sm:text-4xl">Gestão de alunos</h1>
+            <p className="mt-2 text-sm text-ink-muted">
+              Cadastre, acompanhe e organize todas as informações dos alunos da sua escola em um só lugar.
+            </p>
+            <button
+              className="mt-5 inline-flex items-center gap-2 rounded-xl bg-primary px-5 py-2.5 text-sm font-semibold text-white shadow-card hover:bg-primary/90"
+              onClick={() => navigate('/app/students/new')}
+            >
+              <Plus size={18} /> Novo aluno
+            </button>
+          </div>
+          <div className="hidden shrink-0 items-center justify-center sm:flex">
+            <div className="grid h-32 w-32 place-items-center rounded-full bg-white/40 text-primary shadow-inner">
+              <GraduationCap size={64} />
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* ===== KPI CARDS ===== */}
+      <div className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <KpiCard
+          icon={Users}
+          tone="primary"
+          label="Total de alunos"
+          value={counts.all.toString()}
+          hint={counts.active + ' ativos · ' + counts.inactive + ' inativos'}
+        />
+        <KpiCard
+          icon={UserPlus}
+          tone="success"
+          label="Novas matrículas"
+          value={newLast30.toString()}
+          hint="nos últimos 30 dias"
+        />
+        <KpiCard
+          icon={Gift}
+          tone="warning"
+          label="Aniversariantes do mês"
+          value={birthdaysMonth.toString()}
+          hint="alunos fazem aniversário este mês"
+        />
+        <KpiCard
+          icon={AlertTriangle}
+          tone="danger"
+          label="Alunos inativos"
+          value={counts.inactive.toString()}
+          hint="não estão frequentando"
+        />
+      </div>
+
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-[7fr_3fr]">
-        {/* ===== Coluna 60% — Lista ===== */}
+        {/* ===== Coluna 70% — Lista ===== */}
         <div className="min-w-0 space-y-4">
-          {/* Abas Todos / Ativos / Inativos */}
-          <div className="inline-flex rounded-xl border border-border bg-surface p-1 shadow-card">
-            {([
-              { key: 'all', label: 'Alunos', count: counts.all },
-              { key: 'active', label: 'Ativos', count: counts.active },
-              { key: 'inactive', label: 'Inativos', count: counts.inactive },
-            ] as { key: StatusFilter; label: string; count: number }[]).map((t) => (
-              <button
-                key={t.key}
-                type="button"
-                className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold ${
-                  statusFilter === t.key ? 'bg-primary text-white' : 'text-ink-muted hover:bg-canvas hover:text-ink'
-                }`}
-                onClick={() => setStatusFilter(t.key)}
-              >
-                {t.label}
-                <span className={`rounded-full px-1.5 text-[10px] font-bold ${
-                  statusFilter === t.key ? 'bg-white/20 text-white' : 'bg-canvas text-ink-muted'
-                }`}>{t.count}</span>
-              </button>
-            ))}
+          {/* Filtros (Turma / Série / Status / Busca) */}
+          <div className="card p-4">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+              <div>
+                <label className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-ink-subtle">Turma</label>
+                <select className="input" value={classFilter} onChange={(e) => setClassFilter(e.target.value)}>
+                  <option value="">Todas as turmas</option>
+                  {classes.map((c) => (<option key={c.id} value={c.id}>{c.name}</option>))}
+                </select>
+              </div>
+              <div>
+                <label className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-ink-subtle">Série</label>
+                <select className="input" value={serieFilter} onChange={(e) => setSerieFilter(e.target.value)}>
+                  <option value="">Todas as séries</option>
+                  {distinctSeries.map((s) => (<option key={s} value={s}>{s}</option>))}
+                </select>
+              </div>
+              <div>
+                <label className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-ink-subtle">Status</label>
+                <select className="input" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value as StatusFilter)}>
+                  <option value="all">Todos ({counts.all})</option>
+                  <option value="active">Ativos ({counts.active})</option>
+                  <option value="inactive">Inativos ({counts.inactive})</option>
+                </select>
+              </div>
+              <div>
+                <label className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-ink-subtle">Buscar</label>
+                <div className="relative">
+                  <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-ink-subtle" />
+                  <input className="input pl-9" placeholder="Buscar alunos…" value={query} onChange={(e) => setQuery(e.target.value)} />
+                </div>
+              </div>
+            </div>
           </div>
 
           <div className="card overflow-hidden">
-            <div className="flex items-center gap-3 border-b border-border p-4">
-              <div className="relative flex-1 max-w-sm">
-                <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-ink-subtle" />
-                <input className="input pl-9" placeholder="Buscar por nome ou matrícula…" value={query} onChange={(e) => setQuery(e.target.value)} />
-              </div>
-              <span className="text-sm text-ink-muted">{filtered.length} aluno(s)</span>
-            </div>
-
             {loading ? (
               <div className="flex items-center justify-center gap-2 py-14 text-ink-muted">
                 <Loader2 className="animate-spin" size={18} /> Carregando…
@@ -549,17 +666,19 @@ export function StudentsPage() {
                 title={statusFilter === 'inactive' ? 'Nenhum aluno inativo' : 'Nenhum aluno encontrado'}
                 description={statusFilter === 'inactive'
                   ? 'Alunos removidos aparecem aqui.'
-                  : 'Cadastre o primeiro aluno para começar.'}
+                  : 'Ajuste os filtros ou cadastre o primeiro aluno.'}
               />
             ) : (
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="border-b border-border text-left text-[11px] font-semibold uppercase text-ink-subtle">
-                      <th className="px-4 py-2.5">Nome</th>
-                      <th className="px-4 py-2.5">Matrícula</th>
-                      <th className="px-4 py-2.5">Ano</th>
-                      <th className="px-4 py-2.5">Status</th>
+                      <th className="px-4 py-3">Aluno</th>
+                      <th className="px-4 py-3">Turma / Série</th>
+                      <th className="px-4 py-3">Responsável</th>
+                      <th className="px-4 py-3">Matrícula</th>
+                      <th className="px-4 py-3">Status</th>
+                      <th className="px-4 py-3 text-right">Ações</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -567,31 +686,57 @@ export function StudentsPage() {
                       <tr
                         key={s.id}
                         onClick={() => { setSelected(s); setDetailTab('dados'); }}
-                        className={`cursor-pointer border-b border-border last:border-0 hover:bg-canvas ${selected?.id === s.id ? 'bg-primary-soft/30' : ''}`}
+                        className={`cursor-pointer border-b border-border last:border-0 hover:bg-canvas ${selected?.id === s.id ? 'bg-primary-soft/40' : ''}`}
                       >
-                        <td className="px-4 py-2.5">
+                        <td className="px-4 py-3">
                           <div className="flex items-center gap-3">
                             {s.photo_url ? (
-                              <img src={s.photo_url} alt="" className="h-8 w-8 shrink-0 rounded-full object-cover" />
+                              <img src={s.photo_url} alt="" className="h-9 w-9 shrink-0 rounded-full object-cover" />
                             ) : (
-                              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary-soft text-[11px] font-bold text-primary">
+                              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary-soft text-xs font-bold text-primary">
                                 {initials(s.name)}
                               </div>
                             )}
-                            <span className="truncate font-medium text-ink">{s.name}</span>
+                            <span className="truncate font-semibold text-ink">{s.name}</span>
                           </div>
                         </td>
-                        <td className="whitespace-nowrap px-4 py-2.5 font-mono text-xs text-ink-muted">{s.registration_number ?? '—'}</td>
-                        <td className="px-4 py-2.5 text-ink-muted">{s.class_name ?? 'Sem turma'}</td>
-                        <td className="px-4 py-2.5">
+                        <td className="whitespace-nowrap px-4 py-3 text-ink-muted">{s.class_name ?? 'Sem turma'}</td>
+                        <td className="px-4 py-3 text-ink-muted">{s.guardian_name ?? '—'}</td>
+                        <td className="whitespace-nowrap px-4 py-3 font-mono text-xs text-ink-muted">{s.registration_number ?? '—'}</td>
+                        <td className="px-4 py-3">
                           <StatusBadge tone={s.status === 'active' ? 'success' : 'neutral'}>
                             {s.status === 'active' ? 'Ativo' : 'Inativo'}
                           </StatusBadge>
+                        </td>
+                        <td className="px-4 py-3 text-right">
+                          <div className="inline-flex items-center gap-1">
+                            <button
+                              type="button"
+                              className="rounded-lg p-2 text-ink-muted hover:bg-primary-soft hover:text-primary"
+                              onClick={(e) => { e.stopPropagation(); setSelected(s); setDetailTab('dados'); }}
+                              title="Ver detalhes"
+                            >
+                              <Eye size={16} />
+                            </button>
+                            <button
+                              type="button"
+                              className="rounded-lg p-2 text-ink-muted hover:bg-canvas hover:text-ink"
+                              onClick={(e) => { e.stopPropagation(); setEditing(s); }}
+                              title="Editar"
+                            >
+                              <MoreVertical size={16} />
+                            </button>
+                          </div>
                         </td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
+              </div>
+            )}
+            {filtered.length > 0 && (
+              <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border px-4 py-3 text-xs text-ink-muted">
+                <span>Mostrando {filtered.length} de {counts.all} aluno(s).</span>
               </div>
             )}
           </div>
