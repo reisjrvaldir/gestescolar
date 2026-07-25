@@ -4,6 +4,7 @@ import {
   ClipboardCheck, Save, Check, Loader2, AlertTriangle,
   Lock, ChevronLeft, ChevronRight, CheckCircle2,
   Paperclip, FileText, Download, ShieldCheck, CalendarDays,
+  Users, UserMinus, FileCheck2, BarChart3,
 } from 'lucide-react';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Modal } from '@/components/ui/Modal';
@@ -558,225 +559,30 @@ function TeacherAttendanceView({ isAdmin, isTeacher }: { isAdmin: boolean; isTea
       )}
 
       {view === 'chamada' && (
-        <div className="grid grid-cols-1 gap-6 lg:grid-cols-[7fr_3fr]">
-          {/* ===================== COLUNA ESQUERDA (70%) — CHAMADA ===================== */}
-          <div className="min-w-0">
-            {toast && (
-              <div className={`mb-4 flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-medium ${
-                toast.type === 'success' ? 'bg-success-soft text-success' : 'bg-danger-soft text-danger'
-              }`}>
-                {toast.type === 'success' ? <Check size={16} /> : <AlertTriangle size={16} />}
-                {toast.msg}
+        <>
+          {/* ===== FILTRO BAR ===== */}
+          <div className="mb-4 card p-4">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-[1fr_1fr_1fr_auto]">
+              <div>
+                <label className="label">Turma</label>
+                <select className="input" value={classId} onChange={(e) => setClassId(e.target.value)}>
+                  {classes.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+                </select>
               </div>
-            )}
-
-            {locked && (
-              <div className={`mb-4 flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-medium ${
-                isAdmin ? 'bg-warning-soft text-warning' : 'bg-primary-soft text-primary'
-              }`}>
-                <Lock size={16} />
-                {isAdmin
-                  ? 'Chamada encerrada pelo professor. Como gestor, você pode substituí-la.'
-                  : 'Chamada encerrada. Somente a gestão pode fazer alterações.'}
+              <div>
+                <label className="label">Data</label>
+                <input type="date" className="input" value={date} onChange={(e) => setDate(e.target.value)} />
               </div>
-            )}
-
-            <div className="card mb-6 p-4">
-              <div className="grid grid-cols-1 gap-4 sm:grid-cols-4">
-                <div>
-                  <label className="label">Turma</label>
-                  <select className="input" value={classId} onChange={(e) => setClassId(e.target.value)}>
-                    {classes.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-                  </select>
-                </div>
-                <div>
-                  <label className="label">Matéria (opcional)</label>
-                  <select className="input" value={subjectId} onChange={(e) => setSubjectId(e.target.value)}>
-                    <option value="">Chamada por dia</option>
-                    {subjects.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
-                  </select>
-                </div>
-                <div>
-                  <label className="label">Data</label>
-                  <input type="date" className="input" value={date} onChange={(e) => setDate(e.target.value)} />
-                </div>
-                <div className="flex items-end gap-3">
-                  <div className="flex flex-wrap items-center gap-2 text-sm">
-                    <span className="inline-flex items-center gap-1 rounded-lg bg-success-soft px-2 py-1 font-semibold text-success">{present} P</span>
-                    <span className="inline-flex items-center gap-1 rounded-lg bg-danger-soft px-2 py-1 font-semibold text-danger">{absent} F</span>
-                    <span className="inline-flex items-center gap-1 rounded-lg bg-warning-soft px-2 py-1 font-semibold text-warning">{justified} J</span>
-                    <span className="inline-flex items-center gap-1 rounded-lg bg-primary-soft px-2 py-1 font-semibold text-primary">{attested} A</span>
-                  </div>
-                </div>
+              <div>
+                <label className="label">Disciplina / Professor</label>
+                <select className="input" value={subjectId} onChange={(e) => setSubjectId(e.target.value)}>
+                  <option value="">Chamada geral</option>
+                  {subjects.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+                </select>
               </div>
-              {studentList.length > 0 && !readOnly && (
-                <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-border pt-3">
-                  <span className="text-xs text-ink-muted self-center mr-1">Marcar todos:</span>
-                  <button className="rounded-lg bg-success-soft px-3 py-1 text-xs font-semibold text-success hover:bg-success/20" onClick={() => markAll('present')}>Presentes</button>
-                  <button className="rounded-lg bg-danger-soft px-3 py-1 text-xs font-semibold text-danger hover:bg-danger/20" onClick={() => markAll('absent')}>Falta</button>
-                  {!allConfirmed && (
-                    <button className="ml-auto rounded-lg bg-primary-soft px-3 py-1 text-xs font-semibold text-primary hover:bg-primary/20" onClick={confirmAll}>
-                      Confirmar todos
-                    </button>
-                  )}
-                </div>
-              )}
-            </div>
-
-            <div className="card overflow-hidden">
-              {studentList.length === 0 ? (
-                <EmptyState icon={ClipboardCheck} title="Nenhum aluno nesta turma" description="Vincule alunos a esta turma para fazer a chamada." />
-              ) : (
-                <div className="divide-y divide-border">
-                  {studentList.map((entry) => (
-                    <div key={entry.student_id} className={`flex flex-wrap items-start gap-3 px-4 py-3 sm:flex-nowrap ${entry.confirmed ? 'bg-success-soft/20' : 'hover:bg-canvas'}`}>
-                      {/* Avatar + nome + matrícula */}
-                      <div className="flex min-w-0 flex-1 items-center gap-3 pt-1">
-                        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary-soft text-xs font-bold text-primary">
-                          {entry.student_name.split(' ').slice(0, 2).map((n) => n[0]).join('')}
-                        </div>
-                        <div className="min-w-0">
-                          <p className="truncate font-medium text-ink">{entry.student_name}</p>
-                          {entry.registration_number && (
-                            <p className="truncate text-[11px] text-ink-subtle">Matrícula {entry.registration_number}</p>
-                          )}
-                        </div>
-                      </div>
-
-                      {/* Controles ou badge */}
-                      <div className="flex flex-col gap-2">
-                        {entry.confirmed ? (
-                          entry.status === 'excused' ? (
-                            <span className={`self-start rounded-xl px-4 py-1.5 text-xs ${STATUS_BADGE.excused}`}>
-                              Abono por Atestado
-                            </span>
-                          ) : (
-                            <span className={`self-start rounded-xl px-4 py-1.5 text-xs ${STATUS_BADGE[entry.status]}`}>
-                              {STATUS_OPTIONS.find(s => s.value === entry.status)?.short} — {STATUS_OPTIONS.find(s => s.value === entry.status)?.label}
-                            </span>
-                          )
-                        ) : (
-                          <>
-                            {/* Botões P/F/J/A */}
-                            <div className="inline-flex rounded-xl border border-border p-0.5">
-                              {STATUS_OPTIONS.map((opt) => (
-                                <button
-                                  key={opt.value}
-                                  onClick={() => setStatus(entry.student_id, opt.value)}
-                                  title={opt.label}
-                                  className={`rounded-lg px-3 py-1.5 text-xs font-bold transition-colors ${
-                                    entry.status === opt.value ? opt.on : opt.off
-                                  }`}
-                                >
-                                  {opt.short}
-                                </button>
-                              ))}
-                            </div>
-
-                            {/* Descrição da F. Justificada (ex.: mãe avisou antes) */}
-                            {entry.status === 'justified' && (
-                              <div>
-                                <input
-                                  className="input w-full text-xs"
-                                  placeholder="Ex.: mãe avisou que o filho vai faltar (até 100 caracteres)"
-                                  maxLength={100}
-                                  value={entry.justification ?? ''}
-                                  onChange={(e) => setJustification(entry.student_id, e.target.value)}
-                                />
-                                <p className="mt-0.5 text-right text-[10px] text-ink-subtle">{(entry.justification ?? '').length}/100</p>
-                              </div>
-                            )}
-
-                            {/* Upload de atestado (A) — obrigatório para confirmar */}
-                            {entry.status === 'attested' && (
-                              <div className="flex items-center gap-2">
-                                <input
-                                  ref={(el) => { fileInputRefs.current[entry.student_id] = el; }}
-                                  type="file"
-                                  accept="application/pdf"
-                                  className="hidden"
-                                  onChange={(e) => {
-                                    const f = e.target.files?.[0];
-                                    if (!f) return;
-                                    if (f.size > 5 * 1024 * 1024) {
-                                      setToast({ type: 'error', msg: 'O PDF deve ter no máximo 5 MB.' });
-                                      e.target.value = '';
-                                      return;
-                                    }
-                                    setAttestationFile(entry.student_id, f);
-                                  }}
-                                />
-                                <button
-                                  type="button"
-                                  onClick={() => fileInputRefs.current[entry.student_id]?.click()}
-                                  className="flex items-center gap-1.5 rounded-lg border border-dashed border-primary px-3 py-1.5 text-xs font-medium text-primary hover:bg-primary-soft transition-colors"
-                                >
-                                  <Paperclip size={13} />
-                                  {entry.attestationFile ? entry.attestationFile.name : 'Selecionar PDF (obrigatório)'}
-                                </button>
-                                {entry.attestationFile && (
-                                  <span className="text-xs text-ink-muted flex items-center gap-1">
-                                    <FileText size={12} />
-                                    {(entry.attestationFile.size / 1024).toFixed(0)} KB
-                                  </span>
-                                )}
-                              </div>
-                            )}
-                          </>
-                        )}
-
-                        {/* Atestado já enviado — baixar PDF */}
-                        {entry.confirmed && (entry.status === 'attested' || entry.status === 'excused') && entry.attestationUploaded && (
-                          <button
-                            type="button"
-                            onClick={() => downloadAttestation(entry.student_id)}
-                            disabled={downloadingId === entry.student_id}
-                            className="flex items-center gap-1 text-xs font-medium text-primary hover:underline disabled:opacity-50"
-                          >
-                            {downloadingId === entry.student_id
-                              ? <Loader2 size={12} className="animate-spin" />
-                              : <FileText size={12} />}
-                            Baixar atestado
-                          </button>
-                        )}
-                        {/* Justificativa (modo read) */}
-                        {entry.confirmed && entry.justification && entry.status === 'justified' && (
-                          <span className="text-xs text-ink-muted italic">{entry.justification}</span>
-                        )}
-                      </div>
-
-                      {/* Botão confirmar ou ícone confirmado */}
-                      {!readOnly && (
-                        <div className="flex items-center pt-1">
-                          {entry.confirmed ? (
-                            <CheckCircle2 size={18} className="shrink-0 text-success" />
-                          ) : (
-                            <button
-                              onClick={() => confirm(entry.student_id)}
-                              disabled={entry.status === 'attested' && !entry.attestationFile && !entry.attestationUploaded}
-                              className="shrink-0 rounded-lg border border-primary px-3 py-1.5 text-xs font-semibold text-primary hover:bg-primary hover:text-white transition-colors disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-primary"
-                            >
-                              Confirmar
-                            </button>
-                          )}
-                        </div>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-
-            {/* Rodapé */}
-            {!readOnly && studentList.length > 0 && (
-              <div className="mt-4 flex items-center justify-between rounded-xl border border-border bg-canvas px-4 py-3">
-                <span className="text-sm text-ink-muted">
-                  {allConfirmed
-                    ? 'Todos os alunos confirmados. Clique em Salvar para encerrar a chamada.'
-                    : `${unconfirmedCount} aluno(s) aguardando confirmação.`}
-                </span>
+              <div className="flex items-end">
                 <button
-                  className="btn-primary flex items-center gap-2"
+                  className="inline-flex items-center gap-2 rounded-xl bg-primary px-5 py-2.5 text-sm font-semibold text-white shadow-card hover:bg-primary/90 disabled:opacity-50"
                   onClick={save}
                   disabled={!canSave || saving}
                 >
@@ -784,15 +590,251 @@ function TeacherAttendanceView({ isAdmin, isTeacher }: { isAdmin: boolean; isTea
                   {saving ? 'Salvando…' : 'Salvar chamada'}
                 </button>
               </div>
-            )}
+            </div>
           </div>
 
-          {/* ===================== COLUNA DIREITA (30%) — RESUMO E ALERTAS ===================== */}
-          <div className="space-y-6">
-            <AttendanceSummaryChart summary={dailySummary} date={date} />
-            <AttendanceAlertsCard classId={classId} />
+          {toast && (
+            <div className={`mb-4 flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-medium ${
+              toast.type === 'success' ? 'bg-success-soft text-success' : 'bg-danger-soft text-danger'
+            }`}>
+              {toast.type === 'success' ? <Check size={16} /> : <AlertTriangle size={16} />}
+              {toast.msg}
+            </div>
+          )}
+
+          {locked && (
+            <div className={`mb-4 flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-medium ${
+              isAdmin ? 'bg-warning-soft text-warning' : 'bg-primary-soft text-primary'
+            }`}>
+              <Lock size={16} />
+              {isAdmin
+                ? 'Chamada encerrada pelo professor. Como gestor, você pode substituí-la.'
+                : 'Chamada encerrada. Somente a gestão pode fazer alterações.'}
+            </div>
+          )}
+
+          {/* ===== KPI CARDS ===== */}
+          <div className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+            {(() => {
+              const total = studentList.length || 1;
+              const freq = studentList.length > 0 ? Math.round((present / total) * 100) : 0;
+              const kpis: { label: string; value: string; hint: string; icon: typeof Users; tone: 'success' | 'danger' | 'warning' | 'primary' }[] = [
+                { label: 'Presentes', value: String(present), hint: `${Math.round((present / total) * 100)}% do total`, icon: Users, tone: 'success' },
+                { label: 'Faltas', value: String(absent), hint: `${Math.round((absent / total) * 100)}% do total`, icon: UserMinus, tone: 'danger' },
+                { label: 'Justificadas', value: String(justified + attested + excused), hint: `${Math.round(((justified + attested + excused) / total) * 100)}% do total`, icon: FileCheck2, tone: 'warning' },
+                { label: 'Frequência da turma', value: `${freq}%`, hint: studentList.length > 0 ? `${total} aluno(s) na turma` : 'Sem dados', icon: BarChart3, tone: 'primary' },
+              ];
+              return kpis.map((k) => {
+                const bg: Record<string, string> = { success: 'border-success/20 bg-success-soft/30', danger: 'border-danger/20 bg-danger-soft/30', warning: 'border-warning/20 bg-warning-soft/30', primary: 'border-primary/20 bg-primary-soft/30' };
+                const ico: Record<string, string> = { success: 'bg-success-soft text-success', danger: 'bg-danger-soft text-danger', warning: 'bg-warning-soft text-warning', primary: 'bg-primary-soft text-primary' };
+                const txt: Record<string, string> = { success: 'text-success', danger: 'text-danger', warning: 'text-warning', primary: 'text-primary' };
+                return (
+                  <div key={k.label} className={`flex items-start gap-4 rounded-xl border p-5 ${bg[k.tone]}`}>
+                    <div className={`grid h-10 w-10 shrink-0 place-items-center rounded-xl ${ico[k.tone]}`}>
+                      <k.icon size={20} />
+                    </div>
+                    <div>
+                      <p className="text-xs font-medium text-ink-muted">{k.label}</p>
+                      <p className={`text-2xl font-extrabold ${txt[k.tone]}`}>{k.value}</p>
+                      <p className="text-[11px] text-ink-subtle">{k.hint}</p>
+                    </div>
+                  </div>
+                );
+              });
+            })()}
           </div>
-        </div>
+
+          <div className="grid grid-cols-1 gap-6 lg:grid-cols-[7fr_3fr]">
+            {/* ===================== COLUNA ESQUERDA (70%) — CHAMADA ===================== */}
+            <div className="min-w-0 space-y-4">
+              {/* Tabela de alunos */}
+              <div className="card overflow-hidden">
+                {studentList.length === 0 ? (
+                  <EmptyState icon={ClipboardCheck} title="Nenhum aluno nesta turma" description="Vincule alunos a esta turma para fazer a chamada." />
+                ) : (
+                  <>
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-sm">
+                        <thead>
+                          <tr className="border-b border-border text-left text-[11px] font-semibold uppercase text-ink-subtle">
+                            <th className="px-4 py-3">Aluno</th>
+                            <th className="px-4 py-3">Turma / Série</th>
+                            <th className="px-4 py-3 text-center">Status</th>
+                            {!readOnly && <th className="px-4 py-3 w-24" />}
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {studentList.map((entry) => {
+                            const cls = classes.find((c) => c.id === classId);
+                            return (
+                              <tr key={entry.student_id} className={`border-b border-border last:border-0 ${entry.confirmed ? 'bg-success-soft/20' : 'hover:bg-canvas'}`}>
+                                <td className="px-4 py-3">
+                                  <div className="flex items-center gap-3">
+                                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary-soft text-xs font-bold text-primary">
+                                      {entry.student_name.split(' ').slice(0, 2).map((n) => n[0]).join('')}
+                                    </div>
+                                    <div className="min-w-0">
+                                      <p className="truncate font-medium text-ink">{entry.student_name}</p>
+                                      {entry.registration_number && (
+                                        <p className="truncate text-[11px] text-ink-subtle">Mat. {entry.registration_number}</p>
+                                      )}
+                                    </div>
+                                  </div>
+                                </td>
+                                <td className="px-4 py-3 text-ink-muted">{cls?.name ?? '—'}</td>
+                                <td className="px-4 py-3">
+                                  <div className="flex flex-col items-center gap-2">
+                                    {entry.confirmed ? (
+                                      entry.status === 'excused' ? (
+                                        <span className={`rounded-xl px-4 py-1.5 text-xs ${STATUS_BADGE.excused}`}>Abono</span>
+                                      ) : (
+                                        <span className={`rounded-xl px-4 py-1.5 text-xs ${STATUS_BADGE[entry.status]}`}>
+                                          {STATUS_OPTIONS.find(s => s.value === entry.status)?.short}
+                                        </span>
+                                      )
+                                    ) : (
+                                      <div className="inline-flex rounded-xl border border-border p-0.5">
+                                        {STATUS_OPTIONS.map((opt) => (
+                                          <button
+                                            key={opt.value}
+                                            onClick={() => setStatus(entry.student_id, opt.value)}
+                                            title={opt.label}
+                                            className={`rounded-lg px-3 py-1.5 text-xs font-bold transition-colors ${
+                                              entry.status === opt.value ? opt.on : opt.off
+                                            }`}
+                                          >
+                                            {opt.short}
+                                          </button>
+                                        ))}
+                                      </div>
+                                    )}
+                                    {/* Justificativa input */}
+                                    {!entry.confirmed && entry.status === 'justified' && (
+                                      <input
+                                        className="input w-full max-w-[220px] text-xs"
+                                        placeholder="Motivo (até 100 caracteres)"
+                                        maxLength={100}
+                                        value={entry.justification ?? ''}
+                                        onChange={(e) => setJustification(entry.student_id, e.target.value)}
+                                      />
+                                    )}
+                                    {entry.confirmed && entry.justification && entry.status === 'justified' && (
+                                      <span className="text-xs text-ink-muted italic">{entry.justification}</span>
+                                    )}
+                                    {/* Atestado upload */}
+                                    {!entry.confirmed && entry.status === 'attested' && (
+                                      <div className="flex items-center gap-2">
+                                        <input
+                                          ref={(el) => { fileInputRefs.current[entry.student_id] = el; }}
+                                          type="file"
+                                          accept="application/pdf"
+                                          className="hidden"
+                                          onChange={(e) => {
+                                            const f = e.target.files?.[0];
+                                            if (!f) return;
+                                            if (f.size > 5 * 1024 * 1024) {
+                                              setToast({ type: 'error', msg: 'O PDF deve ter no máximo 5 MB.' });
+                                              e.target.value = '';
+                                              return;
+                                            }
+                                            setAttestationFile(entry.student_id, f);
+                                          }}
+                                        />
+                                        <button
+                                          type="button"
+                                          onClick={() => fileInputRefs.current[entry.student_id]?.click()}
+                                          className="flex items-center gap-1.5 rounded-lg border border-dashed border-primary px-3 py-1.5 text-xs font-medium text-primary hover:bg-primary-soft transition-colors"
+                                        >
+                                          <Paperclip size={13} />
+                                          {entry.attestationFile ? entry.attestationFile.name : 'PDF'}
+                                        </button>
+                                      </div>
+                                    )}
+                                    {entry.confirmed && (entry.status === 'attested' || entry.status === 'excused') && entry.attestationUploaded && (
+                                      <button
+                                        type="button"
+                                        onClick={() => downloadAttestation(entry.student_id)}
+                                        disabled={downloadingId === entry.student_id}
+                                        className="flex items-center gap-1 text-xs font-medium text-primary hover:underline disabled:opacity-50"
+                                      >
+                                        {downloadingId === entry.student_id ? <Loader2 size={12} className="animate-spin" /> : <FileText size={12} />}
+                                        Baixar atestado
+                                      </button>
+                                    )}
+                                  </div>
+                                </td>
+                                {!readOnly && (
+                                  <td className="px-4 py-3 text-center">
+                                    {entry.confirmed ? (
+                                      <CheckCircle2 size={18} className="mx-auto text-success" />
+                                    ) : (
+                                      <button
+                                        onClick={() => confirm(entry.student_id)}
+                                        disabled={entry.status === 'attested' && !entry.attestationFile && !entry.attestationUploaded}
+                                        className="rounded-lg border border-primary px-3 py-1.5 text-xs font-semibold text-primary hover:bg-primary hover:text-white transition-colors disabled:cursor-not-allowed disabled:opacity-40"
+                                      >
+                                        Confirmar
+                                      </button>
+                                    )}
+                                  </td>
+                                )}
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                    {/* Footer */}
+                    <div className="border-t border-border px-4 py-3 text-xs text-ink-muted">
+                      {allConfirmed
+                        ? 'Todos os alunos confirmados.'
+                        : `${unconfirmedCount} aluno(s) aguardando confirmação.`}
+                    </div>
+                  </>
+                )}
+              </div>
+            </div>
+
+            {/* ===================== COLUNA DIREITA (30%) — RESUMO E AÇÕES ===================== */}
+            <div className="space-y-4">
+              <AttendanceSummaryChart summary={dailySummary} date={date} />
+
+              {/* Ações rápidas */}
+              {!readOnly && studentList.length > 0 && (
+                <div className="card p-5">
+                  <p className="mb-3 text-sm font-bold text-ink">Ações rápidas</p>
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      className="flex flex-col items-center gap-1.5 rounded-xl border border-border p-3 text-center text-xs font-semibold text-success hover:bg-success-soft/40 transition-colors"
+                      onClick={() => markAll('present')}
+                    >
+                      <Users size={20} />
+                      Marcar todos presentes
+                    </button>
+                    <button
+                      className="flex flex-col items-center gap-1.5 rounded-xl border border-border p-3 text-center text-xs font-semibold text-danger hover:bg-danger-soft/40 transition-colors"
+                      onClick={() => markAll('absent')}
+                    >
+                      <UserMinus size={20} />
+                      Marcar todos faltas
+                    </button>
+                    {!allConfirmed && (
+                      <button
+                        className="flex flex-col items-center gap-1.5 rounded-xl border border-border p-3 text-center text-xs font-semibold text-primary hover:bg-primary-soft/40 transition-colors col-span-2"
+                        onClick={confirmAll}
+                      >
+                        <CheckCircle2 size={20} />
+                        Confirmar todos
+                      </button>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              <AttendanceAlertsCard classId={classId} />
+            </div>
+          </div>
+        </>
       )}
 
       {/* Painel do dia — lista completa de alunos + status + atestados */}

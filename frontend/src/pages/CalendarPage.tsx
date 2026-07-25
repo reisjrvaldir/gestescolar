@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
-import { CalendarDays, Plus, Trash2, Loader2, Check, AlertTriangle } from 'lucide-react';
+import { CalendarDays, Plus, Trash2, Loader2, Check, AlertTriangle, Calendar, School2, Clock } from 'lucide-react';
 import { StatusBadge } from '@/components/ui/StatusBadge';
 import { Modal } from '@/components/ui/Modal';
 import { EmptyState } from '@/components/ui/EmptyState';
@@ -168,75 +168,179 @@ export function CalendarPage() {
         </div>
       )}
 
-      <div className="mb-4 flex flex-wrap gap-1.5">
-        <button
-          className={`rounded-lg px-3 py-1.5 text-xs font-semibold ${month == null ? 'bg-primary text-white' : 'bg-surface text-ink-muted hover:bg-canvas'}`}
-          onClick={() => setMonth(null)}
-        >Todos</button>
-        {MONTHS.map((label, i) => (
-          <button
-            key={i}
-            className={`rounded-lg px-3 py-1.5 text-xs font-semibold ${month === i ? 'bg-primary text-white' : 'bg-surface text-ink-muted hover:bg-canvas'}`}
-            onClick={() => setMonth(i)}
-          >{label.slice(0, 3)}</button>
-        ))}
-      </div>
-
-      <div className="mb-4 flex flex-wrap gap-3 text-xs text-ink-muted">
-        <span className="inline-flex items-center gap-1"><span className="h-2.5 w-2.5 rounded-full bg-danger" /> Feriado</span>
-        <span className="inline-flex items-center gap-1"><span className="h-2.5 w-2.5 rounded-full bg-warning" /> Prova</span>
-        <span className="inline-flex items-center gap-1"><span className="h-2.5 w-2.5 rounded-full bg-primary" /> Reunião/Recesso</span>
-        <span className="inline-flex items-center gap-1"><span className="h-2.5 w-2.5 rounded-full bg-success" /> Evento</span>
-      </div>
-
-      {Object.keys(byMonth).length === 0 ? (
-        <div className="card">
-          <EmptyState
-            icon={CalendarDays}
-            title="Nenhum evento neste período"
-            description={isAdmin ? 'Adicione feriados, provas e reuniões ao calendário.' : 'Nenhum evento cadastrado pela escola para este período.'}
-            action={isAdmin ? <button className="btn-primary" onClick={() => setOpen(true)}><Plus size={16} /> Novo evento</button> : undefined}
-          />
-        </div>
-      ) : (
-        <div className="space-y-4">
-          {Object.entries(byMonth).sort(([a], [b]) => Number(a) - Number(b)).map(([m, items]) => (
-            <div key={m} className="card overflow-hidden">
-              <div className="border-b border-border bg-canvas px-4 py-2.5">
-                <h3 className="text-sm font-bold text-ink">{MONTHS[Number(m)]} {year}</h3>
+      {/* ===== KPI CARDS ===== */}
+      {(() => {
+        const currentMonth = new Date().getMonth();
+        const eventsThisMonth = allEvents.filter((e) => new Date(e.date_start + 'T12:00:00').getMonth() === currentMonth).length;
+        const holidays = allEvents.filter((e) => e.event_type === 'holiday').length;
+        const exams = allEvents.filter((e) => e.event_type === 'exam').length;
+        const kpis: { label: string; value: string; hint: string; icon: typeof CalendarDays; tone: 'primary' | 'success' | 'warning' | 'danger' }[] = [
+          { label: 'Ano letivo ativo', value: String(year), hint: `Calendário de ${year}`, icon: Calendar, tone: 'primary' },
+          { label: 'Total de eventos', value: String(events.length), hint: `${events.length} evento(s) cadastrado(s)`, icon: School2, tone: 'success' },
+          { label: 'Eventos do mês', value: String(eventsThisMonth), hint: MONTHS[currentMonth], icon: Clock, tone: 'warning' },
+          { label: 'Feriados', value: String(holidays), hint: `${exams} prova(s) programada(s)`, icon: CalendarDays, tone: 'danger' },
+        ];
+        const bg: Record<string, string> = { primary: 'border-primary/20 bg-primary-soft/30', success: 'border-success/20 bg-success-soft/30', warning: 'border-warning/20 bg-warning-soft/30', danger: 'border-danger/20 bg-danger-soft/30' };
+        const ico: Record<string, string> = { primary: 'bg-primary-soft text-primary', success: 'bg-success-soft text-success', warning: 'bg-warning-soft text-warning', danger: 'bg-danger-soft text-danger' };
+        const txt: Record<string, string> = { primary: 'text-primary', success: 'text-success', warning: 'text-warning', danger: 'text-danger' };
+        return (
+          <div className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+            {kpis.map((k) => (
+              <div key={k.label} className={`flex items-start gap-4 rounded-xl border p-5 ${bg[k.tone]}`}>
+                <div className={`grid h-10 w-10 shrink-0 place-items-center rounded-xl ${ico[k.tone]}`}>
+                  <k.icon size={20} />
+                </div>
+                <div>
+                  <p className="text-xs font-medium text-ink-muted">{k.label}</p>
+                  <p className={`text-2xl font-extrabold ${txt[k.tone]}`}>{k.value}</p>
+                  <p className="text-[11px] text-ink-subtle">{k.hint}</p>
+                </div>
               </div>
-              <div className="divide-y divide-border">
-                {items.map((ev) => {
-                  const isNat = 'isNational' in ev;
-                  const dateStr = new Date(ev.date_start + 'T12:00:00').toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', weekday: 'short' });
-                  return (
-                    <div key={ev.id} className={`flex items-center gap-3 px-4 py-2.5 ${isNat ? 'bg-danger-soft/30' : 'hover:bg-canvas'}`}>
-                      <span className="w-24 shrink-0 text-xs font-mono text-ink-muted">{dateStr}</span>
-                      <StatusBadge tone={TYPE_TONE[ev.event_type]}>{EVENT_TYPE_LABELS[ev.event_type]}</StatusBadge>
-                      <span className="min-w-0 flex-1 truncate font-medium text-ink">{ev.title}</span>
-                      {ev.start_time && (
-                        <span className="shrink-0 text-xs font-semibold text-ink-muted">
-                          {ev.start_time}{ev.end_time ? `–${ev.end_time}` : ''}
-                        </span>
-                      )}
-                      {ev.date_end && ev.date_end !== ev.date_start && (
-                        <span className="text-xs text-ink-muted">até {new Date(ev.date_end + 'T12:00:00').toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })}</span>
-                      )}
-                      {ev.description && !isNat && <span className="hidden text-xs text-ink-muted sm:block">{ev.description}</span>}
-                      {isNat && <span className="text-xs text-ink-subtle italic">Nacional</span>}
-                      {isAdmin && !isNat && (
-                        <button className="rounded-lg p-1.5 text-ink-muted hover:bg-danger-soft hover:text-danger" onClick={() => onRemove(ev.id, ev.title)} title="Excluir">
-                          <Trash2 size={14} />
-                        </button>
-                      )}
-                    </div>
-                  );
-                })}
+            ))}
+          </div>
+        );
+      })()}
+
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-[7fr_3fr]">
+        {/* ===== Coluna principal ===== */}
+        <div className="min-w-0 space-y-4">
+          {/* Filtro de meses */}
+          <div className="card p-4">
+            <div className="flex flex-wrap gap-1.5">
+              <button
+                className={`rounded-lg px-3 py-1.5 text-xs font-semibold ${month == null ? 'bg-primary text-white' : 'bg-surface text-ink-muted hover:bg-canvas'}`}
+                onClick={() => setMonth(null)}
+              >Todos</button>
+              {MONTHS.map((label, i) => (
+                <button
+                  key={i}
+                  className={`rounded-lg px-3 py-1.5 text-xs font-semibold ${month === i ? 'bg-primary text-white' : 'bg-surface text-ink-muted hover:bg-canvas'}`}
+                  onClick={() => setMonth(i)}
+                >{label.slice(0, 3)}</button>
+              ))}
+            </div>
+            <div className="mt-3 flex flex-wrap gap-3 border-t border-border pt-3 text-xs text-ink-muted">
+              <span className="inline-flex items-center gap-1"><span className="h-2.5 w-2.5 rounded-full bg-danger" /> Feriado</span>
+              <span className="inline-flex items-center gap-1"><span className="h-2.5 w-2.5 rounded-full bg-warning" /> Prova</span>
+              <span className="inline-flex items-center gap-1"><span className="h-2.5 w-2.5 rounded-full bg-primary" /> Reunião/Recesso</span>
+              <span className="inline-flex items-center gap-1"><span className="h-2.5 w-2.5 rounded-full bg-success" /> Evento</span>
+            </div>
+          </div>
+
+          {/* Eventos */}
+          {Object.keys(byMonth).length === 0 ? (
+            <div className="card">
+              <EmptyState
+                icon={CalendarDays}
+                title="Nenhum evento neste período"
+                description={isAdmin ? 'Adicione feriados, provas e reuniões ao calendário.' : 'Nenhum evento cadastrado pela escola para este período.'}
+                action={isAdmin ? <button className="btn-primary" onClick={() => setOpen(true)}><Plus size={16} /> Novo evento</button> : undefined}
+              />
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {Object.entries(byMonth).sort(([a], [b]) => Number(a) - Number(b)).map(([m, items]) => (
+                <div key={m} className="card overflow-hidden">
+                  <div className="border-b border-border bg-canvas px-4 py-2.5">
+                    <h3 className="text-sm font-bold text-ink">{MONTHS[Number(m)]} {year}</h3>
+                  </div>
+                  <div className="divide-y divide-border">
+                    {items.map((ev) => {
+                      const isNat = 'isNational' in ev;
+                      const dateStr = new Date(ev.date_start + 'T12:00:00').toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', weekday: 'short' });
+                      return (
+                        <div key={ev.id} className={`flex items-center gap-3 px-4 py-2.5 ${isNat ? 'bg-danger-soft/30' : 'hover:bg-canvas'}`}>
+                          <span className="w-24 shrink-0 text-xs font-mono text-ink-muted">{dateStr}</span>
+                          <StatusBadge tone={TYPE_TONE[ev.event_type]}>{EVENT_TYPE_LABELS[ev.event_type]}</StatusBadge>
+                          <span className="min-w-0 flex-1 truncate font-medium text-ink">{ev.title}</span>
+                          {ev.start_time && (
+                            <span className="shrink-0 text-xs font-semibold text-ink-muted">
+                              {ev.start_time}{ev.end_time ? `–${ev.end_time}` : ''}
+                            </span>
+                          )}
+                          {ev.date_end && ev.date_end !== ev.date_start && (
+                            <span className="text-xs text-ink-muted">até {new Date(ev.date_end + 'T12:00:00').toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })}</span>
+                          )}
+                          {ev.description && !isNat && <span className="hidden text-xs text-ink-muted sm:block">{ev.description}</span>}
+                          {isNat && <span className="text-xs text-ink-subtle italic">Nacional</span>}
+                          {isAdmin && !isNat && (
+                            <button className="rounded-lg p-1.5 text-ink-muted hover:bg-danger-soft hover:text-danger" onClick={() => onRemove(ev.id, ev.title)} title="Excluir">
+                              <Trash2 size={14} />
+                            </button>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* ===== Sidebar ===== */}
+        <div className="space-y-4">
+          {/* Resumo do calendário */}
+          <div className="card p-5">
+            <p className="mb-3 text-sm font-bold text-ink">Resumo do calendário</p>
+            <div className="space-y-2 text-sm">
+              <div className="flex justify-between"><span className="text-ink-muted">Feriados</span><span className="font-semibold text-danger">{allEvents.filter(e => e.event_type === 'holiday').length} dias</span></div>
+              <div className="flex justify-between"><span className="text-ink-muted">Provas</span><span className="font-semibold text-warning">{allEvents.filter(e => e.event_type === 'exam').length} eventos</span></div>
+              <div className="flex justify-between"><span className="text-ink-muted">Reuniões</span><span className="font-semibold text-primary">{allEvents.filter(e => e.event_type === 'meeting').length} eventos</span></div>
+              <div className="flex justify-between"><span className="text-ink-muted">Recessos</span><span className="font-semibold text-primary">{allEvents.filter(e => e.event_type === 'recess').length} períodos</span></div>
+            </div>
+          </div>
+
+          {/* Ações rápidas */}
+          {isAdmin && (
+            <div className="card p-5">
+              <p className="mb-3 text-sm font-bold text-ink">Ações rápidas</p>
+              <div className="space-y-2">
+                <button className="flex w-full items-center justify-between rounded-lg px-3 py-2 text-sm font-medium text-primary hover:bg-primary-soft/40" onClick={() => setOpen(true)}>
+                  <span className="flex items-center gap-2"><Plus size={16} /> Novo evento</span>
+                  <span className="text-ink-subtle">→</span>
+                </button>
               </div>
             </div>
-          ))}
+          )}
+
+          {/* Próximos eventos */}
+          {(() => {
+            const todayStr = new Date().toISOString().slice(0, 10);
+            const upcoming = allEvents.filter(e => e.date_start >= todayStr).slice(0, 5);
+            if (upcoming.length === 0) return null;
+            return (
+              <div className="card p-5">
+                <p className="mb-3 text-sm font-bold text-ink">Próximos eventos</p>
+                <div className="space-y-3">
+                  {upcoming.map((ev) => {
+                    const d = new Date(ev.date_start + 'T12:00:00');
+                    const day = String(d.getDate()).padStart(2, '0');
+                    const mon = MONTHS[d.getMonth()].slice(0, 3).toUpperCase();
+                    const toneCls = TYPE_TONE[ev.event_type];
+                    const dotColor: Record<string, string> = { primary: 'bg-primary', success: 'bg-success', warning: 'bg-warning', danger: 'bg-danger' };
+                    return (
+                      <div key={ev.id} className="flex items-start gap-3">
+                        <div className="text-center">
+                          <span className={`block text-lg font-extrabold ${toneCls === 'danger' ? 'text-danger' : toneCls === 'warning' ? 'text-warning' : toneCls === 'success' ? 'text-success' : 'text-primary'}`}>{day}</span>
+                          <span className={`text-[10px] font-bold uppercase ${toneCls === 'danger' ? 'text-danger' : toneCls === 'warning' ? 'text-warning' : toneCls === 'success' ? 'text-success' : 'text-primary'}`}>{mon}</span>
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <p className="flex items-center gap-1.5 text-sm font-semibold text-ink">
+                            <span className={`h-2 w-2 shrink-0 rounded-full ${dotColor[toneCls]}`} />
+                            {ev.title}
+                          </p>
+                          <p className="text-xs text-ink-muted">{EVENT_TYPE_LABELS[ev.event_type]}{ev.start_time ? ` · ${ev.start_time}` : ''}</p>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            );
+          })()}
         </div>
-      )}
+      </div>
 
       <Modal
         open={open}

@@ -348,7 +348,37 @@ function GradesView({ isAdmin, isTeacher }: { isAdmin: boolean; isTeacher: boole
 
       {/* =================== LANÇAR NOTAS =================== */}
       {!isBoletimRoute && (
-        <div className="grid grid-cols-1 gap-6 lg:grid-cols-[7fr_3fr]">
+        <>
+          {/* ===== KPI CARDS ===== */}
+          {(() => {
+            const total = studentList.length;
+            const withGrades = studentList.filter(e => e.av1 !== null || e.av2 !== null).length;
+            const pct = total > 0 ? Math.round((withGrades / total) * 100) : 0;
+            const avgs = studentList.filter(e => avg(e.av1, e.av2) !== null).map(e => avg(e.av1, e.av2)!);
+            const classAvg = avgs.length > 0 ? (avgs.reduce((s, v) => s + v, 0) / avgs.length) : 0;
+            const belowAvg = avgs.filter(v => v < pg).length;
+            const kpis: { label: string; value: string; hint: string; tone: 'primary' | 'success' | 'warning' | 'danger' }[] = [
+              { label: 'Alunos na turma', value: String(total), hint: period, tone: 'primary' },
+              { label: 'Notas lançadas', value: `${pct}%`, hint: `${withGrades} de ${total} aluno(s)`, tone: 'success' },
+              { label: 'Média da turma', value: classAvg > 0 ? classAvg.toFixed(1) : '—', hint: classAvg >= pg ? 'Acima da média' : classAvg > 0 ? 'Abaixo da média' : 'Sem dados', tone: classAvg >= pg ? 'success' : classAvg > 0 ? 'warning' : 'primary' },
+              { label: 'Abaixo da média', value: String(belowAvg), hint: total > 0 ? `${Math.round((belowAvg / total) * 100)}% da turma` : '—', tone: belowAvg > 0 ? 'danger' : 'success' },
+            ];
+            const bgMap: Record<string, string> = { primary: 'border-primary/20 bg-primary-soft/30', success: 'border-success/20 bg-success-soft/30', warning: 'border-warning/20 bg-warning-soft/30', danger: 'border-danger/20 bg-danger-soft/30' };
+            const txtMap: Record<string, string> = { primary: 'text-primary', success: 'text-success', warning: 'text-warning', danger: 'text-danger' };
+            return (
+              <div className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+                {kpis.map((k) => (
+                  <div key={k.label} className={`rounded-xl border p-5 ${bgMap[k.tone]}`}>
+                    <p className="text-xs font-medium text-ink-muted">{k.label}</p>
+                    <p className={`mt-1 text-2xl font-extrabold ${txtMap[k.tone]}`}>{k.value}</p>
+                    <p className="text-[11px] text-ink-subtle">{k.hint}</p>
+                  </div>
+                ))}
+              </div>
+            );
+          })()}
+
+          <div className="grid grid-cols-1 gap-6 lg:grid-cols-[7fr_3fr]">
 
           {/* Coluna principal 70% */}
           <div className="min-w-0 space-y-4">
@@ -586,6 +616,7 @@ function GradesView({ isAdmin, isTeacher }: { isAdmin: boolean; isTeacher: boole
             </div>
           </div>
         </div>
+        </>
       )}
 
       {/* =================== BOLETIM =================== */}
