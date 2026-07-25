@@ -1,7 +1,9 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useForm } from 'react-hook-form';
-import { Users, Plus, Trash2, Pencil, Loader2, Copy, Check, Search, Link2 } from 'lucide-react';
-import { PageHeader } from '@/components/ui/PageHeader';
+import {
+  Users, Plus, Trash2, Pencil, Loader2, Copy, Check, Search, Link2,
+  Briefcase, UserPlus, ShieldCheck, Eye, MoreVertical,
+} from 'lucide-react';
 import { StatusBadge } from '@/components/ui/StatusBadge';
 import { Modal } from '@/components/ui/Modal';
 import { EmptyState } from '@/components/ui/EmptyState';
@@ -9,7 +11,6 @@ import { staffService, type NewStaff, type CreatedStaff } from '@/services/staff
 import { createSchedule } from '@/services/schedules';
 import { STAFF_ROLE_LABELS, type Staff, type StaffRole } from '@/types/models';
 
-/** Senha inicial padrão para todos os funcionários novos (espelha o backend). */
 const DEFAULT_STAFF_PASSWORD = 'Escola@2026';
 
 type StatusFilter = 'all' | 'active' | 'inactive';
@@ -25,9 +26,41 @@ const initials = (name: string) => name.split(' ').filter(Boolean).slice(0, 2).m
 
 function Row({ label, value }: { label: string; value?: string | null }) {
   return (
-    <div className="flex items-start justify-between gap-3 border-b border-border pb-2 last:border-0 last:pb-0">
-      <span className="text-xs text-ink-muted">{label}</span>
-      <span className="text-right text-sm font-medium text-ink">{value || '—'}</span>
+    <div className="flex items-center justify-between border-b border-border/50 pb-2 last:border-0">
+      <span className="text-ink-muted">{label}</span>
+      <span className="font-medium text-ink">{value || '—'}</span>
+    </div>
+  );
+}
+
+function KpiCard({
+  icon: Icon, tone, label, value, hint,
+}: {
+  icon: typeof Users;
+  tone: 'primary' | 'success' | 'warning' | 'danger';
+  label: string;
+  value: string;
+  hint?: string;
+}) {
+  const toneCls: Record<typeof tone, { bg: string; text: string }> = {
+    primary: { bg: 'bg-primary-soft', text: 'text-primary' },
+    success: { bg: 'bg-success-soft', text: 'text-success' },
+    warning: { bg: 'bg-warning-soft', text: 'text-warning' },
+    danger:  { bg: 'bg-danger-soft',  text: 'text-danger'  },
+  };
+  const t = toneCls[tone];
+  return (
+    <div className="card p-5">
+      <div className="flex items-start gap-3">
+        <div className={`grid h-11 w-11 shrink-0 place-items-center rounded-xl ${t.bg} ${t.text}`}>
+          <Icon size={20} />
+        </div>
+        <div className="min-w-0 flex-1">
+          <p className="truncate text-xs font-medium text-ink-muted">{label}</p>
+          <p className="mt-1 text-2xl font-extrabold text-ink">{value}</p>
+          {hint && <p className="mt-1 text-[11px] text-ink-subtle">{hint}</p>}
+        </div>
+      </div>
     </div>
   );
 }
@@ -46,7 +79,7 @@ interface SlotState { enabled: boolean; start: string; end: string }
 
 function defaultSlots(): SlotState[] {
   return WEEKDAYS.map(({ wd }) => ({
-    enabled: wd >= 1 && wd <= 5, // Seg–Sex
+    enabled: wd >= 1 && wd <= 5,
     start: '08:00',
     end: '17:00',
   }));
@@ -66,6 +99,7 @@ export function StaffPage() {
   const [slots, setSlots] = useState<SlotState[]>(defaultSlots());
   const [schedError, setSchedError] = useState<string | null>(null);
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
+  const [roleFilter, setRoleFilter] = useState<string>('');
   const [query, setQuery] = useState('');
   const [selected, setSelected] = useState<Staff | null>(null);
   const [copiedLink, setCopiedLink] = useState(false);
@@ -85,14 +119,17 @@ export function StaffPage() {
     all: staff.length,
     active: staff.filter((s) => s.status === 'active').length,
     inactive: staff.filter((s) => s.status === 'inactive').length,
+    teachers: staff.filter((s) => (s.role_type ?? s.role) === 'teacher' && s.status === 'active').length,
+    admin: staff.filter((s) => (s.role_type ?? s.role) !== 'teacher' && s.status === 'active').length,
   }), [staff]);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
     return staff
       .filter((s) => statusFilter === 'all' ? true : s.status === statusFilter)
+      .filter((s) => !roleFilter || (s.role_type ?? s.role) === roleFilter)
       .filter((s) => !q || s.name.toLowerCase().includes(q) || (s.registration_number ?? '').includes(q));
-  }, [staff, query, statusFilter]);
+  }, [staff, query, statusFilter, roleFilter]);
 
   function openNew() {
     setEditing(null);
@@ -129,7 +166,6 @@ export function StaffPage() {
   }
 
   async function onSubmit(data: FormFields) {
-    // Valida jornada somente para novos cadastros
     if (!editing) {
       const activeDays = slots.filter((s) => s.enabled);
       if (activeDays.length === 0) {
@@ -162,7 +198,6 @@ export function StaffPage() {
         await staffService.update(editing.id, payload);
       } else {
         const created = await staffService.create(payload);
-        // Salva a jornada de trabalho logo após criar o colaborador
         const userId = created.user_id;
         if (userId) {
           const activeDays = slots.filter((s) => s.enabled);
@@ -173,7 +208,7 @@ export function StaffPage() {
                 weekday: slots.indexOf(s),
                 start_time: s.start,
                 end_time: s.end,
-              }).catch(() => {}) // falha silenciosa — jornada pode ser ajustada depois
+              }).catch(() => {})
             ),
           );
         }
@@ -212,53 +247,98 @@ export function StaffPage() {
 
   return (
     <>
-      <PageHeader
-        title="Funcionários"
-        subtitle="Cadastre e gerencie a equipe da sua escola."
-        actions={
-          <button className="btn-primary" onClick={openNew}>
-            <Plus size={16} /> Novo funcionário
-          </button>
-        }
-      />
-
       {error && <div className="mb-4 rounded-xl bg-danger-soft px-3 py-2 text-sm text-danger">{error}</div>}
+
+      {/* ===== HERO ===== */}
+      <div className="mb-6 overflow-hidden rounded-2xl bg-gradient-to-r from-primary-soft to-primary-soft/40 p-6 sm:p-8">
+        <div className="flex items-start justify-between gap-6">
+          <div className="max-w-xl">
+            <h1 className="text-3xl font-extrabold text-ink sm:text-4xl">Gestão de funcionários</h1>
+            <p className="mt-2 text-sm text-ink-muted">
+              Cadastre, acompanhe e organize a equipe da sua escola em um só lugar.
+            </p>
+            <button
+              className="mt-5 inline-flex items-center gap-2 rounded-xl bg-primary px-5 py-2.5 text-sm font-semibold text-white shadow-card hover:bg-primary/90"
+              onClick={openNew}
+            >
+              <Plus size={18} /> Novo colaborador
+            </button>
+          </div>
+          <div className="hidden shrink-0 items-center justify-center sm:flex">
+            <div className="grid h-32 w-32 place-items-center rounded-full bg-white/40 text-primary shadow-inner">
+              <Briefcase size={64} />
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* ===== KPI CARDS ===== */}
+      <div className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <KpiCard
+          icon={Users}
+          tone="primary"
+          label="Total de funcionários"
+          value={counts.all.toString()}
+          hint={counts.active + ' ativos · ' + counts.inactive + ' inativos'}
+        />
+        <KpiCard
+          icon={UserPlus}
+          tone="success"
+          label="Professores"
+          value={counts.teachers.toString()}
+          hint="professores ativos"
+        />
+        <KpiCard
+          icon={ShieldCheck}
+          tone="warning"
+          label="Equipe administrativa"
+          value={counts.admin.toString()}
+          hint="gestão, financeiro e coordenação"
+        />
+        <KpiCard
+          icon={Briefcase}
+          tone="danger"
+          label="Inativos"
+          value={counts.inactive.toString()}
+          hint="funcionários inativos"
+        />
+      </div>
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-[7fr_3fr]">
         {/* ===== Coluna 70% — Lista ===== */}
         <div className="min-w-0 space-y-4">
-          {/* Abas Todos / Ativos / Inativos */}
-          <div className="inline-flex rounded-xl border border-border bg-surface p-1 shadow-card">
-            {([
-              { key: 'all', label: 'Funcionários', count: counts.all },
-              { key: 'active', label: 'Ativos', count: counts.active },
-              { key: 'inactive', label: 'Inativos', count: counts.inactive },
-            ] as { key: StatusFilter; label: string; count: number }[]).map((t) => (
-              <button
-                key={t.key}
-                type="button"
-                className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold ${
-                  statusFilter === t.key ? 'bg-primary text-white' : 'text-ink-muted hover:bg-canvas hover:text-ink'
-                }`}
-                onClick={() => setStatusFilter(t.key)}
-              >
-                {t.label}
-                <span className={`rounded-full px-1.5 text-[10px] font-bold ${
-                  statusFilter === t.key ? 'bg-white/20 text-white' : 'bg-canvas text-ink-muted'
-                }`}>{t.count}</span>
-              </button>
-            ))}
+          {/* Filtros (Perfil / Status / Busca) */}
+          <div className="card p-4">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              <div>
+                <label className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-ink-subtle">Perfil</label>
+                <select className="input" value={roleFilter} onChange={(e) => setRoleFilter(e.target.value)}>
+                  <option value="">Todos os perfis</option>
+                  <option value="school_admin">Gestor/Admin</option>
+                  <option value="financial">Financeiro</option>
+                  <option value="teacher">Professor</option>
+                  <option value="coordinator">Coordenação</option>
+                </select>
+              </div>
+              <div>
+                <label className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-ink-subtle">Status</label>
+                <select className="input" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value as StatusFilter)}>
+                  <option value="all">Todos ({counts.all})</option>
+                  <option value="active">Ativos ({counts.active})</option>
+                  <option value="inactive">Inativos ({counts.inactive})</option>
+                </select>
+              </div>
+              <div>
+                <label className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-ink-subtle">Buscar</label>
+                <div className="relative">
+                  <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-ink-subtle" />
+                  <input className="input pl-9" placeholder="Buscar funcionários…" value={query} onChange={(e) => setQuery(e.target.value)} />
+                </div>
+              </div>
+            </div>
           </div>
 
           <div className="card overflow-hidden">
-            <div className="flex items-center gap-3 border-b border-border p-4">
-              <div className="relative flex-1 max-w-sm">
-                <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-ink-subtle" />
-                <input className="input pl-9" placeholder="Buscar por nome ou matrícula…" value={query} onChange={(e) => setQuery(e.target.value)} />
-              </div>
-              <span className="text-sm text-ink-muted">{filtered.length} funcionário(s)</span>
-            </div>
-
             {filtered.length === 0 ? (
               <EmptyState
                 icon={Users}
@@ -273,10 +353,13 @@ export function StaffPage() {
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="border-b border-border text-left text-[11px] font-semibold uppercase text-ink-subtle">
-                      <th className="px-4 py-2.5">Nome</th>
-                      <th className="px-4 py-2.5">Matrícula</th>
-                      <th className="px-4 py-2.5">Perfil</th>
-                      <th className="px-4 py-2.5">Status</th>
+                      <th className="px-4 py-3">Funcionário</th>
+                      <th className="px-4 py-3">Matrícula</th>
+                      <th className="px-4 py-3">Perfil</th>
+                      <th className="px-4 py-3">Cargo</th>
+                      <th className="px-4 py-3">Jornada</th>
+                      <th className="px-4 py-3">Status</th>
+                      <th className="px-4 py-3 text-right">Ações</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -286,30 +369,59 @@ export function StaffPage() {
                         <tr
                           key={s.id}
                           onClick={() => setSelected(s)}
-                          className={`cursor-pointer border-b border-border last:border-0 hover:bg-canvas ${selected?.id === s.id ? 'bg-primary-soft/30' : ''}`}
+                          className={`cursor-pointer border-b border-border last:border-0 hover:bg-canvas ${selected?.id === s.id ? 'bg-primary-soft/40' : ''}`}
                         >
-                          <td className="px-4 py-2.5">
+                          <td className="px-4 py-3">
                             <div className="flex items-center gap-3">
-                              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary-soft text-[11px] font-bold text-primary">
+                              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary-soft text-xs font-bold text-primary">
                                 {initials(s.name)}
                               </div>
-                              <span className="truncate font-medium text-ink">{s.name}</span>
+                              <span className="truncate font-semibold text-ink">{s.name}</span>
                             </div>
                           </td>
-                          <td className="whitespace-nowrap px-4 py-2.5 font-mono text-xs text-ink-muted">{s.registration_number ?? '—'}</td>
-                          <td className="px-4 py-2.5">
+                          <td className="whitespace-nowrap px-4 py-3 font-mono text-xs text-ink-muted">{s.registration_number ?? '—'}</td>
+                          <td className="px-4 py-3">
                             <StatusBadge tone={ROLE_TONE[role]}>{STAFF_ROLE_LABELS[role]}</StatusBadge>
                           </td>
-                          <td className="px-4 py-2.5">
+                          <td className="whitespace-nowrap px-4 py-3 text-ink-muted">{s.position ?? '—'}</td>
+                          <td className="whitespace-nowrap px-4 py-3 text-ink-muted">
+                            {s.weekly_hours != null ? `${s.weekly_hours}h/sem` : '—'}
+                          </td>
+                          <td className="px-4 py-3">
                             <StatusBadge tone={s.status === 'active' ? 'success' : 'neutral'}>
                               {s.status === 'active' ? 'Ativo' : 'Inativo'}
                             </StatusBadge>
+                          </td>
+                          <td className="px-4 py-3 text-right">
+                            <div className="inline-flex items-center gap-1">
+                              <button
+                                type="button"
+                                className="rounded-lg p-2 text-ink-muted hover:bg-primary-soft hover:text-primary"
+                                onClick={(e) => { e.stopPropagation(); setSelected(s); }}
+                                title="Ver detalhes"
+                              >
+                                <Eye size={16} />
+                              </button>
+                              <button
+                                type="button"
+                                className="rounded-lg p-2 text-ink-muted hover:bg-canvas hover:text-ink"
+                                onClick={(e) => { e.stopPropagation(); openEdit(s); }}
+                                title="Editar"
+                              >
+                                <MoreVertical size={16} />
+                              </button>
+                            </div>
                           </td>
                         </tr>
                       );
                     })}
                   </tbody>
                 </table>
+              </div>
+            )}
+            {filtered.length > 0 && (
+              <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border px-4 py-3 text-xs text-ink-muted">
+                <span>Mostrando {filtered.length} de {counts.all} funcionário(s).</span>
               </div>
             )}
           </div>
@@ -325,13 +437,16 @@ export function StaffPage() {
           ) : (
             <>
               <div className="card p-5">
-                <div className="flex items-start gap-4">
+                <div className="flex items-center gap-4">
                   <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-full bg-primary-soft text-lg font-bold text-primary">
                     {initials(selected.name)}
                   </div>
                   <div className="min-w-0 flex-1">
                     <h3 className="truncate text-lg font-bold text-ink">{selected.name}</h3>
-                    <p className="text-xs text-ink-muted">Mat. <strong className="text-ink">{selected.registration_number ?? '—'}</strong></p>
+                    <div className="mt-1 flex flex-wrap gap-x-4 gap-y-1 text-xs text-ink-muted">
+                      <span>Mat. <strong className="text-ink">{selected.registration_number ?? '—'}</strong></span>
+                      {selected.position && <span>{selected.position}</span>}
+                    </div>
                     <div className="mt-2 flex flex-wrap gap-1.5">
                       <StatusBadge tone={ROLE_TONE[(selected.role_type ?? selected.role) as StaffRole]}>
                         {STAFF_ROLE_LABELS[(selected.role_type ?? selected.role) as StaffRole]}
@@ -341,22 +456,11 @@ export function StaffPage() {
                       </StatusBadge>
                     </div>
                   </div>
-                </div>
-                <div className="mt-4 flex gap-2">
-                  <button className="btn-outline flex flex-1 items-center justify-center gap-1.5 text-xs" onClick={() => openEdit(selected)}>
-                    <Pencil size={13} /> Editar
-                  </button>
-                  <button
-                    className="rounded-lg border border-border p-2 text-ink-muted hover:bg-danger-soft hover:text-danger"
-                    onClick={async () => {
-                      if (!confirm(`Remover ${selected.name}? O funcionário ficará como inativo.`)) return;
-                      await onRemove(selected.id);
-                      setSelected(null);
-                    }}
-                    title="Remover"
-                  >
-                    <Trash2 size={14} />
-                  </button>
+                  <div className="flex flex-col items-end gap-2">
+                    <button className="btn-outline flex items-center gap-1.5 text-xs" onClick={() => openEdit(selected)}>
+                      <Pencil size={13} /> Editar
+                    </button>
+                  </div>
                 </div>
               </div>
 
@@ -404,6 +508,17 @@ export function StaffPage() {
                   {copiedLink ? <Check size={14} /> : <Copy size={14} />} {copiedLink ? 'Copiado!' : 'Copiar dados de acesso'}
                 </button>
               </div>
+
+              <button
+                className="w-full rounded-xl border border-danger/30 bg-danger-soft/30 p-3 text-xs font-semibold text-danger hover:bg-danger-soft/60"
+                onClick={async () => {
+                  if (!confirm(`Remover ${selected.name}? O funcionário ficará como inativo.`)) return;
+                  await onRemove(selected.id);
+                  setSelected(null);
+                }}
+              >
+                <Trash2 size={14} className="mr-1.5 inline" /> Desativar funcionário
+              </button>
             </>
           )}
         </div>
@@ -463,7 +578,6 @@ export function StaffPage() {
             </div>
           )}
 
-          {/* Dados trabalhistas */}
           <div className="border-t border-border pt-4">
             <p className="mb-3 text-xs font-bold uppercase tracking-wide text-ink-subtle">Dados trabalhistas</p>
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
@@ -496,7 +610,6 @@ export function StaffPage() {
             </label>
           </div>
 
-          {/* Jornada de trabalho — apenas no cadastro */}
           {!editing && (
             <div className="border-t border-border pt-4">
               <div className="mb-3 flex items-center justify-between">
