@@ -504,7 +504,7 @@ export function StudentsPage() {
 
       {error && <div className="mb-4 rounded-xl bg-danger-soft px-3 py-2 text-sm text-danger">{error}</div>}
 
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-[6fr_4fr]">
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-[7fr_3fr]">
         {/* ===== Coluna 60% — Lista ===== */}
         <div className="min-w-0 space-y-4">
           {/* Abas Todos / Ativos / Inativos */}

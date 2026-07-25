@@ -28721,7 +28721,7 @@ var require_websocket = __commonJS({
     var http = require("http");
     var net = require("net");
     var tls = require("tls");
-    var { randomBytes: randomBytes2, createHash: createHash2 } = require("crypto");
+    var { randomBytes, createHash: createHash2 } = require("crypto");
     var { Duplex, Readable } = require("stream");
     var { URL: URL2 } = require("url");
     var PerMessageDeflate2 = require_permessage_deflate();
@@ -29259,7 +29259,7 @@ var require_websocket = __commonJS({
         }
       }
       const defaultPort = isSecure ? 443 : 80;
-      const key = randomBytes2(16).toString("base64");
+      const key = randomBytes(16).toString("base64");
       const request = isSecure ? https.request : http.request;
       const protocolSet = /* @__PURE__ */ new Set();
       let perMessageDeflate;
@@ -43292,7 +43292,6 @@ async function signUpGuardian(params) {
 }
 
 // src/lib/validation.ts
-var import_crypto2 = require("crypto");
 var cpfDigits = (s) => s.replace(/\D/g, "");
 function isValidCpf(cpf) {
   if (cpf.length !== 11) return false;
@@ -43312,13 +43311,6 @@ var cpfSchema = external_exports.string().transform(cpfDigits).refine((v2) => is
 var dateSchema = external_exports.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Data deve estar no formato AAAA-MM-DD");
 var optionalDateSchema = dateSchema.optional();
 var DEFAULT_GUARDIAN_PASSWORD = "Escola@2026";
-var TEMP_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789";
-function initialPassword() {
-  const bytes = (0, import_crypto2.randomBytes)(10);
-  let out = "";
-  for (let i = 0; i < bytes.length; i++) out += TEMP_ALPHABET[bytes[i] % TEMP_ALPHABET.length];
-  return out;
-}
 function toStoredPassword(visible6) {
   return visible6.length >= 8 ? visible6 : (visible6 + visible6).slice(0, 8);
 }
@@ -43682,7 +43674,7 @@ staffRouter.post("/", requireRole("school_admin", "superadmin"), async (req, res
     const result = await withTenant(req.ctx, async (c) => {
       const matRow = await c.query(`select public.next_staff_matricula() as matricula`);
       const matricula = matRow.rows[0].matricula;
-      const visiblePassword = initialPassword();
+      const visiblePassword = DEFAULT_GUARDIAN_PASSWORD;
       const authResult = await signUpGuardian({
         email: s.email,
         password: toStoredPassword(visiblePassword),
@@ -43732,7 +43724,7 @@ staffRouter.post("/", requireRole("school_admin", "superadmin"), async (req, res
         ...tRow.rows[0],
         login_matricula: matricula,
         initial_password: visiblePassword,
-        login_password_hint: "Login: matr\xEDcula \u2022 Senha inicial: tempor\xE1ria gerada automaticamente (anote e repasse ao funcion\xE1rio). Troca obrigat\xF3ria no 1\xBA acesso."
+        login_password_hint: "Login: e-mail do funcion\xE1rio \u2022 Senha inicial padr\xE3o: Escola@2026 \u2014 troca obrigat\xF3ria no 1\xBA acesso."
       };
     });
     res.status(201).json({ ok: true, data: result });
@@ -45059,7 +45051,7 @@ invoicesRouter.get("/balance/summary", requireRole("school_admin", "financial", 
 
 // src/api/routes/expenses.ts
 var import_express10 = __toESM(require_express2());
-var import_crypto3 = require("crypto");
+var import_crypto2 = require("crypto");
 var expensesRouter = (0, import_express10.Router)();
 expensesRouter.use(requireAuth);
 var ROLES = ["school_admin", "financial", "superadmin"];
@@ -45151,7 +45143,7 @@ expensesRouter.post("/", requireRole(...ROLES), async (req, res) => {
   const inst = p2.data.installments && p2.data.installments > 1 ? p2.data.installments : 1;
   const perInstallment = inst > 1 && p2.data.installment_mode === "total" ? Math.round(p2.data.amount / inst * 100) / 100 : p2.data.amount;
   const created = await withTenant(req.ctx, async (c) => {
-    const groupId = inst > 1 ? (0, import_crypto3.randomUUID)() : null;
+    const groupId = inst > 1 ? (0, import_crypto2.randomUUID)() : null;
     const rows = [];
     for (let i = 1; i <= inst; i++) {
       const due = p2.data.due_date ? addMonthsIso(p2.data.due_date, i - 1) : null;
@@ -46937,12 +46929,12 @@ staffDocumentsRouter.delete("/:id", async (req, res) => {
 
 // src/api/routes/cron.ts
 var import_express23 = __toESM(require_express2());
-var import_crypto4 = require("crypto");
+var import_crypto3 = require("crypto");
 var cronRouter = (0, import_express23.Router)();
 function safeEqual2(a2, b) {
   const ba = Buffer.from(a2);
   const bb = Buffer.from(b);
-  return ba.length === bb.length && (0, import_crypto4.timingSafeEqual)(ba, bb);
+  return ba.length === bb.length && (0, import_crypto3.timingSafeEqual)(ba, bb);
 }
 cronRouter.get("/overdue-invoices", async (req, res) => {
   const secret = req.headers["authorization"] ?? "";

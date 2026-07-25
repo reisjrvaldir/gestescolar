@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { withTenant } from '../../db/withTenant';
 import { requireAuth, requireRole } from '../../middleware/auth';
 import { signUpGuardian } from '../../lib/authSignup';
-import { cpfSchema, initialPassword, toStoredPassword } from '../../lib/validation';
+import { cpfSchema, DEFAULT_GUARDIAN_PASSWORD, toStoredPassword } from '../../lib/validation';
 
 export const staffRouter = Router();
 
@@ -59,9 +59,9 @@ staffRouter.post('/', requireRole('school_admin', 'superadmin'), async (req, res
       const matRow = await c.query(`select public.next_staff_matricula() as matricula`);
       const matricula: string = matRow.rows[0].matricula;
 
-      // Senha inicial = temporária aleatória (anote e repasse ao funcionário).
-      // Login é feito pela matrícula. Guarda-se a versão de 8 chars no provedor.
-      const visiblePassword = initialPassword();
+      // Senha inicial = padrão único da plataforma (troca obrigatória no 1º acesso).
+      // Login primário = e-mail; matrícula também funciona via publicAuth.
+      const visiblePassword = DEFAULT_GUARDIAN_PASSWORD;
       const authResult = await signUpGuardian({
         email: s.email,
         password: toStoredPassword(visiblePassword),
@@ -97,7 +97,7 @@ staffRouter.post('/', requireRole('school_admin', 'superadmin'), async (req, res
         ...tRow.rows[0],
         login_matricula: matricula,
         initial_password: visiblePassword,
-        login_password_hint: 'Login: matrícula • Senha inicial: temporária gerada automaticamente (anote e repasse ao funcionário). Troca obrigatória no 1º acesso.',
+        login_password_hint: 'Login: e-mail do funcionário • Senha inicial padrão: Escola@2026 — troca obrigatória no 1º acesso.',
       };
     });
     res.status(201).json({ ok: true, data: result });
