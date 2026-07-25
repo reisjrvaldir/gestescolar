@@ -3,7 +3,6 @@ import {
   CreditCard, Plus, Check, Trash2, Loader2, Pencil, Undo2,
   Download, Filter, X, RotateCcw, History, ChevronLeft, ChevronRight, Calendar,
 } from 'lucide-react';
-import { PageHeader } from '@/components/ui/PageHeader';
 import { MetricCard } from '@/components/ui/MetricCard';
 import { StatusBadge } from '@/components/ui/StatusBadge';
 import { EmptyState } from '@/components/ui/EmptyState';
@@ -170,27 +169,42 @@ export function ExpensesPage() {
 
   return (
     <>
-      <PageHeader
-        title="Contas a Pagar"
-        subtitle="Gerencie as despesas e contas a pagar da escola."
-        actions={
-          <div className="flex flex-wrap gap-2">
-            <button
-              className="btn-outline"
-              onClick={() => setShowFilters((v) => !v)}
-              title="Filtros para auditoria de gastos"
-            >
-              <Filter size={16} /> Filtros
-            </button>
-            <button className="btn-outline" onClick={onExport} title="Exportar saídas de recursos">
-              <Download size={16} /> Exportar
-            </button>
-            <button className="btn-primary" onClick={() => { setEditing(null); setFormOpen(true); }}>
-              <Plus size={16} /> Nova despesa
-            </button>
+      {/* ===== HERO ===== */}
+      <div className="mb-6 overflow-hidden rounded-2xl bg-gradient-to-r from-primary-soft to-primary-soft/40 p-6 sm:p-8">
+        <div className="flex items-start justify-between gap-6">
+          <div className="max-w-xl">
+            <h1 className="text-3xl font-extrabold text-ink sm:text-4xl">Contas a Pagar</h1>
+            <p className="mt-2 text-sm text-ink-muted">
+              Gerencie as despesas e contas a pagar da escola.
+            </p>
+            <div className="mt-5 flex flex-wrap gap-2">
+              <button
+                className="inline-flex items-center gap-2 rounded-xl bg-primary px-5 py-2.5 text-sm font-semibold text-white shadow-card hover:bg-primary/90"
+                onClick={() => { setEditing(null); setFormOpen(true); }}
+              >
+                <Plus size={18} /> Nova despesa
+              </button>
+              <button
+                className="inline-flex items-center gap-2 rounded-xl border border-border bg-white px-4 py-2.5 text-sm font-semibold text-ink hover:bg-canvas"
+                onClick={() => setShowFilters((v) => !v)}
+              >
+                <Filter size={16} /> Filtros
+              </button>
+              <button
+                className="inline-flex items-center gap-2 rounded-xl border border-border bg-white px-4 py-2.5 text-sm font-semibold text-ink hover:bg-canvas"
+                onClick={onExport}
+              >
+                <Download size={16} /> Exportar
+              </button>
+            </div>
           </div>
-        }
-      />
+          <div className="hidden shrink-0 items-center justify-center sm:flex">
+            <div className="grid h-32 w-32 place-items-center rounded-full bg-white/40 text-primary shadow-inner">
+              <CreditCard size={64} />
+            </div>
+          </div>
+        </div>
+      </div>
 
       <div className="mb-4 flex gap-1 border-b border-border">
         <TabButton active={tab === 'ativas'} onClick={() => setTab('ativas')}>Ativas</TabButton>
