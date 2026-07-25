@@ -1,7 +1,9 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useForm } from 'react-hook-form';
-import { School2, Plus, Trash2, Pencil, Users, Clock, UserCog, Loader2, BookOpen } from 'lucide-react';
-import { PageHeader } from '@/components/ui/PageHeader';
+import {
+  School2, Plus, Trash2, Users, UserCog, Loader2, BookOpen,
+  Search, Eye, MoreVertical, ChevronLeft, ChevronRight, LayoutGrid,
+} from 'lucide-react';
 import { StatusBadge } from '@/components/ui/StatusBadge';
 import { Modal } from '@/components/ui/Modal';
 import { EmptyState } from '@/components/ui/EmptyState';
@@ -9,6 +11,35 @@ import { classesService, type NewClass, type ClassStudent } from '@/services/cla
 import { subjectsService, LEVEL_LABELS, LEVEL_ORDER, type Subject } from '@/services/subjects';
 import { staffService } from '@/services/staff';
 import { SHIFT_LABELS, type SchoolClass, type Staff } from '@/types/models';
+
+const PAGE_SIZE = 6;
+
+const initials = (name: string) =>
+  name.split(' ').filter(Boolean).slice(0, 2).map((n) => n[0]?.toUpperCase() ?? '').join('');
+
+function KpiMini({ label, value, icon: Icon, tone }: {
+  label: string; value: string;
+  icon: typeof Users;
+  tone: 'primary' | 'success' | 'warning' | 'danger';
+}) {
+  const cls: Record<typeof tone, string> = {
+    primary: 'bg-primary-soft text-primary',
+    success: 'bg-success-soft text-success',
+    warning: 'bg-warning-soft text-warning',
+    danger:  'bg-danger-soft text-danger',
+  };
+  return (
+    <div className="flex items-center gap-3 rounded-xl border border-border p-3">
+      <div className="min-w-0 flex-1">
+        <p className="text-[11px] text-ink-muted">{label}</p>
+        <p className="text-xl font-extrabold text-ink">{value}</p>
+      </div>
+      <div className={`grid h-9 w-9 shrink-0 place-items-center rounded-lg ${cls[tone]}`}>
+        <Icon size={16} />
+      </div>
+    </div>
+  );
+}
 
 export function ClassesPage() {
   const [classes, setClasses] = useState<SchoolClass[]>([]);
@@ -18,13 +49,19 @@ export function ClassesPage() {
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<SchoolClass | null>(null);
   const [selectedSubjects, setSelectedSubjects] = useState<string[]>([]);
-  const [subjectTeacher, setSubjectTeacher] = useState<Record<string, string>>({}); // subject_id → teacher_id
+  const [subjectTeacher, setSubjectTeacher] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
 
-  // Modal de lista de alunos da turma.
   const [studentsFor, setStudentsFor] = useState<SchoolClass | null>(null);
   const [students, setStudents] = useState<ClassStudent[]>([]);
   const [loadingStudents, setLoadingStudents] = useState(false);
+
+  // Filters
+  const [query, setQuery] = useState('');
+  const [yearFilter, setYearFilter] = useState<string>('');
+  const [shiftFilter, setShiftFilter] = useState<string>('');
+  const [levelFilter, setLevelFilter] = useState<string>('');
+  const [page, setPage] = useState(1);
 
   const { register, handleSubmit, reset, formState: { errors } } = useForm<NewClass>();
 
@@ -41,6 +78,33 @@ export function ClassesPage() {
     setLoading(false);
   }
 
+  // Distinct values for filter dropdowns
+  const distinctYears = useMemo(() =>
+    Array.from(new Set(classes.map((c) => c.year))).sort((a, b) => b - a), [classes]);
+  const distinctLevels = useMemo(() =>
+    Array.from(new Set(classes.map((c) => c.level).filter(Boolean) as string[])).sort(), [classes]);
+
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    return classes
+      .filter((c) => !yearFilter || c.year === Number(yearFilter))
+      .filter((c) => !shiftFilter || c.shift === shiftFilter)
+      .filter((c) => !levelFilter || c.level === levelFilter)
+      .filter((c) => !q || c.name.toLowerCase().includes(q) || (c.teacher_name ?? '').toLowerCase().includes(q));
+  }, [classes, query, yearFilter, shiftFilter, levelFilter]);
+
+  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  const safePage = Math.min(page, totalPages);
+  const pageItems = filtered.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE);
+
+  // Reset page when filters change
+  useEffect(() => { setPage(1); }, [query, yearFilter, shiftFilter, levelFilter]);
+
+  // KPIs
+  const totalStudents = useMemo(() => classes.reduce((s, c) => s + (c.student_count ?? 0), 0), [classes]);
+  const activeClasses = useMemo(() => classes.filter((c) => c.status === 'active').length, [classes]);
+  const avgStudents = classes.length > 0 ? Math.round(totalStudents / classes.length) : 0;
+
   function openNew() {
     setEditing(null);
     setSelectedSubjects([]);
@@ -52,7 +116,6 @@ export function ClassesPage() {
   function openEdit(c: SchoolClass) {
     setEditing(c);
     setSelectedSubjects(c.subject_ids ?? []);
-    // Mapa matéria → professor (novo formato); cai pro vazio se ainda não tiver.
     const map: Record<string, string> = {};
     for (const s of c.subjects ?? []) if (s.teacher_id) map[s.subject_id] = s.teacher_id;
     setSubjectTeacher(map);
@@ -65,7 +128,7 @@ export function ClassesPage() {
 
   function toggleSubject(id: string) {
     setSelectedSubjects((prev) => prev.includes(id) ? prev.filter((s) => s !== id) : [...prev, id]);
-    setSubjectTeacher((prev) => { const n = { ...prev }; delete n[id]; return n; }); // limpa prof. ao desmarcar
+    setSubjectTeacher((prev) => { const n = { ...prev }; delete n[id]; return n; });
   }
 
   async function onSubmit(data: NewClass) {
@@ -91,6 +154,7 @@ export function ClassesPage() {
   }
 
   async function onRemove(id: string) {
+    if (!confirm('Remover esta turma?')) return;
     await classesService.remove(id);
     await load();
   }
@@ -112,82 +176,257 @@ export function ClassesPage() {
 
   return (
     <>
-      <PageHeader
-        title="Turmas"
-        subtitle="Crie e organize as turmas da sua escola por ano, turno e nível."
-        actions={
-          <button className="btn-primary" onClick={openNew}>
-            <Plus size={16} /> Nova turma
-          </button>
-        }
-      />
-
-      {classes.length === 0 ? (
-        <div className="card">
-          <EmptyState
-            icon={School2}
-            title="Nenhuma turma criada"
-            description="Crie a primeira turma para organizar seus alunos."
-            action={<button className="btn-primary" onClick={openNew}><Plus size={16} /> Nova turma</button>}
-          />
+      {/* ===== HERO ===== */}
+      <div className="mb-6 overflow-hidden rounded-2xl bg-gradient-to-r from-primary-soft to-primary-soft/40 p-6 sm:p-8">
+        <div className="flex items-start justify-between gap-6">
+          <div className="max-w-xl">
+            <h1 className="text-3xl font-extrabold text-ink sm:text-4xl">Gestão de turmas</h1>
+            <p className="mt-2 text-sm text-ink-muted">
+              Organize, acompanhe e gerencie todas as turmas da sua escola.
+            </p>
+            <button
+              className="mt-5 inline-flex items-center gap-2 rounded-xl bg-primary px-5 py-2.5 text-sm font-semibold text-white shadow-card hover:bg-primary/90"
+              onClick={openNew}
+            >
+              <Plus size={18} /> Nova turma
+            </button>
+          </div>
+          <div className="hidden shrink-0 items-center justify-center sm:flex">
+            <div className="grid h-32 w-32 place-items-center rounded-full bg-white/40 text-primary shadow-inner">
+              <School2 size={64} />
+            </div>
+          </div>
         </div>
-      ) : (
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
-          {classes.map((c) => (
-            <div key={c.id} className="card p-5">
-              <div className="flex items-start justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-primary-soft text-primary">
-                    <School2 size={20} />
-                  </div>
-                  <div>
-                    <p className="font-bold text-ink">{c.name}</p>
-                    <p className="text-xs text-ink-subtle">{c.level ?? '—'} · {c.year}</p>
-                  </div>
-                </div>
-                <div className="inline-flex gap-1">
-                  <button className="rounded-lg p-1.5 text-ink-muted hover:bg-primary-soft hover:text-primary" onClick={() => openEdit(c)} title="Editar">
-                    <Pencil size={15} />
-                  </button>
-                  <button className="rounded-lg p-1.5 text-ink-muted hover:bg-danger-soft hover:text-danger" onClick={() => onRemove(c.id)} title="Remover">
-                    <Trash2 size={15} />
-                  </button>
+      </div>
+
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-[7fr_3fr]">
+        {/* ===== Coluna 70% — Lista ===== */}
+        <div className="min-w-0 space-y-4">
+          {/* Filtros */}
+          <div className="card p-4">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+              <div>
+                <label className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-ink-subtle">Buscar</label>
+                <div className="relative">
+                  <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-ink-subtle" />
+                  <input className="input pl-9" placeholder="Buscar turmas…" value={query} onChange={(e) => setQuery(e.target.value)} />
                 </div>
               </div>
-
-              <div className="mt-4 space-y-2 text-sm">
-                <div className="flex items-center gap-2 text-ink-muted">
-                  <Clock size={15} /> Turno: <span className="font-medium text-ink">{SHIFT_LABELS[c.shift]}</span>
-                </div>
-                <div className="flex items-center gap-2 text-ink-muted">
-                  <UserCog size={15} /> Regente: <span className="font-medium text-ink">{c.teacher_name ?? '—'}</span>
-                </div>
-                <div className="flex items-center gap-2 text-ink-muted">
-                  <BookOpen size={15} /> Matérias: <span className="font-medium text-ink">{c.subject_ids?.length ?? 0}</span>
-                </div>
-                {(() => {
-                  const profs = Array.from(new Set((c.subjects ?? []).map((s) => s.teacher_name).filter(Boolean)));
-                  return profs.length > 0 ? (
-                    <div className="flex items-start gap-2 text-ink-muted">
-                      <Users size={15} className="mt-0.5 shrink-0" />
-                      <span>Professores: <span className="font-medium text-ink">{profs.join(', ')}</span></span>
-                    </div>
-                  ) : null;
-                })()}
+              <div>
+                <label className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-ink-subtle">Ano letivo</label>
+                <select className="input" value={yearFilter} onChange={(e) => setYearFilter(e.target.value)}>
+                  <option value="">Todos os anos</option>
+                  {distinctYears.map((y) => <option key={y} value={y}>{y}</option>)}
+                </select>
               </div>
-
-              <div className="mt-4 flex items-center justify-between border-t border-border pt-3">
-                <StatusBadge tone={c.status === 'active' ? 'success' : 'neutral'}>
-                  {c.status === 'active' ? 'Ativa' : 'Inativa'}
-                </StatusBadge>
-                <button className="btn-outline text-xs" onClick={() => openStudents(c)}>
-                  <Users size={14} /> Ver alunos ({c.student_count})
-                </button>
+              <div>
+                <label className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-ink-subtle">Turno</label>
+                <select className="input" value={shiftFilter} onChange={(e) => setShiftFilter(e.target.value)}>
+                  <option value="">Todos os turnos</option>
+                  <option value="morning">Manhã</option>
+                  <option value="afternoon">Tarde</option>
+                  <option value="night">Noite</option>
+                  <option value="full">Integral</option>
+                </select>
+              </div>
+              <div>
+                <label className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-ink-subtle">Nível / Série</label>
+                <select className="input" value={levelFilter} onChange={(e) => setLevelFilter(e.target.value)}>
+                  <option value="">Todas as séries</option>
+                  {distinctLevels.map((l) => <option key={l} value={l}>{l}</option>)}
+                </select>
               </div>
             </div>
-          ))}
+          </div>
+
+          {/* Tabela */}
+          <div className="card overflow-hidden">
+            {filtered.length === 0 ? (
+              <EmptyState
+                icon={School2}
+                title="Nenhuma turma encontrada"
+                description="Ajuste os filtros ou crie a primeira turma."
+                action={<button className="btn-primary" onClick={openNew}><Plus size={16} /> Nova turma</button>}
+              />
+            ) : (
+              <>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b border-border text-left text-[11px] font-semibold uppercase text-ink-subtle">
+                        <th className="px-4 py-3">Turma</th>
+                        <th className="px-4 py-3">Ano / Série</th>
+                        <th className="px-4 py-3">Turno</th>
+                        <th className="px-4 py-3 text-center">Alunos</th>
+                        <th className="px-4 py-3">Professor responsável</th>
+                        <th className="px-4 py-3">Status</th>
+                        <th className="px-4 py-3 text-right">Ações</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {pageItems.map((c) => (
+                        <tr key={c.id} className="border-b border-border last:border-0 hover:bg-canvas">
+                          <td className="px-4 py-3">
+                            <div className="flex items-center gap-3">
+                              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary-soft text-primary">
+                                <School2 size={18} />
+                              </div>
+                              <div className="min-w-0">
+                                <p className="truncate font-semibold text-ink">{c.name}</p>
+                                {c.level && (
+                                  <span className="inline-block mt-0.5 rounded-full bg-primary-soft px-2 py-0.5 text-[10px] font-semibold text-primary">
+                                    {c.level}
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                          </td>
+                          <td className="whitespace-nowrap px-4 py-3 text-ink-muted">{c.level ?? '—'}</td>
+                          <td className="whitespace-nowrap px-4 py-3 text-ink-muted">{SHIFT_LABELS[c.shift]}</td>
+                          <td className="px-4 py-3 text-center">
+                            <span className="font-bold text-ink">{c.student_count}</span>
+                          </td>
+                          <td className="px-4 py-3">
+                            {c.teacher_name ? (
+                              <div className="flex items-center gap-2">
+                                <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary-soft text-[10px] font-bold text-primary">
+                                  {initials(c.teacher_name)}
+                                </div>
+                                <span className="truncate text-ink">{c.teacher_name}</span>
+                              </div>
+                            ) : (
+                              <span className="text-ink-muted">—</span>
+                            )}
+                          </td>
+                          <td className="px-4 py-3">
+                            <StatusBadge tone={c.status === 'active' ? 'success' : 'neutral'}>
+                              {c.status === 'active' ? 'Ativa' : 'Inativa'}
+                            </StatusBadge>
+                          </td>
+                          <td className="px-4 py-3 text-right">
+                            <div className="inline-flex items-center gap-1">
+                              <button
+                                type="button"
+                                className="rounded-lg p-2 text-ink-muted hover:bg-primary-soft hover:text-primary"
+                                onClick={() => openStudents(c)}
+                                title="Ver alunos"
+                              >
+                                <Eye size={16} />
+                              </button>
+                              <button
+                                type="button"
+                                className="rounded-lg p-2 text-ink-muted hover:bg-canvas hover:text-ink"
+                                onClick={() => openEdit(c)}
+                                title="Editar"
+                              >
+                                <MoreVertical size={16} />
+                              </button>
+                              <button
+                                type="button"
+                                className="rounded-lg p-2 text-ink-muted hover:bg-danger-soft hover:text-danger"
+                                onClick={() => onRemove(c.id)}
+                                title="Remover"
+                              >
+                                <Trash2 size={16} />
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+
+                {/* Paginação */}
+                <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border px-4 py-3 text-xs text-ink-muted">
+                  <span>
+                    Mostrando {(safePage - 1) * PAGE_SIZE + 1} a {Math.min(safePage * PAGE_SIZE, filtered.length)} de {filtered.length} turma(s)
+                  </span>
+                  {totalPages > 1 && (
+                    <div className="inline-flex items-center gap-1">
+                      <button
+                        className="rounded-lg p-1.5 text-ink-muted hover:bg-canvas disabled:opacity-30"
+                        disabled={safePage <= 1}
+                        onClick={() => setPage((p) => Math.max(1, p - 1))}
+                      >
+                        <ChevronLeft size={16} />
+                      </button>
+                      {Array.from({ length: totalPages }, (_, i) => i + 1).map((n) => (
+                        <button
+                          key={n}
+                          className={`h-7 w-7 rounded-lg text-xs font-semibold ${
+                            n === safePage ? 'bg-primary text-white' : 'text-ink-muted hover:bg-canvas'
+                          }`}
+                          onClick={() => setPage(n)}
+                        >
+                          {n}
+                        </button>
+                      ))}
+                      <button
+                        className="rounded-lg p-1.5 text-ink-muted hover:bg-canvas disabled:opacity-30"
+                        disabled={safePage >= totalPages}
+                        onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                      >
+                        <ChevronRight size={16} />
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </>
+            )}
+          </div>
         </div>
-      )}
+
+        {/* ===== Coluna 30% — Resumo ===== */}
+        <div className="space-y-4">
+          {/* Resumo das turmas */}
+          <div className="card p-5">
+            <div className="mb-4 flex items-center gap-2 text-sm font-bold text-ink">
+              <LayoutGrid size={16} className="text-primary" /> Resumo das turmas
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <KpiMini icon={School2} tone="primary" label="Total de turmas" value={classes.length.toString()} />
+              <KpiMini icon={Users} tone="success" label="Total de alunos" value={totalStudents.toString()} />
+              <KpiMini icon={UserCog} tone="warning" label="Média de alunos por turma" value={avgStudents.toString()} />
+              <KpiMini icon={BookOpen} tone="danger" label="Turmas ativas" value={activeClasses.toString()} />
+            </div>
+          </div>
+
+          {/* Ações rápidas */}
+          <div className="card p-5">
+            <p className="mb-3 text-sm font-bold text-ink">Ações rápidas</p>
+            <div className="space-y-1">
+              <button
+                className="flex w-full items-center justify-between rounded-xl p-3 text-left text-sm text-ink transition-colors hover:bg-canvas"
+                onClick={openNew}
+              >
+                <span className="flex items-center gap-3">
+                  <Users size={16} className="text-primary" /> Nova turma
+                </span>
+                <ChevronRight size={16} className="text-ink-subtle" />
+              </button>
+              <button
+                className="flex w-full items-center justify-between rounded-xl p-3 text-left text-sm text-ink transition-colors hover:bg-canvas"
+                onClick={openNew}
+              >
+                <span className="flex items-center gap-3">
+                  <UserCog size={16} className="text-success" /> Alocar professores
+                </span>
+                <ChevronRight size={16} className="text-ink-subtle" />
+              </button>
+              <button
+                className="flex w-full items-center justify-between rounded-xl p-3 text-left text-sm text-ink transition-colors hover:bg-canvas"
+                onClick={openNew}
+              >
+                <span className="flex items-center gap-3">
+                  <BookOpen size={16} className="text-warning" /> Gerenciar disciplinas
+                </span>
+                <ChevronRight size={16} className="text-ink-subtle" />
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
 
       {/* Modal de criar/editar turma */}
       <Modal
