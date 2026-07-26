@@ -46079,7 +46079,8 @@ ticketsRouter.use(requireAuth);
 ticketsRouter.get("/", async (req, res) => {
   const data = await withTenant(req.ctx, async (c) => {
     const { rows } = await c.query(
-      `select t.id, t.title, t.description, t.status, t.priority, t.category, t.created_at,
+      `select t.id, t.title, t.description, t.status, t.priority, t.category,
+              coalesce(t.attachments, '[]'::jsonb) as attachments, t.created_at,
               p.name as opened_by_name
          from public.support_tickets t
          left join public.profiles p on p.id = t.opened_by
@@ -46094,7 +46095,8 @@ ticketsRouter.get("/", async (req, res) => {
 ticketsRouter.get("/:id", async (req, res) => {
   const data = await withTenant(req.ctx, async (c) => {
     const ticket = await c.query(
-      `select t.id, t.title, t.description, t.status, t.priority, t.category, t.created_at,
+      `select t.id, t.title, t.description, t.status, t.priority, t.category,
+              coalesce(t.attachments, '[]'::jsonb) as attachments, t.created_at,
               p.name as opened_by_name
          from public.support_tickets t
          left join public.profiles p on p.id = t.opened_by
@@ -46119,7 +46121,8 @@ var ticketSchema = external_exports.object({
   title: external_exports.string().min(3, "Informe o t\xEDtulo"),
   description: external_exports.string().optional(),
   category: external_exports.string().optional(),
-  priority: external_exports.enum(["low", "normal", "high", "urgent"]).optional()
+  priority: external_exports.enum(["low", "normal", "high", "urgent"]).optional(),
+  attachments: external_exports.array(external_exports.string()).max(5).optional()
 });
 ticketsRouter.post("/", async (req, res) => {
   const p2 = ticketSchema.safeParse(req.body);
@@ -46127,16 +46130,17 @@ ticketsRouter.post("/", async (req, res) => {
   const profileId = req.ctx.profileId;
   const created = await withTenant(req.ctx, async (c) => {
     const { rows } = await c.query(
-      `insert into public.support_tickets (school_id, opened_by, title, description, category, priority)
-       values ($1, $2, $3, $4, $5, $6)
-       returning id, title, status, priority, created_at`,
+      `insert into public.support_tickets (school_id, opened_by, title, description, category, priority, attachments)
+       values ($1, $2, $3, $4, $5, $6, $7)
+       returning id, title, status, priority, category, attachments, created_at`,
       [
         req.ctx.schoolId,
         profileId,
         p2.data.title,
         p2.data.description ?? null,
         p2.data.category ?? null,
-        p2.data.priority ?? "normal"
+        p2.data.priority ?? "normal",
+        JSON.stringify(p2.data.attachments ?? [])
       ]
     );
     return rows[0];

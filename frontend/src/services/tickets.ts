@@ -7,6 +7,7 @@ export interface Ticket {
   status: 'open' | 'in_progress' | 'waiting_customer' | 'resolved' | 'reopened' | 'closed';
   priority?: string;
   category?: string;
+  attachments?: string[];
   opened_by_name: string;
   created_at: string;
 }
@@ -32,7 +33,12 @@ export async function getTicket(id: string): Promise<TicketDetail> {
   return r.data;
 }
 
-export async function createTicket(data: { title: string; description: string }): Promise<Ticket> {
+export async function createTicket(data: {
+  title: string;
+  description: string;
+  category?: string;
+  attachments?: string[];
+}): Promise<Ticket> {
   const r = await api.post<{ data: Ticket }>('/tickets', data);
   return r.data;
 }

@@ -9,7 +9,8 @@ ticketsRouter.use(requireAuth);
 ticketsRouter.get('/', async (req, res) => {
   const data = await withTenant(req.ctx!, async (c) => {
     const { rows } = await c.query(
-      `select t.id, t.title, t.description, t.status, t.priority, t.category, t.created_at,
+      `select t.id, t.title, t.description, t.status, t.priority, t.category,
+              coalesce(t.attachments, '[]'::jsonb) as attachments, t.created_at,
               p.name as opened_by_name
          from public.support_tickets t
          left join public.profiles p on p.id = t.opened_by
@@ -25,7 +26,8 @@ ticketsRouter.get('/', async (req, res) => {
 ticketsRouter.get('/:id', async (req, res) => {
   const data = await withTenant(req.ctx!, async (c) => {
     const ticket = await c.query(
-      `select t.id, t.title, t.description, t.status, t.priority, t.category, t.created_at,
+      `select t.id, t.title, t.description, t.status, t.priority, t.category,
+              coalesce(t.attachments, '[]'::jsonb) as attachments, t.created_at,
               p.name as opened_by_name
          from public.support_tickets t
          left join public.profiles p on p.id = t.opened_by
@@ -52,6 +54,7 @@ const ticketSchema = z.object({
   description: z.string().optional(),
   category: z.string().optional(),
   priority: z.enum(['low', 'normal', 'high', 'urgent']).optional(),
+  attachments: z.array(z.string()).max(5).optional(),
 });
 
 ticketsRouter.post('/', async (req, res) => {
@@ -60,11 +63,12 @@ ticketsRouter.post('/', async (req, res) => {
   const profileId = req.ctx!.profileId;
   const created = await withTenant(req.ctx!, async (c) => {
     const { rows } = await c.query(
-      `insert into public.support_tickets (school_id, opened_by, title, description, category, priority)
-       values ($1, $2, $3, $4, $5, $6)
-       returning id, title, status, priority, created_at`,
+      `insert into public.support_tickets (school_id, opened_by, title, description, category, priority, attachments)
+       values ($1, $2, $3, $4, $5, $6, $7)
+       returning id, title, status, priority, category, attachments, created_at`,
       [req.ctx!.schoolId, profileId, p.data.title, p.data.description ?? null,
-       p.data.category ?? null, p.data.priority ?? 'normal'],
+       p.data.category ?? null, p.data.priority ?? 'normal',
+       JSON.stringify(p.data.attachments ?? [])],
     );
     return rows[0];
   });
