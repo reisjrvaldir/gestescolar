@@ -9,21 +9,43 @@ calendarRouter.use(requireAuth);
 
 calendarRouter.get('/', async (req, res) => {
   const year = req.query.year as string | undefined;
+  const { role, profileId, schoolId } = req.ctx!;
+
   const data = await withTenant(req.ctx!, async (c) => {
-    const params: unknown[] = [req.ctx!.schoolId];
-    let filter = '';
+    const params: unknown[] = [schoolId];
+    let yearFilter = '';
     if (year) {
-      filter = ' and extract(year from date_start) = $2';
+      yearFilter = ' and extract(year from sc.date_start) = $2';
       params.push(Number(year));
     }
+
+    let classFilter = '';
+    if (role === 'teacher') {
+      params.push(profileId);
+      classFilter = ` and (sc.class_id IS NULL OR sc.class_id IN (
+        SELECT cs.class_id FROM public.class_subjects cs
+        JOIN public.teachers t ON t.id = cs.teacher_id
+        WHERE t.user_id = $${params.length} AND cs.school_id = $1
+      ))`;
+    } else if (role === 'guardian') {
+      params.push(profileId);
+      classFilter = ` and (sc.class_id IS NULL OR sc.class_id IN (
+        SELECT s.class_id FROM public.students s
+        JOIN public.guardians g ON g.id = s.guardian_id
+        WHERE g.user_id = $${params.length} AND g.school_id = $1 AND s.class_id IS NOT NULL
+      ))`;
+    }
+
     const { rows } = await c.query(
-      `select id, title, description, date_start, date_end, event_type,
-              to_char(start_time, 'HH24:MI') as start_time,
-              to_char(end_time,   'HH24:MI') as end_time,
-              created_at
-         from public.school_calendar
-        where school_id = $1${filter}
-        order by date_start asc, start_time asc nulls last`,
+      `select sc.id, sc.title, sc.description, sc.date_start, sc.date_end, sc.event_type,
+              sc.class_id, cl.name as class_name,
+              to_char(sc.start_time, 'HH24:MI') as start_time,
+              to_char(sc.end_time,   'HH24:MI') as end_time,
+              sc.created_at
+         from public.school_calendar sc
+         left join public.classes cl ON cl.id = sc.class_id
+        where sc.school_id = $1${yearFilter}${classFilter}
+        order by sc.date_start asc, sc.start_time asc nulls last`,
       params,
     );
     return rows;
@@ -40,6 +62,7 @@ const eventSchema = z.object({
   event_type: z.enum(['holiday', 'exam', 'meeting', 'event', 'recess']).optional(),
   start_time: timeSchema.optional(),
   end_time: timeSchema.optional(),
+  class_id: z.string().uuid().optional(),
 });
 
 calendarRouter.post('/', requireRole('school_admin', 'superadmin'), async (req, res) => {
@@ -47,12 +70,13 @@ calendarRouter.post('/', requireRole('school_admin', 'superadmin'), async (req, 
   if (!p.success) return res.status(400).json({ code: 'validation', message: p.error.issues[0]?.message });
   const created = await withTenant(req.ctx!, async (c) => {
     const { rows } = await c.query(
-      `insert into public.school_calendar (school_id, title, description, date_start, date_end, event_type, start_time, end_time)
-       values ($1, $2, $3, $4, $5, $6, $7, $8)
-       returning id, title, date_start, event_type`,
+      `insert into public.school_calendar
+         (school_id, title, description, date_start, date_end, event_type, start_time, end_time, class_id)
+       values ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+       returning id, title, date_start, event_type, class_id`,
       [req.ctx!.schoolId, p.data.title, p.data.description ?? null,
        p.data.date_start, p.data.date_end ?? null, p.data.event_type ?? 'event',
-       p.data.start_time ?? null, p.data.end_time ?? null],
+       p.data.start_time ?? null, p.data.end_time ?? null, p.data.class_id ?? null],
     );
     return rows[0];
   });

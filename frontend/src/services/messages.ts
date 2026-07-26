@@ -7,9 +7,22 @@ export interface Message {
   created_at: string;
   read_at: string | null;
   student_id?: string;
+  sender_id: string;
+  recipient_id: string;
   sender_name: string;
   recipient_name: string;
   student_name?: string;
+}
+
+export interface Thread {
+  partner_id: string;
+  partner_name: string;
+  partner_role: string;
+  last_body: string;
+  last_subject: string;
+  is_mine: boolean;
+  last_at: string;
+  unread_count: number;
 }
 
 export interface Contact {
@@ -26,7 +39,21 @@ export interface NewMessage {
   student_id?: string;
 }
 
+export interface BroadcastMessage {
+  subject: string;
+  body: string;
+  class_id?: string;
+}
+
 export const messagesService = {
+  async threads(): Promise<Thread[]> {
+    const r = await api.get<{ data: Thread[] }>('/messages/threads');
+    return r.data;
+  },
+  async thread(partnerId: string): Promise<Message[]> {
+    const r = await api.get<{ data: Message[] }>(`/messages/thread/${partnerId}`);
+    return r.data;
+  },
   async list(box: 'inbox' | 'sent' = 'inbox'): Promise<Message[]> {
     const r = await api.get<{ data: Message[] }>(`/messages?box=${box}`);
     return r.data;
@@ -38,6 +65,10 @@ export const messagesService = {
   async send(m: NewMessage): Promise<Message> {
     const r = await api.post<{ data: Message }>('/messages', m);
     return r.data;
+  },
+  async broadcast(m: BroadcastMessage): Promise<{ sent: number }> {
+    const r = await api.post<{ sent: number }>('/messages/broadcast', m);
+    return r;
   },
   async markRead(id: string): Promise<void> {
     await api.patch(`/messages/${id}/read`);

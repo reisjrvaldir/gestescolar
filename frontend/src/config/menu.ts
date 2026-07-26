@@ -3,7 +3,7 @@ import {
   Fingerprint, CalendarDays, CreditCard,
   Headset, Crown, Mail,
   CalendarOff, FolderOpen, PiggyBank, ArrowUpRight, Wallet,
-  FileText, ArrowDownRight, AlertTriangle, CalendarCheck, ShieldCheck,
+  FileText, ArrowDownRight, AlertTriangle, ShieldCheck,
   type LucideIcon,
 } from 'lucide-react';
 
@@ -40,7 +40,6 @@ export const MENUS: Record<Role, MenuSection[]> = {
         { to: '/app/grades', label: 'Lançar Notas', icon: Star },
         { to: '/app/grades/boletim', label: 'Boletim', icon: FileText },
         { to: '/app/attendance', label: 'Chamada', icon: ClipboardCheck },
-        { to: '/app/attendance/calendar', label: 'Frequência', icon: CalendarCheck },
         { to: '/app/attendance/approvals', label: 'Atestados', icon: ShieldCheck },
       ],
     },
@@ -85,7 +84,6 @@ export const MENUS: Record<Role, MenuSection[]> = {
       title: 'Acadêmico',
       items: [
         { to: '/app/attendance', label: 'Chamada', icon: ClipboardCheck },
-        { to: '/app/attendance/calendar', label: 'Frequência', icon: CalendarCheck },
         { to: '/app/grades', label: 'Lançar Notas', icon: Star },
         { to: '/app/grades/boletim', label: 'Boletim', icon: FileText },
         { to: '/app/calendar', label: 'Calendário', icon: CalendarDays },

@@ -11,6 +11,8 @@ export interface CalendarEvent {
   description?: string;
   start_time?: string | null;
   end_time?: string | null;
+  class_id?: string | null;
+  class_name?: string | null;
   created_at: string;
 }
 
