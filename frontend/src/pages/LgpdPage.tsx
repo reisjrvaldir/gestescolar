@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Shield, Download, Trash2, Loader2 } from 'lucide-react';
-import { PageHeader } from '@/components/ui/PageHeader';
+import { PageHero } from '@/components/ui/PageHero';
 import { StatusBadge } from '@/components/ui/StatusBadge';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { listRequests, requestExport, requestDeletion, type LgpdRequest } from '@/services/lgpd';
@@ -52,9 +52,10 @@ export function LgpdPage() {
 
   return (
     <>
-      <PageHeader
+      <PageHero
         title="Meus Dados (LGPD)"
         subtitle="Gerencie seus dados pessoais conforme a Lei Geral de Proteção de Dados."
+        icon={Shield}
       />
 
       <div className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-2">

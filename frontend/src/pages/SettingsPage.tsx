@@ -1,7 +1,7 @@
 import { useEffect, useState, useRef } from 'react';
 import { useForm } from 'react-hook-form';
 import { Settings, Save, Check, Loader2, Upload, Image } from 'lucide-react';
-import { PageHeader } from '@/components/ui/PageHeader';
+import { PageHero } from '@/components/ui/PageHero';
 import { StatusBadge } from '@/components/ui/StatusBadge';
 import { settingsService, type SchoolSettings, type UpdateSchoolSettings } from '@/services/settings';
 import { PlansManager } from '@/components/settings/PlansManager';
@@ -60,11 +60,16 @@ export function SettingsPage() {
 
   return (
     <>
-      <PageHeader
+      <PageHero
         title="Configurações"
         subtitle="Dados cadastrais e informações da escola."
+        icon={Settings}
         actions={
-          <button className="btn-primary" form="settings-form" type="submit">
+          <button
+            className="inline-flex items-center gap-2 rounded-xl bg-purple px-5 py-2.5 text-sm font-semibold text-white shadow-card hover:bg-purple/90"
+            form="settings-form"
+            type="submit"
+          >
             {saved ? <Check size={16} /> : <Save size={16} />} {saved ? 'Salvo' : 'Salvar'}
           </button>
         }

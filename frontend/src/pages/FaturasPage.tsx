@@ -3,7 +3,7 @@ import {
   Loader2, Wallet, Copy, Check, QrCode, ExternalLink,
   Eye, EyeOff, Download, FileText, CreditCard,
 } from 'lucide-react';
-import { PageHeader } from '@/components/ui/PageHeader';
+import { PageHero } from '@/components/ui/PageHero';
 import { StatusBadge } from '@/components/ui/StatusBadge';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { QRCodeSVG } from 'qrcode.react';
@@ -165,11 +165,15 @@ export function FaturasPage() {
 
   return (
     <>
-      <PageHeader
+      <PageHero
         title="Faturas"
         subtitle="Mensalidades e cobranças do(s) seu(s) filho(s)."
+        icon={Wallet}
         actions={
-          <button className="btn-outline text-xs" onClick={() => generateIRPdf(me, invoices, new Date().getFullYear() - 1)}>
+          <button
+            className="inline-flex items-center gap-2 rounded-xl border border-border bg-white/60 px-4 py-2.5 text-sm font-semibold text-ink hover:bg-white"
+            onClick={() => generateIRPdf(me, invoices, new Date().getFullYear() - 1)}
+          >
             <FileText size={14} /> Comprovante IR {new Date().getFullYear() - 1}
           </button>
         }

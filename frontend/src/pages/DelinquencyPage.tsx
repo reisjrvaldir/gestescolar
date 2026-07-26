@@ -66,7 +66,7 @@ export function DelinquencyPage() {
   return (
     <>
       {/* ===== HERO ===== */}
-      <div className="mb-6 overflow-hidden rounded-2xl bg-gradient-to-r from-danger-soft to-danger-soft/40 p-6 sm:p-8">
+      <div className="mb-6 overflow-hidden rounded-2xl bg-gradient-to-r from-[#EDE9FE] via-[#F3EEFF] to-[#F5F3FF] p-6 sm:p-8">
         <div className="flex items-start justify-between gap-6">
           <div className="max-w-xl">
             <h1 className="text-3xl font-extrabold text-ink sm:text-4xl">Inadimplência</h1>
@@ -75,7 +75,7 @@ export function DelinquencyPage() {
             </p>
           </div>
           <div className="hidden shrink-0 items-center justify-center sm:flex">
-            <div className="grid h-32 w-32 place-items-center rounded-full bg-white/40 text-danger shadow-inner">
+            <div className="grid h-32 w-32 place-items-center rounded-full bg-purple/10 text-purple shadow-inner">
               <AlertTriangle size={64} />
             </div>
           </div>

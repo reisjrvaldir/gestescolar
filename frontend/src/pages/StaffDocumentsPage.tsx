@@ -1,7 +1,7 @@
 import { useEffect, useState, useRef } from 'react';
 import { useForm } from 'react-hook-form';
-import { FileText, Upload, Trash2, Download, Loader2 } from 'lucide-react';
-import { PageHeader } from '@/components/ui/PageHeader';
+import { FileText, Upload, Trash2, Download, Loader2, FolderOpen } from 'lucide-react';
+import { PageHero } from '@/components/ui/PageHero';
 import { StatusBadge } from '@/components/ui/StatusBadge';
 import { Modal } from '@/components/ui/Modal';
 import { EmptyState } from '@/components/ui/EmptyState';
@@ -95,11 +95,15 @@ export function StaffDocumentsPage() {
 
   return (
     <>
-      <PageHeader
+      <PageHero
         title="Meus Documentos"
         subtitle="Envie certificados, atestados médicos, certidões e outros documentos."
+        icon={FolderOpen}
         actions={
-          <button className="btn-primary" onClick={() => { setFileData(null); reset(); setOpen(true); }}>
+          <button
+            className="inline-flex items-center gap-2 rounded-xl bg-purple px-5 py-2.5 text-sm font-semibold text-white shadow-card hover:bg-purple/90"
+            onClick={() => { setFileData(null); reset(); setOpen(true); }}
+          >
             <Upload size={16} /> Enviar documento
           </button>
         }

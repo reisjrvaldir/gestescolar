@@ -2,9 +2,9 @@ import { useEffect, useState, useCallback } from 'react';
 import {
   GraduationCap, School2, Wallet, AlertTriangle, ClipboardCheck, Loader2,
   Mail, Star, RefreshCw, TrendingUp, TrendingDown, UserPlus, CheckCircle2,
-  ArrowUpRight, ArrowDownRight,
+  ArrowUpRight, ArrowDownRight, LayoutDashboard,
 } from 'lucide-react';
-import { PageHeader } from '@/components/ui/PageHeader';
+import { PageHero } from '@/components/ui/PageHero';
 import { MetricCard } from '@/components/ui/MetricCard';
 import { StatusBadge } from '@/components/ui/StatusBadge';
 import { OnboardingChecklist } from '@/components/onboarding/OnboardingChecklist';
@@ -165,7 +165,7 @@ export function DashboardPage() {
     if (!child) {
       return (
         <>
-          <PageHeader title="Dashboard" subtitle="Portal do responsável" />
+          <PageHero title="Dashboard" subtitle="Portal do responsável" icon={LayoutDashboard} />
           <div className="card p-8 text-center text-ink-muted">
             <GraduationCap size={48} className="mx-auto mb-2 text-ink-subtle" />
             <p>Nenhum aluno vinculado à sua conta.</p>
@@ -188,7 +188,7 @@ export function DashboardPage() {
 
     return (
       <>
-        <PageHeader title="Dashboard" subtitle="Acompanhe a rotina e o desempenho do seu filho(a)." />
+        <PageHero title="Dashboard" subtitle="Acompanhe a rotina e o desempenho do seu filho(a)." icon={LayoutDashboard} />
         {refreshIndicator}
 
         {/* Cabeçalho do aluno */}
@@ -318,9 +318,10 @@ export function DashboardPage() {
 
   return (
     <>
-      <PageHeader
+      <PageHero
         title="Dashboard"
         subtitle="Visão geral da sua escola, indicadores e atividades importantes."
+        icon={LayoutDashboard}
       />
       {refreshIndicator}
 

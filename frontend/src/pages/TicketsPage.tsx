@@ -1,9 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
 import {
   MessageSquare, Plus, X, Send, Loader2, ChevronLeft,
-  Paperclip, ImagePlus, AlertTriangle,
+  Paperclip, ImagePlus, AlertTriangle, Headset,
 } from 'lucide-react';
-import { PageHeader } from '@/components/ui/PageHeader';
+import { PageHero } from '@/components/ui/PageHero';
 import { StatusBadge } from '@/components/ui/StatusBadge';
 import { Modal } from '@/components/ui/Modal';
 import { EmptyState } from '@/components/ui/EmptyState';
@@ -255,11 +255,15 @@ export function TicketsPage() {
 
   return (
     <>
-      <PageHeader
+      <PageHero
         title="Chamados"
         subtitle="Abra e acompanhe solicitações de suporte."
+        icon={Headset}
         actions={
-          <button className="btn-primary" onClick={openModal}>
+          <button
+            className="inline-flex items-center gap-2 rounded-xl bg-purple px-5 py-2.5 text-sm font-semibold text-white shadow-card hover:bg-purple/90"
+            onClick={openModal}
+          >
             <Plus size={16} /> Novo chamado
           </button>
         }

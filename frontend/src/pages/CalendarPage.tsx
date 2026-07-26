@@ -203,7 +203,7 @@ function CalendarView({ isAdmin }: { isAdmin: boolean }) {
   return (
     <>
       {/* HERO */}
-      <div className="mb-6 overflow-hidden rounded-2xl bg-gradient-to-r from-primary-soft to-primary-soft/40 p-6 sm:p-8">
+      <div className="mb-6 overflow-hidden rounded-2xl bg-gradient-to-r from-[#EDE9FE] via-[#F3EEFF] to-[#F5F3FF] p-6 sm:p-8">
         <div className="flex items-start justify-between gap-6">
           <div className="max-w-xl">
             <h1 className="text-3xl font-extrabold text-ink sm:text-4xl">Ano Letivo</h1>
@@ -218,7 +218,7 @@ function CalendarView({ isAdmin }: { isAdmin: boolean }) {
               </select>
               {isAdmin && (
                 <button
-                  className="inline-flex items-center gap-2 rounded-xl bg-primary px-5 py-2.5 text-sm font-semibold text-white shadow-card hover:bg-primary/90"
+                  className="inline-flex items-center gap-2 rounded-xl bg-purple px-5 py-2.5 text-sm font-semibold text-white shadow-card hover:bg-purple/90"
                   onClick={() => openCreate()}
                 >
                   <Plus size={18} /> Novo evento
@@ -227,7 +227,7 @@ function CalendarView({ isAdmin }: { isAdmin: boolean }) {
             </div>
           </div>
           <div className="hidden shrink-0 items-center justify-center sm:flex">
-            <div className="grid h-32 w-32 place-items-center rounded-full bg-white/40 text-primary shadow-inner">
+            <div className="grid h-32 w-32 place-items-center rounded-full bg-purple/10 text-purple shadow-inner">
               <CalendarDays size={64} />
             </div>
           </div>

@@ -4,7 +4,7 @@ import {
   Clock, LogIn, LogOut, Loader2, Check, AlertTriangle, Plus, Users, FileClock,
   CalendarClock, Download, PiggyBank, ClipboardCheck,
 } from 'lucide-react';
-import { PageHeader } from '@/components/ui/PageHeader';
+import { PageHero } from '@/components/ui/PageHero';
 import { MetricCard } from '@/components/ui/MetricCard';
 import { StatusBadge } from '@/components/ui/StatusBadge';
 import { EmptyState } from '@/components/ui/EmptyState';
@@ -843,9 +843,10 @@ function MyTimeclock() {
 
   return (
     <>
-      <PageHeader
+      <PageHero
         title="Meu Ponto"
         subtitle="Registre e acompanhe suas entradas e saídas."
+        icon={Clock}
         actions={
           <div className="flex items-center gap-2">
             <input type="month" className="input w-auto" value={month} onChange={(e) => setMonth(e.target.value)} />

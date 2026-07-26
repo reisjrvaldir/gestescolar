@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { ClipboardList, Plus, Trash2, Loader2, Check, AlertTriangle, Clock } from 'lucide-react';
-import { PageHeader } from '@/components/ui/PageHeader';
+import { PageHero } from '@/components/ui/PageHero';
 import { MetricCard } from '@/components/ui/MetricCard';
 import { Modal } from '@/components/ui/Modal';
 import { EmptyState } from '@/components/ui/EmptyState';
@@ -44,9 +44,10 @@ function MyJourneyView({ profileId }: { profileId: string }) {
 
   return (
     <>
-      <PageHeader
+      <PageHero
         title="Minha Jornada"
         subtitle="Horários de trabalho cadastrados pela gestão para você."
+        icon={Clock}
       />
 
       {schedules.length === 0 ? (
@@ -169,11 +170,15 @@ export function JourneysPage() {
 
   return (
     <>
-      <PageHeader
+      <PageHero
         title="Jornadas de Trabalho"
         subtitle="Defina os horários de trabalho de cada colaborador."
+        icon={Clock}
         actions={
-          <button className="btn-primary" onClick={() => setOpen(true)}>
+          <button
+            className="inline-flex items-center gap-2 rounded-xl bg-purple px-5 py-2.5 text-sm font-semibold text-white shadow-card hover:bg-purple/90"
+            onClick={() => setOpen(true)}
+          >
             <Plus size={16} /> Nova jornada
           </button>
         }

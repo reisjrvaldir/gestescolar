@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { CalendarOff, Plus, Loader2, Check, X } from 'lucide-react';
-import { PageHeader } from '@/components/ui/PageHeader';
+import { PageHero } from '@/components/ui/PageHero';
 import { StatusBadge } from '@/components/ui/StatusBadge';
 import { Modal } from '@/components/ui/Modal';
 import { EmptyState } from '@/components/ui/EmptyState';
@@ -58,12 +58,16 @@ export function LeaveRequestsPage() {
 
   return (
     <>
-      <PageHeader
+      <PageHero
         title="Folgas, Licenças e Férias"
         subtitle={isAdmin ? 'Solicitações da equipe.' : 'Solicite e acompanhe suas folgas, licenças e férias.'}
+        icon={CalendarOff}
         actions={
           !isAdmin && (
-            <button className="btn-primary" onClick={() => { reset(); setOpen(true); }}>
+            <button
+              className="inline-flex items-center gap-2 rounded-xl bg-purple px-5 py-2.5 text-sm font-semibold text-white shadow-card hover:bg-purple/90"
+              onClick={() => { reset(); setOpen(true); }}
+            >
               <Plus size={16} /> Nova solicitação
             </button>
           )

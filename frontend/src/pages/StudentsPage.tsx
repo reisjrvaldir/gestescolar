@@ -6,7 +6,7 @@ import {
   User, Phone, FileText, Link2, Upload, Printer, Pencil,
   Users, UserPlus, Gift, AlertTriangle, Eye, MoreVertical,
 } from 'lucide-react';
-import { PageHeader } from '@/components/ui/PageHeader';
+import { PageHero } from '@/components/ui/PageHero';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { StatusBadge } from '@/components/ui/StatusBadge';
 import { studentsService, type NewStudent, type CreatedStudent } from '@/services/students';
@@ -314,9 +314,10 @@ export function StudentsPage() {
   if (isNewRoute) {
     return (
       <>
-        <PageHeader
+        <PageHero
           title="Cadastrar Aluno"
           subtitle="Preencha os dados para matricular um novo aluno."
+          icon={UserPlus}
         />
 
         {error && <div className="mb-4 rounded-xl bg-danger-soft px-3 py-2 text-sm text-danger">{error}</div>}
@@ -563,7 +564,7 @@ export function StudentsPage() {
       {error && <div className="mb-4 rounded-xl bg-danger-soft px-3 py-2 text-sm text-danger">{error}</div>}
 
       {/* ===== HERO ===== */}
-      <div className="mb-6 overflow-hidden rounded-2xl bg-gradient-to-r from-[#EDE9FE] to-[#F5F3FF] p-6 sm:p-8">
+      <div className="mb-6 overflow-hidden rounded-2xl bg-gradient-to-r from-[#EDE9FE] via-[#F3EEFF] to-[#F5F3FF] p-6 sm:p-8">
         <div className="flex items-start justify-between gap-6">
           <div className="max-w-xl">
             <h1 className="text-3xl font-extrabold text-ink sm:text-4xl">Gestão de alunos</h1>

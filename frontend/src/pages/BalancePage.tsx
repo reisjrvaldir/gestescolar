@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { PiggyBank, Wallet, TrendingUp, ArrowDownCircle, Loader2, Check, AlertTriangle } from 'lucide-react';
-import { PageHeader } from '@/components/ui/PageHeader';
+import { PageHero } from '@/components/ui/PageHero';
 import { MetricCard } from '@/components/ui/MetricCard';
 import { Modal } from '@/components/ui/Modal';
 import { StatusBadge } from '@/components/ui/StatusBadge';
@@ -88,7 +88,7 @@ export function BalancePage() {
 
   return (
     <>
-      <PageHeader title="Saldo / Resgate" subtitle="Acompanhe o saldo da escola e saque para a sua conta." />
+      <PageHero title="Saldo / Resgate" subtitle="Acompanhe o saldo da escola e saque para a sua conta." icon={PiggyBank} />
 
       {toast && (
         <div className={`mb-4 flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-medium ${toast.type === 'success' ? 'bg-success-soft text-success' : 'bg-danger-soft text-danger'}`}>
