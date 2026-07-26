@@ -73,8 +73,11 @@ function isoDate(year: number, month: number, day: number) {
 export function CalendarPage() {
   const me = useMe();
   if (me?.role === 'guardian') return <GuardianAgenda />;
-  const isAdmin = me && ['school_admin', 'superadmin'].includes(me.role);
+  const isAdmin = !!(me && ['school_admin', 'superadmin'].includes(me.role));
+  return <CalendarView isAdmin={isAdmin} />;
+}
 
+function CalendarView({ isAdmin }: { isAdmin: boolean }) {
   const today = new Date();
   const [calYear, setCalYear] = useState(today.getFullYear());
   const [calMonth, setCalMonth] = useState(today.getMonth());
