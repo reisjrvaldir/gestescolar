@@ -46273,7 +46273,10 @@ calendarRouter.get("/", async (req, res) => {
       ))`;
     }
     const { rows } = await c.query(
-      `select sc.id, sc.title, sc.description, sc.date_start, sc.date_end, sc.event_type,
+      `select sc.id, sc.title, sc.description,
+              to_char(sc.date_start, 'YYYY-MM-DD') as date_start,
+              to_char(sc.date_end,   'YYYY-MM-DD') as date_end,
+              sc.event_type,
               sc.class_id, cl.name as class_name,
               to_char(sc.start_time, 'HH24:MI') as start_time,
               to_char(sc.end_time,   'HH24:MI') as end_time,
@@ -46307,7 +46310,7 @@ calendarRouter.post("/", requireRole("school_admin", "superadmin"), async (req, 
       `insert into public.school_calendar
          (school_id, title, description, date_start, date_end, event_type, start_time, end_time, class_id)
        values ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-       returning id, title, date_start, event_type, class_id`,
+       returning id, title, to_char(date_start, 'YYYY-MM-DD') as date_start, event_type, class_id`,
       [
         req.ctx.schoolId,
         p2.data.title,
