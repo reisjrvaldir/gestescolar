@@ -2,12 +2,13 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useLocation } from 'react-router-dom';
 import {
   Star, Save, Check, Loader2, AlertTriangle, Lock,
-  Settings, PieChart, BarChart2, BookOpen,
+  Settings, BookOpen, Search, ClipboardList, BarChart3, Users, TrendingDown,
 } from 'lucide-react';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Modal } from '@/components/ui/Modal';
 import { classesService, type ClassSubject } from '@/services/classes';
-import { gradesService, type GradeSettings, type GradeSummary, type BoletimData } from '@/services/grades';
+import { gradesService, type GradeSettings, type BoletimData } from '@/services/grades';
+import { listEvents, type CalendarEvent } from '@/services/calendar';
 import { GuardianBoletim } from '@/components/grades/GuardianBoletim';
 import { api } from '@/lib/api';
 import { useMe } from '@/auth/AuthGate';
@@ -15,6 +16,9 @@ import type { SchoolClass, Student } from '@/types/models';
 
 const SUBJECTS = ['Português', 'Matemática', 'Ciências', 'História', 'Geografia', 'Inglês'];
 const PERIODS  = ['1ª Unidade', '2ª Unidade', '3ª Unidade', '4ª Unidade'];
+const EXAM_TYPES = ['Todos os tipos', 'AV1 pendente', 'AV2 pendente', 'Em recuperação'];
+
+const MONTHS_SHORT = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
 
 function avg(a: number | null, b: number | null): number | null {
   if (a === null || b === null) return null;
@@ -61,6 +65,50 @@ interface EntryState {
   av1av2Locked: boolean;
 }
 
+// Donut chart component
+function Donut({ data, centerLabel }: {
+  data: { label: string; value: number; color: string }[];
+  centerLabel?: string;
+}) {
+  const total = data.reduce((s, d) => s + d.value, 0);
+  if (total === 0) return <p className="py-4 text-center text-xs text-ink-muted">Nenhuma nota lançada.</p>;
+  const R = 40; const C = 2 * Math.PI * R;
+  let acc = 0;
+  return (
+    <div className="flex flex-col items-center gap-4">
+      <div className="relative">
+        <svg viewBox="0 0 110 110" className="h-36 w-36 -rotate-90">
+          {data.filter(d => d.value > 0).map(d => {
+            const dash = (d.value / total) * C;
+            const off  = acc; acc += dash;
+            return <circle key={d.label} cx="55" cy="55" r={R} fill="none" stroke={d.color}
+              strokeWidth="18" strokeDasharray={`${dash} ${C - dash}`} strokeDashoffset={-off} />;
+          })}
+        </svg>
+        {centerLabel && (
+          <div className="absolute inset-0 flex flex-col items-center justify-center rotate-90">
+            <span className="text-xl font-extrabold text-ink">{centerLabel}</span>
+            <span className="text-[10px] text-ink-muted">Média geral</span>
+          </div>
+        )}
+      </div>
+      <div className="w-full space-y-1.5">
+        {data.filter(d => d.value > 0).map(d => (
+          <div key={d.label} className="flex items-center justify-between text-xs">
+            <span className="flex items-center gap-1.5 text-ink-muted">
+              <span className="h-2.5 w-2.5 shrink-0 rounded-sm" style={{ background: d.color }} />
+              {d.label}
+            </span>
+            <span className="font-bold text-ink">
+              {d.value} <span className="font-normal text-ink-subtle">({((d.value / total) * 100).toFixed(0)}%)</span>
+            </span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 export function GradesPage() {
   const me = useMe();
   if (me?.role === 'guardian') return <GuardianBoletim />;
@@ -72,17 +120,21 @@ export function GradesPage() {
 function GradesView({ isAdmin, isTeacher }: { isAdmin: boolean; isTeacher: boolean }) {
   const location = useLocation();
   const isBoletimRoute = location.pathname.endsWith('/boletim');
+
   const [classes, setClasses]   = useState<SchoolClass[]>([]);
   const [classId, setClassId]   = useState('');
   const [classSubjects, setClassSubjects] = useState<ClassSubject[]>([]);
   const [subject, setSubject]   = useState(SUBJECTS[0]);
   const [period, setPeriod]     = useState(PERIODS[0]);
+  const [examType, setExamType] = useState(EXAM_TYPES[0]);
+  const [search, setSearch]     = useState('');
   const [entries, setEntries]   = useState<Record<string, EntryState>>({});
   const [locked, setLocked]     = useState(false);
   const [saving, setSaving]     = useState(false);
   const [savingFinal, setSavingFinal] = useState(false);
   const [toast, setToast]       = useState<{ type: 'success' | 'error'; msg: string } | null>(null);
   const [loading, setLoading]   = useState(true);
+  const [examEvents, setExamEvents] = useState<CalendarEvent[]>([]);
 
   // Configurações de nota
   const [settings, setSettings] = useState<GradeSettings>({ passing_grade: 7.0, final_passing_grade: 5.0 });
@@ -91,7 +143,6 @@ function GradesView({ isAdmin, isTeacher }: { isAdmin: boolean; isTeacher: boole
   const [settingsSaving, setSettingsSaving] = useState(false);
 
   // Painel direito
-  const [summary, setSummary]           = useState<GradeSummary | null>(null);
   const [summaryLoading, setSummaryLoading] = useState(false);
 
   // Boletim
@@ -107,15 +158,18 @@ function GradesView({ isAdmin, isTeacher }: { isAdmin: boolean; isTeacher: boole
       setSettingsForm(s);
       setLoading(false);
     });
+    listEvents(new Date().getFullYear())
+      .then(evs => setExamEvents(evs.filter(e => e.event_type === 'exam')))
+      .catch(() => {});
   }, [isTeacher]);
 
   useEffect(() => {
     if (!classId) { setClassSubjects([]); return; }
-    classesService.subjects(classId).then((allSubs) => {
+    classesService.subjects(classId).then(allSubs => {
       if (isTeacher) {
-        const cls = classes.find((c) => c.id === classId);
+        const cls = classes.find(c => c.id === classId);
         if (cls && !cls.is_regente && cls.my_subject_ids?.length) {
-          const filtered = allSubs.filter((s) => cls.my_subject_ids!.includes(s.id));
+          const filtered = allSubs.filter(s => cls.my_subject_ids!.includes(s.id));
           setClassSubjects(filtered);
           setSubject(filtered.length > 0 ? filtered[0].name : SUBJECTS[0]);
           return;
@@ -157,7 +211,9 @@ function GradesView({ isAdmin, isTeacher }: { isAdmin: boolean; isTeacher: boole
   useEffect(() => {
     if (isBoletimRoute || !classId) return;
     setSummaryLoading(true);
-    gradesService.summary(classId, period).then(setSummary).finally(() => setSummaryLoading(false));
+    // Trigger briefly to show spinner while entries load
+    const t = setTimeout(() => setSummaryLoading(false), 400);
+    return () => clearTimeout(t);
   }, [isBoletimRoute, classId, period]);
 
   useEffect(() => {
@@ -169,64 +225,103 @@ function GradesView({ isAdmin, isTeacher }: { isAdmin: boolean; isTeacher: boole
   function setField(studentId: string, field: 'av1' | 'av2' | 'final', raw: string) {
     const n = raw === '' ? null : Math.max(0, Math.min(10, Number(raw)));
     if (raw !== '' && !Number.isFinite(n)) return;
-    setEntries((e) => ({ ...e, [studentId]: { ...e[studentId], [field]: n } }));
+    setEntries(e => ({ ...e, [studentId]: { ...e[studentId], [field]: n } }));
     setToast(null);
   }
 
   const studentList = Object.values(entries);
   const pg  = settings.passing_grade;
   const fpg = settings.final_passing_grade;
-
   const readOnly = locked && !isAdmin;
   const canSave  = studentList.length > 0 && (!locked || isAdmin);
 
-  const recoveryStudents = studentList.filter((e) => {
+  // Filtered + searched list
+  const filteredList = useMemo(() => {
+    let list = [...studentList];
+    // Search: prefix match, alphabetically sorted
+    if (search.trim()) {
+      const q = search.trim().toLowerCase();
+      list = list.filter(e => e.student_name.toLowerCase().startsWith(q));
+    }
+    // Exam type filter
+    if (examType === 'AV1 pendente') list = list.filter(e => e.av1 === null);
+    else if (examType === 'AV2 pendente') list = list.filter(e => e.av2 === null);
+    else if (examType === 'Em recuperação') {
+      list = list.filter(e => {
+        const st = studentStatus(e.av1, e.av2, e.final, pg, fpg);
+        return st === 'recovery' || st === 'failed';
+      });
+    }
+    // Alphabetical
+    return list.sort((a, b) => a.student_name.localeCompare(b.student_name, 'pt-BR'));
+  }, [studentList, search, examType, pg, fpg]);
+
+  const recoveryStudents = studentList.filter(e => {
     const s = studentStatus(e.av1, e.av2, e.final, pg, fpg);
     return s === 'recovery' || s === 'approved_final' || s === 'failed';
   });
   const hasFinalPhase = recoveryStudents.length > 0;
 
+  // KPI data
+  const total      = studentList.length;
+  const withGrades = studentList.filter(e => e.av1 !== null || e.av2 !== null).length;
+  const pctLancadas = total > 0 ? Math.round((withGrades / total) * 100) : 0;
+  const pending    = studentList.filter(e => e.av1 === null && e.av2 === null).length;
+  const avgsAll    = studentList.filter(e => avg(e.av1, e.av2) !== null).map(e => avg(e.av1, e.av2)!);
+  const classAvg   = avgsAll.length > 0 ? avgsAll.reduce((s, v) => s + v, 0) / avgsAll.length : 0;
+  const belowAvg   = avgsAll.filter(v => v < pg).length;
+
+  // Pie chart data (por faixa de nota)
+  const pieAcima  = avgsAll.filter(v => v > 8.5).length;
+  const pieNa     = avgsAll.filter(v => v >= 7.5 && v <= 8.5).length;
+  const pieAtenc  = avgsAll.filter(v => v >= 6 && v < 7.5).length;
+  const pieAbaixo = avgsAll.filter(v => v < 6).length;
+
+  // Exam events for the sidebar (filter by class if possible)
+  const todayStr = new Date().toISOString().slice(0, 10);
+  const upcomingExams = examEvents
+    .filter(e => {
+      if (e.date_start < todayStr) return false;
+      if (e.class_id && classId && e.class_id !== classId) return false;
+      return true;
+    })
+    .slice(0, 5);
+
   async function save() {
     setSaving(true);
     try {
-      const batch = studentList.map((e) => ({
+      const batch = studentList.map(e => ({
         student_id: e.student_id,
         ...(e.av1 !== null ? { av1: e.av1 } : {}),
         ...(e.av2 !== null ? { av2: e.av2 } : {}),
       }));
       await gradesService.saveBatch(classId, subject, period, batch);
       setLocked(true);
-      setEntries((prev) => {
+      setEntries(prev => {
         const next = { ...prev };
         for (const k of Object.keys(next)) next[k] = { ...next[k], av1av2Locked: true };
         return next;
       });
-      setToast({ type: 'success', msg: `AV1/AV2 salvas para ${period} — ${subject}` });
+      setToast({ type: 'success', msg: `AV1/AV2 salvas — ${subject} · ${period}` });
     } catch (err: any) {
       const msg = err?.code === 'already_locked'
         ? 'AV1/AV2 já lançadas. Somente a gestão pode alterá-las.'
         : err?.message ?? 'Erro ao salvar notas';
       setToast({ type: 'error', msg });
-    } finally {
-      setSaving(false);
-    }
+    } finally { setSaving(false); }
   }
 
   async function saveFinal() {
     setSavingFinal(true);
     try {
-      const batch = recoveryStudents
-        .filter((e) => e.final !== null)
-        .map((e) => ({ student_id: e.student_id, final: e.final! }));
+      const batch = recoveryStudents.filter(e => e.final !== null).map(e => ({ student_id: e.student_id, final: e.final! }));
       if (batch.length === 0) { setToast({ type: 'error', msg: 'Nenhuma nota final preenchida.' }); return; }
       await gradesService.saveBatch(classId, subject, period, batch);
       setToast({ type: 'success', msg: `Prova Final salva — ${batch.length} aluno(s)` });
       await loadContext();
     } catch (err: any) {
       setToast({ type: 'error', msg: err?.message ?? 'Erro ao salvar prova final.' });
-    } finally {
-      setSavingFinal(false);
-    }
+    } finally { setSavingFinal(false); }
   }
 
   async function saveSettings() {
@@ -242,8 +337,8 @@ function GradesView({ isAdmin, isTeacher }: { isAdmin: boolean; isTeacher: boole
   // Boletim pivot
   const boletimPivot = useMemo(() => {
     if (!boletim) return null;
-    const subjects = [...new Set(boletim.grades.map((g) => g.subject))].sort();
-    const periods  = [...new Set(boletim.grades.map((g) => g.period))].sort();
+    const subjects = [...new Set(boletim.grades.map(g => g.subject))].sort();
+    const periods  = [...new Set(boletim.grades.map(g => g.period))].sort();
     const map: Record<string, Record<string, { av1: number | null; av2: number | null; final: number | null }>> = {};
     for (const g of boletim.grades) {
       const key = `${g.subject}||${g.period}`;
@@ -256,36 +351,7 @@ function GradesView({ isAdmin, isTeacher }: { isAdmin: boolean; isTeacher: boole
     return { subjects, periods, map };
   }, [boletim]);
 
-  // Donut helper
-  function Donut({ data }: { data: { label: string; value: number; color: string }[] }) {
-    const total = data.reduce((s, d) => s + d.value, 0);
-    if (total === 0) return <p className="py-4 text-center text-xs text-ink-muted">Nenhuma nota lançada para este período.</p>;
-    const R = 44; const C = 2 * Math.PI * R;
-    let acc = 0;
-    return (
-      <div className="flex flex-col items-center gap-3">
-        <svg viewBox="0 0 110 110" className="h-28 w-28 -rotate-90">
-          {data.filter(d => d.value > 0).map((d) => {
-            const dash = (d.value / total) * C;
-            const off  = acc; acc += dash;
-            return <circle key={d.label} cx="55" cy="55" r={R} fill="none" stroke={d.color}
-              strokeWidth="16" strokeDasharray={`${dash} ${C - dash}`} strokeDashoffset={-off} />;
-          })}
-        </svg>
-        <div className="w-full space-y-1">
-          {data.filter(d => d.value > 0).map(d => (
-            <div key={d.label} className="flex items-center justify-between text-xs">
-              <span className="flex items-center gap-1.5 text-ink-muted">
-                <span className="h-2.5 w-2.5 shrink-0 rounded-sm" style={{ background: d.color }} />
-                {d.label}
-              </span>
-              <span className="font-bold text-ink">{d.value} <span className="font-normal text-ink-subtle">({((d.value/total)*100).toFixed(0)}%)</span></span>
-            </div>
-          ))}
-        </div>
-      </div>
-    );
-  }
+  const subjectList = classSubjects.length > 0 ? classSubjects.map(s => s.name) : SUBJECTS;
 
   if (loading) return (
     <div className="flex items-center justify-center py-20 text-ink-muted">
@@ -293,13 +359,11 @@ function GradesView({ isAdmin, isTeacher }: { isAdmin: boolean; isTeacher: boole
     </div>
   );
 
-  const subjectList = classSubjects.length > 0 ? classSubjects.map(s => s.name) : SUBJECTS;
-
   return (
     <>
-      {/* ===== HERO ===== */}
-      <div className="mb-6 overflow-hidden rounded-2xl bg-gradient-to-r from-primary-soft to-primary-soft/40 p-6 sm:p-8">
-        <div className="flex items-start justify-between gap-6">
+      {/* ===== HERO — 100% largura ===== */}
+      <div className="mb-6 overflow-hidden rounded-2xl bg-gradient-to-r from-[#EDE9FE] via-[#F3EEFF] to-[#F5F3FF] p-6 sm:p-8">
+        <div className="flex items-center justify-between gap-6">
           <div className="max-w-xl">
             <h1 className="text-3xl font-extrabold text-ink sm:text-4xl">
               {isBoletimRoute ? 'Boletim Escolar' : 'Lançamento de Notas'}
@@ -310,36 +374,27 @@ function GradesView({ isAdmin, isTeacher }: { isAdmin: boolean; isTeacher: boole
                 : 'Registre notas por turma, disciplina e bimestre com rapidez e segurança.'}
             </p>
             <div className="mt-5 flex flex-wrap items-center gap-2">
-              {isAdmin && (
+              {!isBoletimRoute && (
                 <button
-                  className="inline-flex items-center gap-2 rounded-xl border border-border bg-white px-4 py-2.5 text-sm font-semibold text-ink hover:bg-canvas"
-                  onClick={() => { setSettingsForm(settings); setSettingsOpen(true); }}
-                >
-                  <Settings size={16} /> Configurações
-                </button>
-              )}
-              {!isBoletimRoute && !readOnly && !locked && (
-                <button
-                  className="inline-flex items-center gap-2 rounded-xl bg-primary px-5 py-2.5 text-sm font-semibold text-white shadow-card hover:bg-primary/90"
+                  className="inline-flex items-center gap-2 rounded-xl bg-purple px-5 py-2.5 text-sm font-semibold text-white shadow-card hover:bg-purple/90 disabled:opacity-50"
                   onClick={save} disabled={!canSave || saving}
                 >
                   {saving ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
                   {saving ? 'Salvando…' : 'Salvar lançamentos'}
                 </button>
               )}
-              {!isBoletimRoute && isAdmin && locked && (
+              {isAdmin && (
                 <button
-                  className="inline-flex items-center gap-2 rounded-xl bg-primary px-5 py-2.5 text-sm font-semibold text-white shadow-card hover:bg-primary/90"
-                  onClick={save} disabled={saving}
+                  className="inline-flex items-center gap-2 rounded-xl border border-border bg-white/60 px-4 py-2.5 text-sm font-semibold text-ink hover:bg-white"
+                  onClick={() => { setSettingsForm(settings); setSettingsOpen(true); }}
                 >
-                  {saving ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
-                  {saving ? 'Salvando…' : 'Salvar Alteração'}
+                  <Settings size={16} /> Configurações
                 </button>
               )}
             </div>
           </div>
-          <div className="hidden shrink-0 items-center justify-center sm:flex">
-            <div className="grid h-32 w-32 place-items-center rounded-full bg-white/40 text-primary shadow-inner">
+          <div className="hidden shrink-0 sm:block">
+            <div className="grid h-32 w-32 place-items-center rounded-full bg-purple/10 text-purple shadow-inner">
               {isBoletimRoute ? <BookOpen size={64} /> : <Star size={64} />}
             </div>
           </div>
@@ -349,181 +404,235 @@ function GradesView({ isAdmin, isTeacher }: { isAdmin: boolean; isTeacher: boole
       {/* =================== LANÇAR NOTAS =================== */}
       {!isBoletimRoute && (
         <>
-          {/* ===== KPI CARDS ===== */}
-          {(() => {
-            const total = studentList.length;
-            const withGrades = studentList.filter(e => e.av1 !== null || e.av2 !== null).length;
-            const pct = total > 0 ? Math.round((withGrades / total) * 100) : 0;
-            const avgs = studentList.filter(e => avg(e.av1, e.av2) !== null).map(e => avg(e.av1, e.av2)!);
-            const classAvg = avgs.length > 0 ? (avgs.reduce((s, v) => s + v, 0) / avgs.length) : 0;
-            const belowAvg = avgs.filter(v => v < pg).length;
-            const kpis: { label: string; value: string; hint: string; tone: 'primary' | 'success' | 'warning' | 'danger' }[] = [
-              { label: 'Alunos na turma', value: String(total), hint: period, tone: 'primary' },
-              { label: 'Notas lançadas', value: `${pct}%`, hint: `${withGrades} de ${total} aluno(s)`, tone: 'success' },
-              { label: 'Média da turma', value: classAvg > 0 ? classAvg.toFixed(1) : '—', hint: classAvg >= pg ? 'Acima da média' : classAvg > 0 ? 'Abaixo da média' : 'Sem dados', tone: classAvg >= pg ? 'success' : classAvg > 0 ? 'warning' : 'primary' },
-              { label: 'Abaixo da média', value: String(belowAvg), hint: total > 0 ? `${Math.round((belowAvg / total) * 100)}% da turma` : '—', tone: belowAvg > 0 ? 'danger' : 'success' },
-            ];
-            const bgMap: Record<string, string> = { primary: 'border-primary/20 bg-primary-soft/30', success: 'border-success/20 bg-success-soft/30', warning: 'border-warning/20 bg-warning-soft/30', danger: 'border-danger/20 bg-danger-soft/30' };
-            const txtMap: Record<string, string> = { primary: 'text-primary', success: 'text-success', warning: 'text-warning', danger: 'text-danger' };
-            return (
-              <div className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-                {kpis.map((k) => (
-                  <div key={k.label} className={`rounded-xl border p-5 ${bgMap[k.tone]}`}>
+          {/* KPI CARDS */}
+          <div className="mb-6 grid grid-cols-2 gap-4 xl:grid-cols-4">
+            {[
+              {
+                label: 'Avaliações pendentes',
+                value: String(pending),
+                hint: 'sem nenhuma nota lançada',
+                icon: ClipboardList,
+                tone: pending > 0 ? 'warning' : 'success',
+              },
+              {
+                label: 'Notas lançadas',
+                value: `${pctLancadas}%`,
+                hint: `${withGrades} de ${total} aluno(s)`,
+                icon: BarChart3,
+                tone: 'success',
+              },
+              {
+                label: 'Média escolar',
+                value: classAvg > 0 ? classAvg.toFixed(1) : '—',
+                hint: classAvg >= pg ? 'Acima da média' : classAvg > 0 ? 'Atenção' : 'Sem dados',
+                icon: TrendingDown,
+                tone: classAvg >= pg ? 'success' : classAvg > 0 ? 'warning' : 'primary',
+              },
+              {
+                label: 'Abaixo da média',
+                value: String(belowAvg),
+                hint: total > 0 ? `${Math.round((belowAvg / total) * 100)}% da turma` : '—',
+                icon: Users,
+                tone: belowAvg > 0 ? 'danger' : 'success',
+              },
+            ].map(k => {
+              const bg: Record<string, string> = { primary: 'border-primary/20 bg-primary-soft/30', success: 'border-success/20 bg-success-soft/30', warning: 'border-warning/20 bg-warning-soft/30', danger: 'border-danger/20 bg-danger-soft/30' };
+              const ico: Record<string, string> = { primary: 'bg-primary-soft text-primary', success: 'bg-success-soft text-success', warning: 'bg-warning-soft text-warning', danger: 'bg-danger-soft text-danger' };
+              const txt: Record<string, string> = { primary: 'text-primary', success: 'text-success', warning: 'text-warning', danger: 'text-danger' };
+              return (
+                <div key={k.label} className={`flex items-start gap-4 rounded-xl border p-5 ${bg[k.tone]}`}>
+                  <div className={`grid h-10 w-10 shrink-0 place-items-center rounded-xl ${ico[k.tone]}`}>
+                    <k.icon size={20} />
+                  </div>
+                  <div>
                     <p className="text-xs font-medium text-ink-muted">{k.label}</p>
-                    <p className={`mt-1 text-2xl font-extrabold ${txtMap[k.tone]}`}>{k.value}</p>
+                    <p className={`text-2xl font-extrabold ${txt[k.tone]}`}>{k.value}</p>
                     <p className="text-[11px] text-ink-subtle">{k.hint}</p>
                   </div>
-                ))}
-              </div>
-            );
-          })()}
+                </div>
+              );
+            })}
+          </div>
 
+          {/* LAYOUT 70/30 */}
           <div className="grid grid-cols-1 gap-6 lg:grid-cols-[7fr_3fr]">
 
-          {/* Coluna principal 70% */}
-          <div className="min-w-0 space-y-4">
-            {toast && (
-              <div className={`flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-medium ${
-                toast.type === 'success' ? 'bg-success-soft text-success' : 'bg-danger-soft text-danger'
-              }`}>
-                {toast.type === 'success' ? <Check size={16} /> : <AlertTriangle size={16} />}
-                {toast.msg}
-              </div>
-            )}
+            {/* ===== Coluna principal 70% ===== */}
+            <div className="min-w-0 space-y-4">
 
-            {locked && (
-              <div className={`flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-medium ${
-                isAdmin ? 'bg-warning-soft text-warning' : 'bg-primary-soft text-primary'
-              }`}>
-                <Lock size={16} />
-                {isAdmin ? 'AV1/AV2 encerradas pelo professor. Como gestor, pode substituí-las.' : 'AV1/AV2 encerradas. Somente a gestão pode alterar.'}
-              </div>
-            )}
+              {toast && (
+                <div className={`flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-medium ${
+                  toast.type === 'success' ? 'bg-success-soft text-success' : 'bg-danger-soft text-danger'
+                }`}>
+                  {toast.type === 'success' ? <Check size={16} /> : <AlertTriangle size={16} />}
+                  {toast.msg}
+                </div>
+              )}
 
-            {/* Filtros */}
-            <div className="card p-4">
-              <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-                <div>
-                  <label className="label">Turma</label>
-                  <select className="input" value={classId} onChange={e => setClassId(e.target.value)}>
-                    {classes.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-                  </select>
+              {locked && (
+                <div className={`flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-medium ${
+                  isAdmin ? 'bg-warning-soft text-warning' : 'bg-primary-soft text-primary'
+                }`}>
+                  <Lock size={16} />
+                  {isAdmin ? 'AV1/AV2 encerradas pelo professor. Como gestor, pode substituí-las.' : 'AV1/AV2 encerradas. Somente a gestão pode alterar.'}
                 </div>
-                <div>
-                  <label className="label">Disciplina</label>
-                  <select className="input" value={subject} onChange={e => setSubject(e.target.value)}>
-                    {subjectList.map(s => <option key={s} value={s}>{s}</option>)}
-                  </select>
-                </div>
-                <div>
-                  <label className="label">Período (Unidade)</label>
-                  <select className="input" value={period} onChange={e => setPeriod(e.target.value)}>
-                    {PERIODS.map(p => <option key={p} value={p}>{p}</option>)}
-                  </select>
-                </div>
-              </div>
-              <div className="mt-2.5 flex items-center justify-between gap-2 text-xs text-ink-muted border-t border-border pt-2.5">
-                <div className="flex items-center gap-2">
-                  <span>Nota mínima de aprovação: <strong className="text-ink">{settings.passing_grade.toFixed(1)}</strong></span>
-                  <span>·</span>
-                  <span>Mínimo na Final: <strong className="text-ink">{settings.final_passing_grade.toFixed(1)}</strong></span>
-                </div>
-                {isAdmin && (
-                  <button
-                    className="text-primary hover:underline font-semibold"
-                    onClick={() => { setSettingsForm(settings); setSettingsOpen(true); }}
-                  >
-                    Editar
-                  </button>
-                )}
-              </div>
-            </div>
+              )}
 
-            {/* Tabela de notas */}
-            <div className="card overflow-hidden">
-              {studentList.length === 0 ? (
-                <EmptyState icon={Star} title="Nenhum aluno nesta turma" description="Vincule alunos a esta turma para lançar notas." />
-              ) : (
-                <>
-                  {/* Cabeçalho */}
-                  <div className="grid grid-cols-[1fr_7rem_7rem_6rem_8rem] gap-x-3 border-b border-border bg-canvas px-4 py-2 text-xs font-bold uppercase tracking-wide text-ink-muted">
-                    <span>Aluno</span>
-                    <span className="text-center">AV1</span>
-                    <span className="text-center">AV2</span>
-                    <span className="text-center">Média</span>
-                    <span className="text-center">Status</span>
+              {/* Filtros */}
+              <div className="card p-4">
+                <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                  <div>
+                    <label className="label">Turma</label>
+                    <select className="input" value={classId} onChange={e => { setClassId(e.target.value); setSearch(''); }}>
+                      {classes.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                    </select>
                   </div>
+                  <div>
+                    <label className="label">Disciplina</label>
+                    <select className="input" value={subject} onChange={e => setSubject(e.target.value)}>
+                      {subjectList.map(s => <option key={s} value={s}>{s}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="label">Unidade</label>
+                    <select className="input" value={period} onChange={e => setPeriod(e.target.value)}>
+                      {PERIODS.map(p => <option key={p} value={p}>{p}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="label">Tipo de avaliação</label>
+                    <select className="input" value={examType} onChange={e => setExamType(e.target.value)}>
+                      {EXAM_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
+                    </select>
+                  </div>
+                </div>
 
-                  <div className="divide-y divide-border">
-                    {studentList.map((entry) => {
-                      const m  = avg(entry.av1, entry.av2);
-                      const st = studentStatus(entry.av1, entry.av2, entry.final, pg, fpg);
-                      const inRecovery = st === 'recovery' || st === 'approved_final' || st === 'failed';
-                      const isLocked   = entry.av1av2Locked && !isAdmin;
+                {/* Busca live */}
+                <div className="mt-3">
+                  <div className="flex items-center gap-2 rounded-xl border border-border bg-canvas px-3 py-2.5 focus-within:border-primary focus-within:ring-2 focus-within:ring-primary/20">
+                    <Search size={16} className="shrink-0 text-ink-muted" />
+                    <input
+                      type="text"
+                      placeholder="Buscar aluno por nome ou matrícula…"
+                      value={search}
+                      onChange={e => setSearch(e.target.value)}
+                      className="flex-1 bg-transparent text-sm text-ink outline-none placeholder:text-ink-muted"
+                    />
+                    {search && (
+                      <button onClick={() => setSearch('')} className="text-xs text-ink-muted hover:text-ink">
+                        ✕
+                      </button>
+                    )}
+                  </div>
+                  {search && (
+                    <p className="mt-1 text-xs text-ink-muted">
+                      {filteredList.length} aluno(s) encontrado(s) — nomes iniciados por "<strong>{search}</strong>"
+                    </p>
+                  )}
+                </div>
 
-                      return (
-                        <div key={entry.student_id} className="hover:bg-canvas">
-                          {/* Linha principal AV1/AV2 */}
-                          <div className="grid grid-cols-[1fr_7rem_7rem_6rem_8rem] items-center gap-x-3 px-4 py-3">
-                            {/* Nome */}
-                            <div className="flex items-center gap-3 min-w-0">
-                              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary-soft text-xs font-bold text-primary">
-                                {entry.student_name.split(' ').slice(0, 2).map(n => n[0]).join('')}
+                <div className="mt-2.5 flex items-center justify-between gap-2 border-t border-border pt-2.5 text-xs text-ink-muted">
+                  <div className="flex items-center gap-2">
+                    <span>Aprovação: <strong className="text-ink">{settings.passing_grade.toFixed(1)}</strong></span>
+                    <span>·</span>
+                    <span>Mínimo Final: <strong className="text-ink">{settings.final_passing_grade.toFixed(1)}</strong></span>
+                  </div>
+                  {isAdmin && (
+                    <button className="font-semibold text-primary hover:underline" onClick={() => { setSettingsForm(settings); setSettingsOpen(true); }}>
+                      Editar
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {/* Tabela de alunos */}
+              <div className="card overflow-hidden">
+                {studentList.length === 0 ? (
+                  <EmptyState icon={Star} title="Nenhum aluno nesta turma" description="Vincule alunos a esta turma para lançar notas." />
+                ) : filteredList.length === 0 ? (
+                  <div className="flex flex-col items-center py-10 text-ink-muted">
+                    <Search size={32} className="mb-2 opacity-30" />
+                    <p className="text-sm">Nenhum aluno encontrado para "<strong className="text-ink">{search}</strong>"</p>
+                    <button className="mt-2 text-xs text-primary hover:underline" onClick={() => setSearch('')}>Limpar busca</button>
+                  </div>
+                ) : (
+                  <>
+                    <div className="grid grid-cols-[1fr_6rem_6rem_6rem_9rem] gap-x-3 border-b border-border bg-canvas px-4 py-2.5 text-xs font-bold uppercase tracking-wide text-ink-muted">
+                      <span>Aluno</span>
+                      <span className="text-center">AV1</span>
+                      <span className="text-center">AV2</span>
+                      <span className="text-center">Média</span>
+                      <span className="text-center">Status</span>
+                    </div>
+
+                    <div className="divide-y divide-border">
+                      {filteredList.map(entry => {
+                        const m  = avg(entry.av1, entry.av2);
+                        const st = studentStatus(entry.av1, entry.av2, entry.final, pg, fpg);
+                        const inRecovery = st === 'recovery' || st === 'approved_final' || st === 'failed';
+                        const isLocked   = entry.av1av2Locked && !isAdmin;
+
+                        return (
+                          <div key={entry.student_id} className="hover:bg-canvas/50">
+                            <div className="grid grid-cols-[1fr_6rem_6rem_6rem_9rem] items-center gap-x-3 px-4 py-3">
+                              {/* Nome */}
+                              <div className="flex min-w-0 items-center gap-3">
+                                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-purple/10 text-xs font-bold text-purple">
+                                  {entry.student_name.split(' ').slice(0, 2).map(n => n[0]).join('')}
+                                </div>
+                                <div className="min-w-0">
+                                  <p className="truncate font-medium text-ink">{entry.student_name}</p>
+                                  {entry.registration_number && <p className="text-[11px] text-ink-subtle">Mat. {entry.registration_number}</p>}
+                                </div>
                               </div>
-                              <div className="min-w-0">
-                                <p className="truncate font-medium text-ink">{entry.student_name}</p>
-                                {entry.registration_number && <p className="text-[11px] text-ink-subtle">Mat. {entry.registration_number}</p>}
+
+                              {/* AV1 */}
+                              <div className="flex justify-center">
+                                {isLocked ? (
+                                  <span className={`text-sm font-bold ${entry.av1 !== null && entry.av1 >= pg ? 'text-success' : entry.av1 !== null && entry.av1 < 5 ? 'text-danger' : 'text-warning'}`}>
+                                    {fmt(entry.av1)}
+                                  </span>
+                                ) : (
+                                  <input type="number" min={0} max={10} step={0.1}
+                                    className="input w-20 text-center text-sm font-semibold"
+                                    value={entry.av1 !== null ? entry.av1 : ''}
+                                    onChange={e => setField(entry.student_id, 'av1', e.target.value)} />
+                                )}
+                              </div>
+
+                              {/* AV2 */}
+                              <div className="flex justify-center">
+                                {isLocked ? (
+                                  <span className={`text-sm font-bold ${entry.av2 !== null && entry.av2 >= pg ? 'text-success' : entry.av2 !== null && entry.av2 < 5 ? 'text-danger' : 'text-warning'}`}>
+                                    {fmt(entry.av2)}
+                                  </span>
+                                ) : (
+                                  <input type="number" min={0} max={10} step={0.1}
+                                    className="input w-20 text-center text-sm font-semibold"
+                                    value={entry.av2 !== null ? entry.av2 : ''}
+                                    onChange={e => setField(entry.student_id, 'av2', e.target.value)} />
+                                )}
+                              </div>
+
+                              {/* Média */}
+                              <div className="flex justify-center">
+                                <span className={`text-sm font-bold ${m !== null && m >= pg ? 'text-success' : m !== null && m < 5 ? 'text-danger' : m !== null ? 'text-warning' : 'text-ink-muted'}`}>
+                                  {fmt(m)}
+                                </span>
+                              </div>
+
+                              {/* Status */}
+                              <div className="flex justify-center">
+                                <span className={`rounded-full px-3 py-1 text-xs font-semibold ${STATUS_CLS[st]}`}>
+                                  {STATUS_LABEL[st]}
+                                </span>
                               </div>
                             </div>
 
-                            {/* AV1 */}
-                            <div className="flex justify-center">
-                              {isLocked ? (
-                                <span className={`text-sm font-bold ${entry.av1 !== null && entry.av1 >= pg ? 'text-success' : entry.av1 !== null && entry.av1 < 5 ? 'text-danger' : 'text-warning'}`}>
-                                  {fmt(entry.av1)}
-                                </span>
-                              ) : (
-                                <input type="number" min={0} max={10} step={0.1}
-                                  className="input w-20 text-center text-sm font-semibold"
-                                  value={entry.av1 !== null ? entry.av1 : ''}
-                                  onChange={e => setField(entry.student_id, 'av1', e.target.value)} />
-                              )}
-                            </div>
-
-                            {/* AV2 */}
-                            <div className="flex justify-center">
-                              {isLocked ? (
-                                <span className={`text-sm font-bold ${entry.av2 !== null && entry.av2 >= pg ? 'text-success' : entry.av2 !== null && entry.av2 < 5 ? 'text-danger' : 'text-warning'}`}>
-                                  {fmt(entry.av2)}
-                                </span>
-                              ) : (
-                                <input type="number" min={0} max={10} step={0.1}
-                                  className="input w-20 text-center text-sm font-semibold"
-                                  value={entry.av2 !== null ? entry.av2 : ''}
-                                  onChange={e => setField(entry.student_id, 'av2', e.target.value)} />
-                              )}
-                            </div>
-
-                            {/* Média */}
-                            <div className="flex justify-center">
-                              <span className={`text-sm font-bold ${m !== null && m >= pg ? 'text-success' : m !== null && m < 5 ? 'text-danger' : m !== null ? 'text-warning' : 'text-ink-muted'}`}>
-                                {fmt(m)}
-                              </span>
-                            </div>
-
-                            {/* Status */}
-                            <div className="flex justify-center">
-                              <span className={`rounded-xl px-2.5 py-1 text-xs font-semibold ${STATUS_CLS[st]}`}>
-                                {STATUS_LABEL[st]}
-                              </span>
-                            </div>
-                          </div>
-
-                          {/* Linha da Prova Final (só se em recuperação) */}
-                          {inRecovery && (
-                            <div className="flex items-center gap-4 border-t border-border/50 bg-warning-soft/20 px-4 py-2.5">
-                              <span className="text-xs font-semibold text-warning">Prova Final</span>
-                              <div className="flex items-center gap-2">
+                            {/* Prova Final */}
+                            {inRecovery && (
+                              <div className="flex items-center gap-4 border-t border-border/50 bg-warning-soft/20 px-4 py-2.5">
+                                <span className="text-xs font-semibold text-warning">Prova Final</span>
                                 <input type="number" min={0} max={10} step={0.1}
                                   className="input w-20 text-center text-sm font-semibold"
                                   placeholder="—"
@@ -535,87 +644,114 @@ function GradesView({ isAdmin, isTeacher }: { isAdmin: boolean; isTeacher: boole
                                   </span>
                                 )}
                               </div>
-                              {entry.final !== null && (
-                                <span className={`ml-auto rounded-xl px-2.5 py-1 text-xs font-semibold ${STATUS_CLS[st]}`}>
-                                  {STATUS_LABEL[st]}
-                                </span>
-                              )}
-                            </div>
-                          )}
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+
+                    {/* Rodapé resumo */}
+                    <div className="border-t border-border bg-canvas px-4 py-2.5">
+                      <p className="text-xs text-ink-muted">
+                        Exibindo <strong className="text-ink">{filteredList.length}</strong> de <strong className="text-ink">{total}</strong> aluno(s) · Unidade: <strong className="text-ink">{period}</strong>
+                      </p>
+                    </div>
+                  </>
+                )}
+              </div>
+
+              {/* Salvar Prova Final */}
+              {!readOnly && studentList.length > 0 && hasFinalPhase && (
+                <div className="flex items-center justify-between rounded-xl border border-warning/40 bg-warning-soft px-4 py-3">
+                  <span className="text-sm font-medium text-warning">
+                    {recoveryStudents.length} aluno(s) em recuperação — lance a Prova Final.
+                  </span>
+                  <button className="inline-flex items-center gap-2 rounded-lg bg-warning px-4 py-2 text-sm font-semibold text-white hover:bg-warning/90 disabled:opacity-50"
+                    onClick={saveFinal} disabled={savingFinal}>
+                    {savingFinal ? <Loader2 size={15} className="animate-spin" /> : <Save size={15} />}
+                    {savingFinal ? 'Salvando…' : 'Salvar Prova Final'}
+                  </button>
+                </div>
+              )}
+            </div>
+
+            {/* ===== Coluna lateral 30% ===== */}
+            <div className="space-y-4">
+
+              {/* Calendário de avaliações */}
+              <div className="card p-4">
+                <p className="mb-3 text-sm font-bold text-ink">Calendário de avaliações</p>
+                {upcomingExams.length === 0 ? (
+                  <p className="py-3 text-center text-xs text-ink-muted">Nenhuma prova programada.</p>
+                ) : (
+                  <div className="space-y-3">
+                    {upcomingExams.map(ev => {
+                      const d = new Date(ev.date_start + 'T12:00:00');
+                      const day = String(d.getDate()).padStart(2, '0');
+                      const mon = MONTHS_SHORT[d.getMonth()].toUpperCase();
+                      return (
+                        <div key={ev.id} className="flex items-start gap-3">
+                          <div className="flex w-10 shrink-0 flex-col items-center rounded-lg bg-warning-soft py-1 text-center">
+                            <span className="text-base font-extrabold leading-none text-warning">{day}</span>
+                            <span className="text-[9px] font-bold uppercase text-warning">{mon}</span>
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <p className="truncate text-sm font-semibold text-ink">{ev.title}</p>
+                            <p className="text-xs text-ink-muted">
+                              {ev.class_name ?? 'Geral'}
+                              {ev.start_time ? ` · ${ev.start_time}` : ''}
+                            </p>
+                          </div>
+                          <span className="shrink-0 rounded-full bg-warning-soft px-2 py-0.5 text-[10px] font-semibold text-warning">
+                            Programada
+                          </span>
                         </div>
                       );
                     })}
                   </div>
-                </>
-              )}
-            </div>
-
-            {/* Rodapé: Prova Final */}
-            {!readOnly && studentList.length > 0 && hasFinalPhase && (
-              <div className="flex items-center justify-between rounded-xl border border-warning/40 bg-warning-soft px-4 py-3">
-                <span className="text-sm text-warning font-medium">
-                  {recoveryStudents.length} aluno(s) em recuperação — lance a Prova Final.
-                </span>
-                <button className="inline-flex items-center gap-2 rounded-lg bg-warning px-4 py-2 text-sm font-semibold text-white hover:bg-warning/90 disabled:opacity-50"
-                  onClick={saveFinal} disabled={savingFinal}>
-                  {savingFinal ? <Loader2 size={15} className="animate-spin" /> : <Save size={15} />}
-                  {savingFinal ? 'Salvando…' : 'Salvar Prova Final'}
-                </button>
+                )}
               </div>
-            )}
-          </div>
 
-          {/* Coluna lateral 30% */}
-          <div className="space-y-4">
-            {/* Gráfico pizza */}
-            <div className="card p-4">
-              <div className="mb-3 flex items-center gap-2 text-sm font-bold text-ink">
-                <PieChart size={16} className="text-primary" /> Resumo — {period}
+              {/* Resumo da turma — gráfico pizza */}
+              <div className="card p-4">
+                <p className="mb-3 text-sm font-bold text-ink">Resumo da turma</p>
+                {summaryLoading ? (
+                  <div className="flex justify-center py-6 text-ink-muted"><Loader2 size={18} className="animate-spin" /></div>
+                ) : (
+                  <Donut
+                    centerLabel={classAvg > 0 ? classAvg.toFixed(1) : undefined}
+                    data={[
+                      { label: 'Acima da média', value: pieAcima,  color: '#00B894' },
+                      { label: 'Na média',        value: pieNa,    color: '#3B82F6' },
+                      { label: 'Atenção',         value: pieAtenc, color: '#F59E0B' },
+                      { label: 'Abaixo da média', value: pieAbaixo,color: '#EF4444' },
+                    ]}
+                  />
+                )}
               </div>
-              {summaryLoading ? (
-                <div className="flex justify-center py-6 text-ink-muted"><Loader2 size={18} className="animate-spin" /></div>
-              ) : summary ? (
-                <Donut data={[
-                  { label: 'Aprovados',         value: summary.statusCounts.approved,       color: '#00B894' },
-                  { label: 'Aprovados (Final)',  value: summary.statusCounts.approved_final, color: '#3B82F6' },
-                  { label: 'Recuperação',        value: summary.statusCounts.recovery,       color: '#F59E0B' },
-                  { label: 'Reprovados',         value: summary.statusCounts.failed,         color: '#EF4444' },
-                ]} />
-              ) : null}
-            </div>
 
-            {/* Desempenho por disciplina */}
-            <div className="card p-4">
-              <div className="mb-3 flex items-center gap-2 text-sm font-bold text-ink">
-                <BarChart2 size={16} className="text-primary" /> Desempenho por disciplina
-              </div>
-              {summaryLoading ? (
-                <div className="flex justify-center py-6 text-ink-muted"><Loader2 size={18} className="animate-spin" /></div>
-              ) : !summary || summary.bySubject.length === 0 ? (
-                <p className="py-4 text-center text-xs text-ink-muted">Nenhuma nota lançada.</p>
-              ) : (
-                <div className="space-y-3">
-                  {summary.bySubject.map(s => (
-                    <div key={s.subject}>
-                      <div className="mb-1 flex items-center justify-between text-xs">
-                        <span className="font-medium text-ink">{s.subject}</span>
-                        <span className={`font-bold ${s.avg >= pg ? 'text-success' : s.avg < 5 ? 'text-danger' : 'text-warning'}`}>
-                          {s.avg.toFixed(1)} — {(s.passing_rate * 100).toFixed(0)}% aprovados
-                        </span>
-                      </div>
-                      <div className="h-2 w-full rounded-full bg-canvas overflow-hidden">
-                        <div
-                          className={`h-2 rounded-full transition-all ${s.passing_rate >= 0.7 ? 'bg-success' : s.passing_rate >= 0.5 ? 'bg-warning' : 'bg-danger'}`}
-                          style={{ width: `${(s.passing_rate * 100).toFixed(0)}%` }}
-                        />
-                      </div>
-                    </div>
+              {/* Ações rápidas */}
+              <div className="card p-4">
+                <p className="mb-3 text-sm font-bold text-ink">Ações rápidas</p>
+                <div className="space-y-1">
+                  {[
+                    { label: 'Lançar notas', action: save, disabled: !canSave || saving },
+                    { label: 'Salvar Prova Final', action: saveFinal, disabled: !hasFinalPhase || savingFinal },
+                  ].map(a => (
+                    <button
+                      key={a.label}
+                      className="flex w-full items-center justify-between rounded-lg px-3 py-2 text-sm font-medium text-primary hover:bg-primary-soft/40 disabled:cursor-not-allowed disabled:opacity-40"
+                      onClick={a.action}
+                      disabled={a.disabled}
+                    >
+                      <span>{a.label}</span>
+                      <span className="text-ink-subtle">→</span>
+                    </button>
                   ))}
                 </div>
-              )}
+              </div>
             </div>
           </div>
-        </div>
         </>
       )}
 
@@ -662,37 +798,35 @@ function GradesView({ isAdmin, isTeacher }: { isAdmin: boolean; isTeacher: boole
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-border">
-                    {boletim.students.map(stu => {
-                      return (
-                        <tr key={stu.id} className="hover:bg-canvas">
-                          <td className="sticky left-0 bg-white px-4 py-2.5 hover:bg-canvas whitespace-nowrap">
-                            <p className="font-medium text-ink">{stu.name}</p>
-                            {stu.registration_number && <p className="text-[10px] text-ink-subtle">{stu.registration_number}</p>}
-                          </td>
-                          {boletimPivot.subjects.flatMap(subj =>
-                            boletimPivot.periods.map(per => {
-                              const g = boletimPivot.map[stu.id]?.[`${subj}||${per}`];
-                              const m = g ? avg(g.av1, g.av2) : null;
-                              const st = g ? studentStatus(g.av1, g.av2, g.final, pg, fpg) : 'pending';
-                              return (
-                                <td key={`${subj}||${per}`} className="border-l border-border px-2 py-2.5 text-center">
-                                  {m !== null ? (
-                                    <div>
-                                      <span className={`inline-block rounded-lg px-2 py-0.5 font-bold ${STATUS_CLS[st]}`}>
-                                        {m.toFixed(1)}
-                                      </span>
-                                      {g?.final !== null && g?.final !== undefined && (
-                                        <div className="mt-0.5 text-[10px] text-ink-muted">F:{g.final.toFixed(1)}</div>
-                                      )}
-                                    </div>
-                                  ) : <span className="text-ink-subtle">—</span>}
-                                </td>
-                              );
-                            })
-                          )}
-                        </tr>
-                      );
-                    })}
+                    {boletim.students.map(stu => (
+                      <tr key={stu.id} className="hover:bg-canvas">
+                        <td className="sticky left-0 bg-white px-4 py-2.5 hover:bg-canvas whitespace-nowrap">
+                          <p className="font-medium text-ink">{stu.name}</p>
+                          {stu.registration_number && <p className="text-[10px] text-ink-subtle">{stu.registration_number}</p>}
+                        </td>
+                        {boletimPivot.subjects.flatMap(subj =>
+                          boletimPivot.periods.map(per => {
+                            const g  = boletimPivot.map[stu.id]?.[`${subj}||${per}`];
+                            const m  = g ? avg(g.av1, g.av2) : null;
+                            const st = g ? studentStatus(g.av1, g.av2, g.final, pg, fpg) : 'pending';
+                            return (
+                              <td key={`${subj}||${per}`} className="border-l border-border px-2 py-2.5 text-center">
+                                {m !== null ? (
+                                  <div>
+                                    <span className={`inline-block rounded-lg px-2 py-0.5 font-bold ${STATUS_CLS[st]}`}>
+                                      {m.toFixed(1)}
+                                    </span>
+                                    {g?.final !== null && g?.final !== undefined && (
+                                      <div className="mt-0.5 text-[10px] text-ink-muted">F:{g.final.toFixed(1)}</div>
+                                    )}
+                                  </div>
+                                ) : <span className="text-ink-subtle">—</span>}
+                              </td>
+                            );
+                          })
+                        )}
+                      </tr>
+                    ))}
                   </tbody>
                 </table>
               </div>
@@ -716,20 +850,18 @@ function GradesView({ isAdmin, isTeacher }: { isAdmin: boolean; isTeacher: boole
         }
       >
         <div className="space-y-4">
-          <p className="text-sm text-ink-muted">Defina as notas mínimas utilizadas para calcular aprovação nesta escola.</p>
+          <p className="text-sm text-ink-muted">Defina as notas mínimas de aprovação nesta escola.</p>
           <div>
             <label className="label">Nota mínima de aprovação (AV1/AV2)</label>
             <input type="number" min={0} max={10} step={0.5} className="input"
               value={settingsForm.passing_grade}
               onChange={e => setSettingsForm(f => ({ ...f, passing_grade: Number(e.target.value) }))} />
-            <p className="mt-1 text-xs text-ink-muted">Ex.: 6.0 ou 7.0. Média abaixo desse valor vai para a Prova Final.</p>
           </div>
           <div>
             <label className="label">Nota mínima na Prova Final</label>
             <input type="number" min={0} max={10} step={0.5} className="input"
               value={settingsForm.final_passing_grade}
               onChange={e => setSettingsForm(f => ({ ...f, final_passing_grade: Number(e.target.value) }))} />
-            <p className="mt-1 text-xs text-ink-muted">Ex.: 5.0. Aluno que alcançar essa nota na Final é aprovado.</p>
           </div>
         </div>
       </Modal>
