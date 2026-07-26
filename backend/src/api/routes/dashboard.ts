@@ -107,11 +107,16 @@ dashboardRouter.get('/stats', async (req, res) => {
     // apenas os indicadores operacionais.
     const canSeeFinance = ['school_admin', 'financial', 'superadmin'].includes(role);
 
-    const [students, classes, teachers, attendanceToday, trialInfo] = await Promise.all([
+    const [students, classes, teachers, attendanceToday, presenceToday, trialInfo] = await Promise.all([
       c.query(`select count(*)::int as total from public.students where school_id=$1 and status='active'`, [schoolId]),
       c.query(`select count(*)::int as total from public.classes where school_id=$1 and status='active'`, [schoolId]),
       c.query(`select count(*)::int as total from public.teachers where school_id=$1 and status='active'`, [schoolId]),
       c.query(`select count(distinct class_id)::int as total from public.attendance where school_id=$1 and date = current_date`, [schoolId]),
+      c.query(
+        `select round(100.0 * count(*) filter (where status = 'present') / nullif(count(*), 0))::int as pct
+           from public.attendance where school_id=$1 and date = current_date`,
+        [schoolId],
+      ),
       c.query(`select subscription_status, trial_ends_at from public.schools where id=$1`, [schoolId]),
     ]);
 
@@ -128,6 +133,7 @@ dashboardRouter.get('/stats', async (req, res) => {
       classes: classes.rows[0].total,
       teachers: teachers.rows[0].total,
       attendance_today: attendanceToday.rows[0].total,
+      presence_pct: presenceToday.rows[0].pct,
       subscription_status: canSeeFinance ? (school.subscription_status ?? null) : null,
       trial_days_left: canSeeFinance ? trialDaysLeft : null,
     };

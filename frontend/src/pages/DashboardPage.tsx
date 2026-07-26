@@ -1,17 +1,23 @@
 import { useEffect, useState, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   GraduationCap, School2, Wallet, AlertTriangle, ClipboardCheck, Loader2,
   Mail, Star, RefreshCw, TrendingUp, TrendingDown, UserPlus, CheckCircle2,
-  ArrowUpRight, ArrowDownRight, LayoutDashboard,
+  ArrowUpRight, ArrowDownRight, LayoutDashboard, Eye, EyeOff, Send, Gift,
+  CalendarDays, Zap, FileText, Check,
 } from 'lucide-react';
 import { PageHero } from '@/components/ui/PageHero';
 import { MetricCard } from '@/components/ui/MetricCard';
 import { StatusBadge } from '@/components/ui/StatusBadge';
+import { Modal } from '@/components/ui/Modal';
 import { OnboardingChecklist } from '@/components/onboarding/OnboardingChecklist';
 import { api } from '@/lib/api';
 import { brl } from '@/lib/fees';
 import { classesService } from '@/services/classes';
-import { SHIFT_LABELS, type SchoolClass } from '@/types/models';
+import { messagesService, type Contact } from '@/services/messages';
+import { listEvents, EVENT_TYPE_LABELS, type CalendarEvent } from '@/services/calendar';
+import { SHIFT_LABELS, type SchoolClass, type Student } from '@/types/models';
+import { useMe } from '@/auth/AuthGate';
 
 interface ChildStat {
   id: string;
@@ -50,6 +56,7 @@ interface DashboardStats {
   overdue_amount?: number;
   overdue_count?: number;
   attendance_today?: number;
+  presence_pct?: number | null;
   expenses_month?: number;
   balance_month?: number;
   revenue_series?: RevenuePoint[];
@@ -94,11 +101,47 @@ const ACTIVITY_ICON: Record<string, { icon: typeof CheckCircle2; tone: string }>
 const REFRESH_MS = 30_000;
 
 export function DashboardPage() {
+  const me = useMe();
+  const navigate = useNavigate();
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
   const [myClasses, setMyClasses] = useState<SchoolClass[] | null>(null);
+
+  // Olho de privacidade: oculta valores financeiros sensíveis (padrão: oculto)
+  const [hideFin, setHideFin] = useState(() => localStorage.getItem('dash_hide_fin') !== '0');
+  function toggleFin() {
+    setHideFin(h => {
+      localStorage.setItem('dash_hide_fin', h ? '0' : '1');
+      return !h;
+    });
+  }
+
+  // Dados extras do dashboard do gestor
+  const [allStudents, setAllStudents] = useState<Student[]>([]);
+  const [contacts, setContacts] = useState<Contact[]>([]);
+  const [adminClasses, setAdminClasses] = useState<SchoolClass[]>([]);
+  const [todayEvents, setTodayEvents] = useState<CalendarEvent[]>([]);
+  const [toast, setToast] = useState<{ type: 'success' | 'error'; msg: string } | null>(null);
+
+  // Modal: registrar ocorrência
+  const [occOpen, setOccOpen] = useState(false);
+  const [occStudent, setOccStudent] = useState('');
+  const [occText, setOccText] = useState('');
+  const [occBusy, setOccBusy] = useState(false);
+
+  // Modal: enviar comunicado
+  const [comOpen, setComOpen] = useState(false);
+  const [comSubject, setComSubject] = useState('');
+  const [comBody, setComBody] = useState('');
+  const [comClass, setComClass] = useState('');
+  const [comBusy, setComBusy] = useState(false);
+
+  function showToast(type: 'success' | 'error', msg: string) {
+    setToast({ type, msg });
+    setTimeout(() => setToast(null), 6000);
+  }
 
   const fetchStats = useCallback(async (silent = false) => {
     if (!silent) setRefreshing(true);
@@ -133,6 +176,58 @@ export function DashboardPage() {
       classesService.mine().then(setMyClasses).catch(() => setMyClasses([]));
     }
   }, [stats?.role]);
+
+  // Gestão: alunos (aniversariantes + ocorrência), contatos, turmas e agenda de hoje.
+  useEffect(() => {
+    if (!stats || !['school_admin', 'financial', 'superadmin'].includes(stats.role)) return;
+    api.get<{ data: Student[] }>('/students').then(r => setAllStudents(r.data.filter(s => s.status === 'active'))).catch(() => {});
+    messagesService.contacts().then(setContacts).catch(() => {});
+    classesService.list().then(setAdminClasses).catch(() => {});
+    listEvents(new Date().getFullYear()).then(evs => {
+      const today = new Date();
+      const t = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+      setTodayEvents(evs.filter(e => e.date_start === t || (e.date_end && e.date_start <= t && e.date_end >= t)));
+    }).catch(() => {});
+  }, [stats?.role]);
+
+  async function sendOccurrence() {
+    const st = allStudents.find(s => s.id === occStudent);
+    if (!st || !occText.trim()) { showToast('error', 'Selecione o aluno e descreva a ocorrência.'); return; }
+    const contact = contacts.find(ct =>
+      ct.role === 'guardian' &&
+      ((st.guardian_email && ct.email === st.guardian_email) || (st.guardian_name && ct.name === st.guardian_name)),
+    );
+    if (!contact) { showToast('error', 'O responsável deste aluno ainda não tem acesso ao sistema.'); return; }
+    setOccBusy(true);
+    try {
+      await messagesService.send({
+        recipient_id: contact.id,
+        subject: `Ocorrência — ${st.name}`,
+        body: occText.trim(),
+        student_id: st.id,
+      });
+      showToast('success', `Ocorrência registrada e enviada para ${contact.name}.`);
+      setOccOpen(false); setOccStudent(''); setOccText('');
+    } catch (e: any) {
+      showToast('error', e?.message ?? 'Erro ao enviar a ocorrência.');
+    } finally { setOccBusy(false); }
+  }
+
+  async function sendComunicado() {
+    if (!comSubject.trim() || !comBody.trim()) { showToast('error', 'Informe o assunto e a mensagem.'); return; }
+    setComBusy(true);
+    try {
+      const r = await messagesService.broadcast({
+        subject: comSubject.trim(),
+        body: comBody.trim(),
+        class_id: comClass || undefined,
+      });
+      showToast('success', `Comunicado enviado para ${r.sent ?? 'os'} responsável(is).`);
+      setComOpen(false); setComSubject(''); setComBody(''); setComClass('');
+    } catch (e: any) {
+      showToast('error', e?.message ?? 'Erro ao enviar o comunicado.');
+    } finally { setComBusy(false); }
+  }
 
   if (loading || !stats) {
     return <div className="flex items-center justify-center py-20 text-ink-muted"><Loader2 className="animate-spin" size={24} /> <span className="ml-2">Carregando…</span></div>;
@@ -316,14 +411,51 @@ export function DashboardPage() {
   const pix = stats.pix_summary;
   const delta = stats.revenue_delta_pct;
 
+  // Olho de privacidade: mascara valores financeiros
+  const money = (v: number) => (hideFin ? 'R$ ••••••' : brl(v));
+  const firstName = (me?.name ?? '').split(' ')[0];
+
+  // Presença hoje: % vinda do backend; fallback p/ contagem de turmas com chamada
+  const presenceVal = typeof stats.presence_pct === 'number'
+    ? `${stats.presence_pct}%`
+    : (stats.attendance_today ?? 0) > 0 ? String(stats.attendance_today) : '—';
+  const presenceHint = typeof stats.presence_pct === 'number'
+    ? `${stats.attendance_today ?? 0} turma(s) com chamada`
+    : (stats.attendance_today ?? 0) > 0 ? 'turma(s) com chamada hoje' : 'nenhuma chamada hoje';
+
+  // Aniversariantes do mês (birth_date chega como YYYY-MM-DD)
+  const curMonth = new Date().getMonth() + 1;
+  const birthdays = allStudents
+    .filter(s => s.birth_date && Number(s.birth_date.slice(5, 7)) === curMonth)
+    .sort((a, b) => Number(a.birth_date!.slice(8, 10)) - Number(b.birth_date!.slice(8, 10)));
+
+  const sortedTodayEvents = [...todayEvents].sort((a, b) => (a.start_time ?? '99').localeCompare(b.start_time ?? '99'));
+
   return (
     <>
       <PageHero
-        title="Dashboard"
-        subtitle="Visão geral da sua escola, indicadores e atividades importantes."
+        title={firstName ? `Bem-vindo(a), ${firstName}` : 'Dashboard'}
+        subtitle="Veja um panorama completo da operação escolar."
         icon={LayoutDashboard}
+        actions={finance ? (
+          <button
+            className="inline-flex items-center gap-2 rounded-xl bg-purple px-5 py-2.5 text-sm font-semibold text-white shadow-card hover:bg-purple/90"
+            onClick={() => navigate('/app/finance')}
+          >
+            <TrendingUp size={16} /> Ver relatórios
+          </button>
+        ) : undefined}
       />
       {refreshIndicator}
+
+      {toast && (
+        <div className={`mb-4 flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-medium ${
+          toast.type === 'success' ? 'bg-success-soft text-success' : 'bg-danger-soft text-danger'
+        }`}>
+          {toast.type === 'success' ? <Check size={16} /> : <AlertTriangle size={16} />}
+          {toast.msg}
+        </div>
+      )}
 
       {finance && stats.subscription_status === 'trialing' && stats.trial_days_left != null && (
         <div className="mb-6 flex items-center gap-3 rounded-2xl border border-warning/30 bg-warning-soft px-4 py-3 text-sm text-warning">
@@ -339,18 +471,147 @@ export function DashboardPage() {
 
       {/* Cards principais */}
       {finance ? (
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-          <MetricCard label="Alunos ativos" value={stats.students ?? 0} icon={GraduationCap} tone="primary" />
-          <MetricCard
-            label="Receita do mês"
-            value={brl(stats.revenue_month ?? 0)}
-            icon={Wallet}
-            tone="success"
-            hint={delta != null ? `${delta >= 0 ? '▲' : '▼'} ${Math.abs(delta).toFixed(1)}% vs. mês anterior` : undefined}
-          />
-          <MetricCard label="Inadimplência" value={brl(stats.overdue_amount ?? 0)} icon={AlertTriangle} tone="danger" hint={`${stats.overdue_count ?? 0} fatura(s) vencida(s)`} />
-          <MetricCard label="Turmas ativas" value={stats.classes ?? 0} icon={School2} tone="primary" hint={`${stats.teachers ?? 0} professor(es)`} />
-        </div>
+        <>
+          <div className="mb-2 flex items-center justify-end">
+            <button
+              className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-semibold text-ink-muted transition hover:bg-canvas hover:text-ink"
+              onClick={toggleFin}
+              title={hideFin ? 'Mostrar valores financeiros' : 'Ocultar valores financeiros'}
+            >
+              {hideFin ? <EyeOff size={14} /> : <Eye size={14} />}
+              {hideFin ? 'Mostrar valores' : 'Ocultar valores'}
+            </button>
+          </div>
+          <div className="grid grid-cols-2 gap-4 xl:grid-cols-4">
+            <div className="flex items-start gap-4 rounded-xl border border-purple/20 bg-purple/5 p-5">
+              <div className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-purple/10 text-purple"><GraduationCap size={20} /></div>
+              <div>
+                <p className="text-xs font-medium text-ink-muted">Total de alunos</p>
+                <p className="text-2xl font-extrabold text-ink">{stats.students ?? 0}</p>
+                <p className="text-[11px] text-ink-subtle">{stats.classes ?? 0} turma(s) ativa(s)</p>
+              </div>
+            </div>
+            <div className="flex items-start gap-4 rounded-xl border border-success/20 bg-success-soft/30 p-5">
+              <div className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-success-soft text-success"><ClipboardCheck size={20} /></div>
+              <div>
+                <p className="text-xs font-medium text-ink-muted">Presença hoje</p>
+                <p className="text-2xl font-extrabold text-success">{presenceVal}</p>
+                <p className="text-[11px] text-ink-subtle">{presenceHint}</p>
+              </div>
+            </div>
+            <div className="flex items-start gap-4 rounded-xl border border-warning/20 bg-warning-soft/30 p-5">
+              <div className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-warning-soft text-warning"><Wallet size={20} /></div>
+              <div className="min-w-0">
+                <p className="text-xs font-medium text-ink-muted">Receita do mês</p>
+                <p className="truncate text-2xl font-extrabold text-ink">{money(stats.revenue_month ?? 0)}</p>
+                <p className="text-[11px] text-ink-subtle">
+                  {delta != null && !hideFin ? `${delta >= 0 ? '▲' : '▼'} ${Math.abs(delta).toFixed(1)}% vs. mês anterior` : 'recebido no mês'}
+                </p>
+              </div>
+            </div>
+            <div className="flex items-start gap-4 rounded-xl border border-danger/20 bg-danger-soft/30 p-5">
+              <div className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-danger-soft text-danger"><AlertTriangle size={20} /></div>
+              <div className="min-w-0">
+                <p className="text-xs font-medium text-ink-muted">Inadimplência</p>
+                <p className="truncate text-2xl font-extrabold text-danger">{money(stats.overdue_amount ?? 0)}</p>
+                <p className="text-[11px] text-ink-subtle">{stats.overdue_count ?? 0} fatura(s) vencida(s)</p>
+              </div>
+            </div>
+          </div>
+
+          {/* Ações rápidas · Agenda de hoje · Aniversariantes */}
+          <div className="mt-4 grid grid-cols-1 gap-4 xl:grid-cols-3">
+            {/* Ações rápidas */}
+            <div className="card p-4">
+              <h3 className="mb-3 flex items-center gap-1.5 text-sm font-bold text-ink"><Zap size={15} className="text-purple" /> Ações rápidas</h3>
+              <div className="grid grid-cols-2 gap-2">
+                {[
+                  { icon: UserPlus, label: 'Novo aluno', hint: 'Matricular aluno', tone: 'bg-primary-soft/40 border-primary/20 text-primary', onClick: () => navigate('/app/students/new') },
+                  { icon: AlertTriangle, label: 'Registrar ocorrência', hint: 'Notifica o responsável', tone: 'bg-danger-soft/40 border-danger/20 text-danger', onClick: () => setOccOpen(true) },
+                  { icon: Send, label: 'Enviar comunicado', hint: 'Turma ou toda a escola', tone: 'bg-success-soft/40 border-success/20 text-success', onClick: () => setComOpen(true) },
+                  { icon: FileText, label: 'Gerar boletim', hint: 'Boletim escolar', tone: 'bg-purple/5 border-purple/20 text-purple', onClick: () => navigate('/app/grades/boletim') },
+                  { icon: ClipboardCheck, label: 'Ver chamada', hint: 'Frequência do dia', tone: 'bg-warning-soft/40 border-warning/20 text-warning', onClick: () => navigate('/app/attendance') },
+                  { icon: Wallet, label: 'Abrir financeiro', hint: 'Visão geral', tone: 'bg-primary-soft/40 border-primary/20 text-primary', onClick: () => navigate('/app/finance') },
+                ].map(a => (
+                  <button key={a.label} className={`rounded-xl border p-3 text-left transition hover:shadow-card ${a.tone}`} onClick={a.onClick}>
+                    <a.icon size={18} />
+                    <p className="mt-1.5 text-xs font-bold text-ink">{a.label}</p>
+                    <p className="text-[10px] leading-tight text-ink-muted">{a.hint}</p>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Agenda de hoje */}
+            <div className="card flex flex-col overflow-hidden">
+              <div className="border-b border-border px-5 py-3.5">
+                <h3 className="flex items-center gap-1.5 text-sm font-bold text-ink"><CalendarDays size={15} className="text-purple" /> Agenda de hoje</h3>
+              </div>
+              {sortedTodayEvents.length === 0 ? (
+                <p className="flex-1 px-5 py-8 text-center text-sm text-ink-subtle">Nenhum compromisso para hoje.</p>
+              ) : (
+                <div className="flex-1 divide-y divide-border">
+                  {sortedTodayEvents.slice(0, 5).map(ev => (
+                    <div key={ev.id} className="flex items-start gap-3 px-5 py-3">
+                      <span className="mt-0.5 w-12 shrink-0 font-mono text-xs font-bold text-purple">
+                        {ev.start_time ?? 'dia todo'}
+                      </span>
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-sm font-medium text-ink">{ev.title}</p>
+                        <p className="text-xs text-ink-muted">
+                          {EVENT_TYPE_LABELS[ev.event_type] ?? ev.event_type}
+                          {ev.class_name ? ` · ${ev.class_name}` : ''}
+                        </p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+              <button
+                className="border-t border-border px-5 py-2.5 text-xs font-semibold text-purple hover:bg-canvas"
+                onClick={() => navigate('/app/calendar')}
+              >
+                Ver agenda completa →
+              </button>
+            </div>
+
+            {/* Aniversariantes do mês */}
+            <div className="card flex flex-col overflow-hidden">
+              <div className="border-b border-border px-5 py-3.5">
+                <h3 className="flex items-center gap-1.5 text-sm font-bold text-ink"><Gift size={15} className="text-purple" /> Aniversariantes do mês</h3>
+              </div>
+              {birthdays.length === 0 ? (
+                <p className="flex-1 px-5 py-8 text-center text-sm text-ink-subtle">Nenhum aniversariante este mês.</p>
+              ) : (
+                <div className="flex-1 divide-y divide-border">
+                  {birthdays.slice(0, 6).map(s => (
+                    <div key={s.id} className="flex items-center gap-3 px-5 py-2.5">
+                      <div className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-purple/10 text-xs font-bold text-purple">
+                        {initials(s.name)}
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-sm font-medium text-ink">{s.name}</p>
+                        <p className="text-xs text-ink-muted">{s.class_name ?? '—'}</p>
+                      </div>
+                      <span className="shrink-0 font-mono text-xs font-bold text-purple">
+                        {s.birth_date!.slice(8, 10)}/{s.birth_date!.slice(5, 7)}
+                      </span>
+                    </div>
+                  ))}
+                  {birthdays.length > 6 && (
+                    <p className="px-5 py-2 text-center text-xs text-ink-subtle">+{birthdays.length - 6} aniversariante(s)</p>
+                  )}
+                </div>
+              )}
+              <button
+                className="border-t border-border px-5 py-2.5 text-xs font-semibold text-purple hover:bg-canvas"
+                onClick={() => navigate('/app/students')}
+              >
+                Ver todos os alunos →
+              </button>
+            </div>
+          </div>
+        </>
       ) : (
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
           <MetricCard label="Alunos ativos" value={stats.students ?? 0} icon={GraduationCap} tone="primary" />
@@ -416,7 +677,7 @@ export function DashboardPage() {
               {series.map((s, i) => (
                 <div key={i} className="flex flex-1 flex-col items-center gap-1.5">
                   <span className="text-[10px] font-medium text-ink-subtle">
-                    {s.total >= 1000 ? `${(s.total / 1000).toFixed(0)}k` : s.total.toFixed(0)}
+                    {hideFin ? '•••' : s.total >= 1000 ? `${(s.total / 1000).toFixed(0)}k` : s.total.toFixed(0)}
                   </span>
                   <div
                     className="w-full rounded-t-lg bg-primary/80 transition-all hover:bg-primary"
@@ -454,7 +715,7 @@ export function DashboardPage() {
                     </p>
                   </div>
                   <div className="text-right">
-                    <p className="text-sm font-bold text-ink">{brl(ch.amount)}</p>
+                    <p className="text-sm font-bold text-ink">{money(ch.amount)}</p>
                     <StatusBadge tone={ch.status === 'overdue' ? 'danger' : 'warning'}>
                       {ch.status === 'overdue' ? 'Vencida' : 'Em aberto'}
                     </StatusBadge>
@@ -508,7 +769,7 @@ export function DashboardPage() {
           <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
             <div>
               <p className="text-xs text-ink-muted">Recebido</p>
-              <p className="mt-1 text-xl font-extrabold text-success">{brl(pix?.total ?? 0)}</p>
+              <p className="mt-1 text-xl font-extrabold text-success">{money(pix?.total ?? 0)}</p>
             </div>
             <div>
               <p className="text-xs text-ink-muted">Transações</p>
@@ -516,7 +777,7 @@ export function DashboardPage() {
             </div>
             <div>
               <p className="text-xs text-ink-muted">Ticket médio</p>
-              <p className="mt-1 text-xl font-extrabold text-ink">{brl(pix?.avg_ticket ?? 0)}</p>
+              <p className="mt-1 text-xl font-extrabold text-ink">{money(pix?.avg_ticket ?? 0)}</p>
             </div>
             <div>
               <p className="text-xs text-ink-muted">Taxa de sucesso</p>
@@ -531,23 +792,106 @@ export function DashboardPage() {
           <div className="space-y-3 text-sm">
             <div className="flex items-center justify-between">
               <span className="inline-flex items-center gap-1.5 text-ink-muted"><ArrowUpRight size={15} className="text-success" /> Receitas do mês</span>
-              <span className="font-bold text-success">{brl(stats.revenue_month ?? 0)}</span>
+              <span className="font-bold text-success">{money(stats.revenue_month ?? 0)}</span>
             </div>
             <div className="flex items-center justify-between">
               <span className="inline-flex items-center gap-1.5 text-ink-muted"><ArrowDownRight size={15} className="text-danger" /> Despesas do mês</span>
-              <span className="font-bold text-danger">{brl(stats.expenses_month ?? 0)}</span>
+              <span className="font-bold text-danger">{money(stats.expenses_month ?? 0)}</span>
             </div>
             <div className="flex items-center justify-between border-t border-border pt-3">
               <span className="font-semibold text-ink">Saldo do mês</span>
               <span className={`inline-flex items-center gap-1 font-extrabold ${(stats.balance_month ?? 0) >= 0 ? 'text-ink' : 'text-danger'}`}>
                 {(stats.balance_month ?? 0) >= 0 ? <TrendingUp size={15} /> : <TrendingDown size={15} />}
-                {brl(stats.balance_month ?? 0)}
+                {money(stats.balance_month ?? 0)}
               </span>
             </div>
           </div>
         </div>
       </div>
       )}
+
+      {/* ─── Modal: Registrar ocorrência ─── */}
+      <Modal
+        open={occOpen}
+        title="Registrar ocorrência"
+        onClose={() => setOccOpen(false)}
+        footer={
+          <>
+            <button className="btn-outline" onClick={() => setOccOpen(false)} disabled={occBusy}>Cancelar</button>
+            <button className="btn-primary" onClick={sendOccurrence} disabled={occBusy}>
+              {occBusy ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />} Enviar ao responsável
+            </button>
+          </>
+        }
+      >
+        <div className="space-y-4">
+          <div className="flex items-start gap-2 rounded-xl bg-warning-soft px-3 py-2 text-xs text-warning">
+            <AlertTriangle size={14} className="mt-0.5 shrink-0" />
+            <span>A ocorrência é enviada diretamente ao responsável do aluno pelo chat de Mensagens.</span>
+          </div>
+          <div>
+            <label className="label">Aluno *</label>
+            <select className="input" value={occStudent} onChange={e => setOccStudent(e.target.value)}>
+              <option value="">Selecione o aluno…</option>
+              {allStudents.map(s => (
+                <option key={s.id} value={s.id}>{s.name}{s.class_name ? ` — ${s.class_name}` : ''}</option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="label">Descrição da ocorrência *</label>
+            <textarea
+              className="input min-h-[110px] resize-y"
+              placeholder="Descreva o que aconteceu…"
+              value={occText}
+              onChange={e => setOccText(e.target.value)}
+            />
+          </div>
+        </div>
+      </Modal>
+
+      {/* ─── Modal: Enviar comunicado ─── */}
+      <Modal
+        open={comOpen}
+        title="Enviar comunicado"
+        onClose={() => setComOpen(false)}
+        footer={
+          <>
+            <button className="btn-outline" onClick={() => setComOpen(false)} disabled={comBusy}>Cancelar</button>
+            <button className="btn-primary" onClick={sendComunicado} disabled={comBusy}>
+              {comBusy ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />} Enviar comunicado
+            </button>
+          </>
+        }
+      >
+        <div className="space-y-4">
+          <div>
+            <label className="label">Destinatários</label>
+            <select className="input" value={comClass} onChange={e => setComClass(e.target.value)}>
+              <option value="">Todos os responsáveis</option>
+              {adminClasses.map(c => <option key={c.id} value={c.id}>Turma {c.name}</option>)}
+            </select>
+          </div>
+          <div>
+            <label className="label">Assunto *</label>
+            <input
+              className="input"
+              placeholder="Ex.: Reunião de pais e mestres"
+              value={comSubject}
+              onChange={e => setComSubject(e.target.value)}
+            />
+          </div>
+          <div>
+            <label className="label">Mensagem *</label>
+            <textarea
+              className="input min-h-[110px] resize-y"
+              placeholder="Escreva o comunicado…"
+              value={comBody}
+              onChange={e => setComBody(e.target.value)}
+            />
+          </div>
+        </div>
+      </Modal>
     </>
   );
 }
