@@ -81,3 +81,19 @@ export const STAFF_ROLE_LABELS: Record<StaffRole, string> = {
   teacher: 'Professor',
   coordinator: 'Coordenação',
 };
+
+export const CONTRACT_TYPE_LABELS: Record<string, string> = {
+  clt: 'CLT',
+  pj: 'PJ',
+  estagio: 'Estágio',
+  temporario: 'Temporário',
+};
+
+export const ROLE_LABELS: Record<string, string> = {
+  school_admin: 'Diretor(a) / Gestor(a)',
+  financial: 'Financeiro',
+  teacher: 'Professor(a)',
+  coordinator: 'Coordenação',
+  guardian: 'Responsável',
+  superadmin: 'Administrador',
+};

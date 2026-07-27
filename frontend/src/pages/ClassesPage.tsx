@@ -85,13 +85,12 @@ export function ClassesPage() {
   /** Extrai a série do nome da turma: "9º Ano A" → "9º Ano" */
   const serieOf = (name: string) => name.replace(/\s*[A-Z]$/i, '').trim();
 
-  /** Lista unificada de séries + níveis para o dropdown */
+  /** Lista de séries extraídas dos nomes de turma para o dropdown */
   const distinctSeries = useMemo(() => {
     const set = new Set<string>();
     classes.forEach((c) => {
       const serie = serieOf(c.name);
       if (serie) set.add(serie);
-      if (c.level) set.add(c.level);
     });
     return Array.from(set).sort();
   }, [classes]);
@@ -287,13 +286,13 @@ export function ClassesPage() {
                                 <p className="truncate font-semibold text-ink">{c.name}</p>
                                 {c.level && (
                                   <span className="inline-block mt-0.5 rounded-full bg-primary-soft px-2 py-0.5 text-[10px] font-semibold text-primary">
-                                    {c.level}
+                                    {LEVEL_LABELS[c.level] ?? c.level}
                                   </span>
                                 )}
                               </div>
                             </div>
                           </td>
-                          <td className="whitespace-nowrap px-4 py-3 text-ink-muted">{c.level ?? '—'}</td>
+                          <td className="whitespace-nowrap px-4 py-3 text-ink-muted">{c.level ? LEVEL_LABELS[c.level] ?? c.level : '—'}</td>
                           <td className="whitespace-nowrap px-4 py-3 text-ink-muted">{SHIFT_LABELS[c.shift]}</td>
                           <td className="px-4 py-3 text-center">
                             <span className="font-bold text-ink">{c.student_count}</span>

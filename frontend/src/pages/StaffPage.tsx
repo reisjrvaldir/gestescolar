@@ -11,7 +11,7 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { SensitiveField } from '@/components/ui/SensitiveField';
 import { staffService, type NewStaff, type CreatedStaff } from '@/services/staff';
 import { createSchedule } from '@/services/schedules';
-import { STAFF_ROLE_LABELS, type Staff, type StaffRole } from '@/types/models';
+import { STAFF_ROLE_LABELS, CONTRACT_TYPE_LABELS, type Staff, type StaffRole } from '@/types/models';
 import { useMe } from '@/auth/AuthGate';
 import { staffCreateSchema } from '@/lib/schemas';
 import { applyServerErrors } from '@/hooks/useFormErrors';
@@ -519,7 +519,7 @@ export function StaffPage() {
                   <Row label="Cargo" value={selected.position} />
                   <Row label="Leciona" value={selected.subject_teaches} />
                   <Row label="Admissão" value={selected.admission_date} />
-                  <Row label="Contrato" value={selected.contract_type} />
+                  <Row label="Contrato" value={selected.contract_type ? CONTRACT_TYPE_LABELS[selected.contract_type] ?? selected.contract_type : undefined} />
                   <Row label="Carga horária" value={selected.weekly_hours != null ? `${selected.weekly_hours}h/semana` : undefined} />
                 </div>
               </div>

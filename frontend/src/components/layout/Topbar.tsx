@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { Bell, Menu, ChevronDown, LogOut, Settings, ShieldCheck } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { SearchBar } from './SearchBar';
+import { ROLE_LABELS } from '@/types/models';
 
 interface Props {
   userName: string;
@@ -11,14 +12,6 @@ interface Props {
   onMenuClick: () => void;
   onLogout?: () => void;
 }
-
-const ROLE_LABELS: Record<string, string> = {
-  school_admin: 'Diretor(a) / Gestor(a)',
-  financial: 'Financeiro',
-  teacher: 'Professor(a)',
-  guardian: 'Responsável',
-  superadmin: 'Administrador',
-};
 
 interface AccountLink { to: string; label: string; icon: LucideIcon }
 

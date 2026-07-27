@@ -4,13 +4,7 @@ import { PageHeader } from '@/components/ui/PageHeader';
 import { StatusBadge } from '@/components/ui/StatusBadge';
 import { saasService, type SaasUserRow } from '@/services/saas';
 import { fmtDate } from '@/lib/dates';
-
-const ROLE_LABELS: Record<string, string> = {
-  school_admin: 'Gestor',
-  financial: 'Financeiro',
-  teacher: 'Professor',
-  guardian: 'Responsável',
-};
+import { ROLE_LABELS } from '@/types/models';
 
 export function SaasUsersPage() {
   const [rows, setRows] = useState<SaasUserRow[]>([]);

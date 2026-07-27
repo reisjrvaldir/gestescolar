@@ -14,7 +14,7 @@ import { api } from '@/lib/api';
 import { useMe } from '@/auth/AuthGate';
 import type { SchoolClass, Student } from '@/types/models';
 
-const SUBJECTS = ['Português', 'Matemática', 'Ciências', 'História', 'Geografia', 'Inglês'];
+const SUBJECTS = ['Português', 'Matemática', 'Ciências', 'História', 'Geografia', 'Inglês', 'Educação Física', 'Artes', 'Ensino Religioso'];
 const PERIODS  = ['1ª Unidade', '2ª Unidade', '3ª Unidade', '4ª Unidade'];
 const EXAM_TYPES = ['Todos os tipos', 'AV1 pendente', 'AV2 pendente', 'Em recuperação'];
 

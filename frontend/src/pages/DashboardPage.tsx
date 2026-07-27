@@ -17,6 +17,7 @@ import { classesService } from '@/services/classes';
 import { messagesService, type Contact } from '@/services/messages';
 import { listEvents, EVENT_TYPE_LABELS, type CalendarEvent } from '@/services/calendar';
 import { SHIFT_LABELS, type SchoolClass, type Student } from '@/types/models';
+import { LEVEL_LABELS } from '@/services/subjects';
 import { useMe } from '@/auth/AuthGate';
 
 interface ChildStat {
@@ -639,7 +640,7 @@ export function DashboardPage() {
                     <div className="min-w-0">
                       <p className="truncate font-bold text-ink">{c.name}</p>
                       <p className="text-xs text-ink-muted">
-                        {c.year ?? '—'}{c.shift ? ` · ${SHIFT_LABELS[c.shift] ?? c.shift}` : ''}{c.level ? ` · ${c.level}` : ''}
+                        {c.year ?? '—'}{c.shift ? ` · ${SHIFT_LABELS[c.shift] ?? c.shift}` : ''}{c.level ? ` · ${LEVEL_LABELS[c.level] ?? c.level}` : ''}
                       </p>
                     </div>
                     <span className="inline-flex shrink-0 items-center gap-1 rounded-lg bg-primary-soft px-2 py-1 text-xs font-semibold text-primary">
