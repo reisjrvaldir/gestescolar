@@ -1,12 +1,24 @@
 import { useEffect, useState } from 'react';
-import { Shield, Download, Trash2, Loader2 } from 'lucide-react';
+import { Shield, Download, Trash2, Loader2, CheckCircle2, FileText } from 'lucide-react';
+import { Link } from 'react-router-dom';
 import { PageHero } from '@/components/ui/PageHero';
 import { StatusBadge } from '@/components/ui/StatusBadge';
 import { EmptyState } from '@/components/ui/EmptyState';
-import { listRequests, requestExport, requestDeletion, type LgpdRequest } from '@/services/lgpd';
+import {
+  listRequests, requestExport, requestDeletion, listConsents,
+  type LgpdRequest, type ConsentEntry,
+} from '@/services/lgpd';
+import { fmtTimestamp } from '@/lib/dates';
+import { CURRENT_TERMS_VERSION, CURRENT_PRIVACY_VERSION } from '@/lib/consentVersions';
+
+const PURPOSE_LABEL: Record<string, string> = {
+  signup: 'Cadastro inicial',
+  reconsent: 'Atualização de termos',
+};
 
 export function LgpdPage() {
   const [requests, setRequests] = useState<LgpdRequest[]>([]);
+  const [consents, setConsents] = useState<ConsentEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [exporting, setExporting] = useState(false);
 
@@ -14,7 +26,11 @@ export function LgpdPage() {
 
   async function load() {
     setLoading(true);
-    try { setRequests(await listRequests()); } catch (e) { console.error(e); }
+    try {
+      const [reqs, cons] = await Promise.all([listRequests(), listConsents()]);
+      setRequests(reqs);
+      setConsents(cons);
+    } catch (e) { console.error(e); }
     setLoading(false);
   }
 
@@ -50,6 +66,12 @@ export function LgpdPage() {
     return <div className="flex items-center justify-center py-20 text-ink-muted"><Loader2 className="animate-spin" size={24} /> <span className="ml-2">Carregando…</span></div>;
   }
 
+  const latestConsent = consents[0] ?? null;
+  const termsUpToDate = !latestConsent || (
+    latestConsent.terms_version === CURRENT_TERMS_VERSION &&
+    latestConsent.privacy_version === CURRENT_PRIVACY_VERSION
+  );
+
   return (
     <>
       <PageHero
@@ -57,6 +79,16 @@ export function LgpdPage() {
         subtitle="Gerencie seus dados pessoais conforme a Lei Geral de Proteção de Dados."
         icon={Shield}
       />
+
+      {latestConsent && !termsUpToDate && (
+        <div className="mb-4 rounded-xl border border-warning/30 bg-warning-soft px-4 py-3 text-sm text-ink">
+          <strong>Termos atualizados.</strong> Uma nova versão dos documentos está disponível. Por favor, leia os{' '}
+          <Link to="/termos" target="_blank" className="font-medium text-primary underline">Termos de Uso</Link>{' '}
+          e a{' '}
+          <Link to="/privacidade" target="_blank" className="font-medium text-primary underline">Política de Privacidade</Link>{' '}
+          atualizados.
+        </div>
+      )}
 
       <div className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-2">
         <div className="card p-6">
@@ -86,9 +118,65 @@ export function LgpdPage() {
         </div>
       </div>
 
+      {/* Consentimentos registrados */}
+      <div className="card mb-6 overflow-hidden">
+        <div className="border-b border-border px-4 py-3">
+          <div className="flex items-center gap-2">
+            <CheckCircle2 size={16} className="text-success" />
+            <h3 className="text-sm font-semibold text-ink">Consentimentos registrados</h3>
+          </div>
+        </div>
+        {consents.length === 0 ? (
+          <div className="px-4 py-5 text-sm text-ink-muted">
+            Nenhum registro de aceite encontrado.{' '}
+            <span className="text-ink-subtle">
+              Usuários criados antes de 01/01/2026 não possuem registro retroativo.
+            </span>
+          </div>
+        ) : (
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-border text-left text-xs font-semibold uppercase text-ink-subtle">
+                <th className="px-4 py-3">Data/hora</th>
+                <th className="px-4 py-3">Termos de Uso</th>
+                <th className="px-4 py-3">Política de Privacidade</th>
+                <th className="px-4 py-3">Finalidade</th>
+              </tr>
+            </thead>
+            <tbody>
+              {consents.map((c) => (
+                <tr key={c.id} className="border-b border-border last:border-0">
+                  <td className="px-4 py-3 whitespace-nowrap text-ink">{fmtTimestamp(c.accepted_at)}</td>
+                  <td className="px-4 py-3">
+                    <div className="inline-flex items-center gap-1">
+                      <FileText size={13} className="text-ink-subtle" />
+                      <Link to="/termos" target="_blank" className="text-primary hover:underline">
+                        v{c.terms_version}
+                      </Link>
+                    </div>
+                  </td>
+                  <td className="px-4 py-3">
+                    <div className="inline-flex items-center gap-1">
+                      <FileText size={13} className="text-ink-subtle" />
+                      <Link to="/privacidade" target="_blank" className="text-primary hover:underline">
+                        v{c.privacy_version}
+                      </Link>
+                    </div>
+                  </td>
+                  <td className="px-4 py-3 text-ink-muted">
+                    {PURPOSE_LABEL[c.purpose] ?? c.purpose}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>
+
+      {/* Histórico de solicitações LGPD */}
       <div className="card overflow-hidden">
         <div className="border-b border-border px-4 py-3">
-          <h3 className="text-sm font-semibold text-ink">Histórico de solicitações</h3>
+          <h3 className="text-sm font-semibold text-ink">Histórico de solicitações LGPD</h3>
         </div>
         {requests.length === 0 ? (
           <EmptyState
@@ -109,7 +197,7 @@ export function LgpdPage() {
               {requests.map((r) => (
                 <tr key={r.id} className="border-b border-border last:border-0">
                   <td className="px-4 py-3 font-medium text-ink">{r.type === 'export' ? 'Exportação' : 'Exclusão'}</td>
-                  <td className="px-4 py-3 text-ink-muted">{new Date(r.created_at).toLocaleDateString('pt-BR')}</td>
+                  <td className="px-4 py-3 text-ink-muted">{fmtTimestamp(r.created_at)}</td>
                   <td className="px-4 py-3">
                     <StatusBadge tone={r.status === 'completed' ? 'success' : r.status === 'pending' ? 'warning' : 'primary'}>
                       {r.status === 'completed' ? 'Concluído' : r.status === 'pending' ? 'Pendente' : r.status}

@@ -3,6 +3,7 @@ import { useNavigate, Link, useSearchParams } from 'react-router-dom';
 import { GraduationCap, Loader2, ShieldCheck, Zap, Headset } from 'lucide-react';
 import { signIn, signUp } from '@/lib/authClient';
 import { PasswordInput } from '@/components/ui/PasswordInput';
+import { CURRENT_TERMS_VERSION } from '@/lib/consentVersions';
 
 type Tab = 'login' | 'signup';
 
@@ -153,8 +154,24 @@ export function LoginPage() {
                 <p className="mt-1 text-xs text-ink-subtle">Mínimo 8 caracteres.</p>
               </div>
               <label className="flex items-start gap-2 text-sm text-ink-muted">
-                <input type="checkbox" className="mt-0.5" checked={accept} onChange={(e) => setAccept(e.target.checked)} />
-                <span>Li e aceito os Termos de Uso e a Política de Privacidade.</span>
+                <input
+                  type="checkbox"
+                  className="mt-0.5"
+                  checked={accept}
+                  required
+                  onChange={(e) => setAccept(e.target.checked)}
+                />
+                <span>
+                  Li e aceito os{' '}
+                  <Link to="/termos" target="_blank" className="font-medium text-primary hover:underline">
+                    Termos de Uso
+                  </Link>{' '}
+                  e a{' '}
+                  <Link to="/privacidade" target="_blank" className="font-medium text-primary hover:underline">
+                    Política de Privacidade
+                  </Link>{' '}
+                  <span className="text-xs text-ink-subtle">(v{CURRENT_TERMS_VERSION})</span>
+                </span>
               </label>
               <button className="btn-primary w-full justify-center" disabled={loading}>
                 {loading && <Loader2 size={16} className="animate-spin" />} Começar teste grátis

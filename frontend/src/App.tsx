@@ -28,6 +28,8 @@ import { LeaveRequestsPage } from '@/pages/LeaveRequestsPage';
 import { StaffDocumentsPage } from '@/pages/StaffDocumentsPage';
 import { ChangePasswordPage } from '@/pages/ChangePasswordPage';
 import { LandingPage } from '@/pages/LandingPage';
+import { TermosPage } from '@/pages/TermosPage';
+import { PrivacidadePage } from '@/pages/PrivacidadePage';
 import { PlaceholderPage } from '@/pages/PlaceholderPage';
 import { SaasAdminGuard } from '@/saas/SaasAdminGuard';
 import { SaasAdminLayout } from '@/saas/SaasAdminLayout';
@@ -59,6 +61,8 @@ export default function App() {
     <BrowserRouter>
       <Routes>
         <Route path="/" element={<LandingPage />} />
+        <Route path="/termos" element={<TermosPage />} />
+        <Route path="/privacidade" element={<PrivacidadePage />} />
         <Route path="/login" element={<LoginPage />} />
         <Route path="/forgot-password" element={<ForgotPasswordPage />} />
         <Route path="/reset-password" element={<ResetPasswordPage />} />

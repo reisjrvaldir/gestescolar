@@ -228,8 +228,8 @@ export const LANDING_V1_HTML = `
           </div>
           <div class="lp-feature-card lp-fade-up lp-tilt" style="--card-color:#e84393;">
             <div class="lp-feature-icon" style="background:linear-gradient(135deg,#e84393,#c2185b);"><i class="fa-solid fa-shield-halved"></i></div>
-            <h3>Segurança Total</h3>
-            <p>Isolamento de dados por escola (RLS), autenticação segura e zero risco de vazamento de informações.</p>
+            <h3>Dados Protegidos</h3>
+            <p>Isolamento de dados por escola (RLS), autenticação segura e criptografia em trânsito e em repouso.</p>
           </div>
           <div class="lp-feature-card lp-fade-up lp-tilt" style="--card-color:#00cec9;">
             <div class="lp-feature-icon" style="background:linear-gradient(135deg,#00cec9,#00838f);"><i class="fa-solid fa-users-gear"></i></div>
@@ -543,7 +543,7 @@ export const LANDING_V1_HTML = `
               <i class="fa-solid fa-chevron-down"></i>
             </button>
             <div class="lp-faq-a">
-              <p>Não. Cada escola tem seu próprio <strong>cofre de dados fechado</strong> — suas informações ficam 100% isoladas e <strong>ninguém mais consegue acessar</strong>. É como se cada escola tivesse um cadeado digital único. <strong>O sistema é seguro, criptografado e monitorado</strong> 24/7 para garantir que seus dados nunca saiam do lugar.</p>
+              <p>Não. Cada escola tem seu próprio espaço de dados isolado — suas informações ficam rigorosamente separadas das demais escolas por meio de Row-Level Security (RLS) no banco de dados. Utilizamos <strong>criptografia em trânsito e em repouso</strong>, autenticação segura e controle de acesso por perfil. Em caso de incidente relevante, notificamos a ANPD conforme a LGPD.</p>
             </div>
           </div>
           <div class="lp-faq-item">
@@ -617,13 +617,13 @@ export const LANDING_V1_HTML = `
         <div>
           <h4>Legal</h4>
           <ul>
-            <li><a href="#" onclick="event.preventDefault();Router.go('privacy')"><i class="fa-solid fa-shield-halved"></i> Política de Privacidade</a></li>
-            <li><a href="#" onclick="event.preventDefault();Router.go('terms')"><i class="fa-solid fa-file-contract"></i> Termos de Uso</a></li>
+            <li><a href="/privacidade" target="_blank"><i class="fa-solid fa-shield-halved"></i> Política de Privacidade</a></li>
+            <li><a href="/termos" target="_blank"><i class="fa-solid fa-file-contract"></i> Termos de Uso</a></li>
           </ul>
         </div>
       </div>
       <div class="lp-footer-bottom">
-        <span>© 2026 GestEscolar. Todos os direitos reservados. LGPD compliant.</span>
+        <span>© 2026 GestEscolar. Todos os direitos reservados. Dados tratados em conformidade com a LGPD.</span>
         <div class="lp-footer-social">
           <a href="#" title="Instagram"><i class="fa-brands fa-instagram"></i></a>
           <a href="#" title="LinkedIn"><i class="fa-brands fa-linkedin"></i></a>

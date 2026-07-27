@@ -4,6 +4,7 @@ import { useForm } from 'react-hook-form';
 import { GraduationCap, Loader2 } from 'lucide-react';
 import { useSession } from '@/lib/authClient';
 import { api } from '@/lib/api';
+import { CURRENT_TERMS_VERSION, CURRENT_PRIVACY_VERSION } from '@/lib/consentVersions';
 
 interface OnboardingForm {
   school_name: string;
@@ -25,7 +26,11 @@ export function OnboardingPage() {
   async function onSubmit(data: OnboardingForm) {
     setError(null);
     try {
-      await api.post('/me/onboarding', data);
+      await api.post('/me/onboarding', {
+        ...data,
+        terms_version: CURRENT_TERMS_VERSION,
+        privacy_version: CURRENT_PRIVACY_VERSION,
+      });
       navigate('/app', { replace: true });
     } catch (e: any) {
       setError(e?.message ?? 'Falha ao criar a escola');

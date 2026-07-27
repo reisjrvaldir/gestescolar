@@ -8,7 +8,7 @@ lgpdRouter.use(requireAuth);
 lgpdRouter.get('/requests', async (req, res) => {
   const data = await withTenant(req.ctx!, async (c) => {
     const { rows } = await c.query(
-      `select id, request_type, status, created_at, completed_at
+      `select id, request_type as type, status, created_at, completed_at
          from public.lgpd_requests
         where user_id = $1
         order by created_at desc`,
