@@ -22282,7 +22282,7 @@ var require_application = __commonJS({
   "../node_modules/express/lib/application.js"(exports2, module2) {
     "use strict";
     var finalhandler = require_finalhandler();
-    var Router32 = require_router();
+    var Router33 = require_router();
     var methods = require_methods();
     var middleware = require_init();
     var query = require_query();
@@ -22347,7 +22347,7 @@ var require_application = __commonJS({
     };
     app2.lazyrouter = function lazyrouter() {
       if (!this._router) {
-        this._router = new Router32({
+        this._router = new Router33({
           caseSensitive: this.enabled("case sensitive routing"),
           strict: this.enabled("strict routing")
         });
@@ -24209,7 +24209,7 @@ var require_express = __commonJS({
     var mixin = require_merge_descriptors();
     var proto = require_application();
     var Route = require_route();
-    var Router32 = require_router();
+    var Router33 = require_router();
     var req = require_request();
     var res = require_response();
     exports2 = module2.exports = createApplication;
@@ -24232,7 +24232,7 @@ var require_express = __commonJS({
     exports2.request = req;
     exports2.response = res;
     exports2.Route = Route;
-    exports2.Router = Router32;
+    exports2.Router = Router33;
     exports2.json = bodyParser.json;
     exports2.query = require_query();
     exports2.raw = bodyParser.raw;
@@ -30171,7 +30171,7 @@ module.exports = __toCommonJS(api_src_exports);
 })();
 
 // src/api/app.ts
-var import_express32 = __toESM(require_express2());
+var import_express33 = __toESM(require_express2());
 var import_cors = __toESM(require_lib3());
 
 // ../node_modules/helmet/index.mjs
@@ -48403,8 +48403,115 @@ personalDataRouter.get(
   }
 );
 
+// src/api/routes/search.ts
+var import_express32 = __toESM(require_express2());
+var searchRouter = (0, import_express32.Router)();
+searchRouter.use(requireAuth);
+var ADMIN_ROLES2 = ["school_admin", "superadmin"];
+var FINANCIAL_ROLES = ["school_admin", "financial", "superadmin"];
+searchRouter.get("/", async (req, res) => {
+  const q = String(req.query.q ?? "").trim();
+  if (q.length < 2) return res.json({ ok: true, data: [] });
+  const term = `%${q}%`;
+  const role = req.ctx.role;
+  const results = await withTenant(req.ctx, async (c) => {
+    const sid = req.ctx.schoolId;
+    const pending = [];
+    if (role !== "guardian") {
+      pending.push(
+        c.query(
+          `select id::text, name,
+                  coalesce(registration_number, '') as context,
+                  'student' as type
+             from public.students
+            where school_id=$1 and status='active'
+              and (name ilike $2 or registration_number ilike $2)
+            order by name limit 5`,
+          [sid, term]
+        ).then((r) => r.rows)
+      );
+    }
+    if (FINANCIAL_ROLES.includes(role)) {
+      pending.push(
+        c.query(
+          `select id::text, name,
+                  coalesce(email, '') as context,
+                  'guardian' as type
+             from public.guardians
+            where school_id=$1
+              and (name ilike $2 or email ilike $2)
+            order by name limit 5`,
+          [sid, term]
+        ).then((r) => r.rows)
+      );
+    }
+    if (ADMIN_ROLES2.includes(role)) {
+      pending.push(
+        c.query(
+          `select id::text, name,
+                  coalesce(registration_number, '') as context,
+                  'teacher' as type
+             from public.teachers
+            where school_id=$1 and status='active'
+              and (name ilike $2 or registration_number ilike $2 or email ilike $2)
+            order by name limit 5`,
+          [sid, term]
+        ).then((r) => r.rows)
+      );
+    }
+    if (role !== "guardian") {
+      pending.push(
+        c.query(
+          `select id::text, name,
+                  null::text as context,
+                  'class' as type
+             from public.classes
+            where school_id=$1 and status='active'
+              and name ilike $2
+            order by name limit 5`,
+          [sid, term]
+        ).then((r) => r.rows)
+      );
+    }
+    if (FINANCIAL_ROLES.includes(role)) {
+      pending.push(
+        c.query(
+          `select id::text,
+                  student_name as name,
+                  to_char(amount, 'FM"R$"999G999G990D00') as context,
+                  'invoice' as type
+             from public.invoices
+            where school_id=$1
+              and student_name ilike $2
+              and status not in ('cancelled','refunded')
+            order by due_date desc limit 5`,
+          [sid, term]
+        ).then((r) => r.rows)
+      );
+    }
+    if (ADMIN_ROLES2.includes(role)) {
+      pending.push(
+        c.query(
+          `select id::text,
+                  title as name,
+                  status as context,
+                  'ticket' as type
+             from public.support_tickets
+            where school_id=$1
+              and title ilike $2
+            order by created_at desc limit 5`,
+          [sid, term]
+        ).then((r) => r.rows)
+      );
+    }
+    const chunks = await Promise.all(pending);
+    return chunks.flat();
+  });
+  res.json({ ok: true, data: results });
+});
+
 // src/api/app.ts
-var app = (0, import_express32.default)();
+var app = (0, import_express33.default)();
 app.use(helmet({ contentSecurityPolicy: false }));
 var ALLOWED_ORIGINS = [
   process.env.FRONTEND_URL || "https://gestescolar.com.br",
@@ -48423,7 +48530,7 @@ var authLimiter = rate_limit_default({ windowMs: 6e4, max: 5, message: { code: "
 app.use("/api/me/onboarding", authLimiter);
 var publicLimiter = rate_limit_default({ windowMs: 6e4, max: 12, message: { code: "rate_limit", message: "Muitas tentativas. Aguarde 1 minuto." } });
 app.use("/api/public", publicLimiter);
-app.use(import_express32.default.json({ limit: "10mb" }));
+app.use(import_express33.default.json({ limit: "10mb" }));
 app.get("/api/health", (_req, res) => {
   res.json({ ok: true, service: "gestescolar-backend", dbConfigured: isDbConfigured, paymentProvider: activeProviderName() });
 });
@@ -48458,6 +48565,7 @@ app.use("/api/billing", billingRouter);
 app.use("/api/saas", saasRouter);
 app.use("/api/onboarding", onboardingRouter);
 app.use("/api/personal-data", personalDataRouter);
+app.use("/api/search", searchRouter);
 app.use((_req, res) => res.status(404).json({ code: "not_found", message: "Rota n\xE3o encontrada" }));
 app.use((err, _req, res, _next) => {
   console.error("[API] erro:", err);

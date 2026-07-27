@@ -35,7 +35,7 @@ export class ApiError extends Error {
 }
 
 export const api = {
-  get: <T>(p: string) => request<T>(p),
+  get: <T>(p: string, signal?: AbortSignal) => request<T>(p, signal ? { signal } : {}),
   post: <T>(p: string, body?: unknown) =>
     request<T>(p, { method: 'POST', body: JSON.stringify(body ?? {}) }),
   put: <T>(p: string, body?: unknown) =>

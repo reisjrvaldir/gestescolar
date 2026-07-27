@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Search, Bell, Menu, ChevronDown, LogOut, Settings, ShieldCheck } from 'lucide-react';
+import { Bell, Menu, ChevronDown, LogOut, Settings, ShieldCheck } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
+import { SearchBar } from './SearchBar';
 
 interface Props {
   userName: string;
@@ -41,11 +42,8 @@ export function Topbar({ userName, schoolName, role, onMenuClick, onLogout }: Pr
         <Menu size={22} />
       </button>
 
-      {/* Busca */}
-      <div className="relative hidden flex-1 max-w-md sm:block">
-        <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-ink-subtle" />
-        <input className="input pl-9" placeholder="Buscar alunos, turmas, faturas..." />
-      </div>
+      {/* Busca global — oculta para responsável (acesso limitado ao próprio filho) */}
+      {role !== 'guardian' && <SearchBar />}
 
       <div className="flex flex-1 items-center justify-end gap-2 sm:gap-4">
         {/* Escola atual (sem seta — não é um menu) */}
