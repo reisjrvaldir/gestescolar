@@ -28721,7 +28721,7 @@ var require_websocket = __commonJS({
     var http = require("http");
     var net = require("net");
     var tls = require("tls");
-    var { randomBytes, createHash: createHash2 } = require("crypto");
+    var { randomBytes: randomBytes2, createHash: createHash2 } = require("crypto");
     var { Duplex, Readable } = require("stream");
     var { URL: URL2 } = require("url");
     var PerMessageDeflate2 = require_permessage_deflate();
@@ -29259,7 +29259,7 @@ var require_websocket = __commonJS({
         }
       }
       const defaultPort = isSecure ? 443 : 80;
-      const key = randomBytes(16).toString("base64");
+      const key = randomBytes2(16).toString("base64");
       const request = isSecure ? https.request : http.request;
       const protocolSet = /* @__PURE__ */ new Set();
       let perMessageDeflate;
@@ -43628,6 +43628,17 @@ studentsRouter.delete("/:id", requireRole("school_admin", "superadmin"), async (
 
 // src/api/routes/staff.ts
 var import_express3 = __toESM(require_express2());
+var import_crypto2 = require("crypto");
+function betterAuthHash(password) {
+  const salt = (0, import_crypto2.randomBytes)(16).toString("hex");
+  const key = (0, import_crypto2.scryptSync)(password.normalize("NFKC"), salt, 64, {
+    N: 16384,
+    r: 16,
+    p: 1,
+    maxmem: 64 * 1024 * 1024
+  });
+  return `${salt}:${key.toString("hex")}`;
+}
 var staffRouter = (0, import_express3.Router)();
 var staffSchema = external_exports.object({
   name: external_exports.string().min(2),
@@ -43734,6 +43745,75 @@ staffRouter.post("/", requireRole("school_admin", "superadmin"), async (req, res
       code: err?.code ?? "create_failed",
       message: err?.message ?? "Falha ao criar funcion\xE1rio"
     });
+  }
+});
+staffRouter.post("/:id/reset-password", requireRole("school_admin", "superadmin"), async (req, res) => {
+  try {
+    const result = await withTenant(req.ctx, async (c) => {
+      const t = await c.query(
+        `select user_id, name, email from public.teachers where id=$1 and school_id=$2 limit 1`,
+        [req.params.id, req.ctx.schoolId]
+      );
+      if (t.rows.length === 0) return { error: "not_found" };
+      const { user_id: profileId, name, email } = t.rows[0];
+      if (!profileId) return { error: "no_auth" };
+      const p2 = await c.query(
+        `select auth_user_id from public.profiles where id=$1 and school_id=$2 limit 1`,
+        [profileId, req.ctx.schoolId]
+      );
+      if (p2.rows.length === 0 || !p2.rows[0].auth_user_id) return { error: "no_auth" };
+      const authUserId = p2.rows[0].auth_user_id;
+      const tbl = await c.query(
+        `select table_name from information_schema.tables
+          where table_schema='neon_auth' and lower(table_name) in ('account','accounts') limit 1`
+      );
+      if (tbl.rows.length === 0) return { error: "schema_mismatch" };
+      const tableName = tbl.rows[0].table_name;
+      const cols = await c.query(
+        `select column_name from information_schema.columns
+          where table_schema='neon_auth' and table_name=$1`,
+        [tableName]
+      );
+      const names = cols.rows.map((r) => r.column_name);
+      const userCol = names.includes("userId") ? '"userId"' : names.includes("user_id") ? "user_id" : null;
+      const provCol = names.includes("providerId") ? '"providerId"' : names.includes("provider_id") ? "provider_id" : null;
+      if (!userCol || !provCol || !names.includes("password")) return { error: "schema_mismatch" };
+      const acc = await c.query(
+        `select id, password from neon_auth."${tableName}"
+          where ${userCol}=$1 and ${provCol}='credential' limit 1`,
+        [authUserId]
+      );
+      if (acc.rows.length === 0) return { error: "no_credential" };
+      const current = String(acc.rows[0].password ?? "");
+      if (current && !/^[a-f0-9]{16,64}:[a-f0-9]{64,256}$/i.test(current)) {
+        return { error: "hash_format" };
+      }
+      await c.query(
+        `update neon_auth."${tableName}" set password=$2 where id=$1`,
+        [acc.rows[0].id, betterAuthHash(DEFAULT_GUARDIAN_PASSWORD)]
+      );
+      await c.query(
+        `update public.profiles set password_change_required=true where id=$1`,
+        [profileId]
+      );
+      return { name, email };
+    });
+    if ("error" in result && result.error) {
+      const code = result.error;
+      const map = {
+        not_found: { http: 404, message: "Funcion\xE1rio n\xE3o encontrado." },
+        no_auth: { http: 400, message: "Este funcion\xE1rio n\xE3o possui login vinculado." },
+        no_credential: { http: 400, message: 'Conta de login sem senha cadastrada \u2014 pe\xE7a ao funcion\xE1rio para usar "Esqueci minha senha".' },
+        schema_mismatch: { http: 501, message: 'Estrutura do provedor de login n\xE3o reconhecida \u2014 use o fluxo "Esqueci minha senha".' },
+        hash_format: { http: 409, message: 'Formato de senha do provedor n\xE3o reconhecido \u2014 por seguran\xE7a, use o fluxo "Esqueci minha senha".' }
+      };
+      const m2 = map[code] ?? { http: 400, message: "N\xE3o foi poss\xEDvel resetar a senha." };
+      return res.status(m2.http).json({ code, message: m2.message });
+    }
+    res.json({ ok: true, data: { ...result, initial_password: DEFAULT_GUARDIAN_PASSWORD } });
+  } catch (err) {
+    console.error("[staff.reset-password] erro:", err?.message ?? err);
+    res.status(500).json({ code: "reset_failed", message: "Falha ao resetar a senha." });
   }
 });
 staffRouter.put("/:id", requireRole("school_admin", "superadmin"), async (req, res) => {
@@ -45051,7 +45131,7 @@ invoicesRouter.get("/balance/summary", requireRole("school_admin", "financial", 
 
 // src/api/routes/expenses.ts
 var import_express10 = __toESM(require_express2());
-var import_crypto2 = require("crypto");
+var import_crypto3 = require("crypto");
 var expensesRouter = (0, import_express10.Router)();
 expensesRouter.use(requireAuth);
 var ROLES = ["school_admin", "financial", "superadmin"];
@@ -45143,7 +45223,7 @@ expensesRouter.post("/", requireRole(...ROLES), async (req, res) => {
   const inst = p2.data.installments && p2.data.installments > 1 ? p2.data.installments : 1;
   const perInstallment = inst > 1 && p2.data.installment_mode === "total" ? Math.round(p2.data.amount / inst * 100) / 100 : p2.data.amount;
   const created = await withTenant(req.ctx, async (c) => {
-    const groupId = inst > 1 ? (0, import_crypto2.randomUUID)() : null;
+    const groupId = inst > 1 ? (0, import_crypto3.randomUUID)() : null;
     const rows = [];
     for (let i = 1; i <= inst; i++) {
       const due = p2.data.due_date ? addMonthsIso(p2.data.due_date, i - 1) : null;
@@ -47080,12 +47160,12 @@ staffDocumentsRouter.delete("/:id", async (req, res) => {
 
 // src/api/routes/cron.ts
 var import_express23 = __toESM(require_express2());
-var import_crypto3 = require("crypto");
+var import_crypto4 = require("crypto");
 var cronRouter = (0, import_express23.Router)();
 function safeEqual2(a2, b) {
   const ba = Buffer.from(a2);
   const bb = Buffer.from(b);
-  return ba.length === bb.length && (0, import_crypto3.timingSafeEqual)(ba, bb);
+  return ba.length === bb.length && (0, import_crypto4.timingSafeEqual)(ba, bb);
 }
 cronRouter.get("/overdue-invoices", async (req, res) => {
   const secret = req.headers["authorization"] ?? "";

@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import {
   Users, Plus, Trash2, Pencil, Loader2, Copy, Check, Search, Link2,
-  Briefcase, UserPlus, ShieldCheck, Eye, MoreVertical,
+  Briefcase, UserPlus, ShieldCheck, Eye, MoreVertical, KeyRound, AlertTriangle,
 } from 'lucide-react';
 import { StatusBadge } from '@/components/ui/StatusBadge';
 import { Modal } from '@/components/ui/Modal';
@@ -103,6 +103,12 @@ export function StaffPage() {
   const [query, setQuery] = useState('');
   const [selected, setSelected] = useState<Staff | null>(null);
   const [copiedLink, setCopiedLink] = useState(false);
+
+  // Reset de senha para a padrão da plataforma
+  const [resetTarget, setResetTarget] = useState<Staff | null>(null);
+  const [resetBusy, setResetBusy] = useState(false);
+  const [resetError, setResetError] = useState<string | null>(null);
+  const [resetDone, setResetDone] = useState<{ name: string; email: string; password: string } | null>(null);
 
   const { register, handleSubmit, reset, watch, formState: { errors } } = useForm<FormFields>();
   const watchRole = watch('role_type');
@@ -226,6 +232,21 @@ export function StaffPage() {
   async function onRemove(id: string) {
     await staffService.remove(id);
     await load();
+  }
+
+  async function confirmResetPassword() {
+    if (!resetTarget) return;
+    setResetBusy(true);
+    setResetError(null);
+    try {
+      const r = await staffService.resetPassword(resetTarget.id);
+      setResetDone({ name: r.name, email: r.email, password: r.initial_password });
+      setResetTarget(null);
+    } catch (e: any) {
+      setResetError(e?.message ?? 'Falha ao resetar a senha.');
+    } finally {
+      setResetBusy(false);
+    }
   }
 
   function copyCredentials() {
@@ -491,22 +512,30 @@ export function StaffPage() {
                     a troca é obrigatória no 1º acesso. Se já trocou, essa senha não vale mais.
                   </p>
                 </div>
-                <button
-                  className="mt-3 btn-outline flex items-center gap-1.5 text-xs"
-                  onClick={() => {
-                    const text =
-                      `Funcionário: ${selected.name}\n` +
-                      `Login (e-mail): ${selected.email}\n` +
-                      `Matrícula (alternativa): ${selected.registration_number ?? '—'}\n` +
-                      `Senha inicial: ${DEFAULT_STAFF_PASSWORD}\n` +
-                      `(troca obrigatória no 1º acesso)`;
-                    navigator.clipboard.writeText(text);
-                    setCopiedLink(true);
-                    setTimeout(() => setCopiedLink(false), 2000);
-                  }}
-                >
-                  {copiedLink ? <Check size={14} /> : <Copy size={14} />} {copiedLink ? 'Copiado!' : 'Copiar dados de acesso'}
-                </button>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <button
+                    className="btn-outline flex items-center gap-1.5 text-xs"
+                    onClick={() => {
+                      const text =
+                        `Funcionário: ${selected.name}\n` +
+                        `Login (e-mail): ${selected.email}\n` +
+                        `Matrícula (alternativa): ${selected.registration_number ?? '—'}\n` +
+                        `Senha inicial: ${DEFAULT_STAFF_PASSWORD}\n` +
+                        `(troca obrigatória no 1º acesso)`;
+                      navigator.clipboard.writeText(text);
+                      setCopiedLink(true);
+                      setTimeout(() => setCopiedLink(false), 2000);
+                    }}
+                  >
+                    {copiedLink ? <Check size={14} /> : <Copy size={14} />} {copiedLink ? 'Copiado!' : 'Copiar dados de acesso'}
+                  </button>
+                  <button
+                    className="flex items-center gap-1.5 rounded-xl border border-warning/40 bg-warning-soft/40 px-3 py-2 text-xs font-semibold text-warning hover:bg-warning-soft"
+                    onClick={() => { setResetError(null); setResetTarget(selected); }}
+                  >
+                    <KeyRound size={14} /> Resetar senha
+                  </button>
+                </div>
               </div>
 
               <button
@@ -704,6 +733,66 @@ export function StaffPage() {
               <p className="pt-1 text-xs text-ink-subtle">
                 Senha padrão da plataforma — <b className="font-mono">{DEFAULT_STAFF_PASSWORD}</b>. Troca obrigatória no 1º acesso.
               </p>
+            </div>
+          </div>
+        )}
+      </Modal>
+
+      {/* Confirmação — resetar senha para a padrão */}
+      <Modal
+        open={!!resetTarget}
+        title="Resetar senha do funcionário"
+        onClose={() => { if (!resetBusy) setResetTarget(null); }}
+        footer={
+          <>
+            <button className="btn-outline" onClick={() => setResetTarget(null)} disabled={resetBusy}>Cancelar</button>
+            <button
+              className="flex items-center gap-1.5 rounded-xl bg-warning px-4 py-2 text-sm font-semibold text-white hover:bg-warning/90 disabled:opacity-60"
+              onClick={confirmResetPassword}
+              disabled={resetBusy}
+            >
+              {resetBusy ? <Loader2 size={15} className="animate-spin" /> : <KeyRound size={15} />} Resetar para padrão
+            </button>
+          </>
+        }
+      >
+        {resetTarget && (
+          <div className="space-y-3">
+            <div className="flex items-start gap-2 rounded-xl bg-warning-soft px-3 py-2.5 text-xs text-warning">
+              <AlertTriangle size={15} className="mt-0.5 shrink-0" />
+              <span>
+                A senha de <b>{resetTarget.name}</b> voltará para a padrão da plataforma
+                (<b className="font-mono">{DEFAULT_STAFF_PASSWORD}</b>). A senha atual deixará de funcionar
+                e a troca será obrigatória no próximo acesso.
+              </span>
+            </div>
+            {resetError && (
+              <div className="flex items-start gap-2 rounded-xl bg-danger-soft px-3 py-2 text-xs text-danger">
+                <AlertTriangle size={14} className="mt-0.5 shrink-0" /> {resetError}
+              </div>
+            )}
+            <p className="text-sm text-ink-muted">Deseja continuar?</p>
+          </div>
+        )}
+      </Modal>
+
+      {/* Resultado — senha resetada */}
+      <Modal
+        open={!!resetDone}
+        title="Senha resetada com sucesso!"
+        onClose={() => setResetDone(null)}
+        footer={<button className="btn-primary" onClick={() => setResetDone(null)}>Fechar</button>}
+      >
+        {resetDone && (
+          <div className="space-y-3 text-sm">
+            <div className="rounded-xl bg-success-soft p-4 text-success">
+              <p className="font-semibold">Pronto.</p>
+              <p className="mt-1 text-xs">Informe a senha padrão ao funcionário — a troca será exigida no próximo acesso.</p>
+            </div>
+            <div className="space-y-2 rounded-xl border border-border p-4">
+              <div className="flex justify-between"><span className="text-ink-muted">Funcionário:</span><span className="font-medium text-ink">{resetDone.name}</span></div>
+              <div className="flex justify-between"><span className="text-ink-muted">Login (e-mail):</span><span className="font-medium text-primary">{resetDone.email}</span></div>
+              <div className="flex justify-between"><span className="text-ink-muted">Senha:</span><span className="font-mono font-bold text-ink">{resetDone.password}</span></div>
             </div>
           </div>
         )}

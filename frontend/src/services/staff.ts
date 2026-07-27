@@ -53,4 +53,11 @@ export const staffService = {
   async remove(id: string): Promise<void> {
     await api.del(`/staff/${id}`);
   },
+  /** Volta a senha do funcionário para a padrão da plataforma (Escola@2026). */
+  async resetPassword(id: string): Promise<{ name: string; email: string; initial_password: string }> {
+    const r = await api.post<{ ok: boolean; data: { name: string; email: string; initial_password: string } }>(
+      `/staff/${id}/reset-password`, {},
+    );
+    return r.data;
+  },
 };

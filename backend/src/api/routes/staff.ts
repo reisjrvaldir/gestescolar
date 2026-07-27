@@ -1,9 +1,24 @@
 import { Router } from 'express';
 import { z } from 'zod';
+import { randomBytes, scryptSync } from 'crypto';
 import { withTenant } from '../../db/withTenant';
 import { requireAuth, requireRole } from '../../middleware/auth';
 import { signUpGuardian } from '../../lib/authSignup';
 import { cpfSchema, DEFAULT_GUARDIAN_PASSWORD, toStoredPassword } from '../../lib/validation';
+
+/**
+ * Hash de senha no formato do Better Auth (Neon Auth): scrypt N=16384 r=16 p=1
+ * dkLen=64, salt de 16 bytes em hex usado como string, saída "salt:hash" (hex).
+ * Compatível com a verificação do provedor — permite resetar a senha de um
+ * usuário direto na tabela neon_auth.account sem API administrativa.
+ */
+function betterAuthHash(password: string): string {
+  const salt = randomBytes(16).toString('hex');
+  const key = scryptSync(password.normalize('NFKC'), salt, 64, {
+    N: 16384, r: 16, p: 1, maxmem: 64 * 1024 * 1024,
+  });
+  return `${salt}:${key.toString('hex')}`;
+}
 
 export const staffRouter = Router();
 
@@ -107,6 +122,91 @@ staffRouter.post('/', requireRole('school_admin', 'superadmin'), async (req, res
       code: err?.code ?? 'create_failed',
       message: err?.message ?? 'Falha ao criar funcionário',
     });
+  }
+});
+
+// ---------- Resetar senha para a padrão da plataforma (gestão) ----------
+// Volta a senha do funcionário para Escola@2026 gravando o hash direto na
+// tabela de contas do Neon Auth (schema neon_auth). Só sobrescreve se o hash
+// atual estiver no formato scrypt do Better Auth — caso contrário aborta e
+// orienta a usar o fluxo "Esqueci minha senha".
+staffRouter.post('/:id/reset-password', requireRole('school_admin', 'superadmin'), async (req, res) => {
+  try {
+    const result = await withTenant(req.ctx!, async (c) => {
+      const t = await c.query(
+        `select user_id, name, email from public.teachers where id=$1 and school_id=$2 limit 1`,
+        [req.params.id, req.ctx!.schoolId],
+      );
+      if (t.rows.length === 0) return { error: 'not_found' as const };
+      const { user_id: profileId, name, email } = t.rows[0];
+      if (!profileId) return { error: 'no_auth' as const };
+
+      const p = await c.query(
+        `select auth_user_id from public.profiles where id=$1 and school_id=$2 limit 1`,
+        [profileId, req.ctx!.schoolId],
+      );
+      if (p.rows.length === 0 || !p.rows[0].auth_user_id) return { error: 'no_auth' as const };
+      const authUserId = p.rows[0].auth_user_id;
+
+      // Localiza a tabela de contas do Better Auth (o nome/casing varia entre versões)
+      const tbl = await c.query(
+        `select table_name from information_schema.tables
+          where table_schema='neon_auth' and lower(table_name) in ('account','accounts') limit 1`,
+      );
+      if (tbl.rows.length === 0) return { error: 'schema_mismatch' as const };
+      const tableName: string = tbl.rows[0].table_name;
+
+      const cols = await c.query(
+        `select column_name from information_schema.columns
+          where table_schema='neon_auth' and table_name=$1`,
+        [tableName],
+      );
+      const names: string[] = cols.rows.map((r: any) => r.column_name);
+      const userCol = names.includes('userId') ? '"userId"' : names.includes('user_id') ? 'user_id' : null;
+      const provCol = names.includes('providerId') ? '"providerId"' : names.includes('provider_id') ? 'provider_id' : null;
+      if (!userCol || !provCol || !names.includes('password')) return { error: 'schema_mismatch' as const };
+
+      const acc = await c.query(
+        `select id, password from neon_auth."${tableName}"
+          where ${userCol}=$1 and ${provCol}='credential' limit 1`,
+        [authUserId],
+      );
+      if (acc.rows.length === 0) return { error: 'no_credential' as const };
+
+      // Só sobrescreve hash em formato scrypt "saltHex:hashHex" (ou vazio)
+      const current = String(acc.rows[0].password ?? '');
+      if (current && !/^[a-f0-9]{16,64}:[a-f0-9]{64,256}$/i.test(current)) {
+        return { error: 'hash_format' as const };
+      }
+
+      await c.query(
+        `update neon_auth."${tableName}" set password=$2 where id=$1`,
+        [acc.rows[0].id, betterAuthHash(DEFAULT_GUARDIAN_PASSWORD)],
+      );
+      await c.query(
+        `update public.profiles set password_change_required=true where id=$1`,
+        [profileId],
+      );
+      return { name, email };
+    });
+
+    if ('error' in result && result.error) {
+      const code: string = result.error;
+      const map: Record<string, { http: number; message: string }> = {
+        not_found: { http: 404, message: 'Funcionário não encontrado.' },
+        no_auth: { http: 400, message: 'Este funcionário não possui login vinculado.' },
+        no_credential: { http: 400, message: 'Conta de login sem senha cadastrada — peça ao funcionário para usar "Esqueci minha senha".' },
+        schema_mismatch: { http: 501, message: 'Estrutura do provedor de login não reconhecida — use o fluxo "Esqueci minha senha".' },
+        hash_format: { http: 409, message: 'Formato de senha do provedor não reconhecido — por segurança, use o fluxo "Esqueci minha senha".' },
+      };
+      const m = map[code] ?? { http: 400, message: 'Não foi possível resetar a senha.' };
+      return res.status(m.http).json({ code, message: m.message });
+    }
+
+    res.json({ ok: true, data: { ...result, initial_password: DEFAULT_GUARDIAN_PASSWORD } });
+  } catch (err: any) {
+    console.error('[staff.reset-password] erro:', err?.message ?? err);
+    res.status(500).json({ code: 'reset_failed', message: 'Falha ao resetar a senha.' });
   }
 });
 
