@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useId, useMemo, useState } from 'react';
 import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
 import { useLocation, useNavigate } from 'react-router-dom';
 import {
   GraduationCap, Search, Loader2, Copy, Check, Save, Plus,
@@ -18,6 +19,8 @@ import type { SchoolClass, Student } from '@/types/models';
 import { brl } from '@/lib/fees';
 import { resizeImageToDataUrl } from '@/lib/image';
 import { StudentEditModal } from '@/components/students/StudentEditModal';
+import { studentFormSchema, type StudentFormValues } from '@/lib/schemas';
+import { applyServerErrors } from '@/hooks/useFormErrors';
 
 const BLOOD_TYPES = ['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'] as const;
 
@@ -27,26 +30,7 @@ const DEFAULT_GUARDIAN_PASSWORD = 'Escola@2026';
 
 type StatusFilter = 'all' | 'active' | 'inactive';
 
-interface FormFields {
-  name: string;
-  cpf: string;
-  rg: string;
-  birth_date: string;
-  blood_type: string;
-  naturality: string;
-  father_name: string;
-  mother_name: string;
-  class_id?: string;
-  plan_id: string;
-  discount_percentage?: number;
-  enrollment_payment_method?: 'cash' | 'pix' | 'card';
-  first_due?: '30' | '05' | '10' | '15';
-  guardian_name: string;
-  guardian_email: string;
-  guardian_cpf: string;
-  guardian_phone?: string;
-  guardian_phone2?: string;
-}
+type FormFields = StudentFormValues;
 
 type DetailTab = 'dados' | 'responsavel' | 'contatos' | 'documentos';
 
@@ -155,7 +139,7 @@ export function StudentsPage() {
 
   const [students, setStudents] = useState<Student[]>([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setPageError] = useState<string | null>(null);
   const [query, setQuery] = useState('');
   const [classes, setClasses] = useState<SchoolClass[]>([]);
   const [plans, setPlans] = useState<SchoolPlan[]>([]);
@@ -172,7 +156,7 @@ export function StudentsPage() {
 
   const load = useCallback(async () => {
     setLoading(true);
-    setError(null);
+    setPageError(null);
     try {
       const [s, c, p] = await Promise.all([
         studentsService.list(),
@@ -183,7 +167,7 @@ export function StudentsPage() {
       setClasses(c);
       setPlans(p);
     } catch (e: any) {
-      setError(e?.message ?? 'Erro ao carregar alunos');
+      setPageError(e?.message ?? 'Erro ao carregar alunos');
     } finally {
       setLoading(false);
     }
@@ -236,7 +220,7 @@ export function StudentsPage() {
     }).length;
   }, [students]);
 
-  const { register, handleSubmit, reset, watch, formState: { errors } } = useForm<FormFields>();
+  const { register, handleSubmit, reset, watch, setError, formState: { errors } } = useForm<FormFields>({ resolver: zodResolver(studentFormSchema) });
   const uid = useId();
   const fId = (f: string) => `${uid}-${f}`;
   const selectedPlanId = watch('plan_id');
@@ -259,7 +243,7 @@ export function StudentsPage() {
 
   async function onSubmit(data: FormFields) {
     setSaving(true);
-    setError(null);
+    setPageError(null);
     try {
       const payload: NewStudent = {
         name: data.name,
@@ -269,8 +253,8 @@ export function StudentsPage() {
         blood_type: data.blood_type || undefined,
         naturality: data.naturality || undefined,
         photo_url: photoPreview || undefined,
-        father_name: data.father_name,
-        mother_name: data.mother_name,
+        father_name: data.father_name ?? '',
+        mother_name: data.mother_name ?? '',
         class_id: data.class_id || undefined,
         plan_id: data.plan_id,
         discount_percentage: data.discount_percentage != null ? Number(data.discount_percentage) : undefined,
@@ -289,7 +273,9 @@ export function StudentsPage() {
       await load();
       navigate('/app/students');
     } catch (e: any) {
-      setError(e?.message ?? 'Erro ao cadastrar aluno');
+      if (!applyServerErrors(e, setError)) {
+        setError('root', { message: e?.message ?? 'Erro ao cadastrar aluno' });
+      }
     } finally {
       setSaving(false);
     }
@@ -324,7 +310,11 @@ export function StudentsPage() {
           icon={UserPlus}
         />
 
-        {error && <div className="mb-4 rounded-xl bg-danger-soft px-3 py-2 text-sm text-danger">{error}</div>}
+        {(error || errors.root) && (
+          <div role="alert" className="mb-4 rounded-xl bg-danger-soft px-3 py-2 text-sm text-danger">
+            {error ?? errors.root?.message}
+          </div>
+        )}
         {noPlans && (
           <div className="mb-4 rounded-xl bg-warning-soft px-3 py-2 text-sm text-warning">
             Cadastre pelo menos um <strong>plano de mensalidade</strong> antes de matricular alunos.
@@ -352,7 +342,7 @@ export function StudentsPage() {
                     const file = e.target.files?.[0];
                     if (!file) return;
                     try { setPhotoPreview(await resizeImageToDataUrl(file, 256, 0.8)); }
-                    catch { setError('Não foi possível processar a imagem.'); }
+                    catch { setPageError('Não foi possível processar a imagem.'); }
                   }} />
                 </label>
                 <p className="mt-2 text-xs text-ink-muted">JPG ou PNG — redimensionada automaticamente</p>
@@ -368,12 +358,12 @@ export function StudentsPage() {
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                 <div className="sm:col-span-2">
                   <label htmlFor={fId('name')} className="label">Nome completo *</label>
-                  <input id={fId('name')} autoComplete="name" className="input" aria-describedby={errors.name ? `${fId('name')}-err` : undefined} {...register('name', { required: 'Informe o nome' })} />
+                  <input id={fId('name')} autoComplete="name" className="input" maxLength={120} aria-describedby={errors.name ? `${fId('name')}-err` : undefined} {...register('name')} />
                   {errors.name && <p id={`${fId('name')}-err`} className="mt-1 text-xs text-danger">{errors.name.message}</p>}
                 </div>
                 <div>
                   <label htmlFor={fId('cpf')} className="label">CPF *</label>
-                  <input id={fId('cpf')} className="input" placeholder="000.000.000-00" aria-describedby={errors.cpf ? `${fId('cpf')}-err` : undefined} {...register('cpf', { required: 'Informe o CPF' })} />
+                  <input id={fId('cpf')} className="input" placeholder="000.000.000-00" inputMode="numeric" maxLength={14} aria-describedby={errors.cpf ? `${fId('cpf')}-err` : undefined} {...register('cpf')} />
                   {errors.cpf && <p id={`${fId('cpf')}-err`} className="mt-1 text-xs text-danger">{errors.cpf.message}</p>}
                 </div>
                 <div>
@@ -382,12 +372,12 @@ export function StudentsPage() {
                 </div>
                 <div>
                   <label htmlFor={fId('birth_date')} className="label">Data de nascimento *</label>
-                  <input id={fId('birth_date')} type="date" className="input" aria-describedby={errors.birth_date ? `${fId('birth_date')}-err` : undefined} {...register('birth_date', { required: 'Informe a data' })} />
+                  <input id={fId('birth_date')} type="date" className="input" aria-describedby={errors.birth_date ? `${fId('birth_date')}-err` : undefined} {...register('birth_date')} />
                   {errors.birth_date && <p id={`${fId('birth_date')}-err`} className="mt-1 text-xs text-danger">{errors.birth_date.message}</p>}
                 </div>
                 <div>
                   <label htmlFor={fId('blood_type')} className="label">Tipo sanguíneo *</label>
-                  <select id={fId('blood_type')} className="input" aria-describedby={errors.blood_type ? `${fId('blood_type')}-err` : undefined} {...register('blood_type', { required: 'Selecione o tipo sanguíneo' })}>
+                  <select id={fId('blood_type')} className="input" aria-describedby={errors.blood_type ? `${fId('blood_type')}-err` : undefined} {...register('blood_type')}>
                     <option value="">Selecione…</option>
                     {BLOOD_TYPES.map(bt => <option key={bt} value={bt}>{bt}</option>)}
                   </select>
@@ -402,12 +392,12 @@ export function StudentsPage() {
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                 <div>
                   <label htmlFor={fId('father_name')} className="label">Nome do pai *</label>
-                  <input id={fId('father_name')} className="input" aria-describedby={errors.father_name ? `${fId('father_name')}-err` : undefined} {...register('father_name', { required: 'Informe o nome do pai' })} />
+                  <input id={fId('father_name')} className="input" maxLength={120} aria-describedby={errors.father_name ? `${fId('father_name')}-err` : undefined} {...register('father_name')} />
                   {errors.father_name && <p id={`${fId('father_name')}-err`} className="mt-1 text-xs text-danger">{errors.father_name.message}</p>}
                 </div>
                 <div>
                   <label htmlFor={fId('mother_name')} className="label">Nome da mãe *</label>
-                  <input id={fId('mother_name')} className="input" aria-describedby={errors.mother_name ? `${fId('mother_name')}-err` : undefined} {...register('mother_name', { required: 'Informe o nome da mãe' })} />
+                  <input id={fId('mother_name')} className="input" maxLength={120} aria-describedby={errors.mother_name ? `${fId('mother_name')}-err` : undefined} {...register('mother_name')} />
                   {errors.mother_name && <p id={`${fId('mother_name')}-err`} className="mt-1 text-xs text-danger">{errors.mother_name.message}</p>}
                 </div>
               </div>
@@ -422,7 +412,7 @@ export function StudentsPage() {
                 </div>
                 <div>
                   <label htmlFor={fId('plan_id')} className="label">Plano (mensalidade) *</label>
-                  <select id={fId('plan_id')} className="input" aria-describedby={errors.plan_id ? `${fId('plan_id')}-err` : undefined} {...register('plan_id', { required: 'Selecione um plano' })} disabled={noPlans}>
+                  <select id={fId('plan_id')} className="input" aria-describedby={errors.plan_id ? `${fId('plan_id')}-err` : undefined} {...register('plan_id')} disabled={noPlans}>
                     <option value="">Selecione…</option>
                     {plans.map((p) => <option key={p.id} value={p.id}>{p.name} — {brl(Number(p.monthly_fee))}</option>)}
                   </select>
@@ -476,24 +466,24 @@ export function StudentsPage() {
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                 <div>
                   <label htmlFor={fId('guardian_name')} className="label">Nome do responsável *</label>
-                  <input id={fId('guardian_name')} autoComplete="name" className="input" aria-describedby={errors.guardian_name ? `${fId('guardian_name')}-err` : undefined} {...register('guardian_name', { required: 'Informe o nome' })} />
+                  <input id={fId('guardian_name')} autoComplete="name" className="input" maxLength={120} aria-describedby={errors.guardian_name ? `${fId('guardian_name')}-err` : undefined} {...register('guardian_name')} />
                   {errors.guardian_name && <p id={`${fId('guardian_name')}-err`} className="mt-1 text-xs text-danger">{errors.guardian_name.message}</p>}
                 </div>
                 <div>
                   <label htmlFor={fId('guardian_cpf')} className="label">CPF do responsável *</label>
-                  <input id={fId('guardian_cpf')} className="input" placeholder="000.000.000-00" aria-describedby={errors.guardian_cpf ? `${fId('guardian_cpf')}-err` : undefined} {...register('guardian_cpf', { required: 'Informe o CPF' })} />
+                  <input id={fId('guardian_cpf')} className="input" placeholder="000.000.000-00" inputMode="numeric" maxLength={14} aria-describedby={errors.guardian_cpf ? `${fId('guardian_cpf')}-err` : undefined} {...register('guardian_cpf')} />
                   {errors.guardian_cpf && <p id={`${fId('guardian_cpf')}-err`} className="mt-1 text-xs text-danger">{errors.guardian_cpf.message}</p>}
                 </div>
               </div>
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                 <div>
                   <label htmlFor={fId('guardian_email')} className="label">Email *</label>
-                  <input id={fId('guardian_email')} type="email" autoComplete="email" className="input" aria-describedby={errors.guardian_email ? `${fId('guardian_email')}-err` : undefined} {...register('guardian_email', { required: 'Informe o email' })} />
+                  <input id={fId('guardian_email')} type="email" autoComplete="email" className="input" maxLength={254} aria-describedby={errors.guardian_email ? `${fId('guardian_email')}-err` : undefined} {...register('guardian_email')} />
                   {errors.guardian_email && <p id={`${fId('guardian_email')}-err`} className="mt-1 text-xs text-danger">{errors.guardian_email.message}</p>}
                 </div>
                 <div>
                   <label htmlFor={fId('guardian_phone')} className="label">Telefone *</label>
-                  <input id={fId('guardian_phone')} autoComplete="tel" className="input" placeholder="(00) 00000-0000" aria-describedby={errors.guardian_phone ? `${fId('guardian_phone')}-err` : undefined} {...register('guardian_phone', { required: 'Informe o telefone' })} />
+                  <input id={fId('guardian_phone')} autoComplete="tel" className="input" placeholder="(00) 00000-0000" inputMode="tel" maxLength={15} aria-describedby={errors.guardian_phone ? `${fId('guardian_phone')}-err` : undefined} {...register('guardian_phone')} />
                   {errors.guardian_phone && <p id={`${fId('guardian_phone')}-err`} className="mt-1 text-xs text-danger">{errors.guardian_phone.message}</p>}
                 </div>
               </div>

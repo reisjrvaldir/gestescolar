@@ -1,8 +1,9 @@
 import { Router } from 'express';
 import { createHash } from 'crypto';
-import { z } from 'zod';
 import { withSystem } from '../../db/withTenant';
 import { requireIdentity, resolveProfile } from '../../middleware/auth';
+import { validateBody } from '../../lib/validateBody';
+import { onboardingSchema } from '../../../../shared/schemas';
 
 export const meRouter = Router();
 
@@ -49,28 +50,16 @@ meRouter.post('/password-changed', requireIdentity, async (req, res) => {
   res.json({ ok: true });
 });
 
-const onboardingSchema = z.object({
-  school_name: z.string().min(2, 'Informe o nome da escola'),
-  admin_name: z.string().min(2, 'Informe seu nome'),
-  cnpj: z.string().optional(),
-  phone: z.string().optional(),
-  terms_version: z.string().optional(),
-  privacy_version: z.string().optional(),
-});
-
 // POST /api/me/onboarding — cria escola + perfil (school_admin) no 1º acesso.
-meRouter.post('/onboarding', requireIdentity, async (req, res) => {
+meRouter.post('/onboarding', requireIdentity, validateBody(onboardingSchema), async (req, res) => {
   const id = req.identity!;
 
   // Já tem perfil? Retorna idempotente.
   const existing = await resolveProfile(id.authUserId);
   if (existing) return res.status(200).json({ ok: true, alreadyOnboarded: true });
 
-  const parsed = onboardingSchema.safeParse(req.body);
-  if (!parsed.success) {
-    return res.status(400).json({ code: 'validation', message: parsed.error.issues[0]?.message });
-  }
-  const { school_name, admin_name, cnpj, phone, terms_version, privacy_version } = parsed.data;
+  const { school_name, admin_name, cnpj, phone, terms_version, privacy_version } =
+    req.body as import('../../../../shared/schemas').OnboardingOutput;
 
   const tv = terms_version ?? CURRENT_TERMS_VERSION;
   const pv = privacy_version ?? CURRENT_PRIVACY_VERSION;

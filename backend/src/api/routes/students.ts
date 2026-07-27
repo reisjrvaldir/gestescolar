@@ -1,40 +1,13 @@
 import { Router } from 'express';
-import { z } from 'zod';
 import { withTenant } from '../../db/withTenant';
 import { requireAuth, requireRole } from '../../middleware/auth';
 import { signUpGuardian } from '../../lib/authSignup';
-import { cpfSchema, dateSchema, DEFAULT_GUARDIAN_PASSWORD, toStoredPassword } from '../../lib/validation';
+import { DEFAULT_GUARDIAN_PASSWORD, toStoredPassword } from '../../lib/validation';
 import { insertMonthlyInvoices, insertEnrollmentInvoice, generatePixForNewInvoices, type FirstDueRule } from '../../lib/billing/studentInvoices';
+import { validateBody } from '../../lib/validateBody';
+import { studentCreateSchema, studentUpdateSchema } from '../../../../shared/schemas';
 
 export const studentsRouter = Router();
-
-const studentSchema = z.object({
-  name: z.string().min(2, 'Nome do aluno obrigatório'),
-  cpf: cpfSchema,
-  rg: z.string().optional(),
-  birth_date: dateSchema,
-  blood_type: z.enum(['A+','A-','B+','B-','AB+','AB-','O+','O-']).optional(),
-  naturality: z.string().optional(),
-  photo_url: z.string().optional(),
-  father_name: z.string().min(2, 'Nome do pai obrigatório'),
-  mother_name: z.string().min(2, 'Nome da mãe obrigatório'),
-  class_id: z.string().uuid().optional(),
-  plan_id: z.string().uuid('Selecione um plano'),
-  discount_percentage: z.number().min(0).max(100).optional(),
-  enrollment_payment_method: z.enum(['cash', 'pix', 'card']).optional(),
-  first_due: z.enum(['30', '05', '10', '15']).optional(),
-  guardian: z.object({
-    name: z.string().min(2, 'Nome do responsável obrigatório'),
-    email: z.string().email('Email do responsável inválido'),
-    cpf: cpfSchema,
-    phone: z.string().optional(),
-    phone2: z.string().optional(),
-  }),
-});
-
-const studentUpdateSchema = studentSchema.omit({ guardian: true }).partial().extend({
-  name: z.string().min(2),
-});
 
 studentsRouter.use(requireAuth);
 
@@ -80,12 +53,8 @@ studentsRouter.get('/', requireRole('school_admin', 'financial', 'teacher', 'sup
 });
 
 // POST /api/students — cria aluno + responsável + login (transacional)
-studentsRouter.post('/', requireRole('school_admin', 'superadmin'), async (req, res) => {
-  const parsed = studentSchema.safeParse(req.body);
-  if (!parsed.success) {
-    return res.status(400).json({ code: 'validation', message: parsed.error.issues[0]?.message });
-  }
-  const s = parsed.data;
+studentsRouter.post('/', requireRole('school_admin', 'superadmin'), validateBody(studentCreateSchema), async (req, res) => {
+  const s = req.body as import('../../../../shared/schemas').StudentCreateOutput;
 
   let authUserId: string | null = null;
   try {
@@ -236,12 +205,8 @@ studentsRouter.post('/', requireRole('school_admin', 'superadmin'), async (req, 
   }
 });
 
-studentsRouter.put('/:id', requireRole('school_admin', 'superadmin'), async (req, res) => {
-  const parsed = studentUpdateSchema.safeParse(req.body);
-  if (!parsed.success) {
-    return res.status(400).json({ code: 'validation', message: parsed.error.issues[0]?.message });
-  }
-  const s = parsed.data;
+studentsRouter.put('/:id', requireRole('school_admin', 'superadmin'), validateBody(studentUpdateSchema), async (req, res) => {
+  const s = req.body as import('../../../../shared/schemas').StudentUpdateOutput;
   const updated = await withTenant(req.ctx!, async (c) => {
     const { rows } = await c.query(
       `update public.students set

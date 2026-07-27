@@ -1,9 +1,9 @@
 import { Router } from 'express';
-import { z } from 'zod';
 import { randomUUID } from 'crypto';
 import { withTenant } from '../../db/withTenant';
 import { requireAuth, requireRole } from '../../middleware/auth';
-import { dateSchema } from '../../lib/validation';
+import { validateBody } from '../../lib/validateBody';
+import { expenseCreateSchema, expenseEditSchema } from '../../../../shared/schemas';
 
 export const expensesRouter = Router();
 expensesRouter.use(requireAuth);
@@ -78,39 +78,25 @@ expensesRouter.get('/', requireRole(...ROLES), async (req, res) => {
 });
 
 // ---------- Criação (avulsa ou parcelada) ----------
-const baseExpense = z.object({
-  supplier_name: z.string().min(1, 'Informe o fornecedor'),
-  description: z.string().optional(),
-  category: z.string().optional(),
-  amount: z.number().positive('Valor deve ser positivo'),
-  due_date: dateSchema.optional(),
-});
-
-const createSchema = baseExpense.extend({
-  installments: z.number().int().min(1).max(60).optional(),
-  installment_mode: z.enum(['total', 'each']).optional(),
-});
-
 function addMonthsIso(iso: string, months: number): string {
   const [y, m, d] = iso.split('-').map(Number);
   const base = new Date(Date.UTC(y, (m - 1) + months, d));
   return base.toISOString().slice(0, 10);
 }
 
-expensesRouter.post('/', requireRole(...ROLES), async (req, res) => {
-  const p = createSchema.safeParse(req.body);
-  if (!p.success) return res.status(400).json({ code: 'validation', message: p.error.issues[0]?.message });
+expensesRouter.post('/', requireRole(...ROLES), validateBody(expenseCreateSchema), async (req, res) => {
+  const p = req.body as import('../../../../shared/schemas').ExpenseCreateOutput;
 
-  const inst = p.data.installments && p.data.installments > 1 ? p.data.installments : 1;
-  const perInstallment = inst > 1 && p.data.installment_mode === 'total'
-    ? Math.round((p.data.amount / inst) * 100) / 100
-    : p.data.amount;
+  const inst = p.installments && p.installments > 1 ? p.installments : 1;
+  const perInstallment = inst > 1 && p.installment_mode === 'total'
+    ? Math.round((p.amount / inst) * 100) / 100
+    : p.amount;
 
   const created = await withTenant(req.ctx!, async (c) => {
     const groupId = inst > 1 ? randomUUID() : null;
     const rows: any[] = [];
     for (let i = 1; i <= inst; i++) {
-      const due = p.data.due_date ? addMonthsIso(p.data.due_date, i - 1) : null;
+      const due = p.due_date ? addMonthsIso(p.due_date, i - 1) : null;
       const { rows: r } = await c.query(
         `insert into public.expenses
            (school_id, supplier_name, description, category, amount, due_date, status,
@@ -119,9 +105,9 @@ expensesRouter.post('/', requireRole(...ROLES), async (req, res) => {
          returning ${SELECT_COLS}`,
         [
           req.ctx!.schoolId,
-          p.data.supplier_name,
-          p.data.description ?? null,
-          p.data.category ?? null,
+          p.supplier_name,
+          p.description ?? null,
+          p.category ?? null,
           perInstallment,
           due,
           groupId,
@@ -145,11 +131,8 @@ expensesRouter.post('/', requireRole(...ROLES), async (req, res) => {
 });
 
 // ---------- Edição ----------
-const editSchema = baseExpense.partial();
-
-expensesRouter.patch('/:id', requireRole(...ROLES), async (req, res) => {
-  const p = editSchema.safeParse(req.body);
-  if (!p.success) return res.status(400).json({ code: 'validation', message: p.error.issues[0]?.message });
+expensesRouter.patch('/:id', requireRole(...ROLES), validateBody(expenseEditSchema), async (req, res) => {
+  const p = req.body as import('../../../../shared/schemas').ExpenseEditOutput;
 
   const updated = await withTenant(req.ctx!, async (c) => {
     const before = (await c.query(
@@ -159,11 +142,11 @@ expensesRouter.patch('/:id', requireRole(...ROLES), async (req, res) => {
     if (!before) return null;
 
     const next = {
-      supplier_name: p.data.supplier_name ?? before.supplier_name,
-      description: p.data.description ?? before.description,
-      category: p.data.category ?? before.category,
-      amount: p.data.amount ?? Number(before.amount),
-      due_date: p.data.due_date ?? before.due_date,
+      supplier_name: p.supplier_name ?? before.supplier_name,
+      description: p.description ?? before.description,
+      category: p.category ?? before.category,
+      amount: p.amount ?? Number(before.amount),
+      due_date: p.due_date ?? before.due_date,
     };
 
     const { rows } = await c.query(

@@ -1,23 +1,21 @@
 import { useEffect, useId, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
 import { GraduationCap, Loader2 } from 'lucide-react';
 import { useSession } from '@/lib/authClient';
 import { api } from '@/lib/api';
 import { CURRENT_TERMS_VERSION, CURRENT_PRIVACY_VERSION } from '@/lib/consentVersions';
+import { onboardingSchema } from '@/lib/schemas';
+import type { z } from 'zod';
 
-interface OnboardingForm {
-  school_name: string;
-  admin_name: string;
-  cnpj?: string;
-  phone?: string;
-}
+type OnboardingForm = z.input<typeof onboardingSchema>;
 
 export function OnboardingPage() {
   const { data: session, isPending } = useSession();
   const navigate = useNavigate();
   const [error, setError] = useState<string | null>(null);
-  const { register, handleSubmit, formState: { isSubmitting, errors } } = useForm<OnboardingForm>();
+  const { register, handleSubmit, formState: { isSubmitting, errors } } = useForm<OnboardingForm>({ resolver: zodResolver(onboardingSchema) });
 
   const uid = useId();
   const schoolNameId = `${uid}-school-name`;
@@ -69,7 +67,8 @@ export function OnboardingPage() {
               autoComplete="organization"
               className="input"
               aria-describedby={errors.school_name ? `${schoolNameId}-err` : undefined}
-              {...register('school_name', { required: 'Informe o nome da escola' })}
+              maxLength={200}
+              {...register('school_name')}
             />
             {errors.school_name && <p id={`${schoolNameId}-err`} className="mt-1 text-xs text-danger">{errors.school_name.message}</p>}
           </div>
@@ -80,7 +79,8 @@ export function OnboardingPage() {
               autoComplete="name"
               className="input"
               aria-describedby={errors.admin_name ? `${adminNameId}-err` : undefined}
-              {...register('admin_name', { required: 'Informe seu nome' })}
+              maxLength={120}
+              {...register('admin_name')}
             />
             {errors.admin_name && <p id={`${adminNameId}-err`} className="mt-1 text-xs text-danger">{errors.admin_name.message}</p>}
           </div>
@@ -91,7 +91,7 @@ export function OnboardingPage() {
             </div>
             <div>
               <label htmlFor={phoneId} className="label">Telefone</label>
-              <input id={phoneId} autoComplete="tel" className="input" {...register('phone')} />
+              <input id={phoneId} autoComplete="tel" inputMode="tel" maxLength={15} className="input" {...register('phone')} />
             </div>
           </div>
           <button className="btn-primary w-full justify-center" disabled={isSubmitting}>

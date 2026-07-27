@@ -1,7 +1,8 @@
 import { Router } from 'express';
-import { z } from 'zod';
 import { withTenant } from '../../db/withTenant';
 import { requireAuth, requireRole } from '../../middleware/auth';
+import { validateBody } from '../../lib/validateBody';
+import { schoolSettingsSchema } from '../../../../shared/schemas';
 
 export const settingsRouter = Router();
 settingsRouter.use(requireAuth);
@@ -19,21 +20,11 @@ settingsRouter.get('/', async (req, res) => {
   res.json({ ok: true, data });
 });
 
-const updateSchema = z.object({
-  name: z.string().min(2).optional(),
-  legal_name: z.string().optional(),
-  cnpj: z.string().optional(),
-  email: z.string().email().optional(),
-  phone: z.string().optional(),
-  logo_url: z.string().optional(),
-});
-
-settingsRouter.put('/', requireRole('school_admin', 'superadmin'), async (req, res) => {
-  const p = updateSchema.safeParse(req.body);
-  if (!p.success) return res.status(400).json({ code: 'validation', message: p.error.issues[0]?.message });
+settingsRouter.put('/', requireRole('school_admin', 'superadmin'), validateBody(schoolSettingsSchema), async (req, res) => {
+  const p = req.body as import('../../../../shared/schemas').SchoolSettingsOutput;
 
   const ALLOWED_COLS = ['name', 'legal_name', 'cnpj', 'email', 'phone', 'logo_url'];
-  const fields = Object.entries(p.data).filter(([k, v]) => v !== undefined && ALLOWED_COLS.includes(k));
+  const fields = Object.entries(p).filter(([k, v]) => v !== undefined && ALLOWED_COLS.includes(k));
   if (fields.length === 0) return res.json({ ok: true });
 
   const sets = fields.map(([k], i) => `"${k}" = $${i + 2}`).join(', ');

@@ -1,5 +1,6 @@
 import { useId, useState } from 'react';
 import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
 import { Loader2, Save, Upload, X } from 'lucide-react';
 import { Modal } from '@/components/ui/Modal';
 import { studentsService, type UpdateStudent } from '@/services/students';
@@ -7,21 +8,12 @@ import { resizeImageToDataUrl } from '@/lib/image';
 import type { SchoolClass, Student } from '@/types/models';
 import type { SchoolPlan } from '@/services/schoolPlans';
 import { brl } from '@/lib/fees';
+import { studentEditFormSchema, type StudentEditFormValues } from '@/lib/schemas';
+import { applyServerErrors } from '@/hooks/useFormErrors';
+
+type EditFields = StudentEditFormValues;
 
 const BLOOD_TYPES = ['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'] as const;
-
-interface EditFields {
-  name: string;
-  cpf: string;
-  rg: string;
-  birth_date: string;
-  blood_type: string;
-  naturality: string;
-  father_name: string;
-  mother_name: string;
-  class_id: string;
-  plan_id: string;
-}
 
 function initials(name: string) {
   return name.split(' ').slice(0, 2).map((n) => n[0]).join('').toUpperCase();
@@ -43,13 +35,14 @@ export function StudentEditModal({
   const uid = useId();
   const fId = (f: string) => `${uid}-${f}`;
 
-  const { register, handleSubmit, formState: { errors } } = useForm<EditFields>({
+  const { register, handleSubmit, setError: setFieldError, formState: { errors } } = useForm<EditFields>({
+    resolver: zodResolver(studentEditFormSchema),
     defaultValues: {
       name: student.name ?? '',
       cpf: (student.cpf ?? '').includes('*') ? '' : (student.cpf ?? ''),
       rg:  (student.rg  ?? '').includes('*') ? '' : (student.rg  ?? ''),
       birth_date: student.birth_date ? student.birth_date.slice(0, 10) : '',
-      blood_type: student.blood_type ?? '',
+      blood_type: (student.blood_type ?? '') as '' | typeof BLOOD_TYPES[number],
       naturality: student.naturality ?? '',
       father_name: student.father_name ?? '',
       mother_name: student.mother_name ?? '',
@@ -92,7 +85,9 @@ export function StudentEditModal({
       const updated = await studentsService.update(student.id, payload);
       onSaved({ ...student, ...updated, photo_url: photoTouched && photo ? photo : student.photo_url });
     } catch (e: any) {
-      setError(e?.message ?? 'Falha ao salvar as alterações.');
+      if (!applyServerErrors(e, setFieldError)) {
+        setError(e?.message ?? 'Falha ao salvar as alterações.');
+      }
     } finally {
       setSaving(false);
     }
@@ -148,12 +143,12 @@ export function StudentEditModal({
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <div className="sm:col-span-2">
             <label htmlFor={fId('name')} className="label">Nome completo *</label>
-            <input id={fId('name')} className="input" autoComplete="name" {...register('name', { required: 'Informe o nome' })} />
+            <input id={fId('name')} className="input" autoComplete="name" maxLength={120} {...register('name')} />
             {errors.name && <p className="mt-1 text-xs text-danger">{errors.name.message}</p>}
           </div>
           <div>
             <label htmlFor={fId('cpf')} className="label">CPF</label>
-            <input id={fId('cpf')} className="input" placeholder="000.000.000-00" autoComplete="off" {...register('cpf')} />
+            <input id={fId('cpf')} className="input" placeholder="000.000.000-00" inputMode="numeric" maxLength={14} autoComplete="off" {...register('cpf')} />
           </div>
           <div>
             <label htmlFor={fId('rg')} className="label">RG</label>

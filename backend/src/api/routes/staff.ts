@@ -1,10 +1,11 @@
 import { Router } from 'express';
-import { z } from 'zod';
 import { randomBytes, scryptSync } from 'crypto';
 import { withTenant } from '../../db/withTenant';
 import { requireAuth, requireRole } from '../../middleware/auth';
 import { signUpGuardian } from '../../lib/authSignup';
-import { cpfSchema, DEFAULT_GUARDIAN_PASSWORD, toStoredPassword } from '../../lib/validation';
+import { DEFAULT_GUARDIAN_PASSWORD, toStoredPassword } from '../../lib/validation';
+import { validateBody } from '../../lib/validateBody';
+import { staffCreateSchema, staffUpdateSchema } from '../../../../shared/schemas';
 
 /**
  * Hash de senha no formato do Better Auth (Neon Auth): scrypt N=16384 r=16 p=1
@@ -21,24 +22,6 @@ function betterAuthHash(password: string): string {
 }
 
 export const staffRouter = Router();
-
-const staffSchema = z.object({
-  name: z.string().min(2),
-  cpf: cpfSchema,
-  email: z.string().email(),
-  phone: z.string().optional(),
-  role_type: z.enum(['school_admin', 'financial', 'teacher', 'coordinator']),
-  subject_teaches: z.string().optional(),
-  position: z.string().optional(),
-  admission_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
-  contract_type: z.enum(['clt', 'pj', 'estagio', 'temporario']).optional(),
-  weekly_hours: z.number().min(0).max(80).optional(),
-  timeclock_enabled: z.boolean().optional(),
-});
-
-const staffUpdateSchema = staffSchema.partial().extend({
-  name: z.string().min(2),
-});
 
 staffRouter.use(requireAuth);
 
@@ -65,12 +48,8 @@ staffRouter.get('/', requireRole('school_admin', 'financial', 'teacher', 'supera
   res.json({ ok: true, data });
 });
 
-staffRouter.post('/', requireRole('school_admin', 'superadmin'), async (req, res) => {
-  const parsed = staffSchema.safeParse(req.body);
-  if (!parsed.success) {
-    return res.status(400).json({ code: 'validation', message: parsed.error.issues[0]?.message });
-  }
-  const s = parsed.data;
+staffRouter.post('/', requireRole('school_admin', 'superadmin'), validateBody(staffCreateSchema), async (req, res) => {
+  const s = req.body as import('../../../../shared/schemas').StaffCreateOutput;
 
   try {
     const result = await withTenant(req.ctx!, async (c) => {
@@ -214,12 +193,8 @@ staffRouter.post('/:id/reset-password', requireRole('school_admin', 'superadmin'
   }
 });
 
-staffRouter.put('/:id', requireRole('school_admin', 'superadmin'), async (req, res) => {
-  const parsed = staffUpdateSchema.safeParse(req.body);
-  if (!parsed.success) {
-    return res.status(400).json({ code: 'validation', message: parsed.error.issues[0]?.message });
-  }
-  const s = parsed.data;
+staffRouter.put('/:id', requireRole('school_admin', 'superadmin'), validateBody(staffUpdateSchema), async (req, res) => {
+  const s = req.body as import('../../../../shared/schemas').StaffUpdateOutput;
   const updated = await withTenant(req.ctx!, async (c) => {
     const { rows } = await c.query(
       `update public.teachers set

@@ -1,5 +1,6 @@
 import { useEffect, useId, useMemo, useState } from 'react';
 import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
 import {
   Users, Plus, Trash2, Pencil, Loader2, Copy, Check, Search, Link2,
   Briefcase, UserPlus, ShieldCheck, Eye, MoreVertical, KeyRound, AlertTriangle,
@@ -12,6 +13,8 @@ import { staffService, type NewStaff, type CreatedStaff } from '@/services/staff
 import { createSchedule } from '@/services/schedules';
 import { STAFF_ROLE_LABELS, type Staff, type StaffRole } from '@/types/models';
 import { useMe } from '@/auth/AuthGate';
+import { staffCreateSchema } from '@/lib/schemas';
+import { applyServerErrors } from '@/hooks/useFormErrors';
 
 const DEFAULT_STAFF_PASSWORD = 'Escola@2026';
 
@@ -123,7 +126,7 @@ export function StaffPage() {
   const [resetError, setResetError] = useState<string | null>(null);
   const [resetDone, setResetDone] = useState<{ name: string; email: string; password: string } | null>(null);
 
-  const { register, handleSubmit, reset, watch, formState: { errors } } = useForm<FormFields>();
+  const { register, handleSubmit, reset, watch, setError: setFieldError, formState: { errors } } = useForm<FormFields>({ resolver: zodResolver(staffCreateSchema) });
   const watchRole = watch('role_type');
 
   useEffect(() => { load(); }, []);
@@ -239,7 +242,9 @@ export function StaffPage() {
       await load();
       closeModal();
     } catch (e: any) {
-      setError(e?.message ?? 'Erro ao salvar funcionário');
+      if (!applyServerErrors(e, setFieldError)) {
+        setError(e?.message ?? 'Erro ao salvar funcionário');
+      }
     } finally {
       setSaving(false);
     }
@@ -595,18 +600,18 @@ export function StaffPage() {
         <form id="staff-form" className="space-y-4" onSubmit={handleSubmit(onSubmit)}>
           <div>
             <label htmlFor={fId('name')} className="label">Nome completo *</label>
-            <input id={fId('name')} className="input" autoComplete="name" {...register('name', { required: 'Informe o nome' })} />
+            <input id={fId('name')} className="input" autoComplete="name" maxLength={120} {...register('name')} />
             {errors.name && <p className="mt-1 text-xs text-danger">{errors.name.message}</p>}
           </div>
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div>
               <label htmlFor={fId('cpf')} className="label">CPF *</label>
-              <input id={fId('cpf')} className="input" placeholder="000.000.000-00" autoComplete="off" {...register('cpf', { required: 'Informe o CPF' })} />
+              <input id={fId('cpf')} className="input" placeholder="000.000.000-00" inputMode="numeric" maxLength={14} autoComplete="off" {...register('cpf')} />
               {errors.cpf && <p className="mt-1 text-xs text-danger">{errors.cpf.message}</p>}
             </div>
             <div>
               <label htmlFor={fId('phone')} className="label">Telefone</label>
-              <input id={fId('phone')} className="input" placeholder="(00) 00000-0000" autoComplete="tel" {...register('phone')} />
+              <input id={fId('phone')} className="input" placeholder="(00) 00000-0000" inputMode="tel" maxLength={15} autoComplete="tel" {...register('phone')} />
             </div>
           </div>
           <div>
@@ -614,12 +619,13 @@ export function StaffPage() {
             <input id={fId('email')} type="email" className="input"
               placeholder={editing ? 'Deixe em branco para manter o atual' : ''}
               autoComplete="email"
-              {...register('email', { required: editing ? false : 'Informe o e-mail' })} />
+              maxLength={254}
+              {...register('email')} />
             {errors.email && <p className="mt-1 text-xs text-danger">{errors.email.message}</p>}
           </div>
           <div>
             <label htmlFor={fId('role')} className="label">Perfil *</label>
-            <select id={fId('role')} className="input" {...register('role_type', { required: true })}>
+            <select id={fId('role')} className="input" {...register('role_type')}>
               <option value="school_admin">Gestor/Admin</option>
               <option value="financial">Financeiro</option>
               <option value="teacher">Professor</option>

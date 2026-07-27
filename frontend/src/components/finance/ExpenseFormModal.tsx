@@ -9,6 +9,7 @@ import {
   type NewExpense,
   type EditExpense,
 } from '@/services/expenses';
+import { expenseCreateSchema, expenseEditSchema } from '@/lib/schemas';
 
 interface Props {
   open: boolean;
@@ -42,6 +43,7 @@ export function ExpenseFormModal({ open, expense, onClose, onCreate, onEdit }: P
   const isEdit = !!expense;
   const [form, setForm] = useState<FormState>(EMPTY);
   const [error, setError] = useState<string | null>(null);
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
 
   const uid = useId();
   const supplierNameId = `${uid}-supplier`;
@@ -56,6 +58,7 @@ export function ExpenseFormModal({ open, expense, onClose, onCreate, onEdit }: P
   useEffect(() => {
     if (!open) return;
     setError(null);
+    setFieldErrors({});
     if (expense) {
       setForm({
         supplier_name: expense.supplier_name ?? '',
@@ -82,26 +85,35 @@ export function ExpenseFormModal({ open, expense, onClose, onCreate, onEdit }: P
 
   const { run: submit, submitting } = useSubmitOnce(async () => {
     setError(null);
-    if (!form.supplier_name.trim()) { setError('Informe o fornecedor'); return; }
-    if (!(form.amount > 0)) { setError('Informe um valor maior que zero'); return; }
+    setFieldErrors({});
 
-    const payloadBase = {
+    const raw = {
       supplier_name: form.supplier_name.trim(),
       description: form.description.trim() || undefined,
       category: form.category || undefined,
       amount: form.amount,
       due_date: form.due_date || undefined,
+      installments: form.installments > 1 ? form.installments : undefined,
+      installment_mode: form.installments > 1 ? form.installment_mode : undefined,
     };
 
+    const schema = isEdit ? expenseEditSchema : expenseCreateSchema;
+    const result = schema.safeParse(raw);
+    if (!result.success) {
+      const errs: Record<string, string> = {};
+      for (const issue of result.error.issues) {
+        const key = issue.path.join('.') || '_root';
+        if (!errs[key]) errs[key] = issue.message;
+      }
+      setFieldErrors(errs);
+      setError(Object.values(errs)[0] ?? 'Dados inválidos');
+      return;
+    }
+
     if (isEdit && expense) {
-      await onEdit(expense.id, payloadBase);
+      await onEdit(expense.id, result.data as EditExpense);
     } else {
-      const n = Math.max(1, Math.min(60, Math.floor(Number(form.installments) || 1)));
-      await onCreate({
-        ...payloadBase,
-        installments: n > 1 ? n : undefined,
-        installment_mode: n > 1 ? form.installment_mode : undefined,
-      });
+      await onCreate(result.data as NewExpense);
     }
     onClose();
   });
@@ -135,11 +147,12 @@ export function ExpenseFormModal({ open, expense, onClose, onCreate, onEdit }: P
             id={supplierNameId}
             className="input"
             placeholder="Ex.: Papelaria Central"
+            maxLength={200}
             value={form.supplier_name}
             onChange={(e) => setForm((f) => ({ ...f, supplier_name: e.target.value }))}
-            aria-describedby={error ? errorId : undefined}
-            required
+            aria-describedby={fieldErrors.supplier_name ? `${supplierNameId}-err` : undefined}
           />
+          {fieldErrors.supplier_name && <p id={`${supplierNameId}-err`} role="alert" className="mt-1 text-xs text-danger">{fieldErrors.supplier_name}</p>}
         </div>
         <div>
           <label htmlFor={descriptionId} className="label">Descrição</label>
@@ -168,6 +181,7 @@ export function ExpenseFormModal({ open, expense, onClose, onCreate, onEdit }: P
           <div>
             <label htmlFor={amountId} className="label">Valor *</label>
             <BRLInput id={amountId} value={form.amount} onValueChange={(v) => setForm((f) => ({ ...f, amount: v }))} />
+            {fieldErrors.amount && <p role="alert" className="mt-1 text-xs text-danger">{fieldErrors.amount}</p>}
           </div>
           <div>
             <label htmlFor={dueDateId} className="label">1º vencimento</label>

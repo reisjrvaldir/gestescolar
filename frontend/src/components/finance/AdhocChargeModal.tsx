@@ -1,10 +1,14 @@
 import { useEffect, useId, useState } from 'react';
 import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
 import { Loader2 } from 'lucide-react';
 import { Modal } from '@/components/ui/Modal';
 import { classesService } from '@/services/classes';
 import { chargesService, type NewAdhocCharge } from '@/services/charges';
 import type { SchoolClass } from '@/types/models';
+import { adhocChargeSchema } from '@/lib/schemas';
+import { applyServerErrors } from '@/hooks/useFormErrors';
+import type { z } from 'zod';
 
 interface Props {
   open: boolean;
@@ -13,21 +17,15 @@ interface Props {
   onError: (message: string) => void;
 }
 
-interface FormFields {
-  title: string;
-  description: string;
-  amount: number;
-  due_date: string;
-  scope: 'all' | 'class';
-  class_id: string;
-}
+type FormFields = z.input<typeof adhocChargeSchema>;
 
 /** Cria uma cobrança avulsa (festa, material, evento...) para todos os alunos
  *  ou para uma turma específica — gera uma fatura PIX por aluno vinculado. */
 export function AdhocChargeModal({ open, onClose, onCreated, onError }: Props) {
   const [classes, setClasses] = useState<SchoolClass[]>([]);
   const [saving, setSaving] = useState(false);
-  const { register, handleSubmit, reset, watch, formState: { errors } } = useForm<FormFields>({
+  const { register, handleSubmit, reset, watch, setError, formState: { errors } } = useForm<FormFields>({
+    resolver: zodResolver(adhocChargeSchema),
     defaultValues: { scope: 'all' },
   });
   const scope = watch('scope');
@@ -54,7 +52,9 @@ export function AdhocChargeModal({ open, onClose, onCreated, onError }: Props) {
       reset({ scope: 'all' });
       onClose();
     } catch (e: any) {
-      onError(e?.message ?? 'Erro ao criar cobrança avulsa.');
+      if (!applyServerErrors(e, setError)) {
+        onError(e?.message ?? 'Erro ao criar cobrança avulsa.');
+      }
     } finally {
       setSaving(false);
     }
@@ -81,7 +81,7 @@ export function AdhocChargeModal({ open, onClose, onCreated, onError }: Props) {
         </p>
         <div>
           <label htmlFor={fId('title')} className="label">Título *</label>
-          <input id={fId('title')} className="input" placeholder="Ex.: Festa Junina 2026" {...register('title', { required: 'Informe o título' })} />
+          <input id={fId('title')} className="input" placeholder="Ex.: Festa Junina 2026" maxLength={200} {...register('title')} />
           {errors.title && <p className="mt-1 text-xs text-danger">{errors.title.message}</p>}
         </div>
         <div>
@@ -91,12 +91,12 @@ export function AdhocChargeModal({ open, onClose, onCreated, onError }: Props) {
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <div>
             <label htmlFor={fId('amount')} className="label">Valor por aluno (R$) *</label>
-            <input id={fId('amount')} type="number" step="0.01" min="0.01" className="input" placeholder="50.00" {...register('amount', { required: 'Informe o valor', min: { value: 0.01, message: 'Mínimo R$0,01' } })} />
+            <input id={fId('amount')} type="number" step="0.01" min="0.01" className="input" placeholder="50.00" inputMode="decimal" {...register('amount', { valueAsNumber: true })} />
             {errors.amount && <p className="mt-1 text-xs text-danger">{errors.amount.message}</p>}
           </div>
           <div>
             <label htmlFor={fId('due_date')} className="label">Vencimento *</label>
-            <input id={fId('due_date')} type="date" className="input" {...register('due_date', { required: 'Informe o vencimento' })} />
+            <input id={fId('due_date')} type="date" className="input" {...register('due_date')} />
             {errors.due_date && <p className="mt-1 text-xs text-danger">{errors.due_date.message}</p>}
           </div>
         </div>
@@ -110,7 +110,7 @@ export function AdhocChargeModal({ open, onClose, onCreated, onError }: Props) {
         {scope === 'class' && (
           <div>
             <label htmlFor={fId('class_id')} className="label">Turma *</label>
-            <select id={fId('class_id')} className="input" {...register('class_id', { required: scope === 'class' ? 'Selecione a turma' : false })}>
+            <select id={fId('class_id')} className="input" {...register('class_id')}>
               <option value="">Selecione…</option>
               {classes.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
             </select>
