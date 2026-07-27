@@ -46,12 +46,39 @@ schoolPlansRouter.put('/:id', requireRole('school_admin', 'superadmin'), async (
   const p = planSchema.safeParse(req.body);
   if (!p.success) return res.status(400).json({ code: 'validation', message: p.error.issues[0]?.message });
   const updated = await withTenant(req.ctx!, async (c) => {
+    // Lê o estado atual para registrar o histórico antes de sobrescrever.
+    const { rows: cur } = await c.query(
+      `select id, name, monthly_fee::float8 as monthly_fee, enrollment_fee::float8 as enrollment_fee, status
+         from public.school_plans where id=$1 and school_id=$2`,
+      [req.params.id, req.ctx!.schoolId],
+    );
+    if (!cur[0]) return null;
+
     const { rows } = await c.query(
       `update public.school_plans set name=$1, monthly_fee=$2, enrollment_fee=coalesce($5, enrollment_fee), updated_at=now()
         where id=$3 and school_id=$4
         returning id, name, monthly_fee::float8 as monthly_fee, enrollment_fee::float8 as enrollment_fee, status, created_at`,
       [p.data.name, p.data.monthly_fee, req.params.id, req.ctx!.schoolId, p.data.enrollment_fee ?? null],
     );
+    if (!rows[0]) return null;
+
+    // Grava histórico apenas se algo realmente mudou.
+    const before = cur[0];
+    const after = rows[0];
+    const changed = before.name !== after.name
+      || Number(before.monthly_fee) !== Number(after.monthly_fee)
+      || Number(before.enrollment_fee) !== Number(after.enrollment_fee);
+    if (changed) {
+      await c.query(
+        `insert into public.school_plan_history (plan_id, school_id, changed_by, before_data, after_data)
+         values ($1, $2, $3, $4, $5)`,
+        [
+          req.params.id, req.ctx!.schoolId, req.ctx!.profileId,
+          JSON.stringify({ name: before.name, monthly_fee: before.monthly_fee, enrollment_fee: before.enrollment_fee, status: before.status }),
+          JSON.stringify({ name: after.name, monthly_fee: after.monthly_fee, enrollment_fee: after.enrollment_fee, status: after.status }),
+        ],
+      );
+    }
     return rows[0];
   });
   if (!updated) return res.status(404).json({ code: 'not_found' });

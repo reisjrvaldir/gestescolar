@@ -93,16 +93,15 @@ studentsRouter.post('/', requireRole('school_admin', 'superadmin'), async (req, 
       // 1) Buscar valores do plano (mensalidade + matrícula). Aplica desconto %
       //    igual em ambos (regra de negócio: desconto vale p/ matrícula e mensalidades).
       const planRow = await c.query(
-        `select monthly_fee::numeric as monthly_fee, enrollment_fee::numeric as enrollment_fee
+        `select name, monthly_fee::numeric as monthly_fee, enrollment_fee::numeric as enrollment_fee,
+                updated_at
            from public.school_plans where id=$1 and school_id=$2`,
         [s.plan_id, req.ctx!.schoolId],
       );
       if (planRow.rows.length === 0) {
         throw Object.assign(new Error('Plano não encontrado ou pertence a outra escola'), { http: 400, code: 'plan_not_found' });
       }
-      const round2 = (n: number) => Math.round(n * 100) / 100;
       const discountPct = Math.min(100, Math.max(0, Number(s.discount_percentage ?? 0)));
-      const factor = 1 - discountPct / 100;
       const rawMonthly = planRow.rows[0].monthly_fee;
       const rawEnroll = planRow.rows[0].enrollment_fee;
       const baseMonthly = rawMonthly == null ? 0 : Number(rawMonthly);
@@ -110,8 +109,17 @@ studentsRouter.post('/', requireRole('school_admin', 'superadmin'), async (req, 
       if (Number.isNaN(baseMonthly) || Number.isNaN(baseEnroll)) {
         throw Object.assign(new Error('Plano com valores inválidos'), { http: 400, code: 'invalid_plan_fee' });
       }
-      const monthlyFee = round2(baseMonthly * factor);
-      const enrollmentFee = round2(baseEnroll * factor);
+      const { applyDiscount } = await import('../../lib/billing/studentInvoices');
+      const monthlyFee = applyDiscount(baseMonthly, discountPct);
+      const enrollmentFee = applyDiscount(baseEnroll, discountPct);
+      const planSnapshot = {
+        name: String(planRow.rows[0].name),
+        monthly_fee: baseMonthly,
+        enrollment_fee: baseEnroll,
+        version: planRow.rows[0].updated_at instanceof Date
+          ? planRow.rows[0].updated_at.toISOString()
+          : String(planRow.rows[0].updated_at),
+      };
       const enrollMethod = (s.enrollment_payment_method ?? 'pix') as 'cash' | 'pix' | 'card';
       const firstDue = (s.first_due ?? '30') as FirstDueRule;
       console.log('[students.create] plano=', s.plan_id, 'monthly=', monthlyFee, 'matricula=', enrollmentFee, 'desconto%=', discountPct);
@@ -172,20 +180,28 @@ studentsRouter.post('/', requireRole('school_admin', 'superadmin'), async (req, 
         studentId: student.id,
         studentName: student.name,
         amount: enrollmentFee,
+        originalAmount: baseEnroll,
+        discountPct,
+        planId: s.plan_id,
+        planSnapshot,
         paymentMethod: enrollMethod,
       });
 
       // 8b) Mensalidades do restante do ano, 1º vencimento conforme a regra.
-      const monthlyIds = await insertMonthlyInvoices(c, {
+      const monthlyResult = await insertMonthlyInvoices(c, {
         schoolId: req.ctx!.schoolId!,
         studentId: student.id,
         studentName: student.name,
         monthlyFee,
+        originalMonthlyFee: baseMonthly,
+        discountPct,
+        planId: s.plan_id,
+        planSnapshot,
         firstDueRule: firstDue,
       });
 
-      // Cobranças PIX a gerar: mensalidades + matrícula (exceto se paga em dinheiro).
-      const chargeableIds = [...monthlyIds];
+      // Cobranças PIX a gerar: mensalidades inseridas + matrícula (exceto se paga em dinheiro).
+      const chargeableIds = [...monthlyResult.ids];
       if (enrollment && !enrollment.paid) chargeableIds.push(enrollment.id);
 
       return {
@@ -198,6 +214,7 @@ studentsRouter.post('/', requireRole('school_admin', 'superadmin'), async (req, 
         initial_password: visiblePassword,
         login_password_hint: 'Login: e-mail do responsável • Senha inicial padrão: Escola@2026 — troca obrigatória no 1º acesso.',
         invoice_ids: chargeableIds,
+        invoices_skipped: monthlyResult.skipped,
       };
     });
 

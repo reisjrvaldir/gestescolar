@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import { z } from 'zod';
 import { requireAuth, requireRole } from '../../middleware/auth';
 import { withTenant } from '../../db/withTenant';
 import { buildChargeForInvoice, type BillingType } from '../../lib/payments';
@@ -6,6 +7,155 @@ import { notifyChargeCreated } from '../../lib/email';
 
 export const invoicesRouter = Router();
 invoicesRouter.use(requireAuth);
+
+// ---------------------------------------------------------------------------
+// GET /api/invoices/diagnostics
+// Lista anomalias de integridade das faturas:
+//   1. legacy_no_snapshot  — faturas sem plan_id/plan_snapshot (emitidas antes da migration 0024)
+//   2. math_mismatch       — amount ≠ round(original_amount × (1 - discount_pct/100), 2)
+//   3. plan_fee_drift      — snapshot.monthly_fee diverge do plano atual (informa; não corrige)
+// Nunca modifica dados. Exige confirmação explícita para qualquer correção.
+// ---------------------------------------------------------------------------
+invoicesRouter.get('/diagnostics', requireRole('school_admin', 'financial', 'superadmin'), async (req, res) => {
+  const data = await withTenant(req.ctx!, async (c) => {
+    const sid = req.ctx!.schoolId;
+
+    // 1. Faturas sem snapshot (legadas ou geradas antes desta feature)
+    const { rows: legacy } = await c.query(
+      `select id, student_name, amount::float8 as amount, kind, reference_month,
+              to_char(due_date,'YYYY-MM-DD') as due_date, status
+         from public.invoices
+        where school_id=$1
+          and kind in ('mensalidade','matricula')
+          and plan_id is null
+          and status not in ('cancelled','refunded')
+        order by due_date desc nulls last
+        limit 500`,
+      [sid],
+    );
+
+    // 2. Inconsistência matemática: amount ≠ original_amount × fator de desconto
+    const { rows: mathMismatch } = await c.query(
+      `select id, student_name, amount::float8 as amount,
+              original_amount::float8 as original_amount,
+              discount_pct::float8 as discount_pct,
+              round(original_amount * (1 - discount_pct/100), 2)::float8 as expected_amount,
+              kind, reference_month, to_char(due_date,'YYYY-MM-DD') as due_date, status
+         from public.invoices
+        where school_id=$1
+          and plan_id is not null
+          and original_amount is not null
+          and abs(amount - round(original_amount * (1 - discount_pct/100), 2)) > 0.009
+          and status not in ('cancelled','refunded')
+        order by due_date desc nulls last`,
+      [sid],
+    );
+
+    // 3. Deriva de plano: valor no snapshot ≠ valor atual do plano (somente informativo)
+    const { rows: planDrift } = await c.query(
+      `select i.id, i.student_name, i.amount::float8 as amount,
+              i.original_amount::float8 as original_amount,
+              (i.plan_snapshot->>'monthly_fee')::float8 as snapshot_monthly_fee,
+              sp.monthly_fee::float8 as current_plan_fee,
+              i.kind, i.reference_month, to_char(i.due_date,'YYYY-MM-DD') as due_date, i.status,
+              i.plan_id::text as plan_id
+         from public.invoices i
+         join public.school_plans sp on sp.id = i.plan_id
+        where i.school_id=$1
+          and i.kind = 'mensalidade'
+          and i.plan_snapshot is not null
+          and abs((i.plan_snapshot->>'monthly_fee')::numeric - sp.monthly_fee) > 0.009
+          and i.status not in ('cancelled','refunded')
+        order by i.due_date desc nulls last
+        limit 500`,
+      [sid],
+    );
+
+    const allIds = new Set<string>([
+      ...legacy.map((r: any) => r.id),
+      ...mathMismatch.map((r: any) => r.id),
+      ...planDrift.map((r: any) => r.id),
+    ]);
+
+    return {
+      summary: {
+        legacy_no_snapshot: legacy.length,
+        math_mismatch: mathMismatch.length,
+        plan_fee_drift: planDrift.length,
+        total_distinct_anomalies: allIds.size,
+      },
+      legacy_no_snapshot: legacy,
+      math_mismatch: mathMismatch,
+      plan_fee_drift: planDrift,
+    };
+  });
+  res.json({ ok: true, data });
+});
+
+// ---------------------------------------------------------------------------
+// POST /api/invoices/correct-bulk
+// Corrige o campo `amount` de faturas com inconsistência matemática
+// (amount ≠ round(original_amount × fator_desconto, 2)).
+// Exige `confirm: true` no body — sem confirmação retorna 400 imediatamente.
+// Não toca em faturas legadas (sem original_amount) nem em pagas/canceladas.
+// Cada correção gera registro em audit_logs.
+// ---------------------------------------------------------------------------
+const correctBulkSchema = z.object({
+  invoice_ids: z.array(z.string().uuid()).min(1).max(500),
+  reason: z.string().min(3, 'Informe o motivo da correção (mínimo 3 caracteres)'),
+  confirm: z.literal(true, { errorMap: () => ({ message: 'Confirme a operação enviando confirm: true' }) }),
+});
+
+invoicesRouter.post('/correct-bulk', requireRole('school_admin', 'superadmin'), async (req, res) => {
+  const p = correctBulkSchema.safeParse(req.body);
+  if (!p.success) {
+    return res.status(400).json({ code: 'confirmation_required', message: p.error.issues[0]?.message });
+  }
+  const { invoice_ids, reason } = p.data;
+
+  const results = await withTenant(req.ctx!, async (c) => {
+    const corrected: string[] = [];
+    const skipped: { id: string; reason: string }[] = [];
+
+    for (const id of invoice_ids) {
+      const { rows } = await c.query(
+        `select id, status, amount::float8 as amount,
+                original_amount::float8 as original_amount,
+                discount_pct::float8 as discount_pct
+           from public.invoices where id=$1 and school_id=$2 limit 1`,
+        [id, req.ctx!.schoolId],
+      );
+      if (!rows[0]) { skipped.push({ id, reason: 'não encontrada ou pertence a outra escola' }); continue; }
+      const row = rows[0];
+      if (['paid', 'cancelled', 'refunded'].includes(row.status)) {
+        skipped.push({ id, reason: `status=${row.status} — não corrigível` }); continue;
+      }
+      if (row.original_amount == null) {
+        skipped.push({ id, reason: 'fatura legada sem snapshot — impossível corrigir automaticamente' }); continue;
+      }
+
+      const expected = Math.round(Number(row.original_amount) * (1 - Number(row.discount_pct) / 100) * 100) / 100;
+      if (Math.abs(expected - Number(row.amount)) <= 0.009) {
+        skipped.push({ id, reason: 'valor já está correto' }); continue;
+      }
+
+      await c.query(
+        `update public.invoices set amount=$2, updated_at=now() where id=$1`,
+        [id, expected],
+      );
+      await c.query(
+        `insert into public.audit_logs (school_id, user_id, action, entity_type, entity_id, metadata)
+         values ($1,$2,'INVOICE_BULK_CORRECT','invoice',$3,$4)`,
+        [req.ctx!.schoolId, req.ctx!.profileId, id,
+         JSON.stringify({ old_amount: row.amount, new_amount: expected, reason, confirmed: true })],
+      );
+      corrected.push(id);
+    }
+    return { corrected_count: corrected.length, skipped_count: skipped.length, corrected, skipped };
+  });
+
+  res.json({ ok: true, data: results });
+});
 
 // GET /api/invoices — faturas da escola (gestão/financeiro)
 invoicesRouter.get('/', requireRole('school_admin', 'financial', 'superadmin'), async (req, res) => {
