@@ -10,6 +10,7 @@ import {
   type LeaveRequest, type LeaveType,
 } from '@/services/leaveRequests';
 import { useMe } from '@/auth/AuthGate';
+import { fmtDate } from '@/lib/dates';
 
 const STATUS_TONE = {
   pending: 'warning',
@@ -97,7 +98,7 @@ export function LeaveRequestsPage() {
                   {isAdmin && <td className="px-4 py-3 font-medium text-ink">{r.user_name}</td>}
                   <td className="px-4 py-3 text-ink-muted">{LEAVE_TYPE_LABELS[r.type]}</td>
                   <td className="px-4 py-3 text-ink-muted whitespace-nowrap">
-                    {new Date(r.start_date).toLocaleDateString('pt-BR')} → {new Date(r.end_date).toLocaleDateString('pt-BR')}
+                    {fmtDate(r.start_date)} → {fmtDate(r.end_date)}
                   </td>
                   <td className="px-4 py-3 text-ink-muted text-xs">{r.reason || '—'}</td>
                   <td className="px-4 py-3">

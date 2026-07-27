@@ -21,6 +21,7 @@ import {
 import { brl } from '@/lib/money';
 import { useSubmitOnce } from '@/lib/useSubmitOnce';
 import { currentMonthKey, monthKeyOf, monthLabel, shiftMonth } from '@/lib/months';
+import { fmtDate, fmtTimestamp } from '@/lib/dates';
 
 type Tab = 'ativas' | 'lixeira' | 'auditoria';
 
@@ -49,7 +50,7 @@ function toCSV(rows: Expense[]): string {
     Number(e.amount).toFixed(2).replace('.', ','),
     e.due_date ?? '',
     STATUS[e.status]?.label ?? e.status,
-    e.paid_at ? new Date(e.paid_at).toLocaleDateString('pt-BR') : '',
+    e.paid_at ? fmtTimestamp(e.paid_at) : '',
     e.installment_number && e.installment_total ? `${e.installment_number}/${e.installment_total}` : '',
   ].map(csvField).join(';'));
   return [header.join(';'), ...lines].join('\r\n');
@@ -402,7 +403,7 @@ export function ExpensesPage() {
                     <td className="px-4 py-3 text-ink-muted">{e.description ?? '—'}</td>
                     <td className="px-4 py-3 text-ink-muted">{e.category ?? '—'}</td>
                     <td className="px-4 py-3 font-medium text-ink">{brl(Number(e.amount))}</td>
-                    <td className="px-4 py-3 text-ink-muted">{e.due_date ? new Date(e.due_date).toLocaleDateString('pt-BR') : '—'}</td>
+                    <td className="px-4 py-3 text-ink-muted">{fmtDate(e.due_date)}</td>
                     <td className="px-4 py-3"><StatusBadge tone={STATUS[e.status].tone}>{STATUS[e.status].label}</StatusBadge></td>
                     <td className="px-4 py-3">
                       <div className="flex items-center justify-end gap-2">
@@ -581,7 +582,7 @@ function AuditTable({ rows }: { rows: AuditEntry[] }) {
 
 function summarizeChange(r: AuditEntry): string {
   if (r.action === 'create') return `Valor ${brl(Number(r.after?.amount ?? 0))}`;
-  if (r.action === 'pay') return `Pago em ${new Date(r.after?.paid_at ?? Date.now()).toLocaleDateString('pt-BR')}`;
+  if (r.action === 'pay') return `Pago em ${fmtTimestamp(r.after?.paid_at ?? new Date().toISOString())}`;
   if (r.action === 'unpay') return 'Pagamento revertido';
   if (r.action === 'delete') return 'Movida para a lixeira';
   if (r.action === 'restore') return 'Restaurada da lixeira';
@@ -593,7 +594,7 @@ function summarizeChange(r: AuditEntry): string {
       ['description', 'descrição', (v) => String(v ?? '—')],
       ['category', 'categoria', (v) => String(v ?? '—')],
       ['amount', 'valor', (v) => brl(Number(v ?? 0))],
-      ['due_date', 'vencimento', (v) => v ? new Date(v).toLocaleDateString('pt-BR') : '—'],
+      ['due_date', 'vencimento', (v) => fmtDate(v)],
     ];
     for (const [k, label, fmt] of fields) {
       const b = (r.before as any)[k];

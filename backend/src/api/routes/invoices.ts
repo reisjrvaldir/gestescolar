@@ -126,7 +126,7 @@ invoicesRouter.post('/:id/send-to-guardian', requireRole('school_admin', 'financ
     if (!guardianProfileId) return { error: 'guardian_without_login' as const };
 
     const dueLabel = invRow.due_date
-      ? new Date(invRow.due_date).toLocaleDateString('pt-BR')
+      ? new Date(invRow.due_date).toLocaleDateString('pt-BR', { timeZone: 'UTC' })
       : '—';
     const amountLabel = Number(invRow.amount).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
     const kindLabel = invRow.kind === 'avulsa' ? 'Cobrança avulsa' : 'Mensalidade';

@@ -175,7 +175,7 @@ financeRouter.get('/monthly', async (req, res) => {
       [req.ctx!.schoolId],
     );
     return rows.map((r: any) => ({
-      month: new Date(r.month).toLocaleDateString('pt-BR', { month: 'short', year: '2-digit' }).replace('.', ''),
+      month: new Date(r.month).toLocaleDateString('pt-BR', { month: 'short', year: '2-digit', timeZone: 'UTC' }).replace('.', ''),
       receitas: Number(r.receitas),
       despesas: Number(r.despesas),
     }));

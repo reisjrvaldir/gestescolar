@@ -45020,7 +45020,7 @@ invoicesRouter.post("/:id/send-to-guardian", requireRole("school_admin", "financ
     );
     const guardianProfileId = g.rows[0]?.user_id;
     if (!guardianProfileId) return { error: "guardian_without_login" };
-    const dueLabel = invRow.due_date ? new Date(invRow.due_date).toLocaleDateString("pt-BR") : "\u2014";
+    const dueLabel = invRow.due_date ? new Date(invRow.due_date).toLocaleDateString("pt-BR", { timeZone: "UTC" }) : "\u2014";
     const amountLabel = Number(invRow.amount).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
     const kindLabel = invRow.kind === "avulsa" ? "Cobran\xE7a avulsa" : "Mensalidade";
     const body = `${kindLabel} \u2014 ${invRow.student_name}
@@ -47529,7 +47529,7 @@ financeRouter.get("/monthly", async (req, res) => {
       [req.ctx.schoolId]
     );
     return rows.map((r) => ({
-      month: new Date(r.month).toLocaleDateString("pt-BR", { month: "short", year: "2-digit" }).replace(".", ""),
+      month: new Date(r.month).toLocaleDateString("pt-BR", { month: "short", year: "2-digit", timeZone: "UTC" }).replace(".", ""),
       receitas: Number(r.receitas),
       despesas: Number(r.despesas)
     }));

@@ -9,7 +9,7 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { QRCodeSVG } from 'qrcode.react';
 import { invoicesService, type MyInvoice, type InvoiceStatus } from '@/services/invoices';
 import { brl } from '@/lib/fees';
-import { fmtDate } from '@/lib/dates';
+import { fmtDate, fmtTimestamp, getYearBRT } from '@/lib/dates';
 import { useMe } from '@/auth/AuthGate';
 import { api } from '@/lib/api';
 
@@ -37,7 +37,7 @@ interface ChildStat {
 }
 
 function generateIRPdf(me: any, invoices: MyInvoice[], year: number) {
-  const paid = invoices.filter(i => i.status === 'paid' && i.paid_at && new Date(i.paid_at).getFullYear() === year);
+  const paid = invoices.filter(i => i.status === 'paid' && i.paid_at && getYearBRT(i.paid_at) === year);
   const total = paid.reduce((s, i) => s + i.amount, 0);
   const w = window.open('', '_blank');
   if (!w) return;
@@ -63,7 +63,7 @@ function generateIRPdf(me: any, invoices: MyInvoice[], year: number) {
       ${paid.map(i => `<tr>
         <td>${i.kind === 'avulsa' ? (i.charge_title ?? 'Avulsa') : i.kind === 'matricula' ? 'Matrícula' : `Mensalidade ${i.reference_month ?? ''}`}</td>
         <td>${i.student_name}</td>
-        <td>${i.paid_at ? new Date(i.paid_at).toLocaleDateString('pt-BR') : '—'}</td>
+        <td>${i.paid_at ? fmtTimestamp(i.paid_at) : '—'}</td>
         <td>R$ ${i.amount.toFixed(2)}</td>
       </tr>`).join('')}
       </tbody>
@@ -151,7 +151,7 @@ export function FaturasPage() {
       <div class="row"><span>Aluno</span><span>${inv.student_name}</span></div>
       <div class="row"><span>Referente a</span><span>${inv.kind === 'avulsa' ? (inv.charge_title ?? 'Avulsa') : inv.kind === 'matricula' ? 'Matrícula' : `Mensalidade ${inv.reference_month ?? ''}`}</span></div>
       <div class="row"><span>Valor</span><span>R$ ${inv.amount.toFixed(2)}</span></div>
-      <div class="row"><span>Data de pagamento</span><span>${inv.paid_at ? new Date(inv.paid_at).toLocaleDateString('pt-BR') : '—'}</span></div>
+      <div class="row"><span>Data de pagamento</span><span>${inv.paid_at ? fmtTimestamp(inv.paid_at) : '—'}</span></div>
       <div class="row"><span>Forma de pagamento</span><span>${inv.payment_method === 'card' ? 'Cartão de crédito' : inv.payment_method === 'pix' ? 'PIX' : 'Na escola'}</span></div>
       <div class="row"><span>Status</span><span style="color:#22c55e">Pago</span></div>
       </body></html>`);
