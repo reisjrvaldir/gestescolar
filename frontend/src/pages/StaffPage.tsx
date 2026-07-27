@@ -7,9 +7,11 @@ import {
 import { StatusBadge } from '@/components/ui/StatusBadge';
 import { Modal } from '@/components/ui/Modal';
 import { EmptyState } from '@/components/ui/EmptyState';
+import { SensitiveField } from '@/components/ui/SensitiveField';
 import { staffService, type NewStaff, type CreatedStaff } from '@/services/staff';
 import { createSchedule } from '@/services/schedules';
 import { STAFF_ROLE_LABELS, type Staff, type StaffRole } from '@/types/models';
+import { useMe } from '@/auth/AuthGate';
 
 const DEFAULT_STAFF_PASSWORD = 'Escola@2026';
 
@@ -87,7 +89,13 @@ function defaultSlots(): SlotState[] {
 
 interface FormFields extends NewStaff {}
 
+/** Limpa valor mascarado antes de pré-popular formulário de edição. */
+const unmasked = (v?: string) => (v?.includes('*') ? '' : (v ?? ''));
+
 export function StaffPage() {
+  const me = useMe();
+  const canReveal = ['school_admin', 'financial', 'superadmin'].includes(me?.role ?? '');
+
   const [staff, setStaff] = useState<Staff[]>([]);
   const [loading, setLoading] = useState(true);
   const [open, setOpen] = useState(false);
@@ -103,6 +111,9 @@ export function StaffPage() {
   const [query, setQuery] = useState('');
   const [selected, setSelected] = useState<Staff | null>(null);
   const [copiedLink, setCopiedLink] = useState(false);
+
+  // E-mail revelado do funcionário selecionado (para o botão copiar)
+  const [revealedEmail, setRevealedEmail] = useState<string | null>(null);
 
   // Reset de senha para a padrão da plataforma
   const [resetTarget, setResetTarget] = useState<Staff | null>(null);
@@ -149,7 +160,10 @@ export function StaffPage() {
   function openEdit(s: Staff) {
     setEditing(s);
     reset({
-      name: s.name, cpf: s.cpf ?? '', email: s.email, phone: s.phone ?? '',
+      name: s.name,
+      cpf: unmasked(s.cpf),
+      email: unmasked(s.email),
+      phone: unmasked(s.phone),
       role_type: (s.role_type ?? s.role) as FormFields['role_type'],
       subject_teaches: s.subject_teaches ?? '',
       position: s.position ?? '',
@@ -389,7 +403,7 @@ export function StaffPage() {
                       return (
                         <tr
                           key={s.id}
-                          onClick={() => setSelected(s)}
+                          onClick={() => { setSelected(s); setRevealedEmail(null); }}
                           className={`cursor-pointer border-b border-border last:border-0 hover:bg-canvas ${selected?.id === s.id ? 'bg-primary-soft/40' : ''}`}
                         >
                           <td className="px-4 py-3">
@@ -488,9 +502,13 @@ export function StaffPage() {
               <div className="card p-5">
                 <p className="mb-3 text-xs font-bold uppercase tracking-wide text-ink-subtle">Dados</p>
                 <div className="space-y-2 text-sm">
-                  <Row label="E-mail" value={selected.email} />
-                  <Row label="Telefone" value={selected.phone} />
-                  <Row label="CPF" value={selected.cpf} />
+                  <SensitiveField label="E-mail" maskedValue={selected.email}
+                    entityType="staff" entityId={selected.id} field="email" canReveal={canReveal}
+                    onReveal={(v) => setRevealedEmail(v)} />
+                  <SensitiveField label="Telefone" maskedValue={selected.phone}
+                    entityType="staff" entityId={selected.id} field="phone" canReveal={canReveal} />
+                  <SensitiveField label="CPF" maskedValue={selected.cpf}
+                    entityType="staff" entityId={selected.id} field="cpf" canReveal={canReveal} />
                   <Row label="Cargo" value={selected.position} />
                   <Row label="Leciona" value={selected.subject_teaches} />
                   <Row label="Admissão" value={selected.admission_date} />
@@ -504,21 +522,27 @@ export function StaffPage() {
                   <Link2 size={16} className="text-primary" /> Link de acesso do funcionário
                 </div>
                 <div className="space-y-2 text-sm">
-                  <Row label="Login (e-mail)" value={selected.email} />
+                  <Row label="Login (e-mail)" value={revealedEmail ?? selected.email} />
                   <Row label="Matrícula (alternativa)" value={selected.registration_number} />
                   <Row label="Senha inicial padrão" value={DEFAULT_STAFF_PASSWORD} />
                   <p className="mt-2 text-xs text-ink-muted">
                     Todos os funcionários recebem <b className="font-mono">{DEFAULT_STAFF_PASSWORD}</b> como senha inicial —
                     a troca é obrigatória no 1º acesso. Se já trocou, essa senha não vale mais.
                   </p>
+                  {!revealedEmail && (
+                    <p className="text-[11px] text-warning">
+                      Revele o e-mail em "Dados" acima para exibir e copiar o login completo.
+                    </p>
+                  )}
                 </div>
                 <div className="mt-3 flex flex-wrap gap-2">
                   <button
                     className="btn-outline flex items-center gap-1.5 text-xs"
                     onClick={() => {
+                      const emailVal = revealedEmail ?? selected.email;
                       const text =
                         `Funcionário: ${selected.name}\n` +
-                        `Login (e-mail): ${selected.email}\n` +
+                        `Login (e-mail): ${emailVal}\n` +
                         `Matrícula (alternativa): ${selected.registration_number ?? '—'}\n` +
                         `Senha inicial: ${DEFAULT_STAFF_PASSWORD}\n` +
                         `(troca obrigatória no 1º acesso)`;
@@ -584,8 +608,10 @@ export function StaffPage() {
             </div>
           </div>
           <div>
-            <label className="label">E-mail *</label>
-            <input type="email" className="input" {...register('email', { required: 'Informe o e-mail' })} />
+            <label className="label">E-mail {editing ? '' : '*'}</label>
+            <input type="email" className="input"
+              placeholder={editing ? 'Deixe em branco para manter o atual' : ''}
+              {...register('email', { required: editing ? false : 'Informe o e-mail' })} />
             {errors.email && <p className="mt-1 text-xs text-danger">{errors.email.message}</p>}
           </div>
           <div>

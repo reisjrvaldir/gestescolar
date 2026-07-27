@@ -9,6 +9,7 @@ import {
 import { PageHero } from '@/components/ui/PageHero';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { StatusBadge } from '@/components/ui/StatusBadge';
+import { SensitiveField } from '@/components/ui/SensitiveField';
 import { studentsService, type NewStudent, type CreatedStudent } from '@/services/students';
 import { classesService } from '@/services/classes';
 import { schoolPlansService, type SchoolPlan } from '@/services/schoolPlans';
@@ -149,6 +150,7 @@ export function StudentsPage() {
   const navigate = useNavigate();
   const me = useMe();
   const schoolName = me?.school_name ?? 'Escola';
+  const canReveal = ['school_admin', 'financial', 'superadmin'].includes(me?.role ?? '');
   const isNewRoute = location.pathname.endsWith('/new');
 
   const [students, setStudents] = useState<Student[]>([]);
@@ -805,8 +807,10 @@ export function StudentsPage() {
                   {detailTab === 'dados' && (
                     <div className="space-y-3 text-sm">
                       <Row label="Nome completo" value={selected.name} />
-                      <Row label="CPF" value={selected.cpf} />
-                      <Row label="RG" value={selected.rg} />
+                      <SensitiveField label="CPF" maskedValue={selected.cpf}
+                        entityType="student" entityId={selected.id} field="cpf" canReveal={canReveal} />
+                      <SensitiveField label="RG" maskedValue={selected.rg}
+                        entityType="student" entityId={selected.id} field="rg" canReveal={canReveal} />
                       <Row label="Data de nascimento" value={formatDate(selected.birth_date)} />
                       <Row label="Naturalidade" value={selected.naturality} />
                       <Row label="Tipo sanguíneo" value={selected.blood_type} />
@@ -819,17 +823,22 @@ export function StudentsPage() {
                   {detailTab === 'responsavel' && (
                     <div className="space-y-3 text-sm">
                       <Row label="Nome" value={selected.guardian_name} />
-                      <Row label="CPF" value={selected.guardian_cpf} />
-                      <Row label="E-mail" value={selected.guardian_email} />
+                      <SensitiveField label="CPF" maskedValue={selected.guardian_cpf}
+                        entityType="guardian" entityId={selected.guardian_id!} field="cpf" canReveal={canReveal} />
+                      <SensitiveField label="E-mail" maskedValue={selected.guardian_email}
+                        entityType="guardian" entityId={selected.guardian_id!} field="email" canReveal={canReveal} />
                     </div>
                   )}
 
                   {/* Contatos */}
                   {detailTab === 'contatos' && (
                     <div className="space-y-3 text-sm">
-                      <Row label="Telefone 1" value={selected.guardian_phone} />
-                      <Row label="Telefone 2" value={selected.guardian_phone2} />
-                      <Row label="E-mail" value={selected.guardian_email} />
+                      <SensitiveField label="Telefone 1" maskedValue={selected.guardian_phone}
+                        entityType="guardian" entityId={selected.guardian_id!} field="phone" canReveal={canReveal} />
+                      <SensitiveField label="Telefone 2" maskedValue={selected.guardian_phone2}
+                        entityType="guardian" entityId={selected.guardian_id!} field="phone2" canReveal={canReveal} />
+                      <SensitiveField label="E-mail" maskedValue={selected.guardian_email}
+                        entityType="guardian" entityId={selected.guardian_id!} field="email" canReveal={canReveal} />
                     </div>
                   )}
 

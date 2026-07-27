@@ -44,11 +44,15 @@ staffRouter.use(requireAuth);
 
 staffRouter.get('/', requireRole('school_admin', 'financial', 'teacher', 'superadmin'), async (req, res) => {
   const data = await withTenant(req.ctx!, async (c) => {
-    const isAdmin = ['school_admin', 'superadmin', 'financial'].includes(req.ctx!.role);
-    const cpfCol = isAdmin ? 'cpf' : "left(cpf,3) || '*****' || right(cpf,2) as cpf";
+    // Dados pessoais sempre mascarados nas listagens — revelação via /personal-data/reveal
     const { rows } = await c.query(
-      `select id, name, email, phone, ${cpfCol}, registration_number, role_type, subject_teaches,
-              position, admission_date::text as admission_date, contract_type, weekly_hours::float8 as weekly_hours,
+      `select id, name,
+              left(email,1) || '***@' || split_part(email,'@',2)                          as email,
+              case when phone is null then null else '(**) ****-' || right(phone,4) end    as phone,
+              '***.***.***-' || right(cpf,2)                                               as cpf,
+              registration_number, role_type, subject_teaches,
+              position, admission_date::text as admission_date, contract_type,
+              weekly_hours::float8 as weekly_hours,
               coalesce(timeclock_enabled, true) as timeclock_enabled,
               status, created_at, user_id
          from public.teachers

@@ -45,7 +45,7 @@ export function StudentEditModal({
     defaultValues: {
       name: student.name ?? '',
       cpf: (student.cpf ?? '').includes('*') ? '' : (student.cpf ?? ''),
-      rg: student.rg ?? '',
+      rg:  (student.rg  ?? '').includes('*') ? '' : (student.rg  ?? ''),
       birth_date: student.birth_date ? student.birth_date.slice(0, 10) : '',
       blood_type: student.blood_type ?? '',
       naturality: student.naturality ?? '',

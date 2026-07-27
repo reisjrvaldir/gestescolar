@@ -47,17 +47,21 @@ studentsRouter.get('/', requireRole('school_admin', 'financial', 'teacher', 'sup
       filter = ' and s.class_id = $2';
       params.push(classId);
     }
-    const isAdmin = ['school_admin', 'superadmin', 'financial'].includes(req.ctx!.role);
-    const cpfCol = isAdmin ? 's.cpf' : "left(s.cpf,3) || '*****' || right(s.cpf,2) as cpf";
+    // Dados pessoais sempre mascarados nas listagens — revelação via /personal-data/reveal
     const { rows } = await c.query(
       `select s.id, s.name, s.registration_number, s.status, s.class_id, s.guardian_id,
-              ${cpfCol}, s.rg, s.birth_date::text as birth_date, s.father_name, s.mother_name,
+              '***.***.***-' || right(s.cpf, 2)                                           as cpf,
+              case when s.rg    is null then null else '****-'    || right(s.rg, 2)   end as rg,
+              s.birth_date::text as birth_date, s.father_name, s.mother_name,
               s.blood_type, s.naturality, s.photo_url,
               s.monthly_fee::float8 as monthly_fee, s.plan_id,
               s.created_at,
               cl.name as class_name,
-              g.name as guardian_name, g.email as guardian_email,
-              g.cpf as guardian_cpf, g.phone as guardian_phone, g.phone2 as guardian_phone2
+              g.name as guardian_name,
+              case when g.email  is null then null else left(g.email,1)  || '***@' || split_part(g.email,'@',2)              end as guardian_email,
+              case when g.cpf    is null then null else '***.***.***-' || right(g.cpf,2)                                     end as guardian_cpf,
+              case when g.phone  is null then null else '(**) ****-'  || right(g.phone,4)                                    end as guardian_phone,
+              case when g.phone2 is null then null else '(**) ****-'  || right(g.phone2,4)                                   end as guardian_phone2
          from public.students s
          left join public.classes cl on cl.id = s.class_id
          left join public.guardians g on g.id = s.guardian_id

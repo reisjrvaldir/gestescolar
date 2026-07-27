@@ -22282,7 +22282,7 @@ var require_application = __commonJS({
   "../node_modules/express/lib/application.js"(exports2, module2) {
     "use strict";
     var finalhandler = require_finalhandler();
-    var Router31 = require_router();
+    var Router32 = require_router();
     var methods = require_methods();
     var middleware = require_init();
     var query = require_query();
@@ -22347,7 +22347,7 @@ var require_application = __commonJS({
     };
     app2.lazyrouter = function lazyrouter() {
       if (!this._router) {
-        this._router = new Router31({
+        this._router = new Router32({
           caseSensitive: this.enabled("case sensitive routing"),
           strict: this.enabled("strict routing")
         });
@@ -24209,7 +24209,7 @@ var require_express = __commonJS({
     var mixin = require_merge_descriptors();
     var proto = require_application();
     var Route = require_route();
-    var Router31 = require_router();
+    var Router32 = require_router();
     var req = require_request();
     var res = require_response();
     exports2 = module2.exports = createApplication;
@@ -24232,7 +24232,7 @@ var require_express = __commonJS({
     exports2.request = req;
     exports2.response = res;
     exports2.Route = Route;
-    exports2.Router = Router31;
+    exports2.Router = Router32;
     exports2.json = bodyParser.json;
     exports2.query = require_query();
     exports2.raw = bodyParser.raw;
@@ -30171,7 +30171,7 @@ module.exports = __toCommonJS(api_src_exports);
 })();
 
 // src/api/app.ts
-var import_express31 = __toESM(require_express2());
+var import_express32 = __toESM(require_express2());
 var import_cors = __toESM(require_lib3());
 
 // ../node_modules/helmet/index.mjs
@@ -43417,17 +43417,20 @@ studentsRouter.get("/", requireRole("school_admin", "financial", "teacher", "sup
       filter = " and s.class_id = $2";
       params.push(classId);
     }
-    const isAdmin = ["school_admin", "superadmin", "financial"].includes(req.ctx.role);
-    const cpfCol = isAdmin ? "s.cpf" : "left(s.cpf,3) || '*****' || right(s.cpf,2) as cpf";
     const { rows } = await c.query(
       `select s.id, s.name, s.registration_number, s.status, s.class_id, s.guardian_id,
-              ${cpfCol}, s.rg, s.birth_date::text as birth_date, s.father_name, s.mother_name,
+              '***.***.***-' || right(s.cpf, 2)                                           as cpf,
+              case when s.rg    is null then null else '****-'    || right(s.rg, 2)   end as rg,
+              s.birth_date::text as birth_date, s.father_name, s.mother_name,
               s.blood_type, s.naturality, s.photo_url,
               s.monthly_fee::float8 as monthly_fee, s.plan_id,
               s.created_at,
               cl.name as class_name,
-              g.name as guardian_name, g.email as guardian_email,
-              g.cpf as guardian_cpf, g.phone as guardian_phone, g.phone2 as guardian_phone2
+              g.name as guardian_name,
+              case when g.email  is null then null else left(g.email,1)  || '***@' || split_part(g.email,'@',2)              end as guardian_email,
+              case when g.cpf    is null then null else '***.***.***-' || right(g.cpf,2)                                     end as guardian_cpf,
+              case when g.phone  is null then null else '(**) ****-'  || right(g.phone,4)                                    end as guardian_phone,
+              case when g.phone2 is null then null else '(**) ****-'  || right(g.phone2,4)                                   end as guardian_phone2
          from public.students s
          left join public.classes cl on cl.id = s.class_id
          left join public.guardians g on g.id = s.guardian_id
@@ -43659,11 +43662,14 @@ var staffUpdateSchema = staffSchema.partial().extend({
 staffRouter.use(requireAuth);
 staffRouter.get("/", requireRole("school_admin", "financial", "teacher", "superadmin"), async (req, res) => {
   const data = await withTenant(req.ctx, async (c) => {
-    const isAdmin = ["school_admin", "superadmin", "financial"].includes(req.ctx.role);
-    const cpfCol = isAdmin ? "cpf" : "left(cpf,3) || '*****' || right(cpf,2) as cpf";
     const { rows } = await c.query(
-      `select id, name, email, phone, ${cpfCol}, registration_number, role_type, subject_teaches,
-              position, admission_date::text as admission_date, contract_type, weekly_hours::float8 as weekly_hours,
+      `select id, name,
+              left(email,1) || '***@' || split_part(email,'@',2)                          as email,
+              case when phone is null then null else '(**) ****-' || right(phone,4) end    as phone,
+              '***.***.***-' || right(cpf,2)                                               as cpf,
+              registration_number, role_type, subject_teaches,
+              position, admission_date::text as admission_date, contract_type,
+              weekly_hours::float8 as weekly_hours,
               coalesce(timeclock_enabled, true) as timeclock_enabled,
               status, created_at, user_id
          from public.teachers
@@ -45507,8 +45513,8 @@ var updateSchema = external_exports.object({
 settingsRouter.put("/", requireRole("school_admin", "superadmin"), async (req, res) => {
   const p2 = updateSchema.safeParse(req.body);
   if (!p2.success) return res.status(400).json({ code: "validation", message: p2.error.issues[0]?.message });
-  const ALLOWED_COLS = ["name", "legal_name", "cnpj", "email", "phone", "logo_url"];
-  const fields = Object.entries(p2.data).filter(([k, v2]) => v2 !== void 0 && ALLOWED_COLS.includes(k));
+  const ALLOWED_COLS2 = ["name", "legal_name", "cnpj", "email", "phone", "logo_url"];
+  const fields = Object.entries(p2.data).filter(([k, v2]) => v2 !== void 0 && ALLOWED_COLS2.includes(k));
   if (fields.length === 0) return res.json({ ok: true });
   const sets = fields.map(([k], i) => `"${k}" = $${i + 2}`).join(", ");
   const vals = fields.map(([, v2]) => v2);
@@ -48223,8 +48229,97 @@ onboardingRouter.get("/status", requireRole("school_admin", "superadmin"), async
   res.json({ ok: true, data });
 });
 
+// src/api/routes/personalData.ts
+var import_express31 = __toESM(require_express2());
+var personalDataRouter = (0, import_express31.Router)();
+personalDataRouter.use(requireAuth);
+var ALLOWED_COLS = {
+  student: { cpf: "cpf", rg: "rg" },
+  guardian: { cpf: "cpf", phone: "phone", phone2: "phone2", email: "email" },
+  staff: { cpf: "cpf", phone: "phone", email: "email" }
+};
+var ENTITY_TABLE = {
+  student: "public.students",
+  guardian: "public.guardians",
+  staff: "public.teachers"
+};
+var revealSchema = external_exports.object({
+  entity_type: external_exports.enum(["student", "guardian", "staff"]),
+  entity_id: external_exports.string().uuid(),
+  field: external_exports.enum(["cpf", "rg", "phone", "phone2", "email"]),
+  justification: external_exports.string().min(10, "Justificativa deve ter pelo menos 10 caracteres").max(500)
+});
+personalDataRouter.post(
+  "/reveal",
+  requireRole("school_admin", "financial", "superadmin"),
+  async (req, res) => {
+    const parsed = revealSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ code: "validation", message: parsed.error.issues[0]?.message });
+    }
+    const { entity_type, entity_id, field, justification } = parsed.data;
+    const col = ALLOWED_COLS[entity_type]?.[field];
+    if (!col) {
+      return res.status(400).json({ code: "invalid_field", message: "Campo n\xE3o dispon\xEDvel para este tipo de entidade." });
+    }
+    try {
+      const result = await withTenant(req.ctx, async (c) => {
+        const table = ENTITY_TABLE[entity_type];
+        const schoolId = req.ctx.schoolId;
+        const { rows } = await c.query(
+          `select name, ${col}::text as value from ${table} where id=$1 and school_id=$2 limit 1`,
+          [entity_id, schoolId]
+        );
+        if (rows.length === 0) return { error: "not_found" };
+        const entityName = rows[0].name;
+        const realValue = rows[0].value;
+        await c.query(
+          `insert into public.personal_data_access_log
+             (school_id, accessed_by_profile_id, entity_type, entity_id,
+              entity_name, field_name, justification)
+           values ($1,$2,$3,$4,$5,$6,$7)`,
+          [schoolId, req.ctx.profileId, entity_type, entity_id, entityName, field, justification]
+        );
+        return { value: realValue };
+      });
+      if ("error" in result) {
+        return res.status(404).json({ code: "not_found", message: "Registro n\xE3o encontrado ou n\xE3o pertence \xE0 sua escola." });
+      }
+      res.json({ ok: true, data: { value: result.value } });
+    } catch (err) {
+      console.error("[personal-data.reveal] erro:", err?.message ?? err);
+      res.status(500).json({
+        code: "reveal_failed",
+        message: "Falha ao revelar o dado. Verifique se a tabela personal_data_access_log foi criada no Neon SQL Editor."
+      });
+    }
+  }
+);
+personalDataRouter.get(
+  "/audit",
+  requireRole("school_admin", "superadmin"),
+  async (req, res) => {
+    const data = await withTenant(req.ctx, async (c) => {
+      const { rows } = await c.query(
+        `select l.id,
+                coalesce(p.name, l.accessed_by_profile_id::text) as accessed_by,
+                l.entity_type, l.entity_name, l.field_name,
+                l.justification, l.revealed_at
+           from public.personal_data_access_log l
+           left join public.profiles p on p.id = l.accessed_by_profile_id
+          where l.school_id = $1
+          order by l.revealed_at desc
+          limit 200`,
+        [req.ctx.schoolId]
+      );
+      return rows;
+    });
+    res.json({ ok: true, data });
+  }
+);
+
 // src/api/app.ts
-var app = (0, import_express31.default)();
+var app = (0, import_express32.default)();
 app.use(helmet({ contentSecurityPolicy: false }));
 var ALLOWED_ORIGINS = [
   process.env.FRONTEND_URL || "https://gestescolar.com.br",
@@ -48243,7 +48338,7 @@ var authLimiter = rate_limit_default({ windowMs: 6e4, max: 5, message: { code: "
 app.use("/api/me/onboarding", authLimiter);
 var publicLimiter = rate_limit_default({ windowMs: 6e4, max: 12, message: { code: "rate_limit", message: "Muitas tentativas. Aguarde 1 minuto." } });
 app.use("/api/public", publicLimiter);
-app.use(import_express31.default.json({ limit: "10mb" }));
+app.use(import_express32.default.json({ limit: "10mb" }));
 app.get("/api/health", (_req, res) => {
   res.json({ ok: true, service: "gestescolar-backend", dbConfigured: isDbConfigured, paymentProvider: activeProviderName() });
 });
@@ -48277,6 +48372,7 @@ app.use("/api/finance", financeRouter);
 app.use("/api/billing", billingRouter);
 app.use("/api/saas", saasRouter);
 app.use("/api/onboarding", onboardingRouter);
+app.use("/api/personal-data", personalDataRouter);
 app.use((_req, res) => res.status(404).json({ code: "not_found", message: "Rota n\xE3o encontrada" }));
 app.use((err, _req, res, _next) => {
   console.error("[API] erro:", err);
