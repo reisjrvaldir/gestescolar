@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useId, useMemo, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { useLocation, useNavigate } from 'react-router-dom';
 import {
@@ -237,6 +237,8 @@ export function StudentsPage() {
   }, [students]);
 
   const { register, handleSubmit, reset, watch, formState: { errors } } = useForm<FormFields>();
+  const uid = useId();
+  const fId = (f: string) => `${uid}-${f}`;
   const selectedPlanId = watch('plan_id');
   const selectedPlan = plans.find((p) => p.id === selectedPlanId);
   const discountPct = Math.min(100, Math.max(0, Number(watch('discount_percentage') ?? 0) || 0));
@@ -336,17 +338,17 @@ export function StudentsPage() {
             <div className="flex items-center gap-6">
               <div className="relative">
                 {photoPreview ? (
-                  <img src={photoPreview} alt="Foto" className="h-24 w-24 rounded-full object-cover border-2 border-border" />
+                  <img src={photoPreview} alt="Foto do aluno" className="h-24 w-24 rounded-full object-cover border-2 border-border" />
                 ) : (
-                  <div className="flex h-24 w-24 items-center justify-center rounded-full bg-canvas border-2 border-dashed border-border text-ink-subtle">
+                  <div className="flex h-24 w-24 items-center justify-center rounded-full bg-canvas border-2 border-dashed border-border text-ink-subtle" aria-hidden="true">
                     <Upload size={24} />
                   </div>
                 )}
               </div>
               <div>
-                <label className="btn-outline inline-flex cursor-pointer items-center gap-1.5 text-sm">
-                  <Upload size={14} /> Escolher foto
-                  <input type="file" accept="image/*" className="hidden" onChange={async (e) => {
+                <label htmlFor={fId('photo')} className="btn-outline inline-flex cursor-pointer items-center gap-1.5 text-sm">
+                  <Upload size={14} aria-hidden="true" /> Escolher foto
+                  <input id={fId('photo')} type="file" accept="image/*" className="hidden" aria-label="Selecionar foto do aluno" onChange={async (e) => {
                     const file = e.target.files?.[0];
                     if (!file) return;
                     try { setPhotoPreview(await resizeImageToDataUrl(file, 256, 0.8)); }
@@ -359,72 +361,72 @@ export function StudentsPage() {
           </div>
 
           {/* Dados do aluno */}
-          <div className="card p-6">
-            <h3 className="mb-4 text-sm font-bold uppercase tracking-wide text-ink-subtle">Dados do aluno</h3>
+          <fieldset className="card p-6">
+            <legend className="mb-4 text-sm font-bold uppercase tracking-wide text-ink-subtle">Dados do aluno</legend>
 
             <div className="space-y-4">
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                 <div className="sm:col-span-2">
-                  <label className="label">Nome completo *</label>
-                  <input className="input" {...register('name', { required: 'Informe o nome' })} />
-                  {errors.name && <p className="mt-1 text-xs text-danger">{errors.name.message}</p>}
+                  <label htmlFor={fId('name')} className="label">Nome completo *</label>
+                  <input id={fId('name')} autoComplete="name" className="input" aria-describedby={errors.name ? `${fId('name')}-err` : undefined} {...register('name', { required: 'Informe o nome' })} />
+                  {errors.name && <p id={`${fId('name')}-err`} className="mt-1 text-xs text-danger">{errors.name.message}</p>}
                 </div>
                 <div>
-                  <label className="label">CPF *</label>
-                  <input className="input" placeholder="000.000.000-00" {...register('cpf', { required: 'Informe o CPF' })} />
-                  {errors.cpf && <p className="mt-1 text-xs text-danger">{errors.cpf.message}</p>}
+                  <label htmlFor={fId('cpf')} className="label">CPF *</label>
+                  <input id={fId('cpf')} className="input" placeholder="000.000.000-00" aria-describedby={errors.cpf ? `${fId('cpf')}-err` : undefined} {...register('cpf', { required: 'Informe o CPF' })} />
+                  {errors.cpf && <p id={`${fId('cpf')}-err`} className="mt-1 text-xs text-danger">{errors.cpf.message}</p>}
                 </div>
                 <div>
-                  <label className="label">RG</label>
-                  <input className="input" {...register('rg')} />
+                  <label htmlFor={fId('rg')} className="label">RG</label>
+                  <input id={fId('rg')} className="input" {...register('rg')} />
                 </div>
                 <div>
-                  <label className="label">Data de nascimento *</label>
-                  <input type="date" className="input" {...register('birth_date', { required: 'Informe a data' })} />
-                  {errors.birth_date && <p className="mt-1 text-xs text-danger">{errors.birth_date.message}</p>}
+                  <label htmlFor={fId('birth_date')} className="label">Data de nascimento *</label>
+                  <input id={fId('birth_date')} type="date" className="input" aria-describedby={errors.birth_date ? `${fId('birth_date')}-err` : undefined} {...register('birth_date', { required: 'Informe a data' })} />
+                  {errors.birth_date && <p id={`${fId('birth_date')}-err`} className="mt-1 text-xs text-danger">{errors.birth_date.message}</p>}
                 </div>
                 <div>
-                  <label className="label">Tipo sanguíneo *</label>
-                  <select className="input" {...register('blood_type', { required: 'Selecione o tipo sanguíneo' })}>
+                  <label htmlFor={fId('blood_type')} className="label">Tipo sanguíneo *</label>
+                  <select id={fId('blood_type')} className="input" aria-describedby={errors.blood_type ? `${fId('blood_type')}-err` : undefined} {...register('blood_type', { required: 'Selecione o tipo sanguíneo' })}>
                     <option value="">Selecione…</option>
                     {BLOOD_TYPES.map(bt => <option key={bt} value={bt}>{bt}</option>)}
                   </select>
-                  {errors.blood_type && <p className="mt-1 text-xs text-danger">{errors.blood_type.message}</p>}
+                  {errors.blood_type && <p id={`${fId('blood_type')}-err`} className="mt-1 text-xs text-danger">{errors.blood_type.message}</p>}
                 </div>
                 <div>
-                  <label className="label">Naturalidade</label>
-                  <input className="input" placeholder="Ex.: Salvador - BA" {...register('naturality')} />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                <div>
-                  <label className="label">Nome do pai *</label>
-                  <input className="input" {...register('father_name', { required: 'Informe o nome do pai' })} />
-                  {errors.father_name && <p className="mt-1 text-xs text-danger">{errors.father_name.message}</p>}
-                </div>
-                <div>
-                  <label className="label">Nome da mãe *</label>
-                  <input className="input" {...register('mother_name', { required: 'Informe o nome da mãe' })} />
-                  {errors.mother_name && <p className="mt-1 text-xs text-danger">{errors.mother_name.message}</p>}
+                  <label htmlFor={fId('naturality')} className="label">Naturalidade</label>
+                  <input id={fId('naturality')} className="input" placeholder="Ex.: Salvador - BA" {...register('naturality')} />
                 </div>
               </div>
 
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                 <div>
-                  <label className="label">Turma</label>
-                  <select className="input" {...register('class_id')}>
+                  <label htmlFor={fId('father_name')} className="label">Nome do pai *</label>
+                  <input id={fId('father_name')} className="input" aria-describedby={errors.father_name ? `${fId('father_name')}-err` : undefined} {...register('father_name', { required: 'Informe o nome do pai' })} />
+                  {errors.father_name && <p id={`${fId('father_name')}-err`} className="mt-1 text-xs text-danger">{errors.father_name.message}</p>}
+                </div>
+                <div>
+                  <label htmlFor={fId('mother_name')} className="label">Nome da mãe *</label>
+                  <input id={fId('mother_name')} className="input" aria-describedby={errors.mother_name ? `${fId('mother_name')}-err` : undefined} {...register('mother_name', { required: 'Informe o nome da mãe' })} />
+                  {errors.mother_name && <p id={`${fId('mother_name')}-err`} className="mt-1 text-xs text-danger">{errors.mother_name.message}</p>}
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <div>
+                  <label htmlFor={fId('class_id')} className="label">Turma</label>
+                  <select id={fId('class_id')} className="input" {...register('class_id')}>
                     <option value="">— Sem turma —</option>
                     {classes.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
                   </select>
                 </div>
                 <div>
-                  <label className="label">Plano (mensalidade) *</label>
-                  <select className="input" {...register('plan_id', { required: 'Selecione um plano' })} disabled={noPlans}>
+                  <label htmlFor={fId('plan_id')} className="label">Plano (mensalidade) *</label>
+                  <select id={fId('plan_id')} className="input" aria-describedby={errors.plan_id ? `${fId('plan_id')}-err` : undefined} {...register('plan_id', { required: 'Selecione um plano' })} disabled={noPlans}>
                     <option value="">Selecione…</option>
                     {plans.map((p) => <option key={p.id} value={p.id}>{p.name} — {brl(Number(p.monthly_fee))}</option>)}
                   </select>
-                  {errors.plan_id && <p className="mt-1 text-xs text-danger">{errors.plan_id.message}</p>}
+                  {errors.plan_id && <p id={`${fId('plan_id')}-err`} className="mt-1 text-xs text-danger">{errors.plan_id.message}</p>}
                 </div>
               </div>
 
@@ -433,21 +435,21 @@ export function StudentsPage() {
                   <p className="mb-3 text-xs font-bold uppercase tracking-wide text-ink-subtle">Cobrança inicial</p>
                   <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
                     <div>
-                      <label className="label">Desconto (%)</label>
-                      <input type="number" step="0.1" min="0" max="100" className="input" placeholder="0"
+                      <label htmlFor={fId('discount_percentage')} className="label">Desconto (%)</label>
+                      <input id={fId('discount_percentage')} type="number" step="0.1" min="0" max="100" className="input" placeholder="0"
                         {...register('discount_percentage', { valueAsNumber: true })} />
                     </div>
                     <div>
-                      <label className="label">Matrícula paga em</label>
-                      <select className="input" {...register('enrollment_payment_method')} defaultValue="pix">
+                      <label htmlFor={fId('enrollment_payment_method')} className="label">Matrícula paga em</label>
+                      <select id={fId('enrollment_payment_method')} className="input" {...register('enrollment_payment_method')} defaultValue="pix">
                         <option value="pix">PIX</option>
                         <option value="card">Cartão</option>
                         <option value="cash">Dinheiro (recebido)</option>
                       </select>
                     </div>
                     <div>
-                      <label className="label">Vencimento</label>
-                      <select className="input" {...register('first_due')} defaultValue="30">
+                      <label htmlFor={fId('first_due')} className="label">Vencimento</label>
+                      <select id={fId('first_due')} className="input" {...register('first_due')} defaultValue="30">
                         <option value="30">Matrícula + 30 dias</option>
                         <option value="05">Todo dia 05</option>
                         <option value="10">Todo dia 10</option>
@@ -462,47 +464,47 @@ export function StudentsPage() {
                 </div>
               )}
             </div>
-          </div>
+          </fieldset>
 
           {/* Responsável */}
-          <div className="card p-6">
-            <h3 className="mb-4 text-sm font-bold uppercase tracking-wide text-ink-subtle">Responsável *</h3>
+          <fieldset className="card p-6">
+            <legend className="mb-4 text-sm font-bold uppercase tracking-wide text-ink-subtle">Responsável *</legend>
             <p className="mb-4 text-xs text-ink-muted">
               Uma conta de acesso será criada automaticamente. Senha temporária gerada — troca obrigatória no 1º acesso.
             </p>
             <div className="space-y-4">
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                 <div>
-                  <label className="label">Nome do responsável *</label>
-                  <input className="input" {...register('guardian_name', { required: 'Informe o nome' })} />
-                  {errors.guardian_name && <p className="mt-1 text-xs text-danger">{errors.guardian_name.message}</p>}
+                  <label htmlFor={fId('guardian_name')} className="label">Nome do responsável *</label>
+                  <input id={fId('guardian_name')} autoComplete="name" className="input" aria-describedby={errors.guardian_name ? `${fId('guardian_name')}-err` : undefined} {...register('guardian_name', { required: 'Informe o nome' })} />
+                  {errors.guardian_name && <p id={`${fId('guardian_name')}-err`} className="mt-1 text-xs text-danger">{errors.guardian_name.message}</p>}
                 </div>
                 <div>
-                  <label className="label">CPF do responsável *</label>
-                  <input className="input" placeholder="000.000.000-00" {...register('guardian_cpf', { required: 'Informe o CPF' })} />
-                  {errors.guardian_cpf && <p className="mt-1 text-xs text-danger">{errors.guardian_cpf.message}</p>}
-                </div>
-              </div>
-              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                <div>
-                  <label className="label">Email *</label>
-                  <input type="email" className="input" {...register('guardian_email', { required: 'Informe o email' })} />
-                  {errors.guardian_email && <p className="mt-1 text-xs text-danger">{errors.guardian_email.message}</p>}
-                </div>
-                <div>
-                  <label className="label">Telefone *</label>
-                  <input className="input" placeholder="(00) 00000-0000" {...register('guardian_phone', { required: 'Informe o telefone' })} />
-                  {errors.guardian_phone && <p className="mt-1 text-xs text-danger">{errors.guardian_phone.message}</p>}
+                  <label htmlFor={fId('guardian_cpf')} className="label">CPF do responsável *</label>
+                  <input id={fId('guardian_cpf')} className="input" placeholder="000.000.000-00" aria-describedby={errors.guardian_cpf ? `${fId('guardian_cpf')}-err` : undefined} {...register('guardian_cpf', { required: 'Informe o CPF' })} />
+                  {errors.guardian_cpf && <p id={`${fId('guardian_cpf')}-err`} className="mt-1 text-xs text-danger">{errors.guardian_cpf.message}</p>}
                 </div>
               </div>
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                 <div>
-                  <label className="label">Telefone 2</label>
-                  <input className="input" placeholder="(00) 00000-0000" {...register('guardian_phone2')} />
+                  <label htmlFor={fId('guardian_email')} className="label">Email *</label>
+                  <input id={fId('guardian_email')} type="email" autoComplete="email" className="input" aria-describedby={errors.guardian_email ? `${fId('guardian_email')}-err` : undefined} {...register('guardian_email', { required: 'Informe o email' })} />
+                  {errors.guardian_email && <p id={`${fId('guardian_email')}-err`} className="mt-1 text-xs text-danger">{errors.guardian_email.message}</p>}
+                </div>
+                <div>
+                  <label htmlFor={fId('guardian_phone')} className="label">Telefone *</label>
+                  <input id={fId('guardian_phone')} autoComplete="tel" className="input" placeholder="(00) 00000-0000" aria-describedby={errors.guardian_phone ? `${fId('guardian_phone')}-err` : undefined} {...register('guardian_phone', { required: 'Informe o telefone' })} />
+                  {errors.guardian_phone && <p id={`${fId('guardian_phone')}-err`} className="mt-1 text-xs text-danger">{errors.guardian_phone.message}</p>}
+                </div>
+              </div>
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <div>
+                  <label htmlFor={fId('guardian_phone2')} className="label">Telefone 2</label>
+                  <input id={fId('guardian_phone2')} autoComplete="tel" className="input" placeholder="(00) 00000-0000" {...register('guardian_phone2')} />
                 </div>
               </div>
             </div>
-          </div>
+          </fieldset>
 
           {/* Ações */}
           <div className="flex items-center justify-end gap-3">
@@ -517,7 +519,7 @@ export function StudentsPage() {
         {/* Credenciais geradas */}
         {credentials && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-ink/40">
-            <div className="w-full max-w-md rounded-2xl bg-surface p-6 shadow-xl">
+            <div role="dialog" aria-modal="true" aria-label="Aluno cadastrado com sucesso" className="w-full max-w-md rounded-2xl bg-surface p-6 shadow-xl">
               <h3 className="mb-4 text-lg font-bold text-ink">Aluno cadastrado com sucesso!</h3>
               <div className="space-y-3 text-sm">
                 <div className="rounded-xl bg-success-soft p-4 text-success">
@@ -627,32 +629,32 @@ export function StudentsPage() {
           <div className="card p-4">
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
               <div>
-                <label className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-ink-subtle">Turma</label>
-                <select className="input" value={classFilter} onChange={(e) => setClassFilter(e.target.value)}>
+                <label htmlFor={fId('filter-class')} className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-ink-subtle">Turma</label>
+                <select id={fId('filter-class')} className="input" value={classFilter} onChange={(e) => setClassFilter(e.target.value)}>
                   <option value="">Todas as turmas</option>
                   {classes.map((c) => (<option key={c.id} value={c.id}>{c.name}</option>))}
                 </select>
               </div>
               <div>
-                <label className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-ink-subtle">Série</label>
-                <select className="input" value={serieFilter} onChange={(e) => setSerieFilter(e.target.value)}>
+                <label htmlFor={fId('filter-serie')} className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-ink-subtle">Série</label>
+                <select id={fId('filter-serie')} className="input" value={serieFilter} onChange={(e) => setSerieFilter(e.target.value)}>
                   <option value="">Todas as séries</option>
                   {distinctSeries.map((s) => (<option key={s} value={s}>{s}</option>))}
                 </select>
               </div>
               <div>
-                <label className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-ink-subtle">Status</label>
-                <select className="input" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value as StatusFilter)}>
+                <label htmlFor={fId('filter-status')} className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-ink-subtle">Status</label>
+                <select id={fId('filter-status')} className="input" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value as StatusFilter)}>
                   <option value="all">Todos ({counts.all})</option>
                   <option value="active">Ativos ({counts.active})</option>
                   <option value="inactive">Inativos ({counts.inactive})</option>
                 </select>
               </div>
               <div>
-                <label className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-ink-subtle">Buscar</label>
+                <label htmlFor={fId('filter-search')} className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-ink-subtle">Buscar</label>
                 <div className="relative">
-                  <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-ink-subtle" />
-                  <input className="input pl-9" placeholder="Buscar alunos…" value={query} onChange={(e) => setQuery(e.target.value)} />
+                  <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-ink-subtle" aria-hidden="true" />
+                  <input id={fId('filter-search')} className="input pl-9" placeholder="Buscar alunos…" value={query} onChange={(e) => setQuery(e.target.value)} />
                 </div>
               </div>
             </div>
@@ -673,7 +675,7 @@ export function StudentsPage() {
               />
             ) : (
               <div className="overflow-x-auto">
-                <table className="w-full text-sm">
+                <table className="w-full text-sm" aria-label="Lista de alunos">
                   <thead>
                     <tr className="border-b border-border text-left text-[11px] font-semibold uppercase text-ink-subtle">
                       <th className="px-4 py-3">Aluno</th>
@@ -717,17 +719,17 @@ export function StudentsPage() {
                               type="button"
                               className="rounded-lg p-2 text-ink-muted hover:bg-primary-soft hover:text-primary"
                               onClick={(e) => { e.stopPropagation(); setSelected(s); setDetailTab('dados'); }}
-                              title="Ver detalhes"
+                              aria-label={`Ver detalhes de ${s.name}`}
                             >
-                              <Eye size={16} />
+                              <Eye size={16} aria-hidden="true" />
                             </button>
                             <button
                               type="button"
                               className="rounded-lg p-2 text-ink-muted hover:bg-canvas hover:text-ink"
                               onClick={(e) => { e.stopPropagation(); setEditing(s); }}
-                              title="Editar"
+                              aria-label={`Editar ${s.name}`}
                             >
-                              <MoreVertical size={16} />
+                              <MoreVertical size={16} aria-hidden="true" />
                             </button>
                           </div>
                         </td>

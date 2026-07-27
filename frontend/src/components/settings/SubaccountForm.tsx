@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useId, useState } from 'react';
 import { Save, Check, Loader2, Landmark, Lock, Rocket, AlertTriangle, CheckCircle2, Copy } from 'lucide-react';
 import { payoutService, COMPANY_TYPE_LABELS, type CompanyType, type SubaccountOnboarding } from '@/services/payout';
 import { SubaccountDocuments } from './SubaccountDocuments';
@@ -11,6 +11,8 @@ const EMPTY: SubaccountOnboarding = {
 
 /** Formulário de abertura de subconta ASAAS (split). Requer plano ativo. */
 export function SubaccountForm({ active }: { active: boolean }) {
+  const uid = useId();
+  const companyTypeId = `${uid}-company-type`;
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [opening, setOpening] = useState(false);
@@ -118,36 +120,36 @@ export function SubaccountForm({ active }: { active: boolean }) {
       ) : (
         <div className="space-y-3">
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-            <Field label="Razão social" value={form.legal_name} onChange={(v) => set('legal_name', v)} />
-            <Field label="CNPJ" value={form.cnpj} onChange={(v) => set('cnpj', v)} placeholder="00.000.000/0001-00" />
-            <Field label="Responsável" value={form.responsible_name} onChange={(v) => set('responsible_name', v)} />
-            <Field label="CPF do responsável" value={form.responsible_cpf} onChange={(v) => set('responsible_cpf', v)} />
-            <Field label="E-mail" value={form.email} onChange={(v) => set('email', v)} type="email" />
-            <Field label="Telefone / celular" value={form.phone} onChange={(v) => set('phone', v)} placeholder="(00) 00000-0000" />
+            <Field label="Razão social" value={form.legal_name} onChange={(v) => set('legal_name', v)} autoComplete="organization" />
+            <Field label="CNPJ" value={form.cnpj} onChange={(v) => set('cnpj', v)} placeholder="00.000.000/0001-00" autoComplete="off" />
+            <Field label="Responsável" value={form.responsible_name} onChange={(v) => set('responsible_name', v)} autoComplete="name" />
+            <Field label="CPF do responsável" value={form.responsible_cpf} onChange={(v) => set('responsible_cpf', v)} autoComplete="off" />
+            <Field label="E-mail" value={form.email} onChange={(v) => set('email', v)} type="email" autoComplete="email" />
+            <Field label="Telefone / celular" value={form.phone} onChange={(v) => set('phone', v)} placeholder="(00) 00000-0000" autoComplete="tel" />
             <div>
-              <label className="label">Tipo de empresa</label>
-              <select className="input" value={form.company_type} onChange={(e) => set('company_type', e.target.value as CompanyType)}>
+              <label htmlFor={companyTypeId} className="label">Tipo de empresa</label>
+              <select id={companyTypeId} className="input" value={form.company_type} onChange={(e) => set('company_type', e.target.value as CompanyType)}>
                 {(Object.keys(COMPANY_TYPE_LABELS) as CompanyType[]).map((t) => (
                   <option key={t} value={t}>{COMPANY_TYPE_LABELS[t]}</option>
                 ))}
               </select>
             </div>
-            <Field label="Faturamento mensal (R$)" value={form.income_value == null ? '' : String(form.income_value)} onChange={(v) => set('income_value', v === '' ? null : Number(v))} type="number" />
-            <Field label="CEP" value={form.postal_code} onChange={(v) => set('postal_code', v)} placeholder="00000-000" />
-            <Field label="Endereço" value={form.address} onChange={(v) => set('address', v)} />
-            <Field label="Número" value={form.address_number} onChange={(v) => set('address_number', v)} />
-            <Field label="Complemento" value={form.complement} onChange={(v) => set('complement', v)} />
-            <Field label="Bairro" value={form.province} onChange={(v) => set('province', v)} />
+            <Field label="Faturamento mensal (R$)" value={form.income_value == null ? '' : String(form.income_value)} onChange={(v) => set('income_value', v === '' ? null : Number(v))} type="number" autoComplete="off" />
+            <Field label="CEP" value={form.postal_code} onChange={(v) => set('postal_code', v)} placeholder="00000-000" autoComplete="postal-code" />
+            <Field label="Endereço" value={form.address} onChange={(v) => set('address', v)} autoComplete="street-address" />
+            <Field label="Número" value={form.address_number} onChange={(v) => set('address_number', v)} autoComplete="off" />
+            <Field label="Complemento" value={form.complement} onChange={(v) => set('complement', v)} autoComplete="off" />
+            <Field label="Bairro" value={form.province} onChange={(v) => set('province', v)} autoComplete="off" />
           </div>
 
           {error && (
-            <div className="flex items-start gap-2 rounded-lg bg-danger-soft p-3 text-xs text-danger">
-              <AlertTriangle size={14} className="mt-0.5 shrink-0" /> <span>{error}</span>
+            <div role="alert" className="flex items-start gap-2 rounded-lg bg-danger-soft p-3 text-xs text-danger">
+              <AlertTriangle size={14} className="mt-0.5 shrink-0" aria-hidden="true" /> <span>{error}</span>
             </div>
           )}
           {okMsg && (
-            <div className="flex items-start gap-2 rounded-lg bg-success-soft p-3 text-xs text-ink">
-              <CheckCircle2 size={14} className="mt-0.5 shrink-0 text-success" /> <span>{okMsg}</span>
+            <div role="status" className="flex items-start gap-2 rounded-lg bg-success-soft p-3 text-xs text-ink">
+              <CheckCircle2 size={14} className="mt-0.5 shrink-0 text-success" aria-hidden="true" /> <span>{okMsg}</span>
             </div>
           )}
 
@@ -166,13 +168,14 @@ export function SubaccountForm({ active }: { active: boolean }) {
   );
 }
 
-function Field({ label, value, onChange, type = 'text', placeholder }: {
-  label: string; value: string; onChange: (v: string) => void; type?: string; placeholder?: string;
+function Field({ label, value, onChange, type = 'text', placeholder, autoComplete }: {
+  label: string; value: string; onChange: (v: string) => void; type?: string; placeholder?: string; autoComplete?: string;
 }) {
+  const id = useId();
   return (
     <div>
-      <label className="label">{label}</label>
-      <input className="input" type={type} value={value} placeholder={placeholder} onChange={(e) => onChange(e.target.value)} />
+      <label htmlFor={id} className="label">{label}</label>
+      <input id={id} className="input" type={type} value={value} placeholder={placeholder} autoComplete={autoComplete} onChange={(e) => onChange(e.target.value)} />
     </div>
   );
 }
@@ -188,10 +191,10 @@ function Row({ label, value, copy }: { label: string; value: string; copy?: bool
           <button
             type="button"
             className="shrink-0 rounded p-1 text-ink-subtle hover:bg-canvas hover:text-ink"
-            title="Copiar"
+            aria-label={`Copiar ${label}`}
             onClick={() => { navigator.clipboard.writeText(value); setDone(true); setTimeout(() => setDone(false), 1500); }}
           >
-            {done ? <Check size={13} className="text-success" /> : <Copy size={13} />}
+            {done ? <Check size={13} className="text-success" aria-hidden="true" /> : <Copy size={13} aria-hidden="true" />}
           </button>
         )}
       </span>

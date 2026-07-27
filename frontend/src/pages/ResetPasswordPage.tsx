@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useId, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { GraduationCap, Loader2, ArrowLeft, KeyRound } from 'lucide-react';
 import { resetPassword } from '@/lib/authClient';
@@ -14,6 +14,11 @@ export function ResetPasswordPage() {
   const [confirm, setConfirm] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const uid = useId();
+  const passwordId = `${uid}-password`;
+  const confirmId = `${uid}-confirm`;
+  const errorId = `${uid}-error`;
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -52,19 +57,39 @@ export function ResetPasswordPage() {
         ) : (
           <>
             <p className="mb-5 text-sm text-ink-muted">Escolha uma nova senha para sua conta.</p>
-            {error && <div className="mb-4 rounded-xl bg-danger-soft px-3 py-2 text-sm text-danger">{error}</div>}
+            {error && (
+              <div id={errorId} role="alert" className="mb-4 rounded-xl bg-danger-soft px-3 py-2 text-sm text-danger">
+                {error}
+              </div>
+            )}
             <form className="space-y-4" onSubmit={handleSubmit}>
               <div>
-                <label className="label">Nova senha</label>
-                <PasswordInput value={password} onChange={(e) => setPassword(e.target.value)} required minLength={8} />
+                <label htmlFor={passwordId} className="label">Nova senha</label>
+                <PasswordInput
+                  id={passwordId}
+                  autoComplete="new-password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  aria-describedby={error ? errorId : undefined}
+                  required
+                  minLength={8}
+                />
                 <p className="mt-1 text-xs text-ink-subtle">Mínimo 8 caracteres.</p>
               </div>
               <div>
-                <label className="label">Confirmar senha</label>
-                <PasswordInput value={confirm} onChange={(e) => setConfirm(e.target.value)} required minLength={8} />
+                <label htmlFor={confirmId} className="label">Confirmar senha</label>
+                <PasswordInput
+                  id={confirmId}
+                  autoComplete="new-password"
+                  value={confirm}
+                  onChange={(e) => setConfirm(e.target.value)}
+                  aria-describedby={error ? errorId : undefined}
+                  required
+                  minLength={8}
+                />
               </div>
               <button className="btn-primary w-full justify-center" disabled={loading}>
-                {loading && <Loader2 size={16} className="animate-spin" />} Redefinir senha
+                {loading && <Loader2 size={16} className="animate-spin" aria-hidden="true" />} Redefinir senha
               </button>
             </form>
             <Link to="/login" className="mt-4 flex items-center justify-center gap-1 text-sm text-ink-muted hover:text-ink">

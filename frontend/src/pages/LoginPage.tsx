@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useId, useState } from 'react';
 import { useNavigate, Link, useSearchParams } from 'react-router-dom';
 import { GraduationCap, Loader2, ShieldCheck, Zap, Headset } from 'lucide-react';
 import { signIn, signUp } from '@/lib/authClient';
@@ -19,6 +19,15 @@ export function LoginPage() {
   const [accept, setAccept] = useState(false);
   const [params] = useSearchParams();
   const resetOk = params.get('reset') === '1';
+
+  const uid = useId();
+  const loginEmailId = `${uid}-login-email`;
+  const loginPasswordId = `${uid}-login-password`;
+  const signupNameId = `${uid}-signup-name`;
+  const signupEmailId = `${uid}-signup-email`;
+  const signupPasswordId = `${uid}-signup-password`;
+  const signupAcceptId = `${uid}-signup-accept`;
+  const errorId = `${uid}-error`;
 
   async function handleLogin(e: React.FormEvent) {
     e.preventDefault();
@@ -104,18 +113,26 @@ export function LoginPage() {
       {/* Coluna direita — formulário */}
       <div className="flex items-center justify-center bg-canvas p-6">
         <div className="card w-full max-w-md p-6">
-          <div className="mb-5 flex rounded-xl border border-border p-1">
+          <div role="tablist" className="mb-5 flex rounded-xl border border-border p-1">
             <button
+              role="tab"
+              aria-selected={tab === 'login'}
               className={`flex-1 rounded-lg py-2 text-sm font-semibold ${tab === 'login' ? 'bg-primary text-white' : 'text-ink-muted'}`}
               onClick={() => { setTab('login'); setError(null); }}
             >Entrar</button>
             <button
+              role="tab"
+              aria-selected={tab === 'signup'}
               className={`flex-1 rounded-lg py-2 text-sm font-semibold ${tab === 'signup' ? 'bg-primary text-white' : 'text-ink-muted'}`}
               onClick={() => { setTab('signup'); setError(null); }}
             >Cadastrar escola</button>
           </div>
 
-          {error && <div className="mb-4 rounded-xl bg-danger-soft px-3 py-2 text-sm text-danger">{error}</div>}
+          {error && (
+            <div id={errorId} role="alert" className="mb-4 rounded-xl bg-danger-soft px-3 py-2 text-sm text-danger">
+              {error}
+            </div>
+          )}
           {resetOk && tab === 'login' && (
             <div className="mb-4 rounded-xl bg-success-soft px-3 py-2 text-sm text-ink">Senha redefinida com sucesso. Faça login com a nova senha.</div>
           )}
@@ -123,45 +140,86 @@ export function LoginPage() {
           {tab === 'login' ? (
             <form className="space-y-4" onSubmit={handleLogin}>
               <div>
-                <label className="label">E-mail ou Matrícula</label>
-                <input type="text" className="input" placeholder="seu@email.com ou nº de matrícula" value={email} onChange={(e) => setEmail(e.target.value)} required />
+                <label htmlFor={loginEmailId} className="label">E-mail ou Matrícula</label>
+                <input
+                  id={loginEmailId}
+                  type="text"
+                  autoComplete="username"
+                  className="input"
+                  placeholder="seu@email.com ou nº de matrícula"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  aria-describedby={error ? errorId : undefined}
+                  required
+                />
               </div>
               <div>
-                <label className="label">Senha</label>
-                <PasswordInput value={password} onChange={(e) => setPassword(e.target.value)} required />
+                <label htmlFor={loginPasswordId} className="label">Senha</label>
+                <PasswordInput
+                  id={loginPasswordId}
+                  autoComplete="current-password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  aria-describedby={error ? errorId : undefined}
+                  required
+                />
                 <p className="mt-1 text-xs text-ink-subtle">1º acesso: use a senha temporária fornecida pela escola.</p>
                 <div className="mt-1 text-right">
                   <Link to="/forgot-password" className="text-xs font-medium text-primary hover:underline">Esqueci minha senha</Link>
                 </div>
               </div>
               <button className="btn-primary w-full justify-center" disabled={loading}>
-                {loading && <Loader2 size={16} className="animate-spin" />} Entrar na conta
+                {loading && <Loader2 size={16} className="animate-spin" aria-hidden="true" />} Entrar na conta
               </button>
             </form>
           ) : (
             <form className="space-y-4" onSubmit={handleSignup}>
               <div>
-                <label className="label">Seu nome</label>
-                <input className="input" value={name} onChange={(e) => setName(e.target.value)} required />
+                <label htmlFor={signupNameId} className="label">Seu nome</label>
+                <input
+                  id={signupNameId}
+                  autoComplete="name"
+                  className="input"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  required
+                />
               </div>
               <div>
-                <label className="label">E-mail</label>
-                <input type="email" className="input" value={email} onChange={(e) => setEmail(e.target.value)} required />
+                <label htmlFor={signupEmailId} className="label">E-mail</label>
+                <input
+                  id={signupEmailId}
+                  type="email"
+                  autoComplete="email"
+                  className="input"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  aria-describedby={error ? errorId : undefined}
+                  required
+                />
               </div>
               <div>
-                <label className="label">Senha</label>
-                <PasswordInput value={password} onChange={(e) => setPassword(e.target.value)} required minLength={8} />
+                <label htmlFor={signupPasswordId} className="label">Senha</label>
+                <PasswordInput
+                  id={signupPasswordId}
+                  autoComplete="new-password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  required
+                  minLength={8}
+                />
                 <p className="mt-1 text-xs text-ink-subtle">Mínimo 8 caracteres.</p>
               </div>
-              <label className="flex items-start gap-2 text-sm text-ink-muted">
+              <div className="flex items-start gap-2 text-sm text-ink-muted">
                 <input
+                  id={signupAcceptId}
                   type="checkbox"
                   className="mt-0.5"
                   checked={accept}
                   required
                   onChange={(e) => setAccept(e.target.checked)}
                 />
-                <span>
+                <label htmlFor={signupAcceptId}>
                   Li e aceito os{' '}
                   <Link to="/termos" target="_blank" className="font-medium text-primary hover:underline">
                     Termos de Uso
@@ -171,10 +229,10 @@ export function LoginPage() {
                     Política de Privacidade
                   </Link>{' '}
                   <span className="text-xs text-ink-subtle">(v{CURRENT_TERMS_VERSION})</span>
-                </span>
-              </label>
+                </label>
+              </div>
               <button className="btn-primary w-full justify-center" disabled={loading}>
-                {loading && <Loader2 size={16} className="animate-spin" />} Começar teste grátis
+                {loading && <Loader2 size={16} className="animate-spin" aria-hidden="true" />} Começar teste grátis
               </button>
             </form>
           )}

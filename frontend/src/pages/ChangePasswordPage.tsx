@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useId, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { useNavigate } from 'react-router-dom';
 import { ShieldCheck, Loader2, Check } from 'lucide-react';
@@ -20,6 +20,12 @@ export function ChangePasswordPage() {
 
   const { register, handleSubmit, watch, formState: { errors } } = useForm<Fields>();
   const next = watch('next');
+
+  const uid = useId();
+  const currentId = `${uid}-current`;
+  const nextId = `${uid}-next`;
+  const confirmId = `${uid}-confirm`;
+  const errorId = `${uid}-error`;
 
   async function onSubmit(data: Fields) {
     setError(null);
@@ -95,30 +101,44 @@ export function ChangePasswordPage() {
         ) : (
           <form className="space-y-4" onSubmit={handleSubmit(onSubmit)}>
             {error && (
-              <div className="rounded-xl bg-danger-soft px-3 py-2 text-sm text-danger">{error}</div>
+              <div id={errorId} role="alert" className="rounded-xl bg-danger-soft px-3 py-2 text-sm text-danger">
+                {error}
+              </div>
             )}
             <div>
-              <label className="label">Senha atual (inicial)</label>
-              <PasswordInput autoComplete="current-password"
+              <label htmlFor={currentId} className="label">Senha atual (inicial)</label>
+              <PasswordInput
+                id={currentId}
+                autoComplete="current-password"
                 placeholder="Senha temporária recebida"
-                {...register('current', { required: 'Informe a senha atual' })} />
-              {errors.current && <p className="mt-1 text-xs text-danger">{errors.current.message}</p>}
+                aria-describedby={errors.current ? `${currentId}-err` : error ? errorId : undefined}
+                {...register('current', { required: 'Informe a senha atual' })}
+              />
+              {errors.current && <p id={`${currentId}-err`} className="mt-1 text-xs text-danger">{errors.current.message}</p>}
             </div>
             <div>
-              <label className="label">Nova senha</label>
-              <PasswordInput autoComplete="new-password"
+              <label htmlFor={nextId} className="label">Nova senha</label>
+              <PasswordInput
+                id={nextId}
+                autoComplete="new-password"
                 placeholder="Mínimo 8 caracteres"
-                {...register('next', { required: 'Informe a nova senha', minLength: { value: 8, message: 'Mínimo 8 caracteres' } })} />
-              {errors.next && <p className="mt-1 text-xs text-danger">{errors.next.message}</p>}
+                aria-describedby={errors.next ? `${nextId}-err` : undefined}
+                {...register('next', { required: 'Informe a nova senha', minLength: { value: 8, message: 'Mínimo 8 caracteres' } })}
+              />
+              {errors.next && <p id={`${nextId}-err`} className="mt-1 text-xs text-danger">{errors.next.message}</p>}
             </div>
             <div>
-              <label className="label">Confirme a nova senha</label>
-              <PasswordInput autoComplete="new-password"
+              <label htmlFor={confirmId} className="label">Confirme a nova senha</label>
+              <PasswordInput
+                id={confirmId}
+                autoComplete="new-password"
+                aria-describedby={errors.confirm ? `${confirmId}-err` : undefined}
                 {...register('confirm', {
                   required: 'Confirme a senha',
                   validate: (v) => v === next || 'As senhas não conferem',
-                })} />
-              {errors.confirm && <p className="mt-1 text-xs text-danger">{errors.confirm.message}</p>}
+                })}
+              />
+              {errors.confirm && <p id={`${confirmId}-err`} className="mt-1 text-xs text-danger">{errors.confirm.message}</p>}
             </div>
             <button className="btn-primary w-full justify-center" type="submit" disabled={loading}>
               {loading && <Loader2 size={16} className="animate-spin" />} Alterar senha

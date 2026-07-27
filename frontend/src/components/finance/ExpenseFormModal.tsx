@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useId, useState } from 'react';
 import { Modal } from '@/components/ui/Modal';
 import { BRLInput } from '@/components/ui/BRLInput';
 import { useSubmitOnce } from '@/lib/useSubmitOnce';
@@ -42,6 +42,16 @@ export function ExpenseFormModal({ open, expense, onClose, onCreate, onEdit }: P
   const isEdit = !!expense;
   const [form, setForm] = useState<FormState>(EMPTY);
   const [error, setError] = useState<string | null>(null);
+
+  const uid = useId();
+  const supplierNameId = `${uid}-supplier`;
+  const descriptionId = `${uid}-description`;
+  const categoryId = `${uid}-category`;
+  const amountId = `${uid}-amount`;
+  const dueDateId = `${uid}-due-date`;
+  const installmentsId = `${uid}-installments`;
+  const installmentModeId = `${uid}-installment-mode`;
+  const errorId = `${uid}-error`;
 
   useEffect(() => {
     if (!open) return;
@@ -120,17 +130,21 @@ export function ExpenseFormModal({ open, expense, onClose, onCreate, onEdit }: P
     >
       <div className="space-y-4">
         <div>
-          <label className="label">Fornecedor *</label>
+          <label htmlFor={supplierNameId} className="label">Fornecedor *</label>
           <input
+            id={supplierNameId}
             className="input"
             placeholder="Ex.: Papelaria Central"
             value={form.supplier_name}
             onChange={(e) => setForm((f) => ({ ...f, supplier_name: e.target.value }))}
+            aria-describedby={error ? errorId : undefined}
+            required
           />
         </div>
         <div>
-          <label className="label">Descrição</label>
+          <label htmlFor={descriptionId} className="label">Descrição</label>
           <input
+            id={descriptionId}
             className="input"
             placeholder="Ex.: Material didático"
             value={form.description}
@@ -138,8 +152,9 @@ export function ExpenseFormModal({ open, expense, onClose, onCreate, onEdit }: P
           />
         </div>
         <div>
-          <label className="label">Categoria</label>
+          <label htmlFor={categoryId} className="label">Categoria</label>
           <select
+            id={categoryId}
             className="input"
             value={form.category}
             onChange={(e) => setForm((f) => ({ ...f, category: e.target.value }))}
@@ -151,12 +166,13 @@ export function ExpenseFormModal({ open, expense, onClose, onCreate, onEdit }: P
 
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <div>
-            <label className="label">Valor *</label>
-            <BRLInput value={form.amount} onValueChange={(v) => setForm((f) => ({ ...f, amount: v }))} />
+            <label htmlFor={amountId} className="label">Valor *</label>
+            <BRLInput id={amountId} value={form.amount} onValueChange={(v) => setForm((f) => ({ ...f, amount: v }))} />
           </div>
           <div>
-            <label className="label">1º vencimento</label>
+            <label htmlFor={dueDateId} className="label">1º vencimento</label>
             <input
+              id={dueDateId}
               type="date"
               className="input"
               value={form.due_date}
@@ -166,15 +182,16 @@ export function ExpenseFormModal({ open, expense, onClose, onCreate, onEdit }: P
         </div>
 
         {!isEdit && (
-          <div className="rounded-lg border border-border bg-canvas/40 p-3">
+          <fieldset className="rounded-lg border border-border bg-canvas/40 p-3">
             <div className="mb-2 flex items-center justify-between">
-              <label className="label mb-0">Parcelamento (cartão de crédito)</label>
+              <legend className="label mb-0 float-left">Parcelamento (cartão de crédito)</legend>
               <span className="text-xs text-ink-subtle">Deixe em 1 para lançamento único</span>
             </div>
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <div>
-                <label className="label text-xs">Nº de parcelas</label>
+                <label htmlFor={installmentsId} className="label text-xs">Nº de parcelas</label>
                 <input
+                  id={installmentsId}
                   type="number"
                   min={1}
                   max={60}
@@ -186,8 +203,9 @@ export function ExpenseFormModal({ open, expense, onClose, onCreate, onEdit }: P
                 />
               </div>
               <div>
-                <label className="label text-xs">O valor informado é…</label>
+                <label htmlFor={installmentModeId} className="label text-xs">O valor informado é…</label>
                 <select
+                  id={installmentModeId}
                   className="input"
                   value={form.installment_mode}
                   disabled={form.installments <= 1}
@@ -208,10 +226,10 @@ export function ExpenseFormModal({ open, expense, onClose, onCreate, onEdit }: P
                 Uma despesa será criada por parcela, com vencimento mensal a partir da data acima.
               </p>
             )}
-          </div>
+          </fieldset>
         )}
 
-        {error && <p className="text-sm text-danger">{error}</p>}
+        {error && <p id={errorId} role="alert" className="text-sm text-danger">{error}</p>}
       </div>
     </Modal>
   );

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useId, useState } from 'react';
 import { Eye, EyeOff, Loader2 } from 'lucide-react';
 import { personalDataService } from '@/services/personalData';
 import type { EntityType, SensitiveFieldName } from '@/services/personalData';
@@ -32,6 +32,10 @@ export function SensitiveField({
   const [justification, setJustification] = useState('');
   const [busy, setBusy] = useState(false);
   const [modalError, setModalError] = useState<string | null>(null);
+  const uid = useId();
+  const titleId = `${uid}-modal-title`;
+  const textareaId = `${uid}-justification`;
+  const modalErrorId = `${uid}-modal-error`;
 
   const isRevealed = revealedValue !== null;
   const displayValue = isRevealed && visible ? revealedValue : (maskedValue || '—');
@@ -93,9 +97,9 @@ export function SensitiveField({
             <button
               onClick={openModal}
               className="inline-flex items-center gap-1 rounded-lg px-2 py-0.5 text-[11px] font-semibold text-primary transition-colors hover:bg-primary-soft"
-              title="Revelar dado sensível"
+              aria-label={`Revelar ${label}`}
             >
-              <Eye size={11} /> Revelar
+              <Eye size={11} aria-hidden="true" /> Revelar
             </button>
           )}
 
@@ -103,23 +107,31 @@ export function SensitiveField({
             <button
               onClick={() => setVisible((v) => !v)}
               className="rounded-lg p-0.5 text-ink-subtle transition-colors hover:text-ink"
-              title={visible ? 'Ocultar' : 'Mostrar'}
+              aria-label={visible ? `Ocultar ${label}` : `Mostrar ${label}`}
+              aria-pressed={visible}
             >
-              {visible ? <EyeOff size={12} /> : <Eye size={12} />}
+              {visible ? <EyeOff size={12} aria-hidden="true" /> : <Eye size={12} aria-hidden="true" />}
             </button>
           )}
         </div>
       </div>
 
       {showModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-ink/40 p-4">
-          <div className="w-full max-w-sm rounded-2xl bg-surface p-6 shadow-xl">
-            <h4 className="mb-1 text-base font-bold text-ink">Revelar dado sensível</h4>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-ink/40 p-4" aria-hidden="true">
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby={titleId}
+            className="w-full max-w-sm rounded-2xl bg-surface p-6 shadow-xl"
+          >
+            <h4 id={titleId} className="mb-1 text-base font-bold text-ink">Revelar dado sensível</h4>
             <p className="mb-4 text-xs text-ink-muted">
               Informe o motivo de acesso para <strong>{label}</strong>.
               O acesso será registrado na trilha de auditoria LGPD.
             </p>
+            <label htmlFor={textareaId} className="sr-only">Justificativa de acesso</label>
             <textarea
+              id={textareaId}
               className="input w-full resize-none text-sm"
               rows={3}
               placeholder="Ex.: Verificação de documento para matrícula, atualização cadastral…"
@@ -127,8 +139,9 @@ export function SensitiveField({
               onChange={(e) => setJustification(e.target.value)}
               maxLength={500}
               autoFocus
+              aria-describedby={modalError ? modalErrorId : undefined}
             />
-            <div className="mt-1 flex justify-between text-xs text-ink-subtle">
+            <div className="mt-1 flex justify-between text-xs text-ink-subtle" aria-hidden="true">
               <span>
                 {justification.trim().length < 10
                   ? `Mín. 10 caracteres (faltam ${10 - justification.trim().length})`
@@ -136,7 +149,7 @@ export function SensitiveField({
               </span>
               <span>{justification.length}/500</span>
             </div>
-            {modalError && <p className="mt-2 text-xs text-danger">{modalError}</p>}
+            {modalError && <p id={modalErrorId} role="alert" className="mt-2 text-xs text-danger">{modalError}</p>}
             <div className="mt-4 flex justify-end gap-2">
               <button className="btn-outline" onClick={closeModal} disabled={busy}>
                 Cancelar
@@ -146,7 +159,7 @@ export function SensitiveField({
                 onClick={doReveal}
                 disabled={busy || justification.trim().length < 10}
               >
-                {busy ? <Loader2 size={14} className="animate-spin" /> : <Eye size={14} />}
+                {busy ? <Loader2 size={14} className="animate-spin" aria-hidden="true" /> : <Eye size={14} aria-hidden="true" />}
                 Confirmar
               </button>
             </div>

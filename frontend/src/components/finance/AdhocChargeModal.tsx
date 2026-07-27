@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useId, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { Loader2 } from 'lucide-react';
 import { Modal } from '@/components/ui/Modal';
@@ -31,6 +31,8 @@ export function AdhocChargeModal({ open, onClose, onCreated, onError }: Props) {
     defaultValues: { scope: 'all' },
   });
   const scope = watch('scope');
+  const uid = useId();
+  const fId = (f: string) => `${uid}-${f}`;
 
   useEffect(() => {
     if (open) classesService.list().then(setClasses).catch(() => setClasses([]));
@@ -78,37 +80,37 @@ export function AdhocChargeModal({ open, onClose, onCreated, onError }: Props) {
           individual será gerada para cada aluno do escopo escolhido, visível no portal do responsável.
         </p>
         <div>
-          <label className="label">Título *</label>
-          <input className="input" placeholder="Ex.: Festa Junina 2026" {...register('title', { required: 'Informe o título' })} />
+          <label htmlFor={fId('title')} className="label">Título *</label>
+          <input id={fId('title')} className="input" placeholder="Ex.: Festa Junina 2026" {...register('title', { required: 'Informe o título' })} />
           {errors.title && <p className="mt-1 text-xs text-danger">{errors.title.message}</p>}
         </div>
         <div>
-          <label className="label">Descrição</label>
-          <input className="input" placeholder="Detalhes da cobrança (opcional)" {...register('description')} />
+          <label htmlFor={fId('description')} className="label">Descrição</label>
+          <input id={fId('description')} className="input" placeholder="Detalhes da cobrança (opcional)" {...register('description')} />
         </div>
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <div>
-            <label className="label">Valor por aluno (R$) *</label>
-            <input type="number" step="0.01" min="0.01" className="input" placeholder="50.00" {...register('amount', { required: 'Informe o valor', min: { value: 0.01, message: 'Mínimo R$0,01' } })} />
+            <label htmlFor={fId('amount')} className="label">Valor por aluno (R$) *</label>
+            <input id={fId('amount')} type="number" step="0.01" min="0.01" className="input" placeholder="50.00" {...register('amount', { required: 'Informe o valor', min: { value: 0.01, message: 'Mínimo R$0,01' } })} />
             {errors.amount && <p className="mt-1 text-xs text-danger">{errors.amount.message}</p>}
           </div>
           <div>
-            <label className="label">Vencimento *</label>
-            <input type="date" className="input" {...register('due_date', { required: 'Informe o vencimento' })} />
+            <label htmlFor={fId('due_date')} className="label">Vencimento *</label>
+            <input id={fId('due_date')} type="date" className="input" {...register('due_date', { required: 'Informe o vencimento' })} />
             {errors.due_date && <p className="mt-1 text-xs text-danger">{errors.due_date.message}</p>}
           </div>
         </div>
         <div>
-          <label className="label">Vincular a *</label>
-          <select className="input" {...register('scope')}>
+          <label htmlFor={fId('scope')} className="label">Vincular a *</label>
+          <select id={fId('scope')} className="input" {...register('scope')}>
             <option value="all">Todos os alunos</option>
             <option value="class">Uma turma específica</option>
           </select>
         </div>
         {scope === 'class' && (
           <div>
-            <label className="label">Turma *</label>
-            <select className="input" {...register('class_id', { required: scope === 'class' ? 'Selecione a turma' : false })}>
+            <label htmlFor={fId('class_id')} className="label">Turma *</label>
+            <select id={fId('class_id')} className="input" {...register('class_id', { required: scope === 'class' ? 'Selecione a turma' : false })}>
               <option value="">Selecione…</option>
               {classes.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
             </select>

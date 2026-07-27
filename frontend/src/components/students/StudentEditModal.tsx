@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useId, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { Loader2, Save, Upload, X } from 'lucide-react';
 import { Modal } from '@/components/ui/Modal';
@@ -40,6 +40,8 @@ export function StudentEditModal({
   const [error, setError] = useState<string | null>(null);
   const [photo, setPhoto] = useState<string | null>(student.photo_url ?? null);
   const [photoTouched, setPhotoTouched] = useState(false);
+  const uid = useId();
+  const fId = (f: string) => `${uid}-${f}`;
 
   const { register, handleSubmit, formState: { errors } } = useForm<EditFields>({
     defaultValues: {
@@ -112,7 +114,7 @@ export function StudentEditModal({
       }
     >
       <form id="student-edit-form" className="space-y-5" onSubmit={handleSubmit(onSubmit)}>
-        {error && <div className="rounded-xl bg-danger-soft px-3 py-2 text-sm text-danger">{error}</div>}
+        {error && <div role="alert" className="rounded-xl bg-danger-soft px-3 py-2 text-sm text-danger">{error}</div>}
 
         {/* Foto */}
         <div className="flex items-center gap-4">
@@ -123,9 +125,9 @@ export function StudentEditModal({
                 type="button"
                 onClick={() => { setPhoto(null); setPhotoTouched(true); }}
                 className="absolute -right-1 -top-1 rounded-full bg-danger p-1 text-white"
-                title="Remover foto"
+                aria-label="Remover foto"
               >
-                <X size={12} />
+                <X size={12} aria-hidden="true" />
               </button>
             </div>
           ) : (
@@ -135,8 +137,8 @@ export function StudentEditModal({
           )}
           <div>
             <label className="btn-outline inline-flex cursor-pointer items-center gap-1.5 text-sm">
-              <Upload size={14} /> {photo ? 'Trocar foto' : 'Enviar foto'}
-              <input type="file" accept="image/*" className="hidden" onChange={onPhoto} />
+              <Upload size={14} aria-hidden="true" /> {photo ? 'Trocar foto' : 'Enviar foto'}
+              <input type="file" accept="image/*" className="hidden" aria-label="Selecionar foto do aluno" onChange={onPhoto} />
             </label>
             <p className="mt-1.5 text-xs text-ink-muted">Redimensionada automaticamente (256px).</p>
           </div>
@@ -145,51 +147,51 @@ export function StudentEditModal({
         {/* Dados */}
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <div className="sm:col-span-2">
-            <label className="label">Nome completo *</label>
-            <input className="input" {...register('name', { required: 'Informe o nome' })} />
+            <label htmlFor={fId('name')} className="label">Nome completo *</label>
+            <input id={fId('name')} className="input" autoComplete="name" {...register('name', { required: 'Informe o nome' })} />
             {errors.name && <p className="mt-1 text-xs text-danger">{errors.name.message}</p>}
           </div>
           <div>
-            <label className="label">CPF</label>
-            <input className="input" placeholder="000.000.000-00" {...register('cpf')} />
+            <label htmlFor={fId('cpf')} className="label">CPF</label>
+            <input id={fId('cpf')} className="input" placeholder="000.000.000-00" autoComplete="off" {...register('cpf')} />
           </div>
           <div>
-            <label className="label">RG</label>
-            <input className="input" {...register('rg')} />
+            <label htmlFor={fId('rg')} className="label">RG</label>
+            <input id={fId('rg')} className="input" autoComplete="off" {...register('rg')} />
           </div>
           <div>
-            <label className="label">Data de nascimento</label>
-            <input type="date" className="input" {...register('birth_date')} />
+            <label htmlFor={fId('birth_date')} className="label">Data de nascimento</label>
+            <input id={fId('birth_date')} type="date" className="input" autoComplete="bday" {...register('birth_date')} />
           </div>
           <div>
-            <label className="label">Tipo sanguíneo</label>
-            <select className="input" {...register('blood_type')}>
+            <label htmlFor={fId('blood_type')} className="label">Tipo sanguíneo</label>
+            <select id={fId('blood_type')} className="input" {...register('blood_type')}>
               <option value="">—</option>
               {BLOOD_TYPES.map((bt) => <option key={bt} value={bt}>{bt}</option>)}
             </select>
           </div>
           <div className="sm:col-span-2">
-            <label className="label">Naturalidade</label>
-            <input className="input" placeholder="Ex.: Salvador - BA" {...register('naturality')} />
+            <label htmlFor={fId('naturality')} className="label">Naturalidade</label>
+            <input id={fId('naturality')} className="input" placeholder="Ex.: Salvador - BA" autoComplete="off" {...register('naturality')} />
           </div>
           <div>
-            <label className="label">Nome do pai</label>
-            <input className="input" {...register('father_name')} />
+            <label htmlFor={fId('father_name')} className="label">Nome do pai</label>
+            <input id={fId('father_name')} className="input" autoComplete="off" {...register('father_name')} />
           </div>
           <div>
-            <label className="label">Nome da mãe</label>
-            <input className="input" {...register('mother_name')} />
+            <label htmlFor={fId('mother_name')} className="label">Nome da mãe</label>
+            <input id={fId('mother_name')} className="input" autoComplete="off" {...register('mother_name')} />
           </div>
           <div>
-            <label className="label">Turma</label>
-            <select className="input" {...register('class_id')}>
+            <label htmlFor={fId('class_id')} className="label">Turma</label>
+            <select id={fId('class_id')} className="input" {...register('class_id')}>
               <option value="">— Sem turma —</option>
               {classes.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
             </select>
           </div>
           <div>
-            <label className="label">Plano (mensalidade)</label>
-            <select className="input" {...register('plan_id')}>
+            <label htmlFor={fId('plan_id')} className="label">Plano (mensalidade)</label>
+            <select id={fId('plan_id')} className="input" {...register('plan_id')}>
               <option value="">— Manter atual —</option>
               {plans.map((p) => <option key={p.id} value={p.id}>{p.name} — {brl(Number(p.monthly_fee))}</option>)}
             </select>

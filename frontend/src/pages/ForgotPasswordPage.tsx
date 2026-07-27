@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useId, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { GraduationCap, Loader2, MailCheck, ArrowLeft } from 'lucide-react';
 import { requestPasswordReset } from '@/lib/authClient';
@@ -9,6 +9,10 @@ export function ForgotPasswordPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [sent, setSent] = useState(false);
+
+  const uid = useId();
+  const fieldId = `${uid}-identifier`;
+  const errorId = `${uid}-error`;
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -56,14 +60,28 @@ export function ForgotPasswordPage() {
           <>
             <h1 className="mb-1 text-xl font-bold text-ink">Esqueci minha senha</h1>
             <p className="mb-5 text-sm text-ink-muted">Informe seu e-mail ou matrícula para receber o link de redefinição.</p>
-            {error && <div className="mb-4 rounded-xl bg-danger-soft px-3 py-2 text-sm text-danger">{error}</div>}
+            {error && (
+              <div id={errorId} role="alert" className="mb-4 rounded-xl bg-danger-soft px-3 py-2 text-sm text-danger">
+                {error}
+              </div>
+            )}
             <form className="space-y-4" onSubmit={handleSubmit}>
               <div>
-                <label className="label">E-mail ou Matrícula</label>
-                <input type="text" className="input" placeholder="seu@email.com ou nº de matrícula" value={id} onChange={(e) => setId(e.target.value)} required />
+                <label htmlFor={fieldId} className="label">E-mail ou Matrícula</label>
+                <input
+                  id={fieldId}
+                  type="text"
+                  autoComplete="username"
+                  className="input"
+                  placeholder="seu@email.com ou nº de matrícula"
+                  value={id}
+                  onChange={(e) => setId(e.target.value)}
+                  aria-describedby={error ? errorId : undefined}
+                  required
+                />
               </div>
               <button className="btn-primary w-full justify-center" disabled={loading || !id.trim()}>
-                {loading && <Loader2 size={16} className="animate-spin" />} Enviar link de redefinição
+                {loading && <Loader2 size={16} className="animate-spin" aria-hidden="true" />} Enviar link de redefinição
               </button>
             </form>
             <Link to="/login" className="mt-4 flex items-center justify-center gap-1 text-sm text-ink-muted hover:text-ink">

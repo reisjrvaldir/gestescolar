@@ -38,8 +38,8 @@ export function Topbar({ userName, schoolName, role, onMenuClick, onLogout }: Pr
 
   return (
     <header className="sticky top-0 z-20 flex h-16 items-center gap-3 border-b border-border bg-surface/80 px-4 backdrop-blur lg:px-6">
-      <button className="lg:hidden text-ink-muted" onClick={onMenuClick}>
-        <Menu size={22} />
+      <button className="lg:hidden text-ink-muted" onClick={onMenuClick} aria-label="Abrir menu">
+        <Menu size={22} aria-hidden="true" />
       </button>
 
       {/* Busca global — oculta para responsável (acesso limitado ao próprio filho) */}
@@ -52,9 +52,9 @@ export function Topbar({ userName, schoolName, role, onMenuClick, onLogout }: Pr
         </div>
 
         {/* Notificações */}
-        <button className="relative rounded-xl p-2 text-ink-muted hover:bg-canvas">
-          <Bell size={20} />
-          <span className="absolute right-1.5 top-1.5 h-2 w-2 rounded-full bg-danger" />
+        <button className="relative rounded-xl p-2 text-ink-muted hover:bg-canvas" aria-label="Notificações">
+          <Bell size={20} aria-hidden="true" />
+          <span className="absolute right-1.5 top-1.5 h-2 w-2 rounded-full bg-danger" aria-hidden="true" />
         </button>
 
         {/* Avatar + nome + menu de conta */}
@@ -62,36 +62,41 @@ export function Topbar({ userName, schoolName, role, onMenuClick, onLogout }: Pr
           <button
             className="flex items-center gap-2 rounded-xl py-1 pl-1 pr-2 hover:bg-canvas"
             onClick={() => setMenuOpen((v) => !v)}
+            aria-expanded={menuOpen}
+            aria-haspopup="menu"
+            aria-label={`Menu da conta de ${userName}`}
           >
-            <div className="flex h-9 w-9 items-center justify-center rounded-full bg-primary-soft text-sm font-bold text-primary">
+            <div className="flex h-9 w-9 items-center justify-center rounded-full bg-primary-soft text-sm font-bold text-primary" aria-hidden="true">
               {initials || '?'}
             </div>
             <div className="hidden text-left sm:block">
               <span className="block text-sm font-semibold leading-tight text-ink">{userName}</span>
               {roleLabel && <span className="block text-[11px] leading-tight text-ink-subtle">{roleLabel}</span>}
             </div>
-            <ChevronDown size={15} className="hidden text-ink-subtle sm:block" />
+            <ChevronDown size={15} className="hidden text-ink-subtle sm:block" aria-hidden="true" />
           </button>
           {menuOpen && (
             <>
-              <div className="fixed inset-0 z-10" onClick={() => setMenuOpen(false)} />
-              <div className="absolute right-0 z-20 mt-2 w-52 rounded-xl border border-border bg-surface py-1 shadow-card-hover">
+              <div className="fixed inset-0 z-10" onClick={() => setMenuOpen(false)} aria-hidden="true" />
+              <div role="menu" className="absolute right-0 z-20 mt-2 w-52 rounded-xl border border-border bg-surface py-1 shadow-card-hover">
                 {accountLinks.map((link) => (
                   <Link
                     key={link.to}
                     to={link.to}
+                    role="menuitem"
                     className="flex w-full items-center gap-2 px-3 py-2 text-sm text-ink hover:bg-canvas"
                     onClick={() => setMenuOpen(false)}
                   >
-                    <link.icon size={15} /> {link.label}
+                    <link.icon size={15} aria-hidden="true" /> {link.label}
                   </Link>
                 ))}
-                {accountLinks.length > 0 && <div className="my-1 border-t border-border" />}
+                {accountLinks.length > 0 && <div className="my-1 border-t border-border" role="separator" />}
                 <button
+                  role="menuitem"
                   className="flex w-full items-center gap-2 px-3 py-2 text-sm text-danger hover:bg-danger-soft"
                   onClick={() => { setMenuOpen(false); onLogout?.(); }}
                 >
-                  <LogOut size={15} /> Sair
+                  <LogOut size={15} aria-hidden="true" /> Sair
                 </button>
               </div>
             </>

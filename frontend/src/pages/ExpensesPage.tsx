@@ -284,12 +284,12 @@ export function ExpensesPage() {
           <div className="flex items-center gap-2">
             <button
               type="button"
+              aria-label="Mês anterior"
               className="rounded-lg border border-border bg-surface p-1.5 text-ink-muted hover:bg-canvas hover:text-ink disabled:opacity-40"
               onClick={() => setMonthKey((k) => shiftMonth(k ?? currentMonthKey(), -1))}
               disabled={!monthKey}
-              title="Mês anterior"
             >
-              <ChevronLeft size={16} />
+              <ChevronLeft size={16} aria-hidden="true" />
             </button>
             <div className="flex min-w-[190px] items-center justify-center gap-2 rounded-lg bg-canvas px-3 py-1.5 text-sm font-semibold text-ink">
               <Calendar size={14} className="text-ink-muted" />
@@ -297,12 +297,12 @@ export function ExpensesPage() {
             </div>
             <button
               type="button"
+              aria-label="Próximo mês"
               className="rounded-lg border border-border bg-surface p-1.5 text-ink-muted hover:bg-canvas hover:text-ink disabled:opacity-40"
               onClick={() => setMonthKey((k) => shiftMonth(k ?? currentMonthKey(), 1))}
               disabled={!monthKey}
-              title="Próximo mês"
             >
-              <ChevronRight size={16} />
+              <ChevronRight size={16} aria-hidden="true" />
             </button>
           </div>
           <div className="flex items-center gap-2">
@@ -377,7 +377,7 @@ export function ExpensesPage() {
       ) : (
         <div className="card overflow-hidden">
           <div className="overflow-x-auto">
-            <table className="w-full text-sm">
+            <table className="w-full text-sm" aria-label="Despesas">
               <thead>
                 <tr className="border-b border-border text-left text-xs font-semibold uppercase text-ink-subtle">
                   <th className="px-4 py-3">Fornecedor</th>
@@ -446,17 +446,17 @@ export function ExpensesPage() {
                             <button
                               className="rounded-lg border border-border bg-surface p-1.5 text-ink-muted hover:bg-canvas hover:text-ink"
                               onClick={() => { setEditing(e); setFormOpen(true); }}
-                              title="Editar"
+                              aria-label={`Editar despesa ${e.supplier_name}`}
                             >
-                              <Pencil size={15} />
+                              <Pencil size={15} aria-hidden="true" />
                             </button>
-                            <div className="mx-1 h-6 w-px bg-border" />
+                            <div className="mx-1 h-6 w-px bg-border" aria-hidden="true" />
                             <button
                               className="rounded-lg p-1.5 text-ink-muted hover:bg-danger-soft hover:text-danger"
                               onClick={() => setConfirmDelete(e)}
-                              title="Excluir"
+                              aria-label={`Excluir despesa ${e.supplier_name}`}
                             >
-                              <Trash2 size={15} />
+                              <Trash2 size={15} aria-hidden="true" />
                             </button>
                           </>
                         )}

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useId, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { GraduationCap, Loader2 } from 'lucide-react';
@@ -18,6 +18,13 @@ export function OnboardingPage() {
   const navigate = useNavigate();
   const [error, setError] = useState<string | null>(null);
   const { register, handleSubmit, formState: { isSubmitting, errors } } = useForm<OnboardingForm>();
+
+  const uid = useId();
+  const schoolNameId = `${uid}-school-name`;
+  const adminNameId = `${uid}-admin-name`;
+  const cnpjId = `${uid}-cnpj`;
+  const phoneId = `${uid}-phone`;
+  const errorId = `${uid}-error`;
 
   useEffect(() => {
     if (!isPending && !session) navigate('/login', { replace: true });
@@ -48,27 +55,43 @@ export function OnboardingPage() {
           </div>
         </div>
 
-        {error && <div className="mb-4 rounded-xl bg-danger-soft px-3 py-2 text-sm text-danger">{error}</div>}
+        {error && (
+          <div id={errorId} role="alert" className="mb-4 rounded-xl bg-danger-soft px-3 py-2 text-sm text-danger">
+            {error}
+          </div>
+        )}
 
         <form className="space-y-4" onSubmit={handleSubmit(onSubmit)}>
           <div>
-            <label className="label">Nome da escola *</label>
-            <input className="input" {...register('school_name', { required: 'Informe o nome da escola' })} />
-            {errors.school_name && <p className="mt-1 text-xs text-danger">{errors.school_name.message}</p>}
+            <label htmlFor={schoolNameId} className="label">Nome da escola *</label>
+            <input
+              id={schoolNameId}
+              autoComplete="organization"
+              className="input"
+              aria-describedby={errors.school_name ? `${schoolNameId}-err` : undefined}
+              {...register('school_name', { required: 'Informe o nome da escola' })}
+            />
+            {errors.school_name && <p id={`${schoolNameId}-err`} className="mt-1 text-xs text-danger">{errors.school_name.message}</p>}
           </div>
           <div>
-            <label className="label">Seu nome (responsável) *</label>
-            <input className="input" {...register('admin_name', { required: 'Informe seu nome' })} />
-            {errors.admin_name && <p className="mt-1 text-xs text-danger">{errors.admin_name.message}</p>}
+            <label htmlFor={adminNameId} className="label">Seu nome (responsável) *</label>
+            <input
+              id={adminNameId}
+              autoComplete="name"
+              className="input"
+              aria-describedby={errors.admin_name ? `${adminNameId}-err` : undefined}
+              {...register('admin_name', { required: 'Informe seu nome' })}
+            />
+            {errors.admin_name && <p id={`${adminNameId}-err`} className="mt-1 text-xs text-danger">{errors.admin_name.message}</p>}
           </div>
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div>
-              <label className="label">CNPJ</label>
-              <input className="input" {...register('cnpj')} />
+              <label htmlFor={cnpjId} className="label">CNPJ</label>
+              <input id={cnpjId} autoComplete="off" className="input" {...register('cnpj')} />
             </div>
             <div>
-              <label className="label">Telefone</label>
-              <input className="input" {...register('phone')} />
+              <label htmlFor={phoneId} className="label">Telefone</label>
+              <input id={phoneId} autoComplete="tel" className="input" {...register('phone')} />
             </div>
           </div>
           <button className="btn-primary w-full justify-center" disabled={isSubmitting}>

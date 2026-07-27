@@ -19,11 +19,12 @@ export function PeriodPicker({ value, onChange }: Props) {
   const isToday = value.anchor === todayRange(value.period).anchor;
   return (
     <div className="mb-4 flex flex-wrap items-center gap-3 rounded-2xl border border-border bg-surface px-4 py-3 shadow-card">
-      <div className="inline-flex rounded-lg border border-border bg-canvas p-0.5">
+      <div role="group" aria-label="Granularidade do período" className="inline-flex rounded-lg border border-border bg-canvas p-0.5">
         {OPTIONS.map((o) => (
           <button
             key={o.key}
             type="button"
+            aria-pressed={value.period === o.key}
             className={`rounded-md px-3 py-1 text-xs font-semibold ${
               value.period === o.key ? 'bg-primary text-white' : 'text-ink-muted hover:bg-surface hover:text-ink'
             }`}
@@ -37,23 +38,23 @@ export function PeriodPicker({ value, onChange }: Props) {
       <div className="flex items-center gap-1.5">
         <button
           type="button"
+          aria-label="Período anterior"
           className="rounded-lg border border-border bg-surface p-1.5 text-ink-muted hover:bg-canvas hover:text-ink"
           onClick={() => onChange(shiftPeriod(value, -1))}
-          title="Período anterior"
         >
-          <ChevronLeft size={16} />
+          <ChevronLeft size={16} aria-hidden="true" />
         </button>
         <div className="flex min-w-[200px] items-center justify-center gap-2 rounded-lg bg-canvas px-3 py-1.5 text-sm font-semibold text-ink">
-          <Calendar size={14} className="text-ink-muted" />
+          <Calendar size={14} className="text-ink-muted" aria-hidden="true" />
           <span className="capitalize">{value.label}</span>
         </div>
         <button
           type="button"
+          aria-label="Próximo período"
           className="rounded-lg border border-border bg-surface p-1.5 text-ink-muted hover:bg-canvas hover:text-ink"
           onClick={() => onChange(shiftPeriod(value, 1))}
-          title="Próximo período"
         >
-          <ChevronRight size={16} />
+          <ChevronRight size={16} aria-hidden="true" />
         </button>
       </div>
 

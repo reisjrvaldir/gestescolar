@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useId, useMemo, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import {
   Users, Plus, Trash2, Pencil, Loader2, Copy, Check, Search, Link2,
@@ -95,6 +95,8 @@ const unmasked = (v?: string) => (v?.includes('*') ? '' : (v ?? ''));
 export function StaffPage() {
   const me = useMe();
   const canReveal = ['school_admin', 'financial', 'superadmin'].includes(me?.role ?? '');
+  const uid = useId();
+  const fId = (f: string) => `${uid}-${f}`;
 
   const [staff, setStaff] = useState<Staff[]>([]);
   const [loading, setLoading] = useState(true);
@@ -282,7 +284,7 @@ export function StaffPage() {
 
   return (
     <>
-      {error && <div className="mb-4 rounded-xl bg-danger-soft px-3 py-2 text-sm text-danger">{error}</div>}
+      {error && <div role="alert" className="mb-4 rounded-xl bg-danger-soft px-3 py-2 text-sm text-danger">{error}</div>}
 
       {/* ===== HERO ===== */}
       <div className="mb-6 overflow-hidden rounded-2xl bg-gradient-to-r from-[#EDE9FE] via-[#F3EEFF] to-[#F5F3FF] p-6 sm:p-8">
@@ -346,8 +348,8 @@ export function StaffPage() {
           <div className="card p-4">
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
               <div>
-                <label className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-ink-subtle">Perfil</label>
-                <select className="input" value={roleFilter} onChange={(e) => setRoleFilter(e.target.value)}>
+                <label htmlFor={fId('filter-role')} className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-ink-subtle">Perfil</label>
+                <select id={fId('filter-role')} className="input" value={roleFilter} onChange={(e) => setRoleFilter(e.target.value)}>
                   <option value="">Todos os perfis</option>
                   <option value="school_admin">Gestor/Admin</option>
                   <option value="financial">Financeiro</option>
@@ -356,18 +358,18 @@ export function StaffPage() {
                 </select>
               </div>
               <div>
-                <label className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-ink-subtle">Status</label>
-                <select className="input" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value as StatusFilter)}>
+                <label htmlFor={fId('filter-status')} className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-ink-subtle">Status</label>
+                <select id={fId('filter-status')} className="input" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value as StatusFilter)}>
                   <option value="all">Todos ({counts.all})</option>
                   <option value="active">Ativos ({counts.active})</option>
                   <option value="inactive">Inativos ({counts.inactive})</option>
                 </select>
               </div>
               <div>
-                <label className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-ink-subtle">Buscar</label>
+                <label htmlFor={fId('filter-query')} className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-ink-subtle">Buscar</label>
                 <div className="relative">
-                  <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-ink-subtle" />
-                  <input className="input pl-9" placeholder="Buscar funcionários…" value={query} onChange={(e) => setQuery(e.target.value)} />
+                  <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-ink-subtle" aria-hidden="true" />
+                  <input id={fId('filter-query')} className="input pl-9" placeholder="Buscar funcionários…" value={query} onChange={(e) => setQuery(e.target.value)} />
                 </div>
               </div>
             </div>
@@ -385,7 +387,7 @@ export function StaffPage() {
               />
             ) : (
               <div className="overflow-x-auto">
-                <table className="w-full text-sm">
+                <table className="w-full text-sm" aria-label="Lista de funcionários">
                   <thead>
                     <tr className="border-b border-border text-left text-[11px] font-semibold uppercase text-ink-subtle">
                       <th className="px-4 py-3">Funcionário</th>
@@ -433,17 +435,17 @@ export function StaffPage() {
                                 type="button"
                                 className="rounded-lg p-2 text-ink-muted hover:bg-primary-soft hover:text-primary"
                                 onClick={(e) => { e.stopPropagation(); setSelected(s); }}
-                                title="Ver detalhes"
+                                aria-label={`Ver detalhes de ${s.name}`}
                               >
-                                <Eye size={16} />
+                                <Eye size={16} aria-hidden="true" />
                               </button>
                               <button
                                 type="button"
                                 className="rounded-lg p-2 text-ink-muted hover:bg-canvas hover:text-ink"
                                 onClick={(e) => { e.stopPropagation(); openEdit(s); }}
-                                title="Editar"
+                                aria-label={`Editar ${s.name}`}
                               >
-                                <MoreVertical size={16} />
+                                <MoreVertical size={16} aria-hidden="true" />
                               </button>
                             </div>
                           </td>
@@ -592,31 +594,32 @@ export function StaffPage() {
       >
         <form id="staff-form" className="space-y-4" onSubmit={handleSubmit(onSubmit)}>
           <div>
-            <label className="label">Nome completo *</label>
-            <input className="input" {...register('name', { required: 'Informe o nome' })} />
+            <label htmlFor={fId('name')} className="label">Nome completo *</label>
+            <input id={fId('name')} className="input" autoComplete="name" {...register('name', { required: 'Informe o nome' })} />
             {errors.name && <p className="mt-1 text-xs text-danger">{errors.name.message}</p>}
           </div>
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div>
-              <label className="label">CPF *</label>
-              <input className="input" placeholder="000.000.000-00" {...register('cpf', { required: 'Informe o CPF' })} />
+              <label htmlFor={fId('cpf')} className="label">CPF *</label>
+              <input id={fId('cpf')} className="input" placeholder="000.000.000-00" autoComplete="off" {...register('cpf', { required: 'Informe o CPF' })} />
               {errors.cpf && <p className="mt-1 text-xs text-danger">{errors.cpf.message}</p>}
             </div>
             <div>
-              <label className="label">Telefone</label>
-              <input className="input" placeholder="(00) 00000-0000" {...register('phone')} />
+              <label htmlFor={fId('phone')} className="label">Telefone</label>
+              <input id={fId('phone')} className="input" placeholder="(00) 00000-0000" autoComplete="tel" {...register('phone')} />
             </div>
           </div>
           <div>
-            <label className="label">E-mail {editing ? '' : '*'}</label>
-            <input type="email" className="input"
+            <label htmlFor={fId('email')} className="label">E-mail {editing ? '' : '*'}</label>
+            <input id={fId('email')} type="email" className="input"
               placeholder={editing ? 'Deixe em branco para manter o atual' : ''}
+              autoComplete="email"
               {...register('email', { required: editing ? false : 'Informe o e-mail' })} />
             {errors.email && <p className="mt-1 text-xs text-danger">{errors.email.message}</p>}
           </div>
           <div>
-            <label className="label">Perfil *</label>
-            <select className="input" {...register('role_type', { required: true })}>
+            <label htmlFor={fId('role')} className="label">Perfil *</label>
+            <select id={fId('role')} className="input" {...register('role_type', { required: true })}>
               <option value="school_admin">Gestor/Admin</option>
               <option value="financial">Financeiro</option>
               <option value="teacher">Professor</option>
@@ -625,28 +628,28 @@ export function StaffPage() {
           </div>
           {watchRole === 'teacher' && (
             <div>
-              <label className="label">Matéria / Ano que leciona</label>
-              <input className="input" placeholder="Ex.: Matemática / 5º ano, ou Maternal" {...register('subject_teaches')} />
+              <label htmlFor={fId('subject')} className="label">Matéria / Ano que leciona</label>
+              <input id={fId('subject')} className="input" placeholder="Ex.: Matemática / 5º ano, ou Maternal" {...register('subject_teaches')} />
               <p className="mt-1 text-xs text-ink-muted">
                 Para escolas infantis use o ano (ex.: "Maternal", "Pré I"). Para fundamental/médio use a matéria.
               </p>
             </div>
           )}
 
-          <div className="border-t border-border pt-4">
-            <p className="mb-3 text-xs font-bold uppercase tracking-wide text-ink-subtle">Dados trabalhistas</p>
+          <fieldset className="border-t border-border pt-4">
+            <legend className="mb-3 text-xs font-bold uppercase tracking-wide text-ink-subtle">Dados trabalhistas</legend>
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <div>
-                <label className="label">Cargo</label>
-                <input className="input" placeholder="Ex.: Professor(a) titular" {...register('position')} />
+                <label htmlFor={fId('position')} className="label">Cargo</label>
+                <input id={fId('position')} className="input" placeholder="Ex.: Professor(a) titular" {...register('position')} />
               </div>
               <div>
-                <label className="label">Data de admissão</label>
-                <input type="date" className="input" {...register('admission_date')} />
+                <label htmlFor={fId('admission')} className="label">Data de admissão</label>
+                <input id={fId('admission')} type="date" className="input" {...register('admission_date')} />
               </div>
               <div>
-                <label className="label">Tipo de contrato</label>
-                <select className="input" {...register('contract_type')}>
+                <label htmlFor={fId('contract')} className="label">Tipo de contrato</label>
+                <select id={fId('contract')} className="input" {...register('contract_type')}>
                   <option value="">—</option>
                   <option value="clt">CLT</option>
                   <option value="pj">PJ</option>
@@ -655,22 +658,22 @@ export function StaffPage() {
                 </select>
               </div>
               <div>
-                <label className="label">Carga horária semanal (h)</label>
-                <input type="number" step="0.5" min="0" max="80" className="input" placeholder="Ex.: 40" {...register('weekly_hours', { valueAsNumber: true })} />
+                <label htmlFor={fId('hours')} className="label">Carga horária semanal (h)</label>
+                <input id={fId('hours')} type="number" step="0.5" min="0" max="80" className="input" placeholder="Ex.: 40" {...register('weekly_hours', { valueAsNumber: true })} />
               </div>
             </div>
             <label className="mt-3 flex items-center gap-2 text-sm text-ink">
               <input type="checkbox" className="h-4 w-4 rounded border-border" {...register('timeclock_enabled')} />
               Habilitado para bater ponto
             </label>
-          </div>
+          </fieldset>
 
           {!editing && (
-            <div className="border-t border-border pt-4">
+            <fieldset className="border-t border-border pt-4">
               <div className="mb-3 flex items-center justify-between">
-                <p className="text-xs font-bold uppercase tracking-wide text-ink-subtle">
-                  Jornada de trabalho <span className="text-danger">*</span>
-                </p>
+                <legend className="float-left text-xs font-bold uppercase tracking-wide text-ink-subtle">
+                  Jornada de trabalho <span className="text-danger" aria-hidden="true">*</span>
+                </legend>
                 <button
                   type="button"
                   className="text-xs text-primary hover:underline"
@@ -700,27 +703,29 @@ export function StaffPage() {
                       <div className="flex items-center gap-2 flex-1">
                         <input
                           type="time"
+                          aria-label={`Entrada de ${label}`}
                           className="input py-1 text-sm w-28"
                           value={slots[i].start}
                           onChange={(e) => updateSlot(i, 'start', e.target.value)}
                         />
-                        <span className="text-xs text-ink-muted shrink-0">às</span>
+                        <span className="text-xs text-ink-muted shrink-0" aria-hidden="true">às</span>
                         <input
                           type="time"
+                          aria-label={`Saída de ${label}`}
                           className="input py-1 text-sm w-28"
                           value={slots[i].end}
                           onChange={(e) => updateSlot(i, 'end', e.target.value)}
                         />
                       </div>
                     ) : (
-                      <span className="text-xs text-ink-subtle">Folga</span>
+                      <span className="text-xs text-ink-subtle" aria-hidden="true">Folga</span>
                     )}
                   </div>
                 ))}
               </div>
 
-              {schedError && <p className="mt-2 text-xs text-danger">{schedError}</p>}
-            </div>
+              {schedError && <p role="alert" className="mt-2 text-xs text-danger">{schedError}</p>}
+            </fieldset>
           )}
 
           {!editing && (
