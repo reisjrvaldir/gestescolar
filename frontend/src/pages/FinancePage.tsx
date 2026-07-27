@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
   Plus, Loader2, Check, AlertTriangle, Wallet,
 } from 'lucide-react';
@@ -12,54 +12,68 @@ import { DelinquencyCard } from '@/components/finance/DelinquencyCard';
 import { QuickActionsGrid } from '@/components/finance/QuickActionsGrid';
 import { AdhocChargeModal } from '@/components/finance/AdhocChargeModal';
 import { PeriodPicker } from '@/components/finance/PeriodPicker';
-import { todayRange, type Range as PeriodRange } from '@/lib/period';
+import { todayRange, rangeFor, type Range as PeriodRange, type Period } from '@/lib/period';
 import { quickActionsData } from '@/data/finance/quickActionsData';
 import { invoicesService, type Invoice } from '@/services/invoices';
 import { expensesService, type Expense } from '@/services/expenses';
 import { financeService, type FinanceSummary, type MonthlyBalancePoint, type DelinquentInvoice } from '@/services/finance';
 
+const VALID_PERIODS: Period[] = ['month', 'quarter', 'half', 'year'];
+
+function rangeFromParams(params: URLSearchParams): PeriodRange {
+  const periodParam = params.get('period');
+  const anchorParam = params.get('anchor');
+  if (periodParam && (VALID_PERIODS as string[]).includes(periodParam) && anchorParam) {
+    return rangeFor(periodParam as Period, anchorParam);
+  }
+  return todayRange('month');
+}
+
 export function FinancePage() {
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
+
+  const [visaoRange, setVisaoRange] = useState<PeriodRange>(() => rangeFromParams(searchParams));
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [summary, setSummary] = useState<FinanceSummary | null>(null);
   const [monthly, setMonthly] = useState<MonthlyBalancePoint[]>([]);
   const [delinquency, setDelinquency] = useState<DelinquentInvoice[]>([]);
   const [loading, setLoading] = useState(true);
+  const [reloadTick, setReloadTick] = useState(0);
   const [adhocOpen, setAdhocOpen] = useState(false);
   const [sendingId, setSendingId] = useState<string | null>(null);
   const [toast, setToast] = useState<{ type: 'success' | 'error'; msg: string } | null>(null);
-  const [visaoRange, setVisaoRange] = useState<PeriodRange>(() => todayRange('month'));
 
-  useEffect(() => { load(); }, []);
+  function handleRangeChange(r: PeriodRange) {
+    setVisaoRange(r);
+    setSearchParams({ period: r.period, anchor: r.anchor }, { replace: true });
+  }
 
   useEffect(() => {
-    let cancel = false;
-    financeService
-      .summary({ from: visaoRange.from, to: visaoRange.to })
-      .then((s) => { if (!cancel) setSummary(s); })
-      .catch((e) => console.error(e));
-    return () => { cancel = true; };
-  }, [visaoRange.from, visaoRange.to]);
-
-  async function load() {
+    const ctrl = new AbortController();
     setLoading(true);
-    try {
-      const [inv, exp, summ, mon, delq] = await Promise.all([
-        invoicesService.list(),
-        expensesService.list(),
-        financeService.summary({ from: visaoRange.from, to: visaoRange.to }),
-        financeService.monthly(),
-        financeService.delinquency(),
-      ]);
-      setInvoices(inv);
-      setExpenses(exp);
-      setSummary(summ);
-      setMonthly(mon);
-      setDelinquency(delq);
-    } catch (e) { console.error(e); }
-    setLoading(false);
-  }
+
+    Promise.all([
+      invoicesService.list(),
+      expensesService.list({ from: visaoRange.from, to: visaoRange.to }),
+      financeService.summary({ from: visaoRange.from, to: visaoRange.to }),
+      financeService.monthly(),
+      financeService.delinquency(),
+    ])
+      .then(([inv, exp, summ, mon, delq]) => {
+        if (ctrl.signal.aborted) return;
+        setInvoices(inv);
+        setExpenses(exp);
+        setSummary(summ);
+        setMonthly(mon);
+        setDelinquency(delq);
+      })
+      .catch((e) => { if (!ctrl.signal.aborted) console.error(e); })
+      .finally(() => { if (!ctrl.signal.aborted) setLoading(false); });
+
+    return () => ctrl.abort();
+  }, [visaoRange.from, visaoRange.to, reloadTick]);
 
   function showToast(type: 'success' | 'error', msg: string) {
     setToast({ type, msg });
@@ -72,7 +86,7 @@ export function FinancePage() {
       await invoicesService.sendChargeToGuardian(id);
       const inv = invoices.find((i) => i.id === id);
       showToast('success', `Cobrança enviada para o responsável de ${inv?.student_name ?? 'aluno'}.`);
-      await load();
+      setReloadTick((t) => t + 1);
     } catch (e: any) {
       showToast('error', e?.message ?? 'Erro ao enviar a cobrança.');
     } finally {
@@ -108,7 +122,12 @@ export function FinancePage() {
   const goExpenses = () => navigate('/app/finance/expenses');
 
   if (loading || !summary) {
-    return <div className="flex items-center justify-center py-20 text-ink-muted"><Loader2 className="animate-spin" size={24} /> <span className="ml-2">Carregando…</span></div>;
+    return (
+      <div className="flex items-center justify-center py-20 text-ink-muted">
+        <Loader2 className="animate-spin" size={24} />
+        <span className="ml-2">Carregando…</span>
+      </div>
+    );
   }
 
   return (
@@ -145,7 +164,7 @@ export function FinancePage() {
       )}
 
       <div className="space-y-6">
-        <PeriodPicker value={visaoRange} onChange={setVisaoRange} />
+        <PeriodPicker value={visaoRange} onChange={handleRangeChange} />
         <FinanceSummaryCards summary={summary} periodLabel={visaoRange.label} periodKind={visaoRange.period} />
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
           <RevenueExpenseChart data={monthly} />
@@ -153,9 +172,10 @@ export function FinancePage() {
         </div>
 
         <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
-          <PayablesCard rows={expenses} onNew={goExpenses} onViewAll={goExpenses} />
+          <PayablesCard rows={expenses} range={visaoRange} onNew={goExpenses} onViewAll={goExpenses} />
           <ReceivablesCard
             rows={invoices}
+            range={visaoRange}
             onNew={() => setAdhocOpen(true)}
             onSend={handleSendCharge}
             onViewAll={() => navigate('/app/finance/receivables')}
@@ -171,7 +191,10 @@ export function FinancePage() {
       <AdhocChargeModal
         open={adhocOpen}
         onClose={() => setAdhocOpen(false)}
-        onCreated={(result) => { showToast('success', `Cobrança criada para ${result.invoicesCreated} aluno(s).`); load(); }}
+        onCreated={(result) => {
+          showToast('success', `Cobrança criada para ${result.invoicesCreated} aluno(s).`);
+          setReloadTick((t) => t + 1);
+        }}
         onError={(msg) => showToast('error', msg)}
       />
     </>

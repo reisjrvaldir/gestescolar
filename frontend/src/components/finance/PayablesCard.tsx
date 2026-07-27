@@ -1,11 +1,11 @@
-import { useMemo, useState } from 'react';
-import { Plus, ArrowRight, CreditCard, ChevronLeft, ChevronRight, Calendar } from 'lucide-react';
+import { useMemo } from 'react';
+import { Plus, ArrowRight, CreditCard } from 'lucide-react';
 import { StatusBadge } from '@/components/ui/StatusBadge';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { brl } from '@/lib/fees';
 import { fmtDate } from '@/lib/dates';
-import { currentMonthKey, monthKeyOf, monthLabel, shiftMonth } from '@/lib/months';
 import type { Expense, ExpenseStatus } from '@/services/expenses';
+import type { Range } from '@/lib/period';
 
 const STATUS: Record<ExpenseStatus, { tone: 'success' | 'warning' | 'danger'; label: string }> = {
   paid: { tone: 'success', label: 'Pago' },
@@ -13,34 +13,39 @@ const STATUS: Record<ExpenseStatus, { tone: 'success' | 'warning' | 'danger'; la
   overdue: { tone: 'danger', label: 'Vencido' },
 };
 
+const PERIOD_SUFFIX: Record<string, string> = {
+  month: 'do mês',
+  quarter: 'do trimestre',
+  half: 'do semestre',
+  year: 'do ano',
+};
+
 interface Props {
   rows: Expense[];
+  range: Range;
   onNew?: () => void;
   onViewAll?: () => void;
 }
 
-/** Bloco resumido de Contas a pagar com navegação por mês (default = mês atual). */
-export function PayablesCard({ rows, onNew, onViewAll }: Props) {
-  /** null = "todos os meses". Padrão = mês atual. */
-  const [monthKey, setMonthKey] = useState<string | null>(currentMonthKey());
-
-  const visible = useMemo(() => {
-    if (!monthKey) return rows;
-    return rows.filter((r) => monthKeyOf(r.due_date) === monthKey);
-  }, [rows, monthKey]);
-
+/** Bloco de Contas a pagar — consome o período unificado do FinancePage. */
+export function PayablesCard({ rows, range, onNew, onViewAll }: Props) {
   const totals = useMemo(() => {
-    const pending = visible.filter((e) => e.status !== 'paid').reduce((s, e) => s + Number(e.amount), 0);
-    const paid = visible.filter((e) => e.status === 'paid').reduce((s, e) => s + Number(e.amount), 0);
+    const pending = rows.filter((e) => e.status !== 'paid').reduce((s, e) => s + Number(e.amount), 0);
+    const paid = rows.filter((e) => e.status === 'paid').reduce((s, e) => s + Number(e.amount), 0);
     return { pending, paid };
-  }, [visible]);
+  }, [rows]);
+
+  const suffix = PERIOD_SUFFIX[range.period] ?? 'do período';
 
   return (
     <div className="card flex flex-col overflow-hidden">
       <div className="flex flex-wrap items-start justify-between gap-3 border-b border-border px-5 py-4">
         <div>
           <h3 className="text-sm font-bold text-ink">Contas a pagar</h3>
-          <p className="mt-0.5 text-xs text-ink-muted">Despesas da escola que impactam o saldo do mês.</p>
+          <p className="mt-0.5 text-xs text-ink-muted">
+            Despesas {suffix}:{' '}
+            <span className="capitalize font-medium text-ink">{range.label}</span>.
+          </p>
         </div>
         <button
           type="button"
@@ -51,55 +56,19 @@ export function PayablesCard({ rows, onNew, onViewAll }: Props) {
         </button>
       </div>
 
-      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border bg-canvas/40 px-5 py-2.5">
-        <div className="flex items-center gap-1.5">
-          <button
-            type="button"
-            className="rounded-lg border border-border bg-surface p-1 text-ink-muted hover:bg-canvas hover:text-ink disabled:opacity-40"
-            onClick={() => setMonthKey((k) => shiftMonth(k ?? currentMonthKey(), -1))}
-            disabled={!monthKey}
-            title="Mês anterior"
-          >
-            <ChevronLeft size={14} />
-          </button>
-          <div className="flex min-w-[170px] items-center justify-center gap-1.5 rounded-lg bg-surface px-2.5 py-1 text-xs font-semibold text-ink">
-            <Calendar size={12} className="text-ink-muted" />
-            {monthKey ? <span className="capitalize">{monthLabel(monthKey)}</span> : <span>Todos os meses</span>}
-          </div>
-          <button
-            type="button"
-            className="rounded-lg border border-border bg-surface p-1 text-ink-muted hover:bg-canvas hover:text-ink disabled:opacity-40"
-            onClick={() => setMonthKey((k) => shiftMonth(k ?? currentMonthKey(), 1))}
-            disabled={!monthKey}
-            title="Próximo mês"
-          >
-            <ChevronRight size={14} />
-          </button>
-        </div>
-        <div className="flex items-center gap-2 text-xs">
-          <span className="text-ink-muted">Pendente:</span>
-          <span className="font-semibold text-warning">{brl(totals.pending)}</span>
-          <span className="mx-1 text-ink-subtle">•</span>
-          <span className="text-ink-muted">Pago:</span>
-          <span className="font-semibold text-success">{brl(totals.paid)}</span>
-          <button
-            type="button"
-            className={`ml-2 rounded-lg border border-border px-2 py-0.5 text-[11px] font-semibold ${!monthKey ? 'bg-primary text-white border-primary' : 'bg-surface text-ink-muted hover:bg-canvas'}`}
-            onClick={() => setMonthKey((k) => (k ? null : currentMonthKey()))}
-            title="Alternar entre o mês e todas as despesas"
-          >
-            {monthKey ? 'Todos' : 'Mês atual'}
-          </button>
-        </div>
+      <div className="flex flex-wrap items-center gap-3 border-b border-border bg-canvas/40 px-5 py-2.5 text-xs">
+        <span className="text-ink-muted">Pendente:</span>
+        <span className="font-semibold text-warning">{brl(totals.pending)}</span>
+        <span className="text-ink-subtle">•</span>
+        <span className="text-ink-muted">Pago:</span>
+        <span className="font-semibold text-success">{brl(totals.paid)}</span>
       </div>
 
-      {visible.length === 0 ? (
+      {rows.length === 0 ? (
         <EmptyState
           icon={CreditCard}
-          title={monthKey ? `Nenhuma despesa em ${monthLabel(monthKey)}` : 'Nenhuma despesa cadastrada'}
-          description={monthKey
-            ? 'Use as setas para navegar entre os meses ou clique em "Todos" para ver o histórico.'
-            : 'Registre a primeira conta a pagar.'}
+          title={`Nenhuma despesa ${suffix}`}
+          description="Use o seletor de período acima para navegar entre os meses."
         />
       ) : (
         <div className="flex-1 overflow-x-auto">
@@ -114,7 +83,7 @@ export function PayablesCard({ rows, onNew, onViewAll }: Props) {
               </tr>
             </thead>
             <tbody>
-              {visible.slice(0, 6).map((p) => (
+              {rows.slice(0, 6).map((p) => (
                 <tr key={p.id} className="border-b border-border last:border-0 hover:bg-canvas">
                   <td className="whitespace-nowrap px-5 py-2.5 text-ink-muted">{fmtDate(p.due_date)}</td>
                   <td className="px-5 py-2.5 font-medium text-ink">
@@ -127,7 +96,9 @@ export function PayablesCard({ rows, onNew, onViewAll }: Props) {
                   </td>
                   <td className="hidden px-5 py-2.5 text-ink-muted sm:table-cell">{p.category || '—'}</td>
                   <td className="whitespace-nowrap px-5 py-2.5 text-right font-semibold text-ink">{brl(p.amount)}</td>
-                  <td className="px-5 py-2.5"><StatusBadge tone={STATUS[p.status].tone}>{STATUS[p.status].label}</StatusBadge></td>
+                  <td className="px-5 py-2.5">
+                    <StatusBadge tone={STATUS[p.status].tone}>{STATUS[p.status].label}</StatusBadge>
+                  </td>
                 </tr>
               ))}
             </tbody>
