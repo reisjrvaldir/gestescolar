@@ -43410,12 +43410,17 @@ var studentUpdateSchema = studentSchema.omit({ guardian: true }).partial().exten
 studentsRouter.use(requireAuth);
 studentsRouter.get("/", requireRole("school_admin", "financial", "teacher", "superadmin"), async (req, res) => {
   const classId = req.query.class_id;
+  const statusFilter = req.query.status;
   const data = await withTenant(req.ctx, async (c) => {
     const params = [req.ctx.schoolId];
     let filter = "";
     if (classId) {
-      filter = " and s.class_id = $2";
       params.push(classId);
+      filter += ` and s.class_id = $${params.length}`;
+    }
+    if (statusFilter) {
+      params.push(statusFilter);
+      filter += ` and s.status = $${params.length}`;
     }
     const { rows } = await c.query(
       `select s.id, s.name, s.registration_number, s.status, s.class_id, s.guardian_id,

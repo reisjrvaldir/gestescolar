@@ -88,6 +88,8 @@ function TeacherAttendanceView({ isAdmin, isTeacher }: { isAdmin: boolean; isTea
   const [toast, setToast] = useState<{ type: 'success' | 'error'; msg: string } | null>(null);
   const [loading, setLoading] = useState(true);
 
+  const [contextError, setContextError] = useState<string | null>(null);
+
   const [calYear, setCalYear] = useState(new Date().getFullYear());
   const [calMonth, setCalMonth] = useState(new Date().getMonth() + 1);
   const [calDays, setCalDays] = useState<CalendarDay[]>([]);
@@ -131,35 +133,49 @@ function TeacherAttendanceView({ isAdmin, isTeacher }: { isAdmin: boolean; isTea
 
   const loadContext = useCallback(async () => {
     if (!classId) return;
-    const [stuRes, attResult] = await Promise.all([
-      api.get<{ ok: boolean; data: Student[] }>(`/students?class_id=${classId}`),
-      attendanceService.forContext(classId, date, subjectId || undefined),
-    ]);
-    const existingMap: Record<string, EntryState> = {};
-    for (const a of attResult.rows) {
-      existingMap[a.student_id] = {
-        student_id: a.student_id,
-        student_name: a.student_name,
-        registration_number: a.registration_number,
-        status: a.status,
-        justification: a.justification ?? undefined,
-        confirmed: true,
-        attestationUploaded: a.status === 'attested' || a.status === 'excused',
-      };
+    setContextError(null);
+    try {
+      // Carrega alunos independentemente dos registros de chamada
+      const stuRes = await api.get<{ ok: boolean; data: Student[] }>(
+        `/students?class_id=${classId}&status=active`,
+      );
+
+      // Tenta carregar registros existentes de chamada (falha graciosamente)
+      let attResult: { rows: AttendanceRow[]; locked: boolean } = { rows: [], locked: false };
+      try {
+        attResult = await attendanceService.forContext(classId, date, subjectId || undefined);
+      } catch {
+        /* chamada indisponível — inicia com todos presentes, não confirmados */
+      }
+
+      const existingMap: Record<string, EntryState> = {};
+      for (const a of attResult.rows) {
+        existingMap[a.student_id] = {
+          student_id: a.student_id,
+          student_name: a.student_name,
+          registration_number: a.registration_number,
+          status: a.status,
+          justification: a.justification ?? undefined,
+          confirmed: true,
+          attestationUploaded: a.status === 'attested' || a.status === 'excused',
+        };
+      }
+      const seeded: Record<string, EntryState> = {};
+      for (const s of stuRes.data) {
+        seeded[s.id] = existingMap[s.id] ?? {
+          student_id: s.id,
+          student_name: s.name,
+          registration_number: s.registration_number,
+          status: 'present',
+          confirmed: false,
+        };
+      }
+      setEntries(seeded);
+      setLocked(attResult.locked);
+      setToast(null);
+    } catch (err: any) {
+      setContextError(err?.message ?? 'Erro ao carregar alunos da turma.');
     }
-    const seeded: Record<string, EntryState> = {};
-    for (const s of stuRes.data) {
-      seeded[s.id] = existingMap[s.id] ?? {
-        student_id: s.id,
-        student_name: s.name,
-        registration_number: s.registration_number,
-        status: 'present',
-        confirmed: false,
-      };
-    }
-    setEntries(seeded);
-    setLocked(attResult.locked);
-    setToast(null);
   }, [classId, date, subjectId]);
 
   useEffect(() => { loadContext(); }, [loadContext]);
@@ -649,7 +665,18 @@ function TeacherAttendanceView({ isAdmin, isTeacher }: { isAdmin: boolean; isTea
             <div className="min-w-0 space-y-4">
               {/* Tabela de alunos */}
               <div className="card overflow-hidden">
-                {studentList.length === 0 ? (
+                {contextError ? (
+                  <div className="flex flex-col items-center gap-3 px-6 py-10 text-center">
+                    <AlertTriangle size={32} className="text-danger opacity-70" />
+                    <p className="text-sm font-medium text-danger">{contextError}</p>
+                    <button
+                      onClick={loadContext}
+                      className="rounded-xl border border-danger/30 bg-danger-soft px-4 py-2 text-sm font-semibold text-danger hover:bg-danger/10"
+                    >
+                      Tentar novamente
+                    </button>
+                  </div>
+                ) : studentList.length === 0 ? (
                   <EmptyState icon={ClipboardCheck} title="Nenhum aluno nesta turma" description="Vincule alunos a esta turma para fazer a chamada." />
                 ) : (
                   <>

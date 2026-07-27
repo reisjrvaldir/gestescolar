@@ -39,13 +39,18 @@ const studentUpdateSchema = studentSchema.omit({ guardian: true }).partial().ext
 studentsRouter.use(requireAuth);
 
 studentsRouter.get('/', requireRole('school_admin', 'financial', 'teacher', 'superadmin'), async (req, res) => {
-  const classId = req.query.class_id as string | undefined;
+  const classId    = req.query.class_id as string | undefined;
+  const statusFilter = req.query.status as string | undefined;
   const data = await withTenant(req.ctx!, async (c) => {
     const params: unknown[] = [req.ctx!.schoolId];
     let filter = '';
     if (classId) {
-      filter = ' and s.class_id = $2';
       params.push(classId);
+      filter += ` and s.class_id = $${params.length}`;
+    }
+    if (statusFilter) {
+      params.push(statusFilter);
+      filter += ` and s.status = $${params.length}`;
     }
     // Dados pessoais sempre mascarados nas listagens — revelação via /personal-data/reveal
     const { rows } = await c.query(

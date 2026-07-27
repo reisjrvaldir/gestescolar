@@ -7,7 +7,7 @@ import {
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Modal } from '@/components/ui/Modal';
 import { classesService, type ClassSubject } from '@/services/classes';
-import { gradesService, type GradeSettings, type BoletimData } from '@/services/grades';
+import { gradesService, type GradeSettings, type BoletimData, type GradeEntryRow } from '@/services/grades';
 import { listEvents, type CalendarEvent } from '@/services/calendar';
 import { GuardianBoletim } from '@/components/grades/GuardianBoletim';
 import { api } from '@/lib/api';
@@ -148,6 +148,7 @@ function GradesView({ isAdmin, isTeacher }: { isAdmin: boolean; isTeacher: boole
   // Boletim
   const [boletim, setBoletim]           = useState<BoletimData | null>(null);
   const [boletimLoading, setBoletimLoading] = useState(false);
+  const [contextError, setContextError] = useState<string | null>(null);
 
   useEffect(() => {
     const loadClasses = isTeacher ? classesService.mine() : classesService.list();
@@ -182,28 +183,42 @@ function GradesView({ isAdmin, isTeacher }: { isAdmin: boolean; isTeacher: boole
 
   const loadContext = useCallback(async () => {
     if (!classId) return;
-    const [stuRes, gradeResult] = await Promise.all([
-      api.get<{ ok: boolean; data: Student[] }>(`/students?class_id=${classId}`),
-      gradesService.forContext(classId, subject, period),
-    ]);
-    const gradeMap: Record<string, { av1: number | null; av2: number | null; final: number | null }> = {};
-    for (const g of gradeResult.rows) {
-      gradeMap[g.student_id] = { av1: g.av1, av2: g.av2, final: g.final_grade };
+    setContextError(null);
+    try {
+      // Carrega alunos independentemente das notas
+      const stuRes = await api.get<{ ok: boolean; data: Student[] }>(
+        `/students?class_id=${classId}&status=active`,
+      );
+
+      // Tenta carregar notas existentes (falha graciosamente — alunos ainda aparecem)
+      let gradeResult: { rows: GradeEntryRow[]; locked: boolean } = { rows: [], locked: false };
+      try {
+        gradeResult = await gradesService.forContext(classId, subject, period);
+      } catch {
+        /* notas indisponíveis — exibe alunos com estado vazio */
+      }
+
+      const gradeMap: Record<string, { av1: number | null; av2: number | null; final: number | null }> = {};
+      for (const g of gradeResult.rows) {
+        gradeMap[g.student_id] = { av1: g.av1, av2: g.av2, final: g.final_grade };
+      }
+      const seeded: Record<string, EntryState> = {};
+      for (const s of stuRes.data) {
+        const g = gradeMap[s.id] ?? { av1: null, av2: null, final: null };
+        seeded[s.id] = {
+          student_id: s.id,
+          student_name: s.name,
+          registration_number: s.registration_number,
+          av1: g.av1, av2: g.av2, final: g.final,
+          av1av2Locked: gradeResult.locked,
+        };
+      }
+      setEntries(seeded);
+      setLocked(gradeResult.locked);
+      setToast(null);
+    } catch (err: any) {
+      setContextError(err?.message ?? 'Erro ao carregar alunos da turma.');
     }
-    const seeded: Record<string, EntryState> = {};
-    for (const s of stuRes.data) {
-      const g = gradeMap[s.id] ?? { av1: null, av2: null, final: null };
-      seeded[s.id] = {
-        student_id: s.id,
-        student_name: s.name,
-        registration_number: s.registration_number,
-        av1: g.av1, av2: g.av2, final: g.final,
-        av1av2Locked: gradeResult.locked,
-      };
-    }
-    setEntries(seeded);
-    setLocked(gradeResult.locked);
-    setToast(null);
   }, [classId, subject, period]);
 
   useEffect(() => { loadContext(); }, [loadContext]);
@@ -547,7 +562,18 @@ function GradesView({ isAdmin, isTeacher }: { isAdmin: boolean; isTeacher: boole
 
               {/* Tabela de alunos */}
               <div className="card overflow-hidden">
-                {studentList.length === 0 ? (
+                {contextError ? (
+                  <div className="flex flex-col items-center gap-3 px-6 py-10 text-center">
+                    <AlertTriangle size={32} className="text-danger opacity-70" />
+                    <p className="text-sm font-medium text-danger">{contextError}</p>
+                    <button
+                      onClick={loadContext}
+                      className="rounded-xl border border-danger/30 bg-danger-soft px-4 py-2 text-sm font-semibold text-danger hover:bg-danger/10"
+                    >
+                      Tentar novamente
+                    </button>
+                  </div>
+                ) : studentList.length === 0 ? (
                   <EmptyState icon={Star} title="Nenhum aluno nesta turma" description="Vincule alunos a esta turma para lançar notas." />
                 ) : filteredList.length === 0 ? (
                   <div className="flex flex-col items-center py-10 text-ink-muted">
