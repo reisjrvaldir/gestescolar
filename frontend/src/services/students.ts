@@ -44,8 +44,9 @@ export interface CreatedStudent extends Student {
   enrollment_fee?: number;
   enrollment_paid?: boolean;
   guardian_email?: string;
-  initial_password?: string;
-  login_password_hint?: string;
+  login_matricula?: string;
+  invite_emailed?: boolean;
+  login_hint?: string;
 }
 
 export const studentsService = {
@@ -63,5 +64,12 @@ export const studentsService = {
   },
   async remove(id: string): Promise<void> {
     await api.del(`/students/${id}`);
+  },
+  /** Envia/reenvia o convite de acesso ao responsável (ele define a própria senha). */
+  async sendInvite(id: string): Promise<{ emailed: boolean; wasResend: boolean; purpose: 'invite' | 'recovery' }> {
+    const r = await api.post<{ ok: boolean; data: { emailed: boolean; wasResend: boolean; purpose: 'invite' | 'recovery' } }>(
+      `/students/${id}/invite`, {},
+    );
+    return r.data;
   },
 };

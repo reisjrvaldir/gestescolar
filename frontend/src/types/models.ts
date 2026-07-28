@@ -1,5 +1,8 @@
 export type StudentStatus = 'active' | 'inactive';
 
+/** Estado do acesso do usuário: aguardando aceite, expirado, ativado ou sem convite. */
+export type InviteState = 'pending' | 'expired' | 'activated' | 'none';
+
 export interface Student {
   id: string;
   name: string;
@@ -22,6 +25,7 @@ export interface Student {
   guardian_cpf?: string;
   guardian_phone?: string;
   guardian_phone2?: string;
+  guardian_invite_state?: InviteState;
   status: StudentStatus;
   created_at: string;
 }
@@ -71,6 +75,7 @@ export interface Staff {
   contract_type?: 'clt' | 'pj' | 'estagio' | 'temporario';
   weekly_hours?: number;
   timeclock_enabled?: boolean;
+  invite_state?: InviteState;
   status: 'active' | 'inactive';
   created_at: string;
 }

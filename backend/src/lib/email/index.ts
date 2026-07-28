@@ -45,6 +45,28 @@ function layout(title: string, bodyHtml: string): string {
   </div>`;
 }
 
+/**
+ * Convite individual para ativar o acesso (definir a própria senha).
+ * O link contém o token de uso único; NUNCA logamos o token nem a URL completa.
+ */
+export async function sendInviteEmail(to: string, data: {
+  name?: string; schoolName?: string; acceptUrl: string; purpose: 'invite' | 'recovery'; expiresHours: number;
+}): Promise<boolean> {
+  const isRecovery = data.purpose === 'recovery';
+  const title = isRecovery ? 'Redefinição de acesso' : 'Ative seu acesso ao GestEscolar';
+  const intro = isRecovery
+    ? `Recebemos um pedido para redefinir o acesso${data.schoolName ? ` da <strong>${data.schoolName}</strong>` : ''}.`
+    : `Você foi cadastrado(a)${data.schoolName ? ` na <strong>${data.schoolName}</strong>` : ''} e precisa criar sua senha de acesso.`;
+  const cta = isRecovery ? 'Redefinir minha senha' : 'Criar minha senha';
+  const html = layout(title, `
+    <p style="font-size:14px;line-height:1.6">Olá${data.name ? `, <strong>${data.name}</strong>` : ''}! ${intro}</p>
+    <p style="font-size:14px;line-height:1.6">Clique no botão abaixo para definir uma senha pessoal e intransferível. Este link é individual, de uso único e expira em <strong>${data.expiresHours} horas</strong>.</p>
+    <p style="margin:20px 0"><a href="${data.acceptUrl}" style="display:inline-block;background:#2563EB;color:#fff;text-decoration:none;padding:12px 24px;border-radius:8px;font-size:14px;font-weight:bold">${cta}</a></p>
+    <p style="font-size:12px;color:#94A3B8">Se você não esperava este e-mail, pode ignorá-lo com segurança — nenhuma ação será tomada.</p>
+  `);
+  return sendEmail({ to, subject: title, html });
+}
+
 /** Notifica o responsável de que uma nova cobrança está disponível para pagar. */
 export async function notifyChargeCreated(to: string, data: {
   studentName?: string; amount: number; dueDate?: string | null; description?: string; schoolName?: string;

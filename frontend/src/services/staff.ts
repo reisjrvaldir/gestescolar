@@ -33,8 +33,10 @@ export interface UpdateStaff {
 
 export interface CreatedStaff extends Staff {
   registration_number?: string;
-  initial_password?: string;
-  login_password_hint?: string;
+  login_matricula?: string;
+  invite_state?: 'pending';
+  invite_emailed?: boolean;
+  login_hint?: string;
 }
 
 export const staffService = {
@@ -53,10 +55,10 @@ export const staffService = {
   async remove(id: string): Promise<void> {
     await api.del(`/staff/${id}`);
   },
-  /** Volta a senha do funcionário para a padrão da plataforma (Escola@2026). */
-  async resetPassword(id: string): Promise<{ name: string; email: string; initial_password: string }> {
-    const r = await api.post<{ ok: boolean; data: { name: string; email: string; initial_password: string } }>(
-      `/staff/${id}/reset-password`, {},
+  /** Envia/reenvia o convite de acesso (o funcionário define a própria senha). */
+  async sendInvite(id: string): Promise<{ emailed: boolean; wasResend: boolean; purpose: 'invite' | 'recovery' }> {
+    const r = await api.post<{ ok: boolean; data: { emailed: boolean; wasResend: boolean; purpose: 'invite' | 'recovery' } }>(
+      `/staff/${id}/invite`, {},
     );
     return r.data;
   },

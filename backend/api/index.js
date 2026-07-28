@@ -34119,7 +34119,7 @@ var require_websocket = __commonJS({
     var http = require("http");
     var net = require("net");
     var tls = require("tls");
-    var { randomBytes: randomBytes2, createHash: createHash3 } = require("crypto");
+    var { randomBytes: randomBytes4, createHash: createHash4 } = require("crypto");
     var { Duplex, Readable } = require("stream");
     var { URL: URL2 } = require("url");
     var PerMessageDeflate2 = require_permessage_deflate();
@@ -34657,7 +34657,7 @@ var require_websocket = __commonJS({
         }
       }
       const defaultPort = isSecure ? 443 : 80;
-      const key = randomBytes2(16).toString("base64");
+      const key = randomBytes4(16).toString("base64");
       const request = isSecure ? https.request : http.request;
       const protocolSet = /* @__PURE__ */ new Set();
       let perMessageDeflate;
@@ -34787,7 +34787,7 @@ var require_websocket = __commonJS({
           abortHandshake(websocket, socket, "Invalid Upgrade header");
           return;
         }
-        const digest = createHash3("sha1").update(key + GUID).digest("base64");
+        const digest = createHash4("sha1").update(key + GUID).digest("base64");
         if (res.headers["sec-websocket-accept"] !== digest) {
           abortHandshake(websocket, socket, "Invalid Sec-WebSocket-Accept header");
           return;
@@ -35156,7 +35156,7 @@ var require_websocket_server = __commonJS({
     var EventEmitter = require("events");
     var http = require("http");
     var { Duplex } = require("stream");
-    var { createHash: createHash3 } = require("crypto");
+    var { createHash: createHash4 } = require("crypto");
     var extension2 = require_extension();
     var PerMessageDeflate2 = require_permessage_deflate();
     var subprotocol2 = require_subprotocol();
@@ -35463,7 +35463,7 @@ var require_websocket_server = __commonJS({
           );
         }
         if (this._state > RUNNING) return abortHandshake(socket, 503);
-        const digest = createHash3("sha1").update(key + GUID).digest("base64");
+        const digest = createHash4("sha1").update(key + GUID).digest("base64");
         const headers = [
           "HTTP/1.1 101 Switching Protocols",
           "Upgrade: websocket",
@@ -43474,6 +43474,7 @@ var coerce = {
 var NEVER = INVALID;
 
 // src/lib/validation.ts
+var import_crypto2 = require("crypto");
 var cpfDigits = (s) => s.replace(/\D/g, "");
 function isValidCpf(cpf) {
   if (cpf.length !== 11) return false;
@@ -43492,7 +43493,9 @@ function isValidCpf(cpf) {
 var cpfSchema = external_exports.string().transform(cpfDigits).refine((v2) => isValidCpf(v2), "CPF inv\xE1lido");
 var dateSchema = external_exports.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Data deve estar no formato AAAA-MM-DD");
 var optionalDateSchema = dateSchema.optional();
-var DEFAULT_GUARDIAN_PASSWORD = "Escola@2026";
+function generateSecurePassword() {
+  return (0, import_crypto2.randomBytes)(12).toString("base64url");
+}
 function toStoredPassword(visible6) {
   return visible6.length >= 8 ? visible6 : (visible6 + visible6).slice(0, 8);
 }
@@ -43526,6 +43529,162 @@ function validateBody(schema) {
     req.body = result.data;
     next();
   };
+}
+
+// src/lib/invitations.ts
+var import_crypto3 = require("crypto");
+var INVITE_TTL_HOURS = 72;
+var TOKEN_BYTES = 32;
+function generateInviteToken() {
+  const token = (0, import_crypto3.randomBytes)(TOKEN_BYTES).toString("base64url");
+  return { token, tokenHash: hashToken(token) };
+}
+function hashToken(token) {
+  return (0, import_crypto3.createHash)("sha256").update(token).digest("hex");
+}
+function inviteExpiry(hours = INVITE_TTL_HOURS) {
+  return new Date(Date.now() + hours * 36e5);
+}
+async function createInvitation(c, p2) {
+  const prev = await c.query(
+    `update public.user_invitations
+        set status='revoked', revoked_at=now()
+      where profile_id=$1 and school_id=$2 and status='pending'
+      returning id`,
+    [p2.profileId, p2.schoolId]
+  );
+  const wasResend = prev.rows.length > 0;
+  const { token, tokenHash } = generateInviteToken();
+  const ins = await c.query(
+    `insert into public.user_invitations
+       (school_id, profile_id, auth_user_id, email, token_hash, purpose, status,
+        created_by, created_by_email, expires_at)
+     values ($1,$2,$3,$4,$5,$6,'pending',$7,$8,$9)
+     returning id`,
+    [
+      p2.schoolId,
+      p2.profileId,
+      p2.authUserId,
+      p2.email,
+      tokenHash,
+      p2.purpose,
+      p2.createdByProfileId ?? null,
+      p2.createdByEmail ?? null,
+      inviteExpiry()
+    ]
+  );
+  const invitationId = ins.rows[0].id;
+  await c.query(
+    `insert into public.invitation_audit_log
+       (school_id, invitation_id, action, actor_profile_id, actor_email, target_email)
+     values ($1,$2,$3,$4,$5,$6)`,
+    [
+      p2.schoolId,
+      invitationId,
+      wasResend ? "resent" : "sent",
+      p2.createdByProfileId ?? null,
+      p2.createdByEmail ?? null,
+      p2.email
+    ]
+  );
+  return { token, invitationId, wasResend };
+}
+function deriveInviteState(row) {
+  if (row.access_activated_at) return "activated";
+  const status = row.latest_invite_status;
+  if (!status) return "none";
+  if (status === "accepted") return "activated";
+  if (status === "pending") {
+    const exp = row.latest_invite_expires_at ? new Date(row.latest_invite_expires_at).getTime() : 0;
+    return exp > Date.now() ? "pending" : "expired";
+  }
+  return "expired";
+}
+var LATEST_INVITE_SQL = `
+  (select i.status from public.user_invitations i
+    where i.profile_id = p.id order by i.created_at desc limit 1)      as latest_invite_status,
+  (select i.expires_at from public.user_invitations i
+    where i.profile_id = p.id order by i.created_at desc limit 1)      as latest_invite_expires_at,
+  p.access_activated_at
+`;
+
+// src/lib/email/index.ts
+var RESEND_API_KEY = process.env.RESEND_API_KEY;
+var EMAIL_FROM = process.env.EMAIL_FROM || "GestEscolar <noreply@gestescolar.com.br>";
+var APP_URL = process.env.FRONTEND_URL || "https://gestescolar.com.br";
+var isEmailConfigured = Boolean(RESEND_API_KEY);
+async function sendEmail(input) {
+  if (!RESEND_API_KEY) {
+    console.log("[email] RESEND_API_KEY ausente \u2014 e-mail n\xE3o enviado:", input.subject);
+    return false;
+  }
+  if (!input.to || !input.to.includes("@")) return false;
+  try {
+    const res = await fetch("https://api.resend.com/emails", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${RESEND_API_KEY}` },
+      body: JSON.stringify({ from: EMAIL_FROM, to: input.to, subject: input.subject, html: input.html })
+    });
+    if (!res.ok) {
+      const t = await res.text().catch(() => "");
+      console.error("[email] falha ao enviar:", res.status, t.slice(0, 200));
+      return false;
+    }
+    return true;
+  } catch (err) {
+    console.error("[email] erro:", err?.message ?? err);
+    return false;
+  }
+}
+var brl = (n) => n.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+function layout(title, bodyHtml) {
+  return `<div style="font-family:Arial,Helvetica,sans-serif;max-width:520px;margin:0 auto;padding:24px;color:#0F172A">
+    <h1 style="font-size:20px;margin:0 0 16px">${title}</h1>
+    ${bodyHtml}
+    <hr style="border:none;border-top:1px solid #E5E7EB;margin:24px 0">
+    <p style="font-size:12px;color:#94A3B8">GestEscolar \u2014 mensagem autom\xE1tica, n\xE3o responda este e-mail.</p>
+  </div>`;
+}
+async function sendInviteEmail(to2, data) {
+  const isRecovery = data.purpose === "recovery";
+  const title = isRecovery ? "Redefini\xE7\xE3o de acesso" : "Ative seu acesso ao GestEscolar";
+  const intro = isRecovery ? `Recebemos um pedido para redefinir o acesso${data.schoolName ? ` da <strong>${data.schoolName}</strong>` : ""}.` : `Voc\xEA foi cadastrado(a)${data.schoolName ? ` na <strong>${data.schoolName}</strong>` : ""} e precisa criar sua senha de acesso.`;
+  const cta = isRecovery ? "Redefinir minha senha" : "Criar minha senha";
+  const html = layout(title, `
+    <p style="font-size:14px;line-height:1.6">Ol\xE1${data.name ? `, <strong>${data.name}</strong>` : ""}! ${intro}</p>
+    <p style="font-size:14px;line-height:1.6">Clique no bot\xE3o abaixo para definir uma senha pessoal e intransfer\xEDvel. Este link \xE9 individual, de uso \xFAnico e expira em <strong>${data.expiresHours} horas</strong>.</p>
+    <p style="margin:20px 0"><a href="${data.acceptUrl}" style="display:inline-block;background:#2563EB;color:#fff;text-decoration:none;padding:12px 24px;border-radius:8px;font-size:14px;font-weight:bold">${cta}</a></p>
+    <p style="font-size:12px;color:#94A3B8">Se voc\xEA n\xE3o esperava este e-mail, pode ignor\xE1-lo com seguran\xE7a \u2014 nenhuma a\xE7\xE3o ser\xE1 tomada.</p>
+  `);
+  return sendEmail({ to: to2, subject: title, html });
+}
+async function notifyChargeCreated(to2, data) {
+  const due = data.dueDate ? (/* @__PURE__ */ new Date(String(data.dueDate).slice(0, 10) + "T12:00:00")).toLocaleDateString("pt-BR") : null;
+  const html = layout("Nova cobran\xE7a dispon\xEDvel", `
+    <p style="font-size:14px;line-height:1.6">Ol\xE1! Uma nova cobran\xE7a${data.schoolName ? ` de <strong>${data.schoolName}</strong>` : ""} est\xE1 dispon\xEDvel${data.studentName ? ` para <strong>${data.studentName}</strong>` : ""}.</p>
+    <table style="font-size:14px;width:100%;margin:16px 0;border-collapse:collapse">
+      ${data.description ? `<tr><td style="color:#64748B;padding:4px 0">Referente a</td><td style="text-align:right">${data.description}</td></tr>` : ""}
+      <tr><td style="color:#64748B;padding:4px 0">Valor</td><td style="text-align:right;font-weight:bold">${brl(data.amount)}</td></tr>
+      ${due ? `<tr><td style="color:#64748B;padding:4px 0">Vencimento</td><td style="text-align:right">${due}</td></tr>` : ""}
+    </table>
+    <a href="${APP_URL}/faturas" style="display:inline-block;background:#2563EB;color:#fff;text-decoration:none;padding:10px 20px;border-radius:8px;font-size:14px">Ver e pagar com PIX</a>
+  `);
+  return sendEmail({ to: to2, subject: `Nova cobran\xE7a \u2014 ${brl(data.amount)}`, html });
+}
+
+// src/lib/inviteFlow.ts
+var FRONTEND_URL2 = process.env.FRONTEND_URL || "https://gestescolar.com.br";
+async function issueAndSendInvitation(c, p2) {
+  const { token, wasResend } = await createInvitation(c, p2);
+  const acceptUrl = `${FRONTEND_URL2}/convite?token=${encodeURIComponent(token)}`;
+  const emailed = await sendInviteEmail(p2.email, {
+    name: p2.name,
+    schoolName: p2.schoolName,
+    acceptUrl,
+    purpose: p2.purpose,
+    expiresHours: INVITE_TTL_HOURS
+  });
+  return { wasResend, emailed };
 }
 
 // ../shared/schemas.ts
@@ -43665,15 +43824,23 @@ studentsRouter.get("/", requireRole("school_admin", "financial", "teacher", "sup
               case when g.email  is null then null else left(g.email,1)  || '***@' || split_part(g.email,'@',2)              end as guardian_email,
               case when g.cpf    is null then null else '***.***.***-' || right(g.cpf,2)                                     end as guardian_cpf,
               case when g.phone  is null then null else '(**) ****-'  || right(g.phone,4)                                    end as guardian_phone,
-              case when g.phone2 is null then null else '(**) ****-'  || right(g.phone2,4)                                   end as guardian_phone2
+              case when g.phone2 is null then null else '(**) ****-'  || right(g.phone2,4)                                   end as guardian_phone2,
+              p.access_activated_at,
+              (select i.status     from public.user_invitations i where i.profile_id = g.user_id order by i.created_at desc limit 1) as latest_invite_status,
+              (select i.expires_at from public.user_invitations i where i.profile_id = g.user_id order by i.created_at desc limit 1) as latest_invite_expires_at
          from public.students s
          left join public.classes cl on cl.id = s.class_id
          left join public.guardians g on g.id = s.guardian_id
+         left join public.profiles p on p.id = g.user_id
         where s.school_id = $1${filter}
         order by s.name asc`,
       params
     );
-    return rows;
+    return rows.map((r) => {
+      const guardian_invite_state = deriveInviteState(r);
+      const { access_activated_at, latest_invite_status, latest_invite_expires_at, ...rest } = r;
+      return { ...rest, guardian_invite_state };
+    });
   });
   res.json({ ok: true, data });
 });
@@ -43713,10 +43880,10 @@ studentsRouter.post("/", requireRole("school_admin", "superadmin"), validateBody
       console.log("[students.create] plano=", s.plan_id, "monthly=", monthlyFee, "matricula=", enrollmentFee, "desconto%=", discountPct);
       const matRow = await c.query(`select public.next_matricula() as matricula`);
       const matricula = matRow.rows[0].matricula;
-      const visiblePassword = DEFAULT_GUARDIAN_PASSWORD;
+      const throwawayPassword = generateSecurePassword();
       const authResult = await signUpGuardian({
         email: s.guardian.email,
-        password: toStoredPassword(visiblePassword),
+        password: toStoredPassword(throwawayPassword),
         name: s.guardian.name
       });
       authUserId = authResult.authUserId;
@@ -43792,6 +43959,16 @@ studentsRouter.post("/", requireRole("school_admin", "superadmin"), validateBody
       });
       const chargeableIds = [...monthlyResult.ids];
       if (enrollment && !enrollment.paid) chargeableIds.push(enrollment.id);
+      const invite = await issueAndSendInvitation(c, {
+        schoolId: req.ctx.schoolId,
+        profileId,
+        authUserId,
+        email: s.guardian.email,
+        name: s.guardian.name,
+        purpose: "invite",
+        createdByProfileId: req.ctx.profileId,
+        createdByEmail: req.identity?.email ?? null
+      });
       return {
         ...student,
         monthly_fee: monthlyFee,
@@ -43799,8 +43976,9 @@ studentsRouter.post("/", requireRole("school_admin", "superadmin"), validateBody
         enrollment_paid: enrollment?.paid ?? false,
         guardian_email: s.guardian.email,
         login_matricula: matricula,
-        initial_password: visiblePassword,
-        login_password_hint: "Login: e-mail do respons\xE1vel \u2022 Senha inicial padr\xE3o: Escola@2026 \u2014 troca obrigat\xF3ria no 1\xBA acesso.",
+        guardian_invite_state: "pending",
+        invite_emailed: invite.emailed,
+        login_hint: "O respons\xE1vel recebe um convite por e-mail para criar a pr\xF3pria senha. Login: e-mail ou matr\xEDcula do aluno.",
         invoice_ids: chargeableIds,
         invoices_skipped: monthlyResult.skipped
       };
@@ -43818,6 +43996,49 @@ studentsRouter.post("/", requireRole("school_admin", "superadmin"), validateBody
     res.status(status).json({ code, message: err?.message ?? "Falha ao criar aluno" });
   }
 });
+async function sendGuardianInvite(req, res) {
+  try {
+    const result = await withTenant(req.ctx, async (c) => {
+      const r = await c.query(
+        `select g.email, g.name, g.user_id as profile_id, p.auth_user_id, p.access_activated_at
+           from public.students s
+           join public.guardians g on g.id = s.guardian_id
+           left join public.profiles p on p.id = g.user_id
+          where s.id=$1 and s.school_id=$2 limit 1`,
+        [req.params.id, req.ctx.schoolId]
+      );
+      if (r.rows.length === 0) return { error: "not_found" };
+      const row = r.rows[0];
+      if (!row.profile_id || !row.auth_user_id) return { error: "no_auth" };
+      const purpose = row.access_activated_at ? "recovery" : "invite";
+      const invite = await issueAndSendInvitation(c, {
+        schoolId: req.ctx.schoolId,
+        profileId: row.profile_id,
+        authUserId: row.auth_user_id,
+        email: row.email,
+        name: row.name,
+        purpose,
+        createdByProfileId: req.ctx.profileId,
+        createdByEmail: req.identity?.email ?? null
+      });
+      return { emailed: invite.emailed, wasResend: invite.wasResend, purpose };
+    });
+    if ("error" in result && result.error) {
+      const map = {
+        not_found: { http: 404, message: "Aluno n\xE3o encontrado." },
+        no_auth: { http: 400, message: "Este respons\xE1vel n\xE3o possui login vinculado." }
+      };
+      const m2 = map[result.error] ?? { http: 400, message: "N\xE3o foi poss\xEDvel enviar o convite." };
+      return res.status(m2.http).json({ code: result.error, message: m2.message });
+    }
+    res.json({ ok: true, data: result });
+  } catch (err) {
+    console.error("[students.invite] erro:", err?.message ?? err);
+    res.status(500).json({ code: "invite_failed", message: "Falha ao enviar o convite." });
+  }
+}
+studentsRouter.post("/:id/invite", requireRole("school_admin", "superadmin"), sendGuardianInvite);
+studentsRouter.post("/:id/recover", requireRole("school_admin", "superadmin"), sendGuardianInvite);
 studentsRouter.put("/:id", requireRole("school_admin", "superadmin"), validateBody(studentUpdateSchema), async (req, res) => {
   const s = req.body;
   const updated = await withTenant(req.ctx, async (c) => {
@@ -43873,38 +44094,35 @@ studentsRouter.delete("/:id", requireRole("school_admin", "superadmin"), async (
 
 // src/api/routes/staff.ts
 var import_express3 = __toESM(require_express2());
-var import_crypto2 = require("crypto");
 init_withTenant();
-function betterAuthHash(password) {
-  const salt = (0, import_crypto2.randomBytes)(16).toString("hex");
-  const key = (0, import_crypto2.scryptSync)(password.normalize("NFKC"), salt, 64, {
-    N: 16384,
-    r: 16,
-    p: 1,
-    maxmem: 64 * 1024 * 1024
-  });
-  return `${salt}:${key.toString("hex")}`;
-}
 var staffRouter = (0, import_express3.Router)();
 staffRouter.use(requireAuth);
 staffRouter.get("/", requireRole("school_admin", "financial", "teacher", "superadmin"), async (req, res) => {
   const data = await withTenant(req.ctx, async (c) => {
     const { rows } = await c.query(
-      `select id, name,
-              left(email,1) || '***@' || split_part(email,'@',2)                          as email,
-              case when phone is null then null else '(**) ****-' || right(phone,4) end    as phone,
-              '***.***.***-' || right(cpf,2)                                               as cpf,
-              registration_number, role_type, subject_teaches,
-              position, admission_date::text as admission_date, contract_type,
-              weekly_hours::float8 as weekly_hours,
-              coalesce(timeclock_enabled, true) as timeclock_enabled,
-              status, created_at, user_id
-         from public.teachers
-        where school_id = $1
-        order by name asc`,
+      `select t.id, t.name,
+              left(t.email,1) || '***@' || split_part(t.email,'@',2)                        as email,
+              case when t.phone is null then null else '(**) ****-' || right(t.phone,4) end  as phone,
+              '***.***.***-' || right(t.cpf,2)                                               as cpf,
+              t.registration_number, t.role_type, t.subject_teaches,
+              t.position, t.admission_date::text as admission_date, t.contract_type,
+              t.weekly_hours::float8 as weekly_hours,
+              coalesce(t.timeclock_enabled, true) as timeclock_enabled,
+              t.status, t.created_at, t.user_id,
+              ${LATEST_INVITE_SQL}
+         from public.teachers t
+         left join public.profiles p on p.id = t.user_id
+        where t.school_id = $1
+        order by t.name asc`,
       [req.ctx.schoolId]
     );
-    return rows;
+    return rows.map((r) => ({
+      ...r,
+      access_activated_at: void 0,
+      latest_invite_status: void 0,
+      latest_invite_expires_at: void 0,
+      invite_state: deriveInviteState(r)
+    }));
   });
   res.json({ ok: true, data });
 });
@@ -43914,10 +44132,10 @@ staffRouter.post("/", requireRole("school_admin", "superadmin"), validateBody(st
     const result = await withTenant(req.ctx, async (c) => {
       const matRow = await c.query(`select public.next_staff_matricula() as matricula`);
       const matricula = matRow.rows[0].matricula;
-      const visiblePassword = DEFAULT_GUARDIAN_PASSWORD;
+      const throwawayPassword = generateSecurePassword();
       const authResult = await signUpGuardian({
         email: s.email,
-        password: toStoredPassword(visiblePassword),
+        password: toStoredPassword(throwawayPassword),
         name: s.name
       });
       const profileRow = await c.query(
@@ -43960,11 +44178,22 @@ staffRouter.post("/", requireRole("school_admin", "superadmin"), validateBody(st
           s.timeclock_enabled ?? true
         ]
       );
+      const invite = await issueAndSendInvitation(c, {
+        schoolId: req.ctx.schoolId,
+        profileId,
+        authUserId: authResult.authUserId,
+        email: s.email,
+        name: s.name,
+        purpose: "invite",
+        createdByProfileId: req.ctx.profileId,
+        createdByEmail: req.identity?.email ?? null
+      });
       return {
         ...tRow.rows[0],
         login_matricula: matricula,
-        initial_password: visiblePassword,
-        login_password_hint: "Login: e-mail do funcion\xE1rio \u2022 Senha inicial padr\xE3o: Escola@2026 \u2014 troca obrigat\xF3ria no 1\xBA acesso."
+        invite_state: "pending",
+        invite_emailed: invite.emailed,
+        login_hint: "O funcion\xE1rio recebe um convite por e-mail para criar a pr\xF3pria senha. Login: e-mail ou matr\xEDcula."
       };
     });
     res.status(201).json({ ok: true, data: result });
@@ -43976,75 +44205,48 @@ staffRouter.post("/", requireRole("school_admin", "superadmin"), validateBody(st
     });
   }
 });
-staffRouter.post("/:id/reset-password", requireRole("school_admin", "superadmin"), async (req, res) => {
+async function sendStaffInvite(req, res) {
   try {
     const result = await withTenant(req.ctx, async (c) => {
       const t = await c.query(
-        `select user_id, name, email from public.teachers where id=$1 and school_id=$2 limit 1`,
+        `select t.user_id, t.name, t.email, p.auth_user_id, p.access_activated_at
+           from public.teachers t
+           left join public.profiles p on p.id = t.user_id
+          where t.id=$1 and t.school_id=$2 limit 1`,
         [req.params.id, req.ctx.schoolId]
       );
       if (t.rows.length === 0) return { error: "not_found" };
-      const { user_id: profileId, name, email } = t.rows[0];
-      if (!profileId) return { error: "no_auth" };
-      const p2 = await c.query(
-        `select auth_user_id from public.profiles where id=$1 and school_id=$2 limit 1`,
-        [profileId, req.ctx.schoolId]
-      );
-      if (p2.rows.length === 0 || !p2.rows[0].auth_user_id) return { error: "no_auth" };
-      const authUserId = p2.rows[0].auth_user_id;
-      const tbl = await c.query(
-        `select table_name from information_schema.tables
-          where table_schema='neon_auth' and lower(table_name) in ('account','accounts') limit 1`
-      );
-      if (tbl.rows.length === 0) return { error: "schema_mismatch" };
-      const tableName = tbl.rows[0].table_name;
-      const cols = await c.query(
-        `select column_name from information_schema.columns
-          where table_schema='neon_auth' and table_name=$1`,
-        [tableName]
-      );
-      const names = cols.rows.map((r) => r.column_name);
-      const userCol = names.includes("userId") ? '"userId"' : names.includes("user_id") ? "user_id" : null;
-      const provCol = names.includes("providerId") ? '"providerId"' : names.includes("provider_id") ? "provider_id" : null;
-      if (!userCol || !provCol || !names.includes("password")) return { error: "schema_mismatch" };
-      const acc = await c.query(
-        `select id, password from neon_auth."${tableName}"
-          where ${userCol}=$1 and ${provCol}='credential' limit 1`,
-        [authUserId]
-      );
-      if (acc.rows.length === 0) return { error: "no_credential" };
-      const current = String(acc.rows[0].password ?? "");
-      if (current && !/^[a-f0-9]{16,64}:[a-f0-9]{64,256}$/i.test(current)) {
-        return { error: "hash_format" };
-      }
-      await c.query(
-        `update neon_auth."${tableName}" set password=$2 where id=$1`,
-        [acc.rows[0].id, betterAuthHash(DEFAULT_GUARDIAN_PASSWORD)]
-      );
-      await c.query(
-        `update public.profiles set password_change_required=true where id=$1`,
-        [profileId]
-      );
-      return { name, email };
+      const row = t.rows[0];
+      if (!row.user_id || !row.auth_user_id) return { error: "no_auth" };
+      const purpose = row.access_activated_at ? "recovery" : "invite";
+      const invite = await issueAndSendInvitation(c, {
+        schoolId: req.ctx.schoolId,
+        profileId: row.user_id,
+        authUserId: row.auth_user_id,
+        email: row.email,
+        name: row.name,
+        purpose,
+        createdByProfileId: req.ctx.profileId,
+        createdByEmail: req.identity?.email ?? null
+      });
+      return { emailed: invite.emailed, wasResend: invite.wasResend, purpose };
     });
     if ("error" in result && result.error) {
-      const code = result.error;
       const map = {
         not_found: { http: 404, message: "Funcion\xE1rio n\xE3o encontrado." },
-        no_auth: { http: 400, message: "Este funcion\xE1rio n\xE3o possui login vinculado." },
-        no_credential: { http: 400, message: 'Conta de login sem senha cadastrada \u2014 pe\xE7a ao funcion\xE1rio para usar "Esqueci minha senha".' },
-        schema_mismatch: { http: 501, message: 'Estrutura do provedor de login n\xE3o reconhecida \u2014 use o fluxo "Esqueci minha senha".' },
-        hash_format: { http: 409, message: 'Formato de senha do provedor n\xE3o reconhecido \u2014 por seguran\xE7a, use o fluxo "Esqueci minha senha".' }
+        no_auth: { http: 400, message: "Este funcion\xE1rio n\xE3o possui login vinculado." }
       };
-      const m2 = map[code] ?? { http: 400, message: "N\xE3o foi poss\xEDvel resetar a senha." };
-      return res.status(m2.http).json({ code, message: m2.message });
+      const m2 = map[result.error] ?? { http: 400, message: "N\xE3o foi poss\xEDvel enviar o convite." };
+      return res.status(m2.http).json({ code: result.error, message: m2.message });
     }
-    res.json({ ok: true, data: { ...result, initial_password: DEFAULT_GUARDIAN_PASSWORD } });
+    res.json({ ok: true, data: result });
   } catch (err) {
-    console.error("[staff.reset-password] erro:", err?.message ?? err);
-    res.status(500).json({ code: "reset_failed", message: "Falha ao resetar a senha." });
+    console.error("[staff.invite] erro:", err?.message ?? err);
+    res.status(500).json({ code: "invite_failed", message: "Falha ao enviar o convite." });
   }
-});
+}
+staffRouter.post("/:id/invite", requireRole("school_admin", "superadmin"), sendStaffInvite);
+staffRouter.post("/:id/recover", requireRole("school_admin", "superadmin"), sendStaffInvite);
 staffRouter.put("/:id", requireRole("school_admin", "superadmin"), validateBody(staffUpdateSchema), async (req, res) => {
   const s = req.body;
   const updated = await withTenant(req.ctx, async (c) => {
@@ -45014,13 +45216,13 @@ attendanceRouter.post("/batch", requireRole("school_admin", "teacher", "superadm
 
 // src/api/routes/me.ts
 var import_express8 = __toESM(require_express2());
-var import_crypto3 = require("crypto");
+var import_crypto4 = require("crypto");
 init_withTenant();
 var meRouter = (0, import_express8.Router)();
 var CURRENT_TERMS_VERSION = "2026-01-01";
 var CURRENT_PRIVACY_VERSION = "2026-01-01";
 function hashValue(v2) {
-  return (0, import_crypto3.createHash)("sha256").update(v2).digest("hex");
+  return (0, import_crypto4.createHash)("sha256").update(v2).digest("hex");
 }
 meRouter.get("/", requireIdentity, async (req, res) => {
   const id = req.identity;
@@ -45155,59 +45357,6 @@ meRouter.post("/consent", requireIdentity, async (req, res) => {
 var import_express9 = __toESM(require_express2());
 init_withTenant();
 init_payments();
-
-// src/lib/email/index.ts
-var RESEND_API_KEY = process.env.RESEND_API_KEY;
-var EMAIL_FROM = process.env.EMAIL_FROM || "GestEscolar <noreply@gestescolar.com.br>";
-var APP_URL = process.env.FRONTEND_URL || "https://gestescolar.com.br";
-var isEmailConfigured = Boolean(RESEND_API_KEY);
-async function sendEmail(input) {
-  if (!RESEND_API_KEY) {
-    console.log("[email] RESEND_API_KEY ausente \u2014 e-mail n\xE3o enviado:", input.subject);
-    return false;
-  }
-  if (!input.to || !input.to.includes("@")) return false;
-  try {
-    const res = await fetch("https://api.resend.com/emails", {
-      method: "POST",
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${RESEND_API_KEY}` },
-      body: JSON.stringify({ from: EMAIL_FROM, to: input.to, subject: input.subject, html: input.html })
-    });
-    if (!res.ok) {
-      const t = await res.text().catch(() => "");
-      console.error("[email] falha ao enviar:", res.status, t.slice(0, 200));
-      return false;
-    }
-    return true;
-  } catch (err) {
-    console.error("[email] erro:", err?.message ?? err);
-    return false;
-  }
-}
-var brl = (n) => n.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
-function layout(title, bodyHtml) {
-  return `<div style="font-family:Arial,Helvetica,sans-serif;max-width:520px;margin:0 auto;padding:24px;color:#0F172A">
-    <h1 style="font-size:20px;margin:0 0 16px">${title}</h1>
-    ${bodyHtml}
-    <hr style="border:none;border-top:1px solid #E5E7EB;margin:24px 0">
-    <p style="font-size:12px;color:#94A3B8">GestEscolar \u2014 mensagem autom\xE1tica, n\xE3o responda este e-mail.</p>
-  </div>`;
-}
-async function notifyChargeCreated(to2, data) {
-  const due = data.dueDate ? (/* @__PURE__ */ new Date(String(data.dueDate).slice(0, 10) + "T12:00:00")).toLocaleDateString("pt-BR") : null;
-  const html = layout("Nova cobran\xE7a dispon\xEDvel", `
-    <p style="font-size:14px;line-height:1.6">Ol\xE1! Uma nova cobran\xE7a${data.schoolName ? ` de <strong>${data.schoolName}</strong>` : ""} est\xE1 dispon\xEDvel${data.studentName ? ` para <strong>${data.studentName}</strong>` : ""}.</p>
-    <table style="font-size:14px;width:100%;margin:16px 0;border-collapse:collapse">
-      ${data.description ? `<tr><td style="color:#64748B;padding:4px 0">Referente a</td><td style="text-align:right">${data.description}</td></tr>` : ""}
-      <tr><td style="color:#64748B;padding:4px 0">Valor</td><td style="text-align:right;font-weight:bold">${brl(data.amount)}</td></tr>
-      ${due ? `<tr><td style="color:#64748B;padding:4px 0">Vencimento</td><td style="text-align:right">${due}</td></tr>` : ""}
-    </table>
-    <a href="${APP_URL}/faturas" style="display:inline-block;background:#2563EB;color:#fff;text-decoration:none;padding:10px 20px;border-radius:8px;font-size:14px">Ver e pagar com PIX</a>
-  `);
-  return sendEmail({ to: to2, subject: `Nova cobran\xE7a \u2014 ${brl(data.amount)}`, html });
-}
-
-// src/api/routes/invoices.ts
 var invoicesRouter = (0, import_express9.Router)();
 invoicesRouter.use(requireAuth);
 invoicesRouter.get("/diagnostics", requireRole("school_admin", "financial", "superadmin"), async (req, res) => {
@@ -45558,7 +45707,7 @@ invoicesRouter.get("/balance/summary", requireRole("school_admin", "financial", 
 
 // src/api/routes/expenses.ts
 var import_express10 = __toESM(require_express2());
-var import_crypto4 = require("crypto");
+var import_crypto5 = require("crypto");
 init_withTenant();
 var expensesRouter = (0, import_express10.Router)();
 expensesRouter.use(requireAuth);
@@ -45639,7 +45788,7 @@ expensesRouter.post("/", requireRole(...ROLES), validateBody(expenseCreateSchema
   const inst = p2.installments && p2.installments > 1 ? p2.installments : 1;
   const perInstallment = inst > 1 && p2.installment_mode === "total" ? Math.round(p2.amount / inst * 100) / 100 : p2.amount;
   const created = await withTenant(req.ctx, async (c) => {
-    const groupId = inst > 1 ? (0, import_crypto4.randomUUID)() : null;
+    const groupId = inst > 1 ? (0, import_crypto5.randomUUID)() : null;
     const rows = [];
     for (let i = 1; i <= inst; i++) {
       const due = p2.due_date ? addMonthsIso(p2.due_date, i - 1) : null;
@@ -47602,13 +47751,13 @@ staffDocumentsRouter.delete("/:id", async (req, res) => {
 
 // src/api/routes/cron.ts
 var import_express23 = __toESM(require_express2());
-var import_crypto5 = require("crypto");
+var import_crypto6 = require("crypto");
 init_withTenant();
 var cronRouter = (0, import_express23.Router)();
 function safeEqual2(a2, b) {
   const ba = Buffer.from(a2);
   const bb = Buffer.from(b);
-  return ba.length === bb.length && (0, import_crypto5.timingSafeEqual)(ba, bb);
+  return ba.length === bb.length && (0, import_crypto6.timingSafeEqual)(ba, bb);
 }
 cronRouter.get("/overdue-invoices", async (req, res) => {
   const secret = req.headers["authorization"] ?? "";
@@ -47711,7 +47860,142 @@ if (!IS_PROD) {
 var import_express25 = __toESM(require_express2());
 init_pool();
 init_withTenant();
+
+// src/lib/authAccount.ts
+var import_crypto7 = require("crypto");
+function betterAuthHash(password) {
+  const salt = (0, import_crypto7.randomBytes)(16).toString("hex");
+  const key = (0, import_crypto7.scryptSync)(password.normalize("NFKC"), salt, 64, {
+    N: 16384,
+    r: 16,
+    p: 1,
+    maxmem: 64 * 1024 * 1024
+  });
+  return `${salt}:${key.toString("hex")}`;
+}
+async function resolveAccountSchema(c) {
+  const tbl = await c.query(
+    `select table_name from information_schema.tables
+      where table_schema='neon_auth' and lower(table_name) in ('account','accounts') limit 1`
+  );
+  if (tbl.rows.length === 0) return { error: "schema_mismatch" };
+  const table = tbl.rows[0].table_name;
+  const cols = await c.query(
+    `select column_name from information_schema.columns
+      where table_schema='neon_auth' and table_name=$1`,
+    [table]
+  );
+  const names = cols.rows.map((r) => r.column_name);
+  const userCol = names.includes("userId") ? '"userId"' : names.includes("user_id") ? "user_id" : null;
+  const provCol = names.includes("providerId") ? '"providerId"' : names.includes("provider_id") ? "provider_id" : null;
+  if (!userCol || !provCol || !names.includes("password")) return { error: "schema_mismatch" };
+  return { table, userCol, provCol };
+}
+async function setAccountPassword(c, authUserId, plainPassword) {
+  const schema = await resolveAccountSchema(c);
+  if ("error" in schema) throw Object.assign(new Error("schema_mismatch"), { code: "schema_mismatch" });
+  const { table, userCol, provCol } = schema;
+  const acc = await c.query(
+    `select id from neon_auth."${table}" where ${userCol}=$1 and ${provCol}='credential' limit 1`,
+    [authUserId]
+  );
+  if (acc.rows.length === 0) return false;
+  await c.query(
+    `update neon_auth."${table}" set password=$2 where id=$1`,
+    [acc.rows[0].id, betterAuthHash(plainPassword)]
+  );
+  return true;
+}
+
+// src/api/routes/publicAuth.ts
 var publicAuthRouter = (0, import_express25.Router)();
+function maskEmail(email) {
+  const [user, domain] = String(email).split("@");
+  if (!domain) return "***";
+  return `${user.slice(0, 1)}***@${domain}`;
+}
+publicAuthRouter.get("/invite/:token", async (req, res) => {
+  const raw = String(req.params.token ?? "");
+  if (!raw || !isDbConfigured) return res.json({ ok: true, data: { valid: false } });
+  const data = await withSystem(async (c) => {
+    const r = await c.query(
+      `select i.status, i.expires_at, i.purpose, i.email, p.name
+         from public.user_invitations i
+         join public.profiles p on p.id = i.profile_id
+        where i.token_hash = $1 limit 1`,
+      [hashToken(raw)]
+    );
+    if (r.rows.length === 0) return { valid: false };
+    const row = r.rows[0];
+    const expired = new Date(row.expires_at).getTime() <= Date.now();
+    if (row.status !== "pending") return { valid: false, state: row.status };
+    if (expired) return { valid: false, state: "expired" };
+    return {
+      valid: true,
+      purpose: row.purpose,
+      name: row.name,
+      email_masked: maskEmail(row.email)
+    };
+  });
+  res.json({ ok: true, data });
+});
+publicAuthRouter.post("/invite/accept", async (req, res) => {
+  const raw = String(req.body?.token ?? "");
+  const password = String(req.body?.password ?? "");
+  if (!raw) return res.status(400).json({ code: "invalid_token", message: "Convite inv\xE1lido." });
+  if (password.length < 8) {
+    return res.status(400).json({ code: "weak_password", message: "A senha deve ter ao menos 8 caracteres." });
+  }
+  if (!isDbConfigured) return res.status(503).json({ code: "db_unavailable" });
+  try {
+    const result = await withSystem(async (c) => {
+      const r = await c.query(
+        `select i.id, i.school_id, i.profile_id, i.auth_user_id, i.email, i.status, i.expires_at
+           from public.user_invitations i
+          where i.token_hash = $1
+          for update`,
+        [hashToken(raw)]
+      );
+      if (r.rows.length === 0) return { error: "invalid_token" };
+      const inv = r.rows[0];
+      if (inv.status !== "pending") return { error: "used" };
+      if (new Date(inv.expires_at).getTime() <= Date.now()) {
+        await c.query(`update public.user_invitations set status='expired' where id=$1`, [inv.id]);
+        return { error: "expired" };
+      }
+      const ok = await setAccountPassword(c, inv.auth_user_id, password);
+      if (!ok) return { error: "no_credential" };
+      await c.query(
+        `update public.user_invitations set status='accepted', accepted_at=now() where id=$1`,
+        [inv.id]
+      );
+      await c.query(
+        `update public.profiles set access_activated_at=now(), password_change_required=false where id=$1`,
+        [inv.profile_id]
+      );
+      await c.query(
+        `insert into public.invitation_audit_log (school_id, invitation_id, action, target_email)
+         values ($1, $2, 'accepted', $3)`,
+        [inv.school_id, inv.id, inv.email]
+      );
+      return { email: inv.email };
+    });
+    if ("error" in result && result.error) {
+      const map = {
+        invalid_token: { http: 400, message: "Convite inv\xE1lido." },
+        used: { http: 409, message: "Este convite j\xE1 foi utilizado. Solicite um novo \xE0 escola." },
+        expired: { http: 410, message: "Convite expirado. Solicite um novo \xE0 escola." },
+        no_credential: { http: 400, message: "Conta de acesso n\xE3o encontrada. Contate a escola." }
+      };
+      const m2 = map[result.error] ?? { http: 400, message: "N\xE3o foi poss\xEDvel ativar o acesso." };
+      return res.status(m2.http).json({ code: result.error, message: m2.message });
+    }
+    res.json({ ok: true, data: { email: result.email } });
+  } catch (err) {
+    console.error("[public.invite.accept] erro:", err?.message ?? err);
+    res.status(500).json({ code: "accept_failed", message: "Falha ao ativar o acesso." });
+  }
+});
 publicAuthRouter.get("/login-email", async (req, res) => {
   const matricula = String(req.query.matricula ?? "").trim();
   if (!matricula) return res.status(400).json({ code: "missing_matricula" });
@@ -48898,6 +49182,8 @@ var authLimiter = rate_limit_default({ windowMs: 6e4, max: 5, message: { code: "
 app.use("/api/me/onboarding", authLimiter);
 var publicLimiter = rate_limit_default({ windowMs: 6e4, max: 12, message: { code: "rate_limit", message: "Muitas tentativas. Aguarde 1 minuto." } });
 app.use("/api/public", publicLimiter);
+var inviteLimiter = rate_limit_default({ windowMs: 6e4, max: 10, message: { code: "rate_limit", message: "Muitos convites enviados. Aguarde 1 minuto." } });
+app.use(["/api/students/:id/invite", "/api/students/:id/recover", "/api/staff/:id/invite", "/api/staff/:id/recover"], inviteLimiter);
 app.use(import_express33.default.json({ limit: "10mb" }));
 app.get("/api/health", (_req, res) => {
   res.json({ ok: true, service: "gestescolar-backend", dbConfigured: isDbConfigured, paymentProvider: activeProviderName() });

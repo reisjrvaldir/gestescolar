@@ -5,8 +5,10 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import {
   GraduationCap, Search, Loader2, Copy, Check, Save, Plus,
   User, Phone, FileText, Link2, Upload, Printer, Pencil,
-  Users, UserPlus, Gift, AlertTriangle, Eye, MoreVertical,
+  Users, UserPlus, Gift, AlertTriangle, Eye, MoreVertical, Mail,
 } from 'lucide-react';
+import { InviteBadge } from '@/components/ui/InviteBadge';
+import { invitationsService } from '@/services/invitations';
 import { PageHero } from '@/components/ui/PageHero';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { StatusBadge } from '@/components/ui/StatusBadge';
@@ -24,10 +26,6 @@ import { studentFormSchema, type StudentFormValues } from '@/lib/schemas';
 import { applyServerErrors } from '@/hooks/useFormErrors';
 
 const BLOOD_TYPES = ['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'] as const;
-
-/** Senha inicial padrão para todos os responsáveis novos — a troca é obrigatória
- *  no 1º acesso. Espelha o valor definido no backend (validation.ts). */
-const DEFAULT_GUARDIAN_PASSWORD = 'Escola@2026';
 
 type StatusFilter = 'all' | 'active' | 'inactive';
 
@@ -154,6 +152,26 @@ export function StudentsPage() {
   const [copied, setCopied] = useState(false);
   const [photoPreview, setPhotoPreview] = useState<string | null>(null);
   const [editing, setEditing] = useState<Student | null>(null);
+  const [inviteBusy, setInviteBusy] = useState(false);
+  const [inviteMsg, setInviteMsg] = useState<string | null>(null);
+
+  async function sendGuardianInvite(student: Student) {
+    setInviteBusy(true);
+    setInviteMsg(null);
+    try {
+      const r = await invitationsService.sendStudentInvite(student.id);
+      setInviteMsg(r.emailed
+        ? (r.wasResend ? 'Convite reenviado por e-mail.' : 'Convite enviado por e-mail.')
+        : 'Convite registrado, mas o e-mail não pôde ser enviado agora.');
+      queryCache.invalidate(CK.students);
+      await load(true);
+    } catch (e: any) {
+      setInviteMsg(e?.message ?? 'Falha ao enviar o convite.');
+    } finally {
+      setInviteBusy(false);
+      setTimeout(() => setInviteMsg(null), 6000);
+    }
+  }
 
   const load = useCallback(async (force = false) => {
     // Cache-hit: usa dados válidos sem tocar a rede e sem piscar loading.
@@ -293,14 +311,15 @@ export function StudentsPage() {
     }
   }
 
-  function copyCredentials() {
+  function copyLoginInfo() {
     if (!credentials) return;
+    // Copia APENAS dados de login não sensíveis (sem senha) — o acesso é
+    // ativado pelo responsável via convite individual por e-mail.
     const text =
       `Aluno: ${credentials.name}\n` +
       `Login (e-mail): ${credentials.guardian_email ?? '—'}\n` +
       `Matrícula (alternativa): ${credentials.registration_number}\n` +
-      `Senha inicial: ${credentials.initial_password ?? DEFAULT_GUARDIAN_PASSWORD}\n` +
-      `(troca de senha obrigatória no 1º acesso)`;
+      `Acesso: o responsável recebeu um convite por e-mail para criar a própria senha.`;
     navigator.clipboard.writeText(text);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
@@ -525,22 +544,25 @@ export function StudentsPage() {
               <h3 className="mb-4 text-lg font-bold text-ink">Aluno cadastrado com sucesso!</h3>
               <div className="space-y-3 text-sm">
                 <div className="rounded-xl bg-success-soft p-4 text-success">
-                  <p className="font-semibold">Conta do responsável criada.</p>
-                  <p className="mt-1 text-xs">Anote ou envie estas credenciais ao responsável.</p>
+                  <p className="font-semibold">Convite de acesso enviado.</p>
+                  <p className="mt-1 text-xs">
+                    {credentials.invite_emailed
+                      ? `Enviamos um e-mail para ${credentials.guardian_email ?? 'o responsável'} com um link individual para criar a própria senha.`
+                      : 'Cadastro concluído. Use "Reenviar convite" na ficha do aluno para disparar o e-mail de acesso.'}
+                  </p>
                 </div>
                 <div className="space-y-2 rounded-xl border border-border p-4">
                   <div className="flex justify-between"><span className="text-ink-muted">Aluno:</span><span className="font-medium text-ink">{credentials.name}</span></div>
                   <div className="flex justify-between"><span className="text-ink-muted">Login (e-mail):</span><span className="font-medium text-primary">{credentials.guardian_email ?? '—'}</span></div>
                   <div className="flex justify-between"><span className="text-ink-muted">Matrícula (alternativa):</span><span className="font-mono text-ink-muted">{credentials.registration_number}</span></div>
-                  <div className="flex justify-between"><span className="text-ink-muted">Senha inicial:</span><span className="font-mono font-bold text-ink">{credentials.initial_password ?? DEFAULT_GUARDIAN_PASSWORD}</span></div>
                 </div>
                 <p className="text-xs text-ink-muted">
-                  Senha padrão da plataforma — <b className="font-mono">{DEFAULT_GUARDIAN_PASSWORD}</b>. O responsável será obrigado a trocar no 1º acesso.
+                  Nenhuma senha é definida pela escola. O responsável cria uma senha pessoal e intransferível pelo link do convite (válido por 72 horas).
                 </p>
               </div>
               <div className="mt-4 flex justify-end gap-2">
-                <button className="btn-outline flex items-center gap-1.5" onClick={copyCredentials}>
-                  {copied ? <Check size={14} /> : <Copy size={14} />} {copied ? 'Copiado!' : 'Copiar dados'}
+                <button className="btn-outline flex items-center gap-1.5" onClick={copyLoginInfo}>
+                  {copied ? <Check size={14} /> : <Copy size={14} />} {copied ? 'Copiado!' : 'Copiar dados de login'}
                 </button>
                 <button className="btn-primary" onClick={() => setCredentials(null)}>Fechar</button>
               </div>
@@ -875,36 +897,33 @@ export function StudentsPage() {
                 </div>
               </div>
 
-              {/* Link de acesso */}
+              {/* Acesso do responsável */}
               <div className="card p-5">
-                <div className="flex items-center gap-2 mb-3 text-sm font-bold text-ink">
-                  <Link2 size={16} className="text-primary" /> Link de acesso do responsável
+                <div className="flex items-center justify-between gap-2 mb-3">
+                  <div className="flex items-center gap-2 text-sm font-bold text-ink">
+                    <Link2 size={16} className="text-primary" /> Acesso do responsável
+                  </div>
+                  <InviteBadge state={selected.guardian_invite_state} />
                 </div>
                 <div className="space-y-2 text-sm">
                   <Row label="Login (e-mail)" value={selected.guardian_email ?? '—'} />
                   <Row label="Matrícula (alternativa)" value={selected.registration_number ?? '—'} />
-                  <Row label="Senha inicial padrão" value={DEFAULT_GUARDIAN_PASSWORD} />
                   <p className="text-xs text-ink-muted mt-2">
-                    Todos os responsáveis recebem <b className="font-mono">{DEFAULT_GUARDIAN_PASSWORD}</b> como senha inicial —
-                    a troca é obrigatória no 1º acesso. Se o responsável já trocou, essa senha não vale mais.
+                    O acesso é ativado pelo próprio responsável através de um convite por e-mail (link individual,
+                    de uso único, válido por 72 horas). A escola não define nem visualiza senhas.
                   </p>
                 </div>
                 <button
                   className="mt-3 btn-outline flex items-center gap-1.5 text-xs"
-                  onClick={() => {
-                    const text =
-                      `Aluno: ${selected.name}\n` +
-                      `Login (e-mail): ${selected.guardian_email ?? '—'}\n` +
-                      `Matrícula (alternativa): ${selected.registration_number}\n` +
-                      `Senha inicial: ${DEFAULT_GUARDIAN_PASSWORD}\n` +
-                      `(troca obrigatória no 1º acesso)`;
-                    navigator.clipboard.writeText(text);
-                    setCopied(true);
-                    setTimeout(() => setCopied(false), 2000);
-                  }}
+                  disabled={inviteBusy}
+                  onClick={() => sendGuardianInvite(selected)}
                 >
-                  {copied ? <Check size={14} /> : <Copy size={14} />} {copied ? 'Copiado!' : 'Copiar dados de acesso'}
+                  {inviteBusy ? <Loader2 size={14} className="animate-spin" /> : <Mail size={14} />}
+                  {selected.guardian_invite_state === 'activated' ? 'Enviar link de recuperação'
+                    : selected.guardian_invite_state === 'pending' ? 'Reenviar convite'
+                    : 'Enviar convite'}
                 </button>
+                {inviteMsg && <p className="mt-2 text-xs text-success">{inviteMsg}</p>}
               </div>
             </>
           )}

@@ -35,19 +35,9 @@ export function generateSecurePassword(): string {
   return randomBytes(12).toString('base64url');
 }
 
-/**
- * Senha padrão inicial atribuída a TODOS os responsáveis novos.
- *
- * Escolhida para ser:
- *  - fácil de comunicar por telefone/impresso/WhatsApp;
- *  - suficiente para o mínimo de 8 caracteres do provedor de auth;
- *  - com letra maiúscula, minúscula, número e caractere especial.
- *
- * Regra de negócio: a troca é OBRIGATÓRIA no 1º acesso
- * (`profiles.password_change_required = true` — ver students.create).
- * Depois disso, esta senha deixa de ser válida para o usuário.
- */
-export const DEFAULT_GUARDIAN_PASSWORD = 'Escola@2026';
+// NOTA DE SEGURANÇA: a antiga senha universal fixa foi REMOVIDA (migration
+// 0025). Contas novas são criadas com senha aleatória descartada e o acesso é
+// ativado por convite individual (ver lib/invitations.ts + rota de aceite).
 
 // Alfabeto sem caracteres ambíguos (0/O, 1/l/I) — senha temporária legível
 // para ser ditada/anotada e repassada ao responsável ou funcionário.
