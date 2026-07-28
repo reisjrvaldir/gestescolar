@@ -10,15 +10,15 @@ export const LANDING_V1_HTML = `
     <!-- ═══ NAVBAR ═══ -->
     <nav class="lp-nav" id="lpNav">
       <div class="lp-nav-inner">
-        <a class="lp-logo" href="#" onclick="event.preventDefault();window.scrollTo({top:0,behavior:'smooth'})">
+        <a class="lp-logo" href="/" onclick="event.preventDefault();window.scrollTo({top:0,behavior:'smooth'})">
           <i class="fa-solid fa-graduation-cap"></i> GestEscolar
         </a>
         <div class="lp-nav-links" id="lpNavLinks">
-          <a onclick="LandingPage.scrollTo('features')">Funcionalidades</a>
-          <a onclick="LandingPage.scrollTo('how')">Como funciona</a>
-          <a onclick="LandingPage.scrollTo('plans')">Planos</a>
-          <a onclick="LandingPage.scrollTo('coming')">Em breve</a>
-          <a onclick="LandingPage.scrollTo('faq')">FAQ</a>
+          <a href="#lp-features" onclick="event.preventDefault();LandingPage.scrollTo('features')">Funcionalidades</a>
+          <a href="#lp-how" onclick="event.preventDefault();LandingPage.scrollTo('how')">Como funciona</a>
+          <a href="#lp-plans" onclick="event.preventDefault();LandingPage.scrollTo('plans')">Planos</a>
+          <a href="#lp-coming" onclick="event.preventDefault();LandingPage.scrollTo('coming')">Em breve</a>
+          <a href="#lp-faq" onclick="event.preventDefault();LandingPage.scrollTo('faq')">FAQ</a>
         </div>
         <div class="lp-nav-btns">
           <button class="lp-btn lp-btn-outline lp-btn-nav" onclick="LandingPage.goLogin()">
@@ -595,16 +595,16 @@ export const LANDING_V1_HTML = `
         <div>
           <h4>Plataforma</h4>
           <ul>
-            <li><a href="#" onclick="LandingPage.scrollTo('features')">Funcionalidades</a></li>
-            <li><a href="#" onclick="LandingPage.scrollTo('plans')">Planos</a></li>
-            <li><a href="#" onclick="LandingPage.scrollTo('coming')">Em breve</a></li>
+            <li><a href="#lp-features" onclick="event.preventDefault();LandingPage.scrollTo('features')">Funcionalidades</a></li>
+            <li><a href="#lp-plans" onclick="event.preventDefault();LandingPage.scrollTo('plans')">Planos</a></li>
+            <li><a href="#lp-coming" onclick="event.preventDefault();LandingPage.scrollTo('coming')">Em breve</a></li>
           </ul>
         </div>
         <div>
           <h4>Acesso</h4>
           <ul>
-            <li><a href="#" onclick="LandingPage.goLogin()">Login</a></li>
-            <li><a href="#" onclick="LandingPage.goRegister()">Cadastrar escola</a></li>
+            <li><a href="/login">Login</a></li>
+            <li><a href="/onboarding">Cadastrar escola</a></li>
           </ul>
         </div>
         <div>
@@ -617,18 +617,14 @@ export const LANDING_V1_HTML = `
         <div>
           <h4>Legal</h4>
           <ul>
-            <li><a href="/privacidade" target="_blank"><i class="fa-solid fa-shield-halved"></i> Política de Privacidade</a></li>
-            <li><a href="/termos" target="_blank"><i class="fa-solid fa-file-contract"></i> Termos de Uso</a></li>
+            <li><a href="/privacidade" target="_blank" rel="noopener noreferrer"><i class="fa-solid fa-shield-halved"></i> Política de Privacidade</a></li>
+            <li><a href="/termos" target="_blank" rel="noopener noreferrer"><i class="fa-solid fa-file-contract"></i> Termos de Uso</a></li>
           </ul>
         </div>
       </div>
       <div class="lp-footer-bottom">
         <span>© 2026 GestEscolar. Todos os direitos reservados. Dados tratados em conformidade com a LGPD.</span>
-        <div class="lp-footer-social">
-          <a href="#" title="Instagram"><i class="fa-brands fa-instagram"></i></a>
-          <a href="#" title="LinkedIn"><i class="fa-brands fa-linkedin"></i></a>
-          <a href="#" title="YouTube"><i class="fa-brands fa-youtube"></i></a>
-        </div>
+        <!-- redes sociais: ícones ocultos até que as contas estejam ativas -->
       </div>
     </footer>
 
@@ -651,7 +647,7 @@ export const LANDING_V1_HTML = `
     </div>
 
     <!-- Botão flutuante WhatsApp -->
-    <a class="lp-whatsapp-btn" href="https://wa.me/5500000000000?text=Ol%C3%A1%2C%20tenho%20interesse%20no%20GestEscolar!" target="_blank" title="Falar no WhatsApp">
+    <a class="lp-whatsapp-btn" href="https://wa.me/5500000000000?text=Ol%C3%A1%2C%20tenho%20interesse%20no%20GestEscolar!" target="_blank" rel="noopener noreferrer" aria-label="Falar com a gente no WhatsApp">
       <i class="fa-brands fa-whatsapp"></i>
     </a>
 

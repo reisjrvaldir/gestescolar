@@ -22,7 +22,13 @@ export function LandingPage() {
       _annual: false,
       scrollTo(section: string) {
         const el = document.getElementById('lp-' + section);
-        if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        if (!el) return;
+        const HEADER_H = 72; // sticky nav height
+        const top = el.getBoundingClientRect().top + window.scrollY - HEADER_H;
+        window.scrollTo({ top, behavior: 'smooth' });
+        // move focus to section for keyboard/screen-reader users
+        if (!el.hasAttribute('tabindex')) el.setAttribute('tabindex', '-1');
+        el.focus({ preventScroll: true });
       },
       goLogin() { navigate('/login'); },
       goRegister() { navigate('/onboarding'); },
