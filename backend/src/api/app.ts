@@ -44,10 +44,11 @@ export const app = express();
 app.use(helmet({ contentSecurityPolicy: false }));
 
 // --- CORS restrito a origens conhecidas ---
+const isProduction = process.env.VERCEL_ENV === 'production';
 const ALLOWED_ORIGINS = [
   process.env.FRONTEND_URL || 'https://gestescolar.com.br',
   'https://www.gestescolar.com.br',
-  'http://localhost:5173',
+  ...(!isProduction ? ['http://localhost:5173'] : []),
 ].filter(Boolean);
 app.use(cors({
   origin(origin, cb) {

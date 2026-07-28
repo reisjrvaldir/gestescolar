@@ -48880,10 +48880,11 @@ searchRouter.get("/", async (req, res) => {
 // src/api/app.ts
 var app = (0, import_express33.default)();
 app.use(helmet({ contentSecurityPolicy: false }));
+var isProduction = process.env.VERCEL_ENV === "production";
 var ALLOWED_ORIGINS = [
   process.env.FRONTEND_URL || "https://gestescolar.com.br",
   "https://www.gestescolar.com.br",
-  "http://localhost:5173"
+  ...!isProduction ? ["http://localhost:5173"] : []
 ].filter(Boolean);
 app.use((0, import_cors.default)({
   origin(origin, cb) {
