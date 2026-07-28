@@ -7,6 +7,19 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 type Entry<T> = { data: T; at: number };
 const store = new Map<string, Entry<unknown>>();
 
+/** TTL padrão para listas estáveis da sessão (1 min). */
+export const CACHE_TTL = 60_000;
+
+/** Chaves de cache compartilhadas entre páginas — uma mutação numa página
+ *  invalida o cache das outras que consomem o mesmo recurso. */
+export const CK = {
+  students: 'students:list',
+  classes: 'classes:list',
+  staff: 'staff:list',
+  subjects: 'subjects:list',
+  plans: 'plans:list',
+} as const;
+
 export const queryCache = {
   get<T>(key: string, ttlMs: number): T | null {
     const e = store.get(key) as Entry<T> | undefined;

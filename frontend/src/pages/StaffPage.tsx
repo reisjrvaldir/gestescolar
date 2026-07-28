@@ -11,6 +11,7 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { SensitiveField } from '@/components/ui/SensitiveField';
 import { staffService, type NewStaff, type CreatedStaff } from '@/services/staff';
 import { createSchedule } from '@/services/schedules';
+import { queryCache, CK, CACHE_TTL } from '@/lib/cache';
 import { STAFF_ROLE_LABELS, CONTRACT_TYPE_LABELS, type Staff, type StaffRole } from '@/types/models';
 import { useMe } from '@/auth/AuthGate';
 import { staffCreateSchema } from '@/lib/schemas';
@@ -131,9 +132,17 @@ export function StaffPage() {
 
   useEffect(() => { load(); }, []);
 
-  async function load() {
+  async function load(force = false) {
+    if (!force) {
+      const cached = queryCache.get<Staff[]>(CK.staff, CACHE_TTL);
+      if (cached) { setStaff(cached); setLoading(false); return; }
+    }
     setLoading(true);
-    try { setStaff(await staffService.list()); } catch (e) { console.error(e); }
+    try {
+      const s = await staffService.list();
+      queryCache.set(CK.staff, s);
+      setStaff(s);
+    } catch (e) { console.error(e); }
     setLoading(false);
   }
 
@@ -239,7 +248,8 @@ export function StaffPage() {
         }
         setCredentials(created);
       }
-      await load();
+      queryCache.invalidate(CK.staff);
+      await load(true);
       closeModal();
     } catch (e: any) {
       if (!applyServerErrors(e, setFieldError)) {
@@ -252,7 +262,8 @@ export function StaffPage() {
 
   async function onRemove(id: string) {
     await staffService.remove(id);
-    await load();
+    queryCache.invalidate(CK.staff);
+    await load(true);
   }
 
   async function confirmResetPassword() {

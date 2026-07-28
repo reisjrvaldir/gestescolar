@@ -14,6 +14,7 @@ import { SensitiveField } from '@/components/ui/SensitiveField';
 import { studentsService, type NewStudent, type CreatedStudent } from '@/services/students';
 import { classesService } from '@/services/classes';
 import { schoolPlansService, type SchoolPlan } from '@/services/schoolPlans';
+import { queryCache, CK, CACHE_TTL } from '@/lib/cache';
 import { useMe } from '@/auth/AuthGate';
 import type { SchoolClass, Student } from '@/types/models';
 import { brl } from '@/lib/fees';
@@ -154,7 +155,14 @@ export function StudentsPage() {
   const [photoPreview, setPhotoPreview] = useState<string | null>(null);
   const [editing, setEditing] = useState<Student | null>(null);
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (force = false) => {
+    // Cache-hit: usa dados válidos sem tocar a rede e sem piscar loading.
+    if (!force) {
+      const s = queryCache.get<Student[]>(CK.students, CACHE_TTL);
+      const c = queryCache.get<SchoolClass[]>(CK.classes, CACHE_TTL);
+      const p = queryCache.get<SchoolPlan[]>(CK.plans, CACHE_TTL);
+      if (s && c && p) { setStudents(s); setClasses(c); setPlans(p); setLoading(false); return; }
+    }
     setLoading(true);
     setPageError(null);
     try {
@@ -163,6 +171,9 @@ export function StudentsPage() {
         classesService.list(),
         schoolPlansService.list(),
       ]);
+      queryCache.set(CK.students, s);
+      queryCache.set(CK.classes, c);
+      queryCache.set(CK.plans, p);
       setStudents(s);
       setClasses(c);
       setPlans(p);
@@ -270,7 +281,8 @@ export function StudentsPage() {
       };
       const created = await studentsService.create(payload);
       setCredentials(created);
-      await load();
+      queryCache.invalidate(CK.students);
+      await load(true);
       navigate('/app/students');
     } catch (e: any) {
       if (!applyServerErrors(e, setError)) {
@@ -909,7 +921,8 @@ export function StudentsPage() {
             setStudents((prev) => prev.map((s) => (s.id === updated.id ? { ...s, ...updated } : s)));
             setSelected((prev) => (prev && prev.id === updated.id ? { ...prev, ...updated } : prev));
             setEditing(null);
-            load();
+            queryCache.invalidate(CK.students);
+            load(true);
           }}
         />
       )}

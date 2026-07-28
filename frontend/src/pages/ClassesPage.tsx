@@ -10,6 +10,7 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { classesService, type NewClass, type ClassStudent } from '@/services/classes';
 import { subjectsService, LEVEL_LABELS, LEVEL_ORDER, type Subject } from '@/services/subjects';
 import { staffService } from '@/services/staff';
+import { queryCache, CK, CACHE_TTL } from '@/lib/cache';
 import { SHIFT_LABELS, type SchoolClass, type Staff } from '@/types/models';
 
 const PAGE_SIZE = 6;
@@ -67,10 +68,25 @@ export function ClassesPage() {
 
   useEffect(() => { load(); }, []);
 
-  async function load() {
+  async function load(force = false) {
+    if (!force) {
+      const c = queryCache.get<SchoolClass[]>(CK.classes, CACHE_TTL);
+      const s = queryCache.get<Staff[]>(CK.staff, CACHE_TTL);
+      const subs = queryCache.get<Subject[]>(CK.subjects, CACHE_TTL);
+      if (c && s && subs) {
+        setClasses(c);
+        setTeachers(s.filter((t) => (t.role_type ?? t.role) === 'teacher'));
+        setSubjects(subs);
+        setLoading(false);
+        return;
+      }
+    }
     setLoading(true);
     try {
       const [c, s, subs] = await Promise.all([classesService.list(), staffService.list(), subjectsService.list()]);
+      queryCache.set(CK.classes, c);
+      queryCache.set(CK.staff, s);
+      queryCache.set(CK.subjects, subs);
       setClasses(c);
       setTeachers(s.filter((t) => (t.role_type ?? t.role) === 'teacher'));
       setSubjects(subs);
@@ -157,7 +173,8 @@ export function ClassesPage() {
       } else {
         await classesService.create(payload);
       }
-      await load();
+      queryCache.invalidate(CK.classes);
+      await load(true);
       closeModal();
     } finally {
       setSaving(false);
@@ -167,7 +184,8 @@ export function ClassesPage() {
   async function onRemove(id: string) {
     if (!confirm('Remover esta turma?')) return;
     await classesService.remove(id);
-    await load();
+    queryCache.invalidate(CK.classes);
+    await load(true);
   }
 
   async function openStudents(c: SchoolClass) {
