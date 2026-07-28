@@ -11,8 +11,16 @@ export function setTokenProvider(fn: () => Promise<string | null>) {
   getToken = fn;
 }
 
+// Deduplica chamadas concorrentes ao getToken(): múltiplos requests em
+// Promise.all() compartilham a mesma promise em-voo em vez de disparar
+// várias buscas de token simultaneamente.
+let tokenInflight: Promise<string | null> | null = null;
+
 async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
-  const token = await getToken();
+  if (!tokenInflight) {
+    tokenInflight = getToken().finally(() => { tokenInflight = null; });
+  }
+  const token = await tokenInflight;
   const res = await fetch(`${BASE}${path}`, {
     ...init,
     headers: {

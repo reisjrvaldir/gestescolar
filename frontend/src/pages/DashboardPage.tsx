@@ -10,6 +10,7 @@ import { PageHero } from '@/components/ui/PageHero';
 import { MetricCard } from '@/components/ui/MetricCard';
 import { StatusBadge } from '@/components/ui/StatusBadge';
 import { Modal } from '@/components/ui/Modal';
+import { Skeleton, SkeletonMetricCard, SkeletonTable } from '@/components/ui/Skeleton';
 import { OnboardingChecklist } from '@/components/onboarding/OnboardingChecklist';
 import { api } from '@/lib/api';
 import { brl } from '@/lib/fees';
@@ -101,11 +102,30 @@ const ACTIVITY_ICON: Record<string, { icon: typeof CheckCircle2; tone: string }>
 
 const REFRESH_MS = 30_000;
 
+function DashboardSkeleton() {
+  return (
+    <div className="space-y-6" role="status" aria-label="Carregando dashboard…">
+      <div className="rounded-2xl bg-surface p-6 space-y-2">
+        <Skeleton className="h-6 w-52" />
+        <Skeleton className="h-4 w-80" />
+      </div>
+      <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+        <SkeletonMetricCard />
+        <SkeletonMetricCard />
+        <SkeletonMetricCard />
+        <SkeletonMetricCard />
+      </div>
+      <SkeletonTable rows={5} cols={4} />
+    </div>
+  );
+}
+
 export function DashboardPage() {
   const me = useMe();
   const navigate = useNavigate();
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
   const [myClasses, setMyClasses] = useState<SchoolClass[] | null>(null);
@@ -149,8 +169,10 @@ export function DashboardPage() {
     try {
       const r = await api.get<{ ok: boolean; data: DashboardStats }>('/dashboard/stats');
       setStats(r.data);
+      setError(null);
       setLastUpdated(new Date());
-    } catch (e) {
+    } catch (e: any) {
+      setError(e?.message ?? 'Erro ao carregar o dashboard.');
       console.error(e);
     } finally {
       setLoading(false);
@@ -172,15 +194,17 @@ export function DashboardPage() {
   }, [fetchStats]);
 
   // Professor/coordenador: carrega as turmas onde ele é o regente.
+  // Usa me.role (disponível imediatamente via AuthGate) para evitar waterfall com fetchStats.
   useEffect(() => {
-    if (stats && ['teacher', 'coordinator'].includes(stats.role)) {
+    if (me && ['teacher', 'coordinator'].includes(me.role)) {
       classesService.mine().then(setMyClasses).catch(() => setMyClasses([]));
     }
-  }, [stats?.role]);
+  }, [me?.role]);
 
-  // Gestão: alunos (aniversariantes + ocorrência), contatos, turmas e agenda de hoje.
+  // Gestão: alunos, contatos, turmas e agenda de hoje.
+  // Dispara em paralelo com fetchStats usando me.role — elimina 1 round-trip de waterfall.
   useEffect(() => {
-    if (!stats || !['school_admin', 'financial', 'superadmin'].includes(stats.role)) return;
+    if (!me || !['school_admin', 'financial', 'superadmin'].includes(me.role)) return;
     api.get<{ data: Student[] }>('/students').then(r => setAllStudents(r.data.filter(s => s.status === 'active'))).catch(() => {});
     messagesService.contacts().then(setContacts).catch(() => {});
     classesService.list().then(setAdminClasses).catch(() => {});
@@ -189,7 +213,7 @@ export function DashboardPage() {
       const t = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
       setTodayEvents(evs.filter(e => e.date_start === t || (e.date_end && e.date_start <= t && e.date_end >= t)));
     }).catch(() => {});
-  }, [stats?.role]);
+  }, [me?.role]);
 
   async function sendOccurrence() {
     const st = allStudents.find(s => s.id === occStudent);
@@ -230,9 +254,16 @@ export function DashboardPage() {
     } finally { setComBusy(false); }
   }
 
-  if (loading || !stats) {
-    return <div className="flex items-center justify-center py-20 text-ink-muted"><Loader2 className="animate-spin" size={24} /> <span className="ml-2">Carregando…</span></div>;
-  }
+  if (loading) return <DashboardSkeleton />;
+  if (error) return (
+    <div className="card p-10 text-center space-y-3">
+      <p className="text-sm text-danger">{error}</p>
+      <button className="btn-outline inline-flex items-center gap-2" onClick={() => fetchStats()}>
+        <RefreshCw size={15} /> Tentar novamente
+      </button>
+    </div>
+  );
+  if (!stats) return null;
 
   const refreshIndicator = (
     <div className="mb-4 flex items-center justify-end gap-2 text-xs text-ink-subtle">

@@ -11,4 +11,20 @@ export default defineConfig({
     },
   },
   server: { port: 5173 },
+  build: {
+    chunkSizeWarningLimit: 600,
+    rollupOptions: {
+      output: {
+        manualChunks(id) {
+          if (
+            id.includes('node_modules/react/') ||
+            id.includes('node_modules/react-dom/') ||
+            id.includes('node_modules/react-router-dom/')
+          ) return 'react-vendor';
+          if (id.includes('node_modules/lucide-react/')) return 'ui-vendor';
+          if (id.includes('node_modules/better-auth/')) return 'auth-vendor';
+        },
+      },
+    },
+  },
 });
