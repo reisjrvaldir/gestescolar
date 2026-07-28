@@ -93,6 +93,14 @@ export const asaasProvider: PaymentProvider = {
       description: input.description,
       externalReference: input.invoiceId,
     };
+    // Multa/juros por atraso: o ASAAS aplica automaticamente após o vencimento.
+    // fine = multa fixa (%); interest = juros de mora ao mês (%, pro-rata/dia).
+    if (input.finePct && input.finePct > 0) {
+      body.fine = { value: input.finePct, type: 'PERCENTAGE' };
+    }
+    if (input.interestPct && input.interestPct > 0) {
+      body.interest = { value: input.interestPct };
+    }
     if (input.split && input.split.length > 0) {
       body.split = input.split.map((s) => ({
         walletId: s.walletId,

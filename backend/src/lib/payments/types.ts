@@ -30,6 +30,10 @@ export interface CreateChargeInput {
   dueDate?: string;          // yyyy-mm-dd (default: hoje)
   customer?: ChargeCustomer;
   split?: SplitTarget[];
+  /** Multa por atraso: percentual FIXO aplicado uma vez após o vencimento. */
+  finePct?: number;
+  /** Juros de mora: percentual AO MÊS (aplicado pro-rata/dia após o vencimento). */
+  interestPct?: number;
 }
 
 export interface ChargeResult {

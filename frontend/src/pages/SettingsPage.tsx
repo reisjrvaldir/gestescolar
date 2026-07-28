@@ -1,6 +1,6 @@
 import { useEffect, useState, useRef } from 'react';
 import { useForm } from 'react-hook-form';
-import { Settings, Save, Check, Loader2, Upload, Image } from 'lucide-react';
+import { Settings, Save, Check, Loader2, Upload, Image, Percent } from 'lucide-react';
 import { PageHero } from '@/components/ui/PageHero';
 import { StatusBadge } from '@/components/ui/StatusBadge';
 import { settingsService, type SchoolSettings, type UpdateSchoolSettings } from '@/services/settings';
@@ -29,6 +29,8 @@ export function SettingsPage() {
           cnpj: data.cnpj ?? '',
           email: data.email ?? '',
           phone: data.phone ?? '',
+          late_fine_pct: data.late_fine_pct ?? 0,
+          late_interest_pct: data.late_interest_pct ?? 0,
         });
       })
       .catch(console.error)
@@ -124,6 +126,45 @@ export function SettingsPage() {
           <div>
             <label className="label">E-mail da escola</label>
             <input type="email" className="input" {...register('email')} />
+          </div>
+
+          {/* Multa e juros por atraso */}
+          <div className="border-t border-border pt-4">
+            <div className="mb-1 flex items-center gap-2 text-sm font-bold text-ink">
+              <Percent size={15} className="text-primary" /> Multa e juros por atraso
+            </div>
+            <p className="mb-3 text-xs text-ink-muted">
+              Aplicados automaticamente às cobranças pagas após o vencimento. Deixe 0 para não cobrar.
+            </p>
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <div>
+                <label className="label">Multa (% único)</label>
+                <div className="relative">
+                  <input
+                    type="number" step="0.01" min="0" max="100" inputMode="decimal"
+                    className="input pr-8" placeholder="Ex.: 2"
+                    {...register('late_fine_pct', { valueAsNumber: true })}
+                  />
+                  <span className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-sm text-ink-subtle">%</span>
+                </div>
+                <p className="mt-1 text-[11px] text-ink-subtle">Cobrada uma vez sobre o valor em atraso.</p>
+              </div>
+              <div>
+                <label className="label">Juros de mora (% ao mês)</label>
+                <div className="relative">
+                  <input
+                    type="number" step="0.01" min="0" max="100" inputMode="decimal"
+                    className="input pr-8" placeholder="Ex.: 1"
+                    {...register('late_interest_pct', { valueAsNumber: true })}
+                  />
+                  <span className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-sm text-ink-subtle">%</span>
+                </div>
+                <p className="mt-1 text-[11px] text-ink-subtle">Proporcional aos dias de atraso (≈ {'{'}mês{'}'}/30 ao dia).</p>
+              </div>
+            </div>
+            <p className="mt-2 text-[11px] text-ink-subtle">
+              Padrão comum no Brasil: multa 2% + juros 1% ao mês. As taxas valem para novas cobranças geradas após salvar.
+            </p>
           </div>
         </form>
 

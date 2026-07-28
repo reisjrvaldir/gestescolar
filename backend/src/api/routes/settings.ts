@@ -11,7 +11,9 @@ settingsRouter.get('/', async (req, res) => {
   const data = await withTenant(req.ctx!, async (c) => {
     const { rows } = await c.query(
       `select id, name, legal_name, cnpj, email, phone, logo_url, status,
-              subscription_status, trial_ends_at
+              subscription_status, trial_ends_at,
+              coalesce(late_fine_pct, 0)::float8     as late_fine_pct,
+              coalesce(late_interest_pct, 0)::float8 as late_interest_pct
          from public.schools where id = $1`,
       [req.ctx!.schoolId],
     );
@@ -23,7 +25,7 @@ settingsRouter.get('/', async (req, res) => {
 settingsRouter.put('/', requireRole('school_admin', 'superadmin'), validateBody(schoolSettingsSchema), async (req, res) => {
   const p = req.body as import('../../../../shared/schemas').SchoolSettingsOutput;
 
-  const ALLOWED_COLS = ['name', 'legal_name', 'cnpj', 'email', 'phone', 'logo_url'];
+  const ALLOWED_COLS = ['name', 'legal_name', 'cnpj', 'email', 'phone', 'logo_url', 'late_fine_pct', 'late_interest_pct'];
   const fields = Object.entries(p).filter(([k, v]) => v !== undefined && ALLOWED_COLS.includes(k));
   if (fields.length === 0) return res.json({ ok: true });
 

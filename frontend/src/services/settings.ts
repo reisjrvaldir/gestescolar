@@ -11,6 +11,8 @@ export interface SchoolSettings {
   status: string;
   subscription_status: string;
   trial_ends_at?: string;
+  late_fine_pct?: number;
+  late_interest_pct?: number;
 }
 
 export interface UpdateSchoolSettings {
@@ -20,6 +22,8 @@ export interface UpdateSchoolSettings {
   email?: string;
   phone?: string;
   logo_url?: string;
+  late_fine_pct?: number;
+  late_interest_pct?: number;
 }
 
 export const settingsService = {

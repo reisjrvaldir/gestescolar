@@ -53,6 +53,16 @@ export async function buildChargeForInvoice(
     billingType,
   };
 
+  // Multa/juros por atraso configurados pela escola — o provedor aplica após o
+  // vencimento. Buscados sempre (não dependem do ASAAS estar configurado).
+  const feeRow = await c.query(
+    `select coalesce(late_fine_pct,0)::float8 as fine, coalesce(late_interest_pct,0)::float8 as interest
+       from public.schools where id=$1`,
+    [schoolId],
+  );
+  chargeInput.finePct = Number(feeRow.rows[0]?.fine ?? 0);
+  chargeInput.interestPct = Number(feeRow.rows[0]?.interest ?? 0);
+
   if (isAsaasConfigured) {
     const ctxRow = await c.query(
       `select g.name, g.cpf, g.email, g.phone, g.asaas_customer_id, s.asaas_wallet_id

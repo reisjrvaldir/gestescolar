@@ -35772,6 +35772,12 @@ var init_asaas = __esm({
           description: input.description,
           externalReference: input.invoiceId
         };
+        if (input.finePct && input.finePct > 0) {
+          body.fine = { value: input.finePct, type: "PERCENTAGE" };
+        }
+        if (input.interestPct && input.interestPct > 0) {
+          body.interest = { value: input.interestPct };
+        }
         if (input.split && input.split.length > 0) {
           body.split = input.split.map((s) => ({
             walletId: s.walletId,
@@ -36073,6 +36079,13 @@ async function buildChargeForInvoice(c, schoolId, invoiceId, billingType) {
     description: `Mensalidade \u2014 ${invoice.student_name}`,
     billingType
   };
+  const feeRow = await c.query(
+    `select coalesce(late_fine_pct,0)::float8 as fine, coalesce(late_interest_pct,0)::float8 as interest
+       from public.schools where id=$1`,
+    [schoolId]
+  );
+  chargeInput.finePct = Number(feeRow.rows[0]?.fine ?? 0);
+  chargeInput.interestPct = Number(feeRow.rows[0]?.interest ?? 0);
   if (isAsaasConfigured) {
     const ctxRow = await c.query(
       `select g.name, g.cpf, g.email, g.phone, g.asaas_customer_id, s.asaas_wallet_id
@@ -43777,13 +43790,17 @@ var adhocChargeSchema = external_exports.object({
   scope: external_exports.enum(["all", "class"], { required_error: "Selecione o escopo" }),
   class_id: external_exports.string().uuid("Turma inv\xE1lida").optional()
 });
+var pctSchema = external_exports.coerce.number({ invalid_type_error: "Informe um percentual v\xE1lido" }).min(0, "N\xE3o pode ser negativo").max(100, "M\xE1ximo de 100%").optional();
 var schoolSettingsSchema = external_exports.object({
   name: external_exports.string().min(2, "Nome da escola muito curto").max(200).optional(),
   legal_name: external_exports.string().max(200).optional(),
   cnpj: external_exports.string().max(20).optional(),
   email: external_exports.string().email("E-mail inv\xE1lido").max(254).optional().or(external_exports.literal("")),
   phone: phoneSchema.optional(),
-  logo_url: external_exports.string().max(1e3).optional()
+  logo_url: external_exports.string().max(1e3).optional(),
+  // Multa (% fixo) e juros de mora (% ao mês) aplicados a pagamentos em atraso.
+  late_fine_pct: pctSchema,
+  late_interest_pct: pctSchema
 });
 var onboardingSchema = external_exports.object({
   school_name: external_exports.string({ required_error: "Informe o nome da escola" }).min(2, "Nome da escola muito curto").max(200),
@@ -46052,7 +46069,9 @@ settingsRouter.get("/", async (req, res) => {
   const data = await withTenant(req.ctx, async (c) => {
     const { rows } = await c.query(
       `select id, name, legal_name, cnpj, email, phone, logo_url, status,
-              subscription_status, trial_ends_at
+              subscription_status, trial_ends_at,
+              coalesce(late_fine_pct, 0)::float8     as late_fine_pct,
+              coalesce(late_interest_pct, 0)::float8 as late_interest_pct
          from public.schools where id = $1`,
       [req.ctx.schoolId]
     );
@@ -46062,7 +46081,7 @@ settingsRouter.get("/", async (req, res) => {
 });
 settingsRouter.put("/", requireRole("school_admin", "superadmin"), validateBody(schoolSettingsSchema), async (req, res) => {
   const p2 = req.body;
-  const ALLOWED_COLS2 = ["name", "legal_name", "cnpj", "email", "phone", "logo_url"];
+  const ALLOWED_COLS2 = ["name", "legal_name", "cnpj", "email", "phone", "logo_url", "late_fine_pct", "late_interest_pct"];
   const fields = Object.entries(p2).filter(([k, v2]) => v2 !== void 0 && ALLOWED_COLS2.includes(k));
   if (fields.length === 0) return res.json({ ok: true });
   const sets = fields.map(([k], i) => `"${k}" = $${i + 2}`).join(", ");

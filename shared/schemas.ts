@@ -167,6 +167,13 @@ export type AdhocChargeOutput = z.output<typeof adhocChargeSchema>;
 
 // ─── Configurações da escola ──────────────────────────────────────────────────
 
+// Percentual de 0 a 100, com até 2 casas. Aceita number ou string ("2,5"/"2.5").
+const pctSchema = z.coerce
+  .number({ invalid_type_error: 'Informe um percentual válido' })
+  .min(0, 'Não pode ser negativo')
+  .max(100, 'Máximo de 100%')
+  .optional();
+
 export const schoolSettingsSchema = z.object({
   name:        z.string().min(2, 'Nome da escola muito curto').max(200).optional(),
   legal_name:  z.string().max(200).optional(),
@@ -174,6 +181,9 @@ export const schoolSettingsSchema = z.object({
   email:       z.string().email('E-mail inválido').max(254).optional().or(z.literal('')),
   phone:       phoneSchema.optional(),
   logo_url:    z.string().max(1000).optional(),
+  // Multa (% fixo) e juros de mora (% ao mês) aplicados a pagamentos em atraso.
+  late_fine_pct:     pctSchema,
+  late_interest_pct: pctSchema,
 });
 
 export type SchoolSettingsOutput = z.output<typeof schoolSettingsSchema>;
