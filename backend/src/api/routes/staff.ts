@@ -1,12 +1,25 @@
 import { Router } from 'express';
+import { randomBytes, scryptSync } from 'crypto';
 import { withTenant } from '../../db/withTenant';
 import { requireAuth, requireRole } from '../../middleware/auth';
 import { signUpGuardian } from '../../lib/authSignup';
-import { generateSecurePassword, toStoredPassword } from '../../lib/validation';
+import { DEFAULT_GUARDIAN_PASSWORD, toStoredPassword } from '../../lib/validation';
 import { validateBody } from '../../lib/validateBody';
-import { issueAndSendInvitation } from '../../lib/inviteFlow';
-import { LATEST_INVITE_SQL, deriveInviteState } from '../../lib/invitations';
 import { staffCreateSchema, staffUpdateSchema } from '../../../../shared/schemas';
+
+/**
+ * Hash de senha no formato do Better Auth (Neon Auth): scrypt N=16384 r=16 p=1
+ * dkLen=64, salt de 16 bytes em hex usado como string, saída "salt:hash" (hex).
+ * Compatível com a verificação do provedor — permite resetar a senha de um
+ * usuário direto na tabela neon_auth.account sem API administrativa.
+ */
+function betterAuthHash(password: string): string {
+  const salt = randomBytes(16).toString('hex');
+  const key = scryptSync(password.normalize('NFKC'), salt, 64, {
+    N: 16384, r: 16, p: 1, maxmem: 64 * 1024 * 1024,
+  });
+  return `${salt}:${key.toString('hex')}`;
+}
 
 export const staffRouter = Router();
 
@@ -16,29 +29,21 @@ staffRouter.get('/', requireRole('school_admin', 'financial', 'teacher', 'supera
   const data = await withTenant(req.ctx!, async (c) => {
     // Dados pessoais sempre mascarados nas listagens — revelação via /personal-data/reveal
     const { rows } = await c.query(
-      `select t.id, t.name,
-              left(t.email,1) || '***@' || split_part(t.email,'@',2)                        as email,
-              case when t.phone is null then null else '(**) ****-' || right(t.phone,4) end  as phone,
-              '***.***.***-' || right(t.cpf,2)                                               as cpf,
-              t.registration_number, t.role_type, t.subject_teaches,
-              t.position, t.admission_date::text as admission_date, t.contract_type,
-              t.weekly_hours::float8 as weekly_hours,
-              coalesce(t.timeclock_enabled, true) as timeclock_enabled,
-              t.status, t.created_at, t.user_id,
-              ${LATEST_INVITE_SQL}
-         from public.teachers t
-         left join public.profiles p on p.id = t.user_id
-        where t.school_id = $1
-        order by t.name asc`,
+      `select id, name,
+              left(email,1) || '***@' || split_part(email,'@',2)                          as email,
+              case when phone is null then null else '(**) ****-' || right(phone,4) end    as phone,
+              '***.***.***-' || right(cpf,2)                                               as cpf,
+              registration_number, role_type, subject_teaches,
+              position, admission_date::text as admission_date, contract_type,
+              weekly_hours::float8 as weekly_hours,
+              coalesce(timeclock_enabled, true) as timeclock_enabled,
+              status, created_at, user_id
+         from public.teachers
+        where school_id = $1
+        order by name asc`,
       [req.ctx!.schoolId],
     );
-    return rows.map((r: any) => ({
-      ...r,
-      access_activated_at: undefined,
-      latest_invite_status: undefined,
-      latest_invite_expires_at: undefined,
-      invite_state: deriveInviteState(r),
-    }));
+    return rows;
   });
   res.json({ ok: true, data });
 });
@@ -52,17 +57,16 @@ staffRouter.post('/', requireRole('school_admin', 'superadmin'), validateBody(st
       const matRow = await c.query(`select public.next_staff_matricula() as matricula`);
       const matricula: string = matRow.rows[0].matricula;
 
-      // Senha inicial ALEATÓRIA e DESCARTADA: ninguém — nem o gestor — a conhece.
-      // O acesso só é ativado via convite individual (o usuário define a própria
-      // senha). Login primário = e-mail; matrícula também funciona via publicAuth.
-      const throwawayPassword = generateSecurePassword();
+      // Senha inicial = padrão único da plataforma (troca obrigatória no 1º acesso).
+      // Login primário = e-mail; matrícula também funciona via publicAuth.
+      const visiblePassword = DEFAULT_GUARDIAN_PASSWORD;
       const authResult = await signUpGuardian({
         email: s.email,
-        password: toStoredPassword(throwawayPassword),
+        password: toStoredPassword(visiblePassword),
         name: s.name,
       });
 
-      // criar profile (role = role_type) — acesso pendente até aceitar o convite
+      // criar profile (role = role_type) com flag de troca de senha obrigatória
       const profileRow = await c.query(
         `insert into public.profiles (auth_user_id, school_id, name, email, phone, role, cpf, password_change_required)
          values ($1, $2, $3, $4, $5, $6, $7, true)
@@ -87,24 +91,11 @@ staffRouter.post('/', requireRole('school_admin', 'superadmin'), validateBody(st
          s.timeclock_enabled ?? true],
       );
 
-      // Emite o convite individual e dispara o e-mail com o link de uso único.
-      const invite = await issueAndSendInvitation(c, {
-        schoolId: req.ctx!.schoolId!,
-        profileId,
-        authUserId: authResult.authUserId,
-        email: s.email,
-        name: s.name,
-        purpose: 'invite',
-        createdByProfileId: req.ctx!.profileId,
-        createdByEmail: req.identity?.email ?? null,
-      });
-
       return {
         ...tRow.rows[0],
         login_matricula: matricula,
-        invite_state: 'pending',
-        invite_emailed: invite.emailed,
-        login_hint: 'O funcionário recebe um convite por e-mail para criar a própria senha. Login: e-mail ou matrícula.',
+        initial_password: visiblePassword,
+        login_password_hint: 'Login: e-mail do funcionário • Senha inicial padrão: Escola@2026 — troca obrigatória no 1º acesso.',
       };
     });
     res.status(201).json({ ok: true, data: result });
@@ -117,55 +108,90 @@ staffRouter.post('/', requireRole('school_admin', 'superadmin'), validateBody(st
   }
 });
 
-// ---------- Enviar / reenviar convite de acesso (gestão) ----------
-// Gera um novo convite individual de uso único e reenvia o link por e-mail.
-// NÃO define nem revela senha. purpose='recovery' quando o acesso já foi
-// ativado (equivale a "reenviar link de recuperação"); 'invite' caso contrário.
-async function sendStaffInvite(req: any, res: any) {
+// ---------- Resetar senha para a padrão da plataforma (gestão) ----------
+// Volta a senha do funcionário para Escola@2026 gravando o hash direto na
+// tabela de contas do Neon Auth (schema neon_auth). Só sobrescreve se o hash
+// atual estiver no formato scrypt do Better Auth — caso contrário aborta e
+// orienta a usar o fluxo "Esqueci minha senha".
+staffRouter.post('/:id/reset-password', requireRole('school_admin', 'superadmin'), async (req, res) => {
   try {
-    const result = await withTenant(req.ctx!, async (c: any) => {
+    const result = await withTenant(req.ctx!, async (c) => {
       const t = await c.query(
-        `select t.user_id, t.name, t.email, p.auth_user_id, p.access_activated_at
-           from public.teachers t
-           left join public.profiles p on p.id = t.user_id
-          where t.id=$1 and t.school_id=$2 limit 1`,
+        `select user_id, name, email from public.teachers where id=$1 and school_id=$2 limit 1`,
         [req.params.id, req.ctx!.schoolId],
       );
       if (t.rows.length === 0) return { error: 'not_found' as const };
-      const row = t.rows[0];
-      if (!row.user_id || !row.auth_user_id) return { error: 'no_auth' as const };
+      const { user_id: profileId, name, email } = t.rows[0];
+      if (!profileId) return { error: 'no_auth' as const };
 
-      const purpose: 'invite' | 'recovery' = row.access_activated_at ? 'recovery' : 'invite';
-      const invite = await issueAndSendInvitation(c, {
-        schoolId: req.ctx!.schoolId!,
-        profileId: row.user_id,
-        authUserId: row.auth_user_id,
-        email: row.email,
-        name: row.name,
-        purpose,
-        createdByProfileId: req.ctx!.profileId,
-        createdByEmail: req.identity?.email ?? null,
-      });
-      return { emailed: invite.emailed, wasResend: invite.wasResend, purpose };
+      const p = await c.query(
+        `select auth_user_id from public.profiles where id=$1 and school_id=$2 limit 1`,
+        [profileId, req.ctx!.schoolId],
+      );
+      if (p.rows.length === 0 || !p.rows[0].auth_user_id) return { error: 'no_auth' as const };
+      const authUserId = p.rows[0].auth_user_id;
+
+      // Localiza a tabela de contas do Better Auth (o nome/casing varia entre versões)
+      const tbl = await c.query(
+        `select table_name from information_schema.tables
+          where table_schema='neon_auth' and lower(table_name) in ('account','accounts') limit 1`,
+      );
+      if (tbl.rows.length === 0) return { error: 'schema_mismatch' as const };
+      const tableName: string = tbl.rows[0].table_name;
+
+      const cols = await c.query(
+        `select column_name from information_schema.columns
+          where table_schema='neon_auth' and table_name=$1`,
+        [tableName],
+      );
+      const names: string[] = cols.rows.map((r: any) => r.column_name);
+      const userCol = names.includes('userId') ? '"userId"' : names.includes('user_id') ? 'user_id' : null;
+      const provCol = names.includes('providerId') ? '"providerId"' : names.includes('provider_id') ? 'provider_id' : null;
+      if (!userCol || !provCol || !names.includes('password')) return { error: 'schema_mismatch' as const };
+
+      const acc = await c.query(
+        `select id, password from neon_auth."${tableName}"
+          where ${userCol}=$1 and ${provCol}='credential' limit 1`,
+        [authUserId],
+      );
+      if (acc.rows.length === 0) return { error: 'no_credential' as const };
+
+      // Só sobrescreve hash em formato scrypt "saltHex:hashHex" (ou vazio)
+      const current = String(acc.rows[0].password ?? '');
+      if (current && !/^[a-f0-9]{16,64}:[a-f0-9]{64,256}$/i.test(current)) {
+        return { error: 'hash_format' as const };
+      }
+
+      await c.query(
+        `update neon_auth."${tableName}" set password=$2 where id=$1`,
+        [acc.rows[0].id, betterAuthHash(DEFAULT_GUARDIAN_PASSWORD)],
+      );
+      await c.query(
+        `update public.profiles set password_change_required=true where id=$1`,
+        [profileId],
+      );
+      return { name, email };
     });
 
     if ('error' in result && result.error) {
+      const code: string = result.error;
       const map: Record<string, { http: number; message: string }> = {
         not_found: { http: 404, message: 'Funcionário não encontrado.' },
         no_auth: { http: 400, message: 'Este funcionário não possui login vinculado.' },
+        no_credential: { http: 400, message: 'Conta de login sem senha cadastrada — peça ao funcionário para usar "Esqueci minha senha".' },
+        schema_mismatch: { http: 501, message: 'Estrutura do provedor de login não reconhecida — use o fluxo "Esqueci minha senha".' },
+        hash_format: { http: 409, message: 'Formato de senha do provedor não reconhecido — por segurança, use o fluxo "Esqueci minha senha".' },
       };
-      const m = map[result.error] ?? { http: 400, message: 'Não foi possível enviar o convite.' };
-      return res.status(m.http).json({ code: result.error, message: m.message });
+      const m = map[code] ?? { http: 400, message: 'Não foi possível resetar a senha.' };
+      return res.status(m.http).json({ code, message: m.message });
     }
-    res.json({ ok: true, data: result });
-  } catch (err: any) {
-    console.error('[staff.invite] erro:', err?.message ?? err);
-    res.status(500).json({ code: 'invite_failed', message: 'Falha ao enviar o convite.' });
-  }
-}
 
-staffRouter.post('/:id/invite',  requireRole('school_admin', 'superadmin'), sendStaffInvite);
-staffRouter.post('/:id/recover', requireRole('school_admin', 'superadmin'), sendStaffInvite);
+    res.json({ ok: true, data: { ...result, initial_password: DEFAULT_GUARDIAN_PASSWORD } });
+  } catch (err: any) {
+    console.error('[staff.reset-password] erro:', err?.message ?? err);
+    res.status(500).json({ code: 'reset_failed', message: 'Falha ao resetar a senha.' });
+  }
+});
 
 staffRouter.put('/:id', requireRole('school_admin', 'superadmin'), validateBody(staffUpdateSchema), async (req, res) => {
   const s = req.body as import('../../../../shared/schemas').StaffUpdateOutput;

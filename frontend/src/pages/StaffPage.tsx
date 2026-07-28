@@ -3,7 +3,7 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import {
   Users, Plus, Trash2, Pencil, Loader2, Copy, Check, Search, Link2,
-  Briefcase, UserPlus, ShieldCheck, Eye, MoreVertical, Mail,
+  Briefcase, UserPlus, ShieldCheck, Eye, MoreVertical, KeyRound, AlertTriangle,
 } from 'lucide-react';
 import { StatusBadge } from '@/components/ui/StatusBadge';
 import { Modal } from '@/components/ui/Modal';
@@ -16,7 +16,8 @@ import { STAFF_ROLE_LABELS, CONTRACT_TYPE_LABELS, type Staff, type StaffRole } f
 import { useMe } from '@/auth/AuthGate';
 import { staffCreateSchema } from '@/lib/schemas';
 import { applyServerErrors } from '@/hooks/useFormErrors';
-import { InviteBadge } from '@/components/ui/InviteBadge';
+
+const DEFAULT_STAFF_PASSWORD = 'Escola@2026';
 
 type StatusFilter = 'all' | 'active' | 'inactive';
 
@@ -120,28 +121,11 @@ export function StaffPage() {
   // E-mail revelado do funcionário selecionado (para o botão copiar)
   const [revealedEmail, setRevealedEmail] = useState<string | null>(null);
 
-  // Envio/reenvio de convite de acesso (o funcionário define a própria senha)
+  // Reset de senha para a padrão da plataforma
+  const [resetTarget, setResetTarget] = useState<Staff | null>(null);
   const [resetBusy, setResetBusy] = useState(false);
   const [resetError, setResetError] = useState<string | null>(null);
-  const [resetDone, setResetDone] = useState<string | null>(null);
-
-  async function sendStaffInvite(target: Staff) {
-    setResetBusy(true);
-    setResetError(null);
-    setResetDone(null);
-    try {
-      const r = await staffService.sendInvite(target.id);
-      setResetDone(r.emailed
-        ? (r.wasResend ? 'Convite reenviado por e-mail.' : 'Convite enviado por e-mail.')
-        : 'Convite registrado, mas o e-mail não pôde ser enviado agora.');
-      await load();
-    } catch (e: any) {
-      setResetError(e?.message ?? 'Falha ao enviar o convite.');
-    } finally {
-      setResetBusy(false);
-      setTimeout(() => setResetDone(null), 6000);
-    }
-  }
+  const [resetDone, setResetDone] = useState<{ name: string; email: string; password: string } | null>(null);
 
   const { register, handleSubmit, reset, watch, setError: setFieldError, formState: { errors } } = useForm<FormFields>({ resolver: zodResolver(staffCreateSchema) });
   const watchRole = watch('role_type');
@@ -282,13 +266,29 @@ export function StaffPage() {
     await load(true);
   }
 
+  async function confirmResetPassword() {
+    if (!resetTarget) return;
+    setResetBusy(true);
+    setResetError(null);
+    try {
+      const r = await staffService.resetPassword(resetTarget.id);
+      setResetDone({ name: r.name, email: r.email, password: r.initial_password });
+      setResetTarget(null);
+    } catch (e: any) {
+      setResetError(e?.message ?? 'Falha ao resetar a senha.');
+    } finally {
+      setResetBusy(false);
+    }
+  }
+
   function copyCredentials() {
     if (!credentials) return;
     const text =
       `Funcionário: ${credentials.name}\n` +
       `Login (e-mail): ${credentials.email}\n` +
       `Matrícula (alternativa): ${credentials.registration_number ?? '—'}\n` +
-      `Acesso: o funcionário recebeu um convite por e-mail para criar a própria senha.`;
+      `Senha inicial: ${credentials.initial_password ?? DEFAULT_STAFF_PASSWORD}\n` +
+      `(troca de senha obrigatória no 1º acesso)`;
     navigator.clipboard.writeText(text);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
@@ -536,19 +536,22 @@ export function StaffPage() {
               </div>
 
               <div className="card p-5">
-                <div className="mb-3 flex items-center justify-between gap-2">
-                  <div className="flex items-center gap-2 text-sm font-bold text-ink">
-                    <Link2 size={16} className="text-primary" /> Acesso do funcionário
-                  </div>
-                  <InviteBadge state={selected.invite_state} />
+                <div className="mb-3 flex items-center gap-2 text-sm font-bold text-ink">
+                  <Link2 size={16} className="text-primary" /> Link de acesso do funcionário
                 </div>
                 <div className="space-y-2 text-sm">
                   <Row label="Login (e-mail)" value={revealedEmail ?? selected.email} />
                   <Row label="Matrícula (alternativa)" value={selected.registration_number} />
+                  <Row label="Senha inicial padrão" value={DEFAULT_STAFF_PASSWORD} />
                   <p className="mt-2 text-xs text-ink-muted">
-                    O acesso é ativado pelo próprio funcionário através de um convite por e-mail (link individual,
-                    de uso único, válido por 72 horas). A escola não define nem visualiza senhas.
+                    Todos os funcionários recebem <b className="font-mono">{DEFAULT_STAFF_PASSWORD}</b> como senha inicial —
+                    a troca é obrigatória no 1º acesso. Se já trocou, essa senha não vale mais.
                   </p>
+                  {!revealedEmail && (
+                    <p className="text-[11px] text-warning">
+                      Revele o e-mail em "Dados" acima para exibir e copiar o login completo.
+                    </p>
+                  )}
                 </div>
                 <div className="mt-3 flex flex-wrap gap-2">
                   <button
@@ -559,27 +562,22 @@ export function StaffPage() {
                         `Funcionário: ${selected.name}\n` +
                         `Login (e-mail): ${emailVal}\n` +
                         `Matrícula (alternativa): ${selected.registration_number ?? '—'}\n` +
-                        `Acesso: convite individual por e-mail para criar a própria senha.`;
+                        `Senha inicial: ${DEFAULT_STAFF_PASSWORD}\n` +
+                        `(troca obrigatória no 1º acesso)`;
                       navigator.clipboard.writeText(text);
                       setCopiedLink(true);
                       setTimeout(() => setCopiedLink(false), 2000);
                     }}
                   >
-                    {copiedLink ? <Check size={14} /> : <Copy size={14} />} {copiedLink ? 'Copiado!' : 'Copiar dados de login'}
+                    {copiedLink ? <Check size={14} /> : <Copy size={14} />} {copiedLink ? 'Copiado!' : 'Copiar dados de acesso'}
                   </button>
                   <button
-                    className="flex items-center gap-1.5 rounded-xl border border-primary/40 bg-primary-soft/40 px-3 py-2 text-xs font-semibold text-primary hover:bg-primary-soft disabled:opacity-60"
-                    disabled={resetBusy}
-                    onClick={() => sendStaffInvite(selected)}
+                    className="flex items-center gap-1.5 rounded-xl border border-warning/40 bg-warning-soft/40 px-3 py-2 text-xs font-semibold text-warning hover:bg-warning-soft"
+                    onClick={() => { setResetError(null); setResetTarget(selected); }}
                   >
-                    {resetBusy ? <Loader2 size={14} className="animate-spin" /> : <Mail size={14} />}
-                    {selected.invite_state === 'activated' ? 'Enviar link de recuperação'
-                      : selected.invite_state === 'pending' ? 'Reenviar convite'
-                      : 'Enviar convite'}
+                    <KeyRound size={14} /> Resetar senha
                   </button>
                 </div>
-                {resetError && <p className="mt-2 text-xs text-danger">{resetError}</p>}
-                {resetDone && <p className="mt-2 text-xs text-success">{resetDone}</p>}
               </div>
 
               <button
@@ -749,8 +747,8 @@ export function StaffPage() {
 
           {!editing && (
             <div className="rounded-xl border border-border bg-canvas p-3 text-xs text-ink-muted">
-              Uma conta de acesso será criada e um <b>convite individual</b> será enviado por e-mail ao funcionário,
-              para que ele crie a própria senha (link de uso único, válido por 72 horas). A escola não define senhas.
+              Uma conta de acesso será criada automaticamente com a senha padrão da plataforma
+              (<b className="font-mono">{DEFAULT_STAFF_PASSWORD}</b>). No primeiro acesso o sistema obrigará a troca por uma senha intransferível.
             </div>
           )}
         </form>
@@ -763,7 +761,7 @@ export function StaffPage() {
         footer={
           <>
             <button className="btn-outline" onClick={copyCredentials}>
-              {copied ? <Check size={16} /> : <Copy size={16} />} {copied ? 'Copiado!' : 'Copiar dados de login'}
+              {copied ? <Check size={16} /> : <Copy size={16} />} {copied ? 'Copiado!' : 'Copiar dados'}
             </button>
             <button className="btn-primary" onClick={() => setCredentials(null)}>Fechar</button>
           </>
@@ -772,20 +770,77 @@ export function StaffPage() {
         {credentials && (
           <div className="space-y-3 text-sm">
             <div className="rounded-xl bg-success-soft p-4 text-success">
-              <p className="font-semibold">Convite de acesso enviado.</p>
-              <p className="mt-1 text-xs">
-                {credentials.invite_emailed
-                  ? `Enviamos um e-mail para ${credentials.email} com um link individual para criar a própria senha.`
-                  : 'Cadastro concluído. Use "Reenviar convite" na ficha do funcionário para disparar o e-mail de acesso.'}
-              </p>
+              <p className="font-semibold">Conta criada.</p>
+              <p className="mt-1 text-xs">Anote ou envie estas credenciais ao funcionário.</p>
             </div>
             <div className="space-y-2 rounded-xl border border-border p-4">
               <div className="flex justify-between"><span className="text-ink-muted">Funcionário:</span><span className="font-medium text-ink">{credentials.name}</span></div>
               <div className="flex justify-between"><span className="text-ink-muted">Login (e-mail):</span><span className="font-medium text-primary">{credentials.email}</span></div>
               <div className="flex justify-between"><span className="text-ink-muted">Matrícula (alternativa):</span><span className="font-mono text-ink-muted">{credentials.registration_number ?? '—'}</span></div>
+              <div className="flex justify-between"><span className="text-ink-muted">Senha inicial:</span><span className="font-mono font-bold text-ink">{credentials.initial_password ?? DEFAULT_STAFF_PASSWORD}</span></div>
               <p className="pt-1 text-xs text-ink-subtle">
-                Nenhuma senha é definida pela escola. O funcionário cria uma senha pessoal e intransferível pelo link do convite.
+                Senha padrão da plataforma — <b className="font-mono">{DEFAULT_STAFF_PASSWORD}</b>. Troca obrigatória no 1º acesso.
               </p>
+            </div>
+          </div>
+        )}
+      </Modal>
+
+      {/* Confirmação — resetar senha para a padrão */}
+      <Modal
+        open={!!resetTarget}
+        title="Resetar senha do funcionário"
+        onClose={() => { if (!resetBusy) setResetTarget(null); }}
+        footer={
+          <>
+            <button className="btn-outline" onClick={() => setResetTarget(null)} disabled={resetBusy}>Cancelar</button>
+            <button
+              className="flex items-center gap-1.5 rounded-xl bg-warning px-4 py-2 text-sm font-semibold text-white hover:bg-warning/90 disabled:opacity-60"
+              onClick={confirmResetPassword}
+              disabled={resetBusy}
+            >
+              {resetBusy ? <Loader2 size={15} className="animate-spin" /> : <KeyRound size={15} />} Resetar para padrão
+            </button>
+          </>
+        }
+      >
+        {resetTarget && (
+          <div className="space-y-3">
+            <div className="flex items-start gap-2 rounded-xl bg-warning-soft px-3 py-2.5 text-xs text-warning">
+              <AlertTriangle size={15} className="mt-0.5 shrink-0" />
+              <span>
+                A senha de <b>{resetTarget.name}</b> voltará para a padrão da plataforma
+                (<b className="font-mono">{DEFAULT_STAFF_PASSWORD}</b>). A senha atual deixará de funcionar
+                e a troca será obrigatória no próximo acesso.
+              </span>
+            </div>
+            {resetError && (
+              <div className="flex items-start gap-2 rounded-xl bg-danger-soft px-3 py-2 text-xs text-danger">
+                <AlertTriangle size={14} className="mt-0.5 shrink-0" /> {resetError}
+              </div>
+            )}
+            <p className="text-sm text-ink-muted">Deseja continuar?</p>
+          </div>
+        )}
+      </Modal>
+
+      {/* Resultado — senha resetada */}
+      <Modal
+        open={!!resetDone}
+        title="Senha resetada com sucesso!"
+        onClose={() => setResetDone(null)}
+        footer={<button className="btn-primary" onClick={() => setResetDone(null)}>Fechar</button>}
+      >
+        {resetDone && (
+          <div className="space-y-3 text-sm">
+            <div className="rounded-xl bg-success-soft p-4 text-success">
+              <p className="font-semibold">Pronto.</p>
+              <p className="mt-1 text-xs">Informe a senha padrão ao funcionário — a troca será exigida no próximo acesso.</p>
+            </div>
+            <div className="space-y-2 rounded-xl border border-border p-4">
+              <div className="flex justify-between"><span className="text-ink-muted">Funcionário:</span><span className="font-medium text-ink">{resetDone.name}</span></div>
+              <div className="flex justify-between"><span className="text-ink-muted">Login (e-mail):</span><span className="font-medium text-primary">{resetDone.email}</span></div>
+              <div className="flex justify-between"><span className="text-ink-muted">Senha:</span><span className="font-mono font-bold text-ink">{resetDone.password}</span></div>
             </div>
           </div>
         )}

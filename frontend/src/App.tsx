@@ -14,7 +14,6 @@ import { PrivacidadePage } from '@/pages/PrivacidadePage';
 import { LoginPage } from '@/pages/LoginPage';
 import { ForgotPasswordPage } from '@/pages/ForgotPasswordPage';
 import { ResetPasswordPage } from '@/pages/ResetPasswordPage';
-import { AcceptInvitePage } from '@/pages/AcceptInvitePage';
 import { OnboardingPage } from '@/pages/OnboardingPage';
 import { PlaceholderPage } from '@/pages/PlaceholderPage';
 import { SaasPlaceholderPage } from '@/saas/pages/SaasPlaceholderPage';
@@ -85,7 +84,6 @@ export default function App() {
           <Route path="/login" element={<LoginPage />} />
           <Route path="/forgot-password" element={<ForgotPasswordPage />} />
           <Route path="/reset-password" element={<ResetPasswordPage />} />
-          <Route path="/convite" element={<AcceptInvitePage />} />
           <Route path="/onboarding" element={<OnboardingPage />} />
           <Route element={<AuthGate />}>
             {/* Fora do AppLayout — bloqueia app até troca de senha */}

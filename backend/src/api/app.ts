@@ -65,14 +65,9 @@ app.use(rateLimit({ windowMs: 60_000, max: 60, standardHeaders: true, legacyHead
 const authLimiter = rateLimit({ windowMs: 60_000, max: 5, message: { code: 'rate_limit', message: 'Muitas tentativas. Aguarde 1 minuto.' } });
 app.use('/api/me/onboarding', authLimiter);
 
-// Rate limit para rotas públicas de apoio ao login (evita enumeração de matrícula
-// e brute-force de aceite de convite).
+// Rate limit para rotas públicas de apoio ao login (evita enumeração de matrícula).
 const publicLimiter = rateLimit({ windowMs: 60_000, max: 12, message: { code: 'rate_limit', message: 'Muitas tentativas. Aguarde 1 minuto.' } });
 app.use('/api/public', publicLimiter);
-
-// Rate limit para envio/reenvio de convites (evita spam de e-mail e abuso).
-const inviteLimiter = rateLimit({ windowMs: 60_000, max: 10, message: { code: 'rate_limit', message: 'Muitos convites enviados. Aguarde 1 minuto.' } });
-app.use(['/api/students/:id/invite', '/api/students/:id/recover', '/api/staff/:id/invite', '/api/staff/:id/recover'], inviteLimiter);
 
 app.use(express.json({ limit: '10mb' })); // base64 de PDF de até 5 MB → ~6.7 MB
 

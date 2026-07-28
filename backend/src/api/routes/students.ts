@@ -2,11 +2,9 @@ import { Router } from 'express';
 import { withTenant } from '../../db/withTenant';
 import { requireAuth, requireRole } from '../../middleware/auth';
 import { signUpGuardian } from '../../lib/authSignup';
-import { generateSecurePassword, toStoredPassword } from '../../lib/validation';
+import { DEFAULT_GUARDIAN_PASSWORD, toStoredPassword } from '../../lib/validation';
 import { insertMonthlyInvoices, insertEnrollmentInvoice, generatePixForNewInvoices, type FirstDueRule } from '../../lib/billing/studentInvoices';
 import { validateBody } from '../../lib/validateBody';
-import { issueAndSendInvitation } from '../../lib/inviteFlow';
-import { deriveInviteState } from '../../lib/invitations';
 import { studentCreateSchema, studentUpdateSchema } from '../../../../shared/schemas';
 
 export const studentsRouter = Router();
@@ -41,23 +39,15 @@ studentsRouter.get('/', requireRole('school_admin', 'financial', 'teacher', 'sup
               case when g.email  is null then null else left(g.email,1)  || '***@' || split_part(g.email,'@',2)              end as guardian_email,
               case when g.cpf    is null then null else '***.***.***-' || right(g.cpf,2)                                     end as guardian_cpf,
               case when g.phone  is null then null else '(**) ****-'  || right(g.phone,4)                                    end as guardian_phone,
-              case when g.phone2 is null then null else '(**) ****-'  || right(g.phone2,4)                                   end as guardian_phone2,
-              p.access_activated_at,
-              (select i.status     from public.user_invitations i where i.profile_id = g.user_id order by i.created_at desc limit 1) as latest_invite_status,
-              (select i.expires_at from public.user_invitations i where i.profile_id = g.user_id order by i.created_at desc limit 1) as latest_invite_expires_at
+              case when g.phone2 is null then null else '(**) ****-'  || right(g.phone2,4)                                   end as guardian_phone2
          from public.students s
          left join public.classes cl on cl.id = s.class_id
          left join public.guardians g on g.id = s.guardian_id
-         left join public.profiles p on p.id = g.user_id
         where s.school_id = $1${filter}
         order by s.name asc`,
       params,
     );
-    return rows.map((r: any) => {
-      const guardian_invite_state = deriveInviteState(r);
-      const { access_activated_at, latest_invite_status, latest_invite_expires_at, ...rest } = r;
-      return { ...rest, guardian_invite_state };
-    });
+    return rows;
   });
   res.json({ ok: true, data });
 });
@@ -108,19 +98,18 @@ studentsRouter.post('/', requireRole('school_admin', 'superadmin'), validateBody
       const matricula: string = matRow.rows[0].matricula;
 
       // Login primário = e-mail do responsável (matrícula também funciona via publicAuth).
-      // Senha inicial ALEATÓRIA e DESCARTADA: ninguém a conhece. O acesso só é
-      // ativado via convite individual (o responsável define a própria senha).
-      const throwawayPassword = generateSecurePassword();
+      // Senha inicial = padrão único da plataforma (troca obrigatória no 1º acesso).
+      const visiblePassword = DEFAULT_GUARDIAN_PASSWORD;
 
       // 4) Criar usuário no Neon Auth (público — sign-up); guarda versão de 8 chars.
       const authResult = await signUpGuardian({
         email: s.guardian.email,
-        password: toStoredPassword(throwawayPassword),
+        password: toStoredPassword(visiblePassword),
         name: s.guardian.name,
       });
       authUserId = authResult.authUserId;
 
-      // 5) Criar profile vinculado — acesso pendente até aceitar o convite
+      // 5) Criar profile vinculado com flag de troca obrigatória
       const profileRow = await c.query(
         `insert into public.profiles (auth_user_id, school_id, name, email, phone, role, password_change_required)
          values ($1, $2, $3, $4, $5, 'guardian', true)
@@ -184,18 +173,6 @@ studentsRouter.post('/', requireRole('school_admin', 'superadmin'), validateBody
       const chargeableIds = [...monthlyResult.ids];
       if (enrollment && !enrollment.paid) chargeableIds.push(enrollment.id);
 
-      // Emite o convite individual e dispara o e-mail com o link de uso único.
-      const invite = await issueAndSendInvitation(c, {
-        schoolId: req.ctx!.schoolId!,
-        profileId,
-        authUserId,
-        email: s.guardian.email,
-        name: s.guardian.name,
-        purpose: 'invite',
-        createdByProfileId: req.ctx!.profileId,
-        createdByEmail: req.identity?.email ?? null,
-      });
-
       return {
         ...student,
         monthly_fee: monthlyFee,
@@ -203,9 +180,8 @@ studentsRouter.post('/', requireRole('school_admin', 'superadmin'), validateBody
         enrollment_paid: enrollment?.paid ?? false,
         guardian_email: s.guardian.email,
         login_matricula: matricula,
-        guardian_invite_state: 'pending',
-        invite_emailed: invite.emailed,
-        login_hint: 'O responsável recebe um convite por e-mail para criar a própria senha. Login: e-mail ou matrícula do aluno.',
+        initial_password: visiblePassword,
+        login_password_hint: 'Login: e-mail do responsável • Senha inicial padrão: Escola@2026 — troca obrigatória no 1º acesso.',
         invoice_ids: chargeableIds,
         invoices_skipped: monthlyResult.skipped,
       };
@@ -228,56 +204,6 @@ studentsRouter.post('/', requireRole('school_admin', 'superadmin'), validateBody
     res.status(status).json({ code, message: err?.message ?? 'Falha ao criar aluno' });
   }
 });
-
-// ---------- Enviar / reenviar convite de acesso ao responsável ----------
-// Gera novo convite individual de uso único e reenvia o link por e-mail.
-// NÃO define nem revela senha.
-async function sendGuardianInvite(req: any, res: any) {
-  try {
-    const result = await withTenant(req.ctx!, async (c: any) => {
-      const r = await c.query(
-        `select g.email, g.name, g.user_id as profile_id, p.auth_user_id, p.access_activated_at
-           from public.students s
-           join public.guardians g on g.id = s.guardian_id
-           left join public.profiles p on p.id = g.user_id
-          where s.id=$1 and s.school_id=$2 limit 1`,
-        [req.params.id, req.ctx!.schoolId],
-      );
-      if (r.rows.length === 0) return { error: 'not_found' as const };
-      const row = r.rows[0];
-      if (!row.profile_id || !row.auth_user_id) return { error: 'no_auth' as const };
-
-      const purpose: 'invite' | 'recovery' = row.access_activated_at ? 'recovery' : 'invite';
-      const invite = await issueAndSendInvitation(c, {
-        schoolId: req.ctx!.schoolId!,
-        profileId: row.profile_id,
-        authUserId: row.auth_user_id,
-        email: row.email,
-        name: row.name,
-        purpose,
-        createdByProfileId: req.ctx!.profileId,
-        createdByEmail: req.identity?.email ?? null,
-      });
-      return { emailed: invite.emailed, wasResend: invite.wasResend, purpose };
-    });
-
-    if ('error' in result && result.error) {
-      const map: Record<string, { http: number; message: string }> = {
-        not_found: { http: 404, message: 'Aluno não encontrado.' },
-        no_auth: { http: 400, message: 'Este responsável não possui login vinculado.' },
-      };
-      const m = map[result.error] ?? { http: 400, message: 'Não foi possível enviar o convite.' };
-      return res.status(m.http).json({ code: result.error, message: m.message });
-    }
-    res.json({ ok: true, data: result });
-  } catch (err: any) {
-    console.error('[students.invite] erro:', err?.message ?? err);
-    res.status(500).json({ code: 'invite_failed', message: 'Falha ao enviar o convite.' });
-  }
-}
-
-studentsRouter.post('/:id/invite',  requireRole('school_admin', 'superadmin'), sendGuardianInvite);
-studentsRouter.post('/:id/recover', requireRole('school_admin', 'superadmin'), sendGuardianInvite);
 
 studentsRouter.put('/:id', requireRole('school_admin', 'superadmin'), validateBody(studentUpdateSchema), async (req, res) => {
   const s = req.body as import('../../../../shared/schemas').StudentUpdateOutput;
