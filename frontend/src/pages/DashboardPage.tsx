@@ -211,7 +211,7 @@ export function DashboardPage() {
     listEvents(new Date().getFullYear()).then(evs => {
       const today = new Date();
       const t = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
-      setTodayEvents(evs.filter(e => e.date_start === t || (e.date_end && e.date_start <= t && e.date_end >= t)));
+      setTodayEvents(evs.filter(e => e.date_start === t));
     }).catch(() => {});
   }, [me?.role]);
 
