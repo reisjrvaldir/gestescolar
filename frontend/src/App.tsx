@@ -50,10 +50,10 @@ const TicketsPage        = lazyPage(() => import('@/pages/TicketsPage'),        
 const LgpdPage           = lazyPage(() => import('@/pages/LgpdPage'),           'LgpdPage');
 
 // Páginas do /saas — lazy-loaded
-const SaasDashboardPage     = lazyPage(() => import('@/saas/pages/SaasDashboardPage'),     'SaasDashboardPage');
-const SaasSchoolsPage       = lazyPage(() => import('@/saas/pages/SaasSchoolsPage'),       'SaasSchoolsPage');
-const SaasSubscriptionsPage = lazyPage(() => import('@/saas/pages/SaasSubscriptionsPage'), 'SaasSubscriptionsPage');
-const SaasExpirationsPage   = lazyPage(() => import('@/saas/pages/SaasExpirationsPage'),   'SaasExpirationsPage');
+const SaasDashboardPage           = lazyPage(() => import('@/saas/pages/SaasDashboardPage'),           'SaasDashboardPage');
+const SaasSchoolsPage             = lazyPage(() => import('@/saas/pages/SaasSchoolsPage'),           'SaasSchoolsPage');
+const SaasPlansAndSubscriptionsPage = lazyPage(() => import('@/saas/pages/SaasPlansAndSubscriptionsPage'), 'SaasPlansAndSubscriptionsPage');
+const SaasExpirationsPage         = lazyPage(() => import('@/saas/pages/SaasExpirationsPage'),       'SaasExpirationsPage');
 const SaasUsersPage         = lazyPage(() => import('@/saas/pages/SaasUsersPage'),         'SaasUsersPage');
 const SaasAuditLogsPage     = lazyPage(() => import('@/saas/pages/SaasAuditLogsPage'),     'SaasAuditLogsPage');
 const SaasRevenuePage       = lazyPage(() => import('@/saas/pages/SaasRevenuePage'),       'SaasRevenuePage');
@@ -123,7 +123,7 @@ export default function App() {
               <Route element={<SaasAdminLayout />}>
                 <Route index element={<SaasDashboardPage />} />
                 <Route path="escolas"          element={<SaasSchoolsPage />} />
-                <Route path="planos"           element={<SaasSubscriptionsPage />} />
+                <Route path="planos"           element={<SaasPlansAndSubscriptionsPage />} />
                 <Route path="vencimentos"      element={<SaasExpirationsPage />} />
                 <Route path="usuarios-escolas" element={<SaasUsersPage />} />
                 <Route path="logs-acesso"      element={<SaasAuditLogsPage />} />
