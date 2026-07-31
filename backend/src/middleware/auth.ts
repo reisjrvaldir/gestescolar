@@ -106,7 +106,9 @@ function isSubscriptionActive(ctx: TenantContext): boolean {
 }
 
 // Rotas que permanecem acessíveis mesmo com assinatura inativa (para regularizar).
-const GATE_EXEMPT_PREFIXES = ['/api/me', '/api/settings', '/api/school-plans', '/api/lgpd'];
+// /api/billing é essencial: sem ele a escola expirada não consegue ASSINAR/PAGAR
+// para regularizar (o POST /billing/subscribe seria barrado pelo próprio paywall).
+const GATE_EXEMPT_PREFIXES = ['/api/me', '/api/settings', '/api/school-plans', '/api/lgpd', '/api/billing'];
 
 /** Middleware: exige JWT válido (identidade), mas NÃO exige perfil.
  *  Usado em /api/me e /api/onboarding (usuário recém-criado ainda sem perfil). */

@@ -12,13 +12,16 @@ import { SubaccountForm } from '@/components/settings/SubaccountForm';
 export function SettingsPage() {
   const [school, setSchool] = useState<SchoolSettings | null>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
   const [logoPreview, setLogoPreview] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
 
   const { register, handleSubmit, reset } = useForm<UpdateSchoolSettings>();
 
-  useEffect(() => {
+  function loadSettings() {
+    setLoading(true);
+    setError(null);
     settingsService.get()
       .then((data) => {
         setSchool(data);
@@ -33,9 +36,11 @@ export function SettingsPage() {
           late_interest_pct: data.late_interest_pct ?? 0,
         });
       })
-      .catch(console.error)
+      .catch((e: any) => setError(e?.message ?? 'Não foi possível carregar as configurações.'))
       .finally(() => setLoading(false));
-  }, [reset]);
+  }
+
+  useEffect(() => { loadSettings(); }, [reset]);
 
   function handleLogoChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -51,8 +56,18 @@ export function SettingsPage() {
     setTimeout(() => setSaved(false), 3000);
   }
 
-  if (loading || !school) {
+  if (loading) {
     return <div className="flex items-center justify-center py-20 text-ink-muted"><Loader2 className="animate-spin" size={24} /> <span className="ml-2">Carregando…</span></div>;
+  }
+  if (error || !school) {
+    return (
+      <div className="card mx-auto mt-10 max-w-md p-8 text-center">
+        <p className="text-sm text-danger">{error ?? 'Não foi possível carregar as configurações.'}</p>
+        <button className="btn-outline mt-4 inline-flex items-center gap-2" onClick={loadSettings}>
+          <Loader2 size={15} /> Tentar novamente
+        </button>
+      </div>
+    );
   }
 
   const statusTone = school.subscription_status === 'active' ? 'success'

@@ -39327,7 +39327,7 @@ function isSubscriptionActive(ctx) {
   }
   return false;
 }
-var GATE_EXEMPT_PREFIXES = ["/api/me", "/api/settings", "/api/school-plans", "/api/lgpd"];
+var GATE_EXEMPT_PREFIXES = ["/api/me", "/api/settings", "/api/school-plans", "/api/lgpd", "/api/billing"];
 async function requireIdentity(req, res, next) {
   try {
     const identity = await verifyAuthToken(req);

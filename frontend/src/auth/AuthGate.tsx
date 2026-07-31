@@ -1,8 +1,9 @@
 import { createContext, useContext, useEffect, useState } from 'react';
 import { Navigate, Outlet, useLocation, Link } from 'react-router-dom';
-import { Loader2, ShieldAlert } from 'lucide-react';
+import { Loader2, ShieldAlert, CreditCard } from 'lucide-react';
 import { useSession, signOut } from '@/lib/authClient';
 import { api } from '@/lib/api';
+import { SubscribePanel } from '@/components/settings/SubscribePanel';
 import type { Role } from '@/config/menu';
 
 export interface Me {
@@ -31,6 +32,7 @@ function isSubscriptionInactive(me: Me): boolean {
 
 function SubscriptionBlocked({ me }: { me: Me }) {
   const isAdmin = me.role === 'school_admin';
+  const [showPay, setShowPay] = useState(false);
   return (
     <div className="flex min-h-screen items-center justify-center bg-canvas p-4">
       <div className="card w-full max-w-md p-7 text-center">
@@ -42,13 +44,26 @@ function SubscriptionBlocked({ me }: { me: Me }) {
           O período de teste ou a assinatura da <strong>{me.school_name}</strong> não está mais ativo.
           Para continuar usando o GestEscolar, é necessário regularizar o pagamento.
         </p>
+
         {isAdmin ? (
-          <Link to="/app/settings" className="btn-primary mt-5 w-full justify-center">Ver planos e regularizar</Link>
+          !showPay ? (
+            <button className="btn-primary mt-5 w-full justify-center" onClick={() => setShowPay(true)}>
+              <CreditCard size={16} /> Ver planos e pagar
+            </button>
+          ) : (
+            <div className="mt-5 text-left">
+              <SubscribePanel />
+              <Link to="/app/settings" className="mt-3 block text-center text-xs text-primary hover:underline">
+                Ajustar dados da escola (CNPJ, etc.) nas Configurações
+              </Link>
+            </div>
+          )
         ) : (
           <p className="mt-5 rounded-xl bg-canvas p-3 text-xs text-ink-muted">
             Fale com a gestão da escola para regularizar o acesso.
           </p>
         )}
+
         <button
           className="mt-3 w-full text-center text-xs text-ink-subtle hover:text-ink-muted"
           onClick={() => signOut().then(() => { window.location.href = '/login'; })}
