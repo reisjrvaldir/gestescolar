@@ -16,6 +16,14 @@ const WHATSAPP = 'https://wa.me/5500000000000?text=Ol%C3%A1%2C%20tenho%20interes
 export function LandingPage() {
   const navigate = useNavigate();
 
+  // Neutraliza o `height: 100%` global (index.css) enquanto a landing está
+  // montada — sem isso o body vira um container de scroll de 1 viewport de
+  // altura e a rolagem por âncora não sai do lugar. Ver landing-v1.css.
+  useEffect(() => {
+    document.documentElement.classList.add('lp-active');
+    return () => document.documentElement.classList.remove('lp-active');
+  }, []);
+
   useEffect(() => {
     // ── Handlers de navegação (substituem Router.go / LandingPage.* da v1) ──
     const LP: any = {

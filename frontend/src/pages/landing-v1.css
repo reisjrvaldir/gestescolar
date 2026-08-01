@@ -3,12 +3,27 @@
    ============================================= */
 
 /* ── RESET & BASE ── */
-html, body { width: 100%; overflow-x: hidden; }
+/* IMPORTANTE: usar `overflow-x: clip`, nunca `hidden`. Pela spec do CSS,
+   `hidden` em um eixo força o outro eixo a computar `auto`, o que transforma
+   o elemento em container de scroll — era a origem das duas barras de rolagem
+   e do motivo de os links do menu não rolarem a página. `clip` recorta sem
+   criar scroll. A classe `lp-active` é aplicada ao <html> pela LandingPage
+   para neutralizar o `height: 100%` global (index.css), que prendia o body
+   na altura do viewport. */
+html.lp-active, html.lp-active body {
+  width: 100%;
+  height: auto;
+  overflow-x: clip;
+}
 .landing * { box-sizing: border-box; margin: 0; padding: 0; }
 .landing {
   font-family: 'Inter', 'Segoe UI', system-ui, sans-serif;
   color: #0f0f1a;
-  overflow-x: hidden;
+  /* `position: relative` é obrigatório junto do clip: os `.lp-orb` são
+     absolutos e, sem um contentor posicionado, se ancoram no viewport e
+     escapam do clip — reintroduzindo rolagem horizontal. */
+  position: relative;
+  overflow-x: clip;
   line-height: 1.6;
 }
 
