@@ -16,6 +16,27 @@ const PLAN_LABELS: Record<string, string> = {
   gestao_250: 'Gestão 250',
 };
 
+/**
+ * Fundo em 3 camadas (a primeira listada fica por cima):
+ *   1. Véu escuro — garante contraste do texto branco independente da foto.
+ *   2. A foto (public/login-bg.jpg). Se o arquivo não existir o navegador
+ *      simplesmente pula esta camada, sem erro e sem quebrar o layout.
+ *   3. Gradiente de marca — o fundo definitivo enquanto não houver foto.
+ * Trocar a arte = substituir o arquivo. Nenhum código muda.
+ */
+const BACKDROP: React.CSSProperties = {
+  backgroundImage: [
+    'linear-gradient(105deg, rgba(9,20,54,0.94) 0%, rgba(15,32,86,0.86) 42%, rgba(30,58,138,0.72) 100%)',
+    "url('/login-bg.jpg')",
+    'radial-gradient(at 12% 22%, #1D4ED8 0px, transparent 55%),' +
+      'radial-gradient(at 82% 12%, #7C3AED 0px, transparent 50%),' +
+      'radial-gradient(at 68% 88%, #0EA5A4 0px, transparent 48%),' +
+      'linear-gradient(135deg, #0F1E4B 0%, #1E3A8A 100%)',
+  ].join(','),
+  backgroundSize: 'cover, cover, cover',
+  backgroundPosition: 'center, center, center',
+};
+
 export function LoginPage() {
   const [params] = useSearchParams();
   // A landing manda ?tab=signup nos CTAs de teste grátis. Sem isso o visitante
@@ -108,96 +129,73 @@ export function LoginPage() {
   }
 
   const tabBtn = (t: Tab) =>
-    `relative flex-1 rounded-lg py-2.5 text-sm font-semibold transition-all duration-200 ${
-      tab === t
-        ? 'bg-surface text-primary shadow-card'
-        : 'text-ink-muted hover:text-ink'
+    `flex-1 rounded-lg py-2.5 text-sm font-semibold transition-all duration-200 ${
+      tab === t ? 'bg-surface text-primary shadow-card' : 'text-ink-muted hover:text-ink'
     }`;
 
   return (
-    <div className="grid min-h-screen lg:grid-cols-[1.05fr_1fr]">
-      {/* ─── Coluna esquerda — institucional ─── */}
-      <div className="relative hidden flex-col justify-between overflow-hidden p-12 text-white lg:flex">
-        {/* Fundo em gradiente + orbes de luz */}
-        <div className="absolute inset-0 bg-gradient-to-br from-primary-ink via-primary to-purple" />
-        <div className="pointer-events-none absolute -left-32 -top-32 h-96 w-96 rounded-full bg-white/10 blur-3xl" />
-        <div className="pointer-events-none absolute -bottom-40 -right-24 h-[28rem] w-[28rem] rounded-full bg-accent/25 blur-3xl" />
-        {/* Grade sutil */}
-        <div
-          className="pointer-events-none absolute inset-0 opacity-[0.07]"
-          style={{
-            backgroundImage:
-              'linear-gradient(#fff 1px, transparent 1px), linear-gradient(90deg, #fff 1px, transparent 1px)',
-            backgroundSize: '44px 44px',
-          }}
-        />
+    <div className="relative min-h-screen w-full" style={BACKDROP}>
+      {/* Vinheta: escurece as bordas e ancora o conteúdo sobre a foto */}
+      <div
+        className="pointer-events-none absolute inset-0"
+        style={{ background: 'radial-gradient(ellipse at 50% 40%, transparent 30%, rgba(4,10,30,0.55) 100%)' }}
+      />
 
-        <Link
-          to="/"
-          className="relative z-10 inline-flex w-fit items-center gap-2.5 rounded-xl transition-opacity hover:opacity-80"
-        >
-          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-white/15 backdrop-blur-sm">
-            <GraduationCap size={22} />
-          </div>
-          <span className="text-lg font-extrabold tracking-tight">GestEscolar</span>
-        </Link>
-
-        <div className="relative z-10 max-w-lg">
-          <div className="mb-5 inline-flex items-center gap-2 rounded-full bg-white/12 px-3.5 py-1.5 text-xs font-semibold backdrop-blur-sm">
-            <Sparkles size={13} /> Teste grátis por 7 dias
-          </div>
-          <h1 className="text-[2.6rem] font-extrabold leading-[1.1] tracking-tight">
-            Gestão escolar simples,
-            <br />
-            completa e integrada.
-          </h1>
-          <p className="mt-4 text-[15px] leading-relaxed text-white/75">
-            Acadêmico, financeiro e comunicação — tudo em um só lugar, com
-            cobrança inteligente via PIX.
-          </p>
-
-          <div className="mt-9 space-y-3.5">
-            {[
-              { icon: Headset, text: 'Suporte humano de verdade' },
-              { icon: Zap, text: 'Implantação em menos de 2 minutos' },
-              { icon: ShieldCheck, text: 'Dados isolados e conformidade LGPD' },
-            ].map(({ icon: Icon, text }) => (
-              <div key={text} className="flex items-center gap-3 text-sm text-white/90">
-                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-white/12 backdrop-blur-sm">
-                  <Icon size={15} />
-                </div>
-                {text}
-              </div>
-            ))}
-          </div>
-        </div>
-
-        <p className="relative z-10 text-xs text-white/45">© 2026 GestEscolar</p>
-      </div>
-
-      {/* ─── Coluna direita — formulário ─── */}
-      <div className="flex flex-col bg-canvas">
-        {/* Topo mobile: marca + voltar (a coluna institucional some no mobile) */}
-        <div className="flex items-center justify-between px-6 pt-6 lg:hidden">
-          <Link to="/" className="flex items-center gap-2 text-ink">
-            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary text-white">
-              <GraduationCap size={19} />
+      <div className="relative mx-auto flex min-h-screen w-full max-w-6xl flex-col px-5 py-6 lg:px-8">
+        {/* Topo: marca + voltar */}
+        <div className="flex items-center justify-between">
+          <Link to="/" className="flex items-center gap-2.5 text-white transition-opacity hover:opacity-80">
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-white/15 backdrop-blur-md">
+              <GraduationCap size={21} />
             </div>
-            <span className="font-extrabold">GestEscolar</span>
+            <span className="text-lg font-extrabold tracking-tight">GestEscolar</span>
+          </Link>
+          <Link
+            to="/"
+            className="inline-flex items-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium text-white/75 transition-colors hover:bg-white/10 hover:text-white"
+          >
+            <ArrowLeft size={15} /> <span className="hidden sm:inline">Voltar ao site</span>
           </Link>
         </div>
 
-        <div className="flex flex-1 items-center justify-center p-6">
-          <div className="w-full max-w-md">
-            <Link
-              to="/"
-              className="mb-6 hidden items-center gap-1.5 text-sm font-medium text-ink-muted transition-colors hover:text-primary lg:inline-flex"
-            >
-              <ArrowLeft size={15} /> Voltar ao site
-            </Link>
+        {/* Miolo */}
+        <div className="grid flex-1 items-center gap-10 py-8 lg:grid-cols-2 lg:gap-14">
+          {/* Institucional — sobre a foto */}
+          <div className="hidden max-w-lg text-white lg:block">
+            <div className="mb-5 inline-flex items-center gap-2 rounded-full bg-white/12 px-3.5 py-1.5 text-xs font-semibold backdrop-blur-md ring-1 ring-white/20">
+              <Sparkles size={13} /> Teste grátis por 7 dias
+            </div>
+            <h1 className="text-[2.7rem] font-extrabold leading-[1.08] tracking-tight drop-shadow-sm">
+              Gestão escolar simples,
+              <br />
+              completa e integrada.
+            </h1>
+            <p className="mt-4 max-w-md text-[15px] leading-relaxed text-white/80">
+              Acadêmico, financeiro e comunicação — tudo em um só lugar, com
+              cobrança inteligente via PIX.
+            </p>
 
-            <div className="rounded-2xl border border-border bg-surface p-7 shadow-card">
-              <div className="mb-1.5">
+            <div className="mt-9 space-y-3">
+              {[
+                { icon: Headset, text: 'Suporte humano de verdade' },
+                { icon: Zap, text: 'Implantação em menos de 2 minutos' },
+                { icon: ShieldCheck, text: 'Dados isolados e conformidade LGPD' },
+              ].map(({ icon: Icon, text }) => (
+                <div key={text} className="flex items-center gap-3 text-sm text-white/90">
+                  <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-white/12 backdrop-blur-md ring-1 ring-white/15">
+                    <Icon size={15} />
+                  </div>
+                  {text}
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Card de vidro. Opacidade alta de propósito: vidro bonito demais
+              deixa os campos ilegíveis — o efeito fica no entorno, não no input. */}
+          <div className="mx-auto w-full max-w-md">
+            <div className="rounded-2xl bg-surface/[0.97] p-6 shadow-2xl ring-1 ring-white/40 backdrop-blur-2xl sm:p-7">
+              <div>
                 <h2 className="text-xl font-extrabold tracking-tight text-ink">
                   {tab === 'login' ? 'Bem-vindo de volta' : 'Crie sua conta'}
                 </h2>
@@ -346,7 +344,6 @@ export function LoginPage() {
                       <span className="text-xs text-ink-subtle">(v{CURRENT_TERMS_VERSION})</span>
                     </label>
                   </div>
-                  {/* py-3 garante ~44px de altura — mínimo recomendado de alvo de toque */}
                   <button className="btn-primary w-full justify-center py-3" disabled={loading}>
                     {loading && <Loader2 size={16} className="animate-spin" aria-hidden="true" />} Começar teste grátis
                   </button>
@@ -358,6 +355,8 @@ export function LoginPage() {
             </div>
           </div>
         </div>
+
+        <p className="text-center text-xs text-white/45 lg:text-left">© 2026 GestEscolar</p>
       </div>
     </div>
   );
