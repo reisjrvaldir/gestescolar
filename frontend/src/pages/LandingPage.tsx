@@ -3,8 +3,8 @@ import { useNavigate } from 'react-router-dom';
 import './landing-v1.css';
 import { LANDING_V1_HTML } from './landingV1Html';
 import { signIn } from '@/lib/authClient';
-
-const WHATSAPP = 'https://wa.me/5500000000000?text=Ol%C3%A1%2C%20tenho%20interesse%20no%20GestEscolar!';
+import { contactHref, HAS_WHATSAPP } from '@/lib/siteConfig';
+import { funnel } from '@/lib/analytics';
 
 /**
  * Landing page — reprodução fiel da versão v1 (backup gestescolar-v1).
@@ -34,8 +34,22 @@ export function LandingPage() {
         el.scrollIntoView({ behavior: 'smooth', block: 'start' });
       },
       goLogin() { navigate('/login'); },
-      goRegister() { navigate('/onboarding'); },
-      goContact() { window.open(WHATSAPP, '_blank'); },
+      /**
+       * Vai direto para a aba de CADASTRO. Antes apontava para /onboarding,
+       * que exige sessão e rebatia o visitante para /login na aba "Entrar" —
+       * ou seja, todo clique no CTA principal terminava num formulário de
+       * login para uma conta que a pessoa ainda não tinha.
+       */
+      goRegister(plan?: string) {
+        funnel.ctaClick(plan ? 'plan_card' : 'nav_hero', plan);
+        const q = new URLSearchParams({ tab: 'signup' });
+        if (plan && plan !== 'free') q.set('plan', plan);
+        navigate(`/login?${q.toString()}`);
+      },
+      goContact() {
+        funnel.contactClick('landing');
+        window.open(contactHref(), '_blank', 'noopener,noreferrer');
+      },
       openSuperadmin() {
         const ov = document.getElementById('lpSaOverlay');
         const err = document.getElementById('lpSaErr');
@@ -121,6 +135,15 @@ export function LandingPage() {
         // 'privacy' / 'terms': sem rota dedicada no app atual — ignora.
       },
     };
+
+    // Botão flutuante do WhatsApp: só aparece com número configurado.
+    // Sem isso ele renderizava apontando para um número inexistente.
+    const waBtn = document.getElementById('lpWhatsapp') as HTMLAnchorElement | null;
+    if (waBtn && HAS_WHATSAPP) {
+      waBtn.href = contactHref();
+      waBtn.style.display = '';
+      waBtn.addEventListener('click', () => funnel.contactClick('floating'));
+    }
 
     // ── Efeitos visuais (fade-up, contadores, navbar, tilt, parallax) ──
     const fadeObs = new IntersectionObserver((entries) => {

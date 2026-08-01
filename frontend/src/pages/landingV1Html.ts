@@ -646,8 +646,10 @@ export const LANDING_V1_HTML = `
       </div>
     </div>
 
-    <!-- Botão flutuante WhatsApp -->
-    <a class="lp-whatsapp-btn" href="https://wa.me/5500000000000?text=Ol%C3%A1%2C%20tenho%20interesse%20no%20GestEscolar!" target="_blank" rel="noopener noreferrer" aria-label="Falar com a gente no WhatsApp">
+    <!-- Botão flutuante WhatsApp — href e visibilidade definidos em runtime
+         pela LandingPage a partir de VITE_WHATSAPP_NUMBER. Fica oculto por
+         padrão para nunca renderizar um link quebrado. -->
+    <a class="lp-whatsapp-btn" id="lpWhatsapp" href="#" style="display:none;" target="_blank" rel="noopener noreferrer" aria-label="Falar com a gente no WhatsApp">
       <i class="fa-brands fa-whatsapp"></i>
     </a>
 

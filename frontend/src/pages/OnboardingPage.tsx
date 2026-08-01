@@ -25,7 +25,9 @@ export function OnboardingPage() {
   const errorId = `${uid}-error`;
 
   useEffect(() => {
-    if (!isPending && !session) navigate('/login', { replace: true });
+    // Quem chega aqui sem sessão veio de um CTA de cadastro — manda para a
+    // aba de signup, não para o formulário de login de uma conta inexistente.
+    if (!isPending && !session) navigate('/login?tab=signup', { replace: true });
   }, [isPending, session, navigate]);
 
   async function onSubmit(data: OnboardingForm) {
