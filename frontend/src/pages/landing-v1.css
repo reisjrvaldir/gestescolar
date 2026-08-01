@@ -11,6 +11,11 @@ html, body { width: 100%; overflow-x: hidden; }
   overflow-x: hidden;
   line-height: 1.6;
 }
+
+/* Offset das seções para o header sticky não cobrir o topo */
+#lp-features, #lp-testimonials, #lp-how, #lp-plans, #lp-coming, #lp-faq {
+  scroll-margin-top: 80px;
+}
 .landing a { text-decoration: none; color: inherit; }
 .landing img { max-width: 100%; }
 
