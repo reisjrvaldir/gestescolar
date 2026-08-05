@@ -45,6 +45,7 @@ const FaturasPage        = lazyPage(() => import('@/pages/FaturasPage'),        
 const MessagesPage       = lazyPage(() => import('@/pages/MessagesPage'),       'MessagesPage');
 const LeaveRequestsPage  = lazyPage(() => import('@/pages/LeaveRequestsPage'),  'LeaveRequestsPage');
 const StaffDocumentsPage = lazyPage(() => import('@/pages/StaffDocumentsPage'), 'StaffDocumentsPage');
+const LessonPlansPage    = lazyPage(() => import('@/pages/LessonPlansPage'),    'LessonPlansPage');
 const SettingsPage       = lazyPage(() => import('@/pages/SettingsPage'),       'SettingsPage');
 const TicketsPage        = lazyPage(() => import('@/pages/TicketsPage'),        'TicketsPage');
 const LgpdPage           = lazyPage(() => import('@/pages/LgpdPage'),           'LgpdPage');
@@ -70,6 +71,10 @@ const AdminFinancial = ({ children }: { children: React.ReactNode }) => (
 );
 const AdminTeacherGuardian = ({ children }: { children: React.ReactNode }) => (
   <RoleGuard allowed={['school_admin', 'teacher', 'guardian', 'superadmin']}>{children}</RoleGuard>
+);
+// Planejamento de aulas: professor preenche, coordenação e direção revisam.
+const TeacherCoordination = ({ children }: { children: React.ReactNode }) => (
+  <RoleGuard allowed={['teacher', 'coordinator', 'school_admin', 'superadmin']}>{children}</RoleGuard>
 );
 
 export default function App() {
@@ -101,6 +106,7 @@ export default function App() {
               <Route path="attendance/approvals" element={<Admin><AttendancePage /></Admin>} />
               <Route path="timeclock" element={<TimeclockPage />} />
               <Route path="calendar" element={<AdminTeacherGuardian><CalendarPage /></AdminTeacherGuardian>} />
+              <Route path="lesson-plans" element={<TeacherCoordination><LessonPlansPage /></TeacherCoordination>} />
               <Route path="finance" element={<AdminFinancial><FinancePage /></AdminFinancial>} />
               <Route path="finance/entries" element={<AdminFinancial><FinancePage /></AdminFinancial>} />
               <Route path="finance/expenses" element={<AdminFinancial><ExpensesPage /></AdminFinancial>} />

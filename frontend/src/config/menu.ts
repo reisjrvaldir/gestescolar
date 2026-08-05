@@ -3,11 +3,15 @@ import {
   Fingerprint, CalendarDays, CreditCard,
   Headset, Crown, Mail,
   CalendarOff, FolderOpen, PiggyBank, ArrowUpRight, Wallet,
-  FileText, ArrowDownRight, AlertTriangle, ShieldCheck,
+  FileText, ArrowDownRight, AlertTriangle, ShieldCheck, BookOpen,
   type LucideIcon,
 } from 'lucide-react';
 
-export type Role = 'superadmin' | 'school_admin' | 'financial' | 'teacher' | 'guardian';
+// `coordinator` já existia no backend e no cadastro de funcionários, mas faltava
+// aqui — o menu resolve `MENUS[role] ?? []`, então a coordenação via a barra
+// lateral vazia. Incluído junto com o planejamento de aulas, que é o fluxo em
+// que a coordenação é a aprovadora.
+export type Role = 'superadmin' | 'school_admin' | 'financial' | 'teacher' | 'guardian' | 'coordinator';
 
 export interface MenuItem {
   to: string;
@@ -37,6 +41,7 @@ export const MENUS: Record<Role, MenuSection[]> = {
       title: 'Acadêmico',
       items: [
         { to: '/app/calendar', label: 'Ano Letivo', icon: CalendarDays },
+        { to: '/app/lesson-plans', label: 'Planejamento', icon: BookOpen },
         { to: '/app/grades', label: 'Lançar Notas', icon: Star },
         { to: '/app/grades/boletim', label: 'Boletim', icon: FileText },
         { to: '/app/attendance', label: 'Chamada', icon: ClipboardCheck },
@@ -83,6 +88,7 @@ export const MENUS: Record<Role, MenuSection[]> = {
     {
       title: 'Acadêmico',
       items: [
+        { to: '/app/lesson-plans', label: 'Planejamento', icon: BookOpen },
         { to: '/app/attendance', label: 'Chamada', icon: ClipboardCheck },
         { to: '/app/grades', label: 'Lançar Notas', icon: Star },
         { to: '/app/grades/boletim', label: 'Boletim', icon: FileText },
@@ -98,6 +104,27 @@ export const MENUS: Record<Role, MenuSection[]> = {
       ],
     },
     { items: [{ to: '/app/messages', label: 'Mensagens', icon: Mail }] },
+  ],
+  coordinator: [
+    { items: [{ to: '/app', label: 'Dashboard', icon: LayoutDashboard }] },
+    {
+      title: 'Acadêmico',
+      items: [
+        { to: '/app/lesson-plans', label: 'Planejamento', icon: BookOpen },
+        { to: '/app/calendar', label: 'Ano Letivo', icon: CalendarDays },
+        { to: '/app/grades/boletim', label: 'Boletim', icon: FileText },
+        { to: '/app/attendance', label: 'Chamada', icon: ClipboardCheck },
+      ],
+    },
+    {
+      title: 'Minha Área',
+      items: [
+        { to: '/app/timeclock', label: 'Meu Ponto', icon: Fingerprint },
+        { to: '/app/leave-requests', label: 'Folgas e Férias', icon: CalendarOff },
+        { to: '/app/documents', label: 'Meus Documentos', icon: FolderOpen },
+      ],
+    },
+    { items: [{ to: '/app/messages', label: 'Mensagens', icon: Mail }, TICKETS] },
   ],
   guardian: [
     { items: [{ to: '/app', label: 'Dashboard', icon: LayoutDashboard }] },
