@@ -81,6 +81,16 @@ export interface LessonPlanInput {
   teacher_id?: string;
 }
 
+/** Tema institucional da semana, definido pela coordenação. */
+export interface LessonPlanTheme {
+  id: string;
+  week_start: string;
+  title: string;
+  description?: string | null;
+  created_at: string;
+  created_by_name?: string | null;
+}
+
 export interface LessonPlanFilters {
   status?: LessonPlanStatus;
   class_id?: string;
@@ -147,5 +157,22 @@ export const lessonPlansService = {
   async comment(id: string, body: string): Promise<LessonPlanComment> {
     const r = await api.post<{ data: LessonPlanComment }>(`/lesson-plans/${id}/comments`, { body });
     return r.data;
+  },
+
+  // ── Temas da semana ──
+  async themes(weekStart: string): Promise<LessonPlanTheme[]> {
+    const r = await api.get<{ data: LessonPlanTheme[] }>(`/lesson-plans/themes?week_start=${weekStart}`);
+    return r.data;
+  },
+
+  async addTheme(weekStart: string, title: string, description?: string): Promise<LessonPlanTheme> {
+    const r = await api.post<{ data: LessonPlanTheme }>('/lesson-plans/themes', {
+      week_start: weekStart, title, description,
+    });
+    return r.data;
+  },
+
+  async removeTheme(id: string): Promise<void> {
+    await api.del(`/lesson-plans/themes/${id}`);
   },
 };

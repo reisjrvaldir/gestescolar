@@ -161,6 +161,64 @@ lessonPlansRouter.get('/options', async (req, res) => {
   res.json({ ok: true, data });
 });
 
+// ── GET /themes?week_start= — temas da semana (todos leem) ──
+lessonPlansRouter.get('/themes', async (req, res) => {
+  const week = req.query.week_start ? mondayOf(String(req.query.week_start)) : mondayOf(new Date().toISOString().slice(0, 10));
+  const data = await withTenant(req.ctx!, async (c) => {
+    const { rows } = await c.query(
+      `select th.id, th.title, th.description,
+              to_char(th.week_start, 'YYYY-MM-DD') as week_start,
+              th.created_at, p.name as created_by_name
+         from public.lesson_plan_themes th
+         left join public.profiles p on p.id = th.created_by
+        where th.school_id = $1 and th.week_start = $2
+        order by th.created_at asc`,
+      [req.ctx!.schoolId, week],
+    );
+    return rows;
+  });
+  res.json({ ok: true, data });
+});
+
+// ── POST /themes — coordenação define o tema da semana ──
+const themeSchema = z.object({
+  week_start: dateSchema,
+  title: z.string().min(2, 'Informe o título do tema'),
+  description: z.string().optional(),
+});
+
+lessonPlansRouter.post('/themes', requireRole(...REVIEWERS), async (req, res) => {
+  const p = themeSchema.safeParse(req.body);
+  if (!p.success) return res.status(400).json({ code: 'validation', message: p.error.issues[0]?.message });
+
+  const created = await withTenant(req.ctx!, async (c) => {
+    const { rows } = await c.query(
+      `insert into public.lesson_plan_themes (school_id, week_start, title, description, created_by)
+       values ($1,$2,$3,$4,$5)
+       on conflict do nothing
+       returning id, title, description,
+                 to_char(week_start,'YYYY-MM-DD') as week_start, created_at`,
+      [req.ctx!.schoolId, mondayOf(p.data.week_start), p.data.title.trim(),
+       p.data.description?.trim() || null, req.ctx!.profileId],
+    );
+    return rows[0] ?? null;
+  });
+
+  if (!created) return res.status(409).json({ code: 'conflict', message: 'Já existe um tema com esse título nesta semana.' });
+  res.status(201).json({ ok: true, data: created });
+});
+
+// ── DELETE /themes/:id — remove o tema ──
+lessonPlansRouter.delete('/themes/:id', requireRole(...REVIEWERS), async (req, res) => {
+  await withTenant(req.ctx!, async (c) => {
+    await c.query(
+      `delete from public.lesson_plan_themes where id=$1 and school_id=$2`,
+      [req.params.id, req.ctx!.schoolId],
+    );
+  });
+  res.status(204).end();
+});
+
 // ── GET /:id — plano com dias e comentários ──
 lessonPlansRouter.get('/:id', async (req, res) => {
   const data = await withTenant(req.ctx!, async (c) => {

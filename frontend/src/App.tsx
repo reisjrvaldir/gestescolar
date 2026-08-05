@@ -46,6 +46,7 @@ const MessagesPage       = lazyPage(() => import('@/pages/MessagesPage'),       
 const LeaveRequestsPage  = lazyPage(() => import('@/pages/LeaveRequestsPage'),  'LeaveRequestsPage');
 const StaffDocumentsPage = lazyPage(() => import('@/pages/StaffDocumentsPage'), 'StaffDocumentsPage');
 const LessonPlansPage    = lazyPage(() => import('@/pages/LessonPlansPage'),    'LessonPlansPage');
+const LessonPlanFormPage = lazyPage(() => import('@/pages/LessonPlanFormPage'), 'LessonPlanFormPage');
 const SettingsPage       = lazyPage(() => import('@/pages/SettingsPage'),       'SettingsPage');
 const TicketsPage        = lazyPage(() => import('@/pages/TicketsPage'),        'TicketsPage');
 const LgpdPage           = lazyPage(() => import('@/pages/LgpdPage'),           'LgpdPage');
@@ -107,6 +108,9 @@ export default function App() {
               <Route path="timeclock" element={<TimeclockPage />} />
               <Route path="calendar" element={<AdminTeacherGuardian><CalendarPage /></AdminTeacherGuardian>} />
               <Route path="lesson-plans" element={<TeacherCoordination><LessonPlansPage /></TeacherCoordination>} />
+              {/* "new" antes de ":id" — senão a rota dinâmica captura a palavra. */}
+              <Route path="lesson-plans/new" element={<TeacherCoordination><LessonPlanFormPage /></TeacherCoordination>} />
+              <Route path="lesson-plans/:id" element={<TeacherCoordination><LessonPlanFormPage /></TeacherCoordination>} />
               <Route path="finance" element={<AdminFinancial><FinancePage /></AdminFinancial>} />
               <Route path="finance/entries" element={<AdminFinancial><FinancePage /></AdminFinancial>} />
               <Route path="finance/expenses" element={<AdminFinancial><ExpensesPage /></AdminFinancial>} />
