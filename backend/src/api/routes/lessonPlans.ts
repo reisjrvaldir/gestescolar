@@ -240,8 +240,9 @@ lessonPlansRouter.get('/:id', async (req, res) => {
          from public.lesson_plan_days where plan_id=$1 order by weekday`,
       [plan.id],
     );
+    // author_role diferencia visualmente professor de coordenação na thread.
     const comments = await c.query(
-      `select cm.id, cm.body, cm.created_at, p.name as author_name
+      `select cm.id, cm.body, cm.created_at, p.name as author_name, p.role as author_role
          from public.lesson_plan_comments cm
          join public.profiles p on p.id = cm.author_id
         where cm.plan_id=$1 order by cm.created_at asc`,
@@ -426,10 +427,12 @@ lessonPlansRouter.post('/:id/comments', async (req, res) => {
     const { rows } = await c.query(
       `insert into public.lesson_plan_comments (school_id, plan_id, author_id, body)
        values ($1,$2,$3,$4)
-       returning id, body, created_at`,
+       returning id, body, created_at,
+                 (select name from public.profiles where id = $3) as author_name`,
       [req.ctx!.schoolId, req.params.id, req.ctx!.profileId, body],
     );
-    return rows[0];
+    // O papel vem do contexto: quem acabou de comentar é o próprio usuário.
+    return { ...rows[0], author_role: req.ctx!.role };
   });
 
   if (out === 'not_found') return res.status(404).json({ code: 'not_found' });

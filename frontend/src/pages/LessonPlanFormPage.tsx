@@ -7,7 +7,7 @@ import {
 import { PageHeader } from '@/components/ui/PageHeader';
 import { StatusBadge } from '@/components/ui/StatusBadge';
 import {
-  lessonPlansService, mondayOf, weekLabel, WEEKDAYS, LESSON_PLAN_STATUS,
+  lessonPlansService, mondayOf, weekLabel, WEEKDAYS, LESSON_PLAN_STATUS, isReviewerRole,
   type LessonPlanDetail, type LessonPlanOptions, type LessonPlanDay, type LessonPlanTheme,
 } from '@/services/lessonPlans';
 import { useMe } from '@/auth/AuthGate';
@@ -302,12 +302,36 @@ export function LessonPlanFormPage() {
               <p className="text-sm text-ink-subtle">Nenhum comentário ainda.</p>
             ) : (
               <div className="space-y-2">
-                {plan.comments.map((c) => (
-                  <div key={c.id} className="rounded-xl bg-canvas px-3.5 py-2.5">
-                    <p className="text-xs font-semibold text-ink">{c.author_name}</p>
-                    <p className="mt-0.5 whitespace-pre-wrap text-sm text-ink-muted">{c.body}</p>
-                  </div>
-                ))}
+                {plan.comments.map((c) => {
+                  const daCoordenacao = isReviewerRole(c.author_role);
+                  return (
+                    <div
+                      key={c.id}
+                      className={`rounded-xl px-3.5 py-2.5 ${
+                        daCoordenacao
+                          ? 'bg-primary-soft ring-1 ring-primary/15'
+                          : 'bg-success-soft ring-1 ring-success/15'
+                      }`}
+                    >
+                      <div className="flex flex-wrap items-center gap-2">
+                        <p className={`text-xs font-semibold ${daCoordenacao ? 'text-primary-ink' : 'text-cta-hover'}`}>
+                          {c.author_name}
+                        </p>
+                        {/* Rótulo além da cor: quem não distingue as cores ainda entende.
+                            O verde usa o tom escuro (cta-hover): o #16A34A padrão dá
+                            3.3:1 com texto branco e reprova no WCAG AA. */}
+                        <span
+                          className={`rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide ${
+                            daCoordenacao ? 'bg-primary text-white' : 'bg-cta-hover text-white'
+                          }`}
+                        >
+                          {daCoordenacao ? 'Coordenação' : 'Professor'}
+                        </span>
+                      </div>
+                      <p className="mt-1 whitespace-pre-wrap text-sm text-ink">{c.body}</p>
+                    </div>
+                  );
+                })}
               </div>
             )}
             <textarea

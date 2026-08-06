@@ -31,7 +31,14 @@ export interface LessonPlanComment {
   body: string;
   created_at: string;
   author_name: string;
+  /** Papel de quem escreveu — usado para diferenciar a thread visualmente. */
+  author_role?: string | null;
 }
+
+/** Papéis que revisam o planejamento (decidido com o usuário em 05/08/2026). */
+export const REVIEWER_ROLES = ['coordinator', 'school_admin', 'superadmin'];
+
+export const isReviewerRole = (role?: string | null) => REVIEWER_ROLES.includes(role ?? '');
 
 export interface LessonPlan {
   id: string;
