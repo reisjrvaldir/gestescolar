@@ -22,9 +22,19 @@
   .card {
     @apply rounded-2xl border border-border bg-surface shadow-card;
   }
+  /* Campo com fundo levemente recuado (canvas) em vez de branco: dentro de um
+     .card branco, campo branco sumia e a tela ficava sem hierarquia. Ao focar,
+     o campo "acende" para branco. */
   .input {
-    @apply w-full rounded-xl border border-border bg-surface px-3.5 py-2.5 text-sm text-ink
-           placeholder:text-ink-subtle focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20;
+    @apply w-full rounded-xl border border-border bg-canvas px-3.5 py-2.5 text-sm text-ink
+           transition-colors placeholder:text-ink-subtle
+           hover:border-ink-subtle/40
+           focus:border-primary focus:bg-surface focus:outline-none focus:ring-2 focus:ring-primary/20;
   }
-  .label { @apply mb-1.5 block text-sm font-medium text-ink; }
+  /* Rótulo é informação secundária: menor e mais claro que o título da seção. */
+  .label { @apply mb-1.5 block text-[13px] font-semibold text-ink-muted; }
+  /* Título de seção dentro de um card. */
+  .section-title {
+    @apply mb-4 flex items-center gap-2 border-b border-border pb-3 text-base font-bold text-ink;
+  }
 }

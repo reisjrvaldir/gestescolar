@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams, useSearchParams, Link } from 'react-router-dom';
 import {
   Loader2, Save, Send, ArrowLeft, MessageSquare, CheckCircle2,
-  AlertTriangle, Lightbulb,
+  AlertTriangle, Lightbulb, School2, ClipboardList, CalendarDays,
 } from 'lucide-react';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { StatusBadge } from '@/components/ui/StatusBadge';
@@ -202,7 +202,9 @@ export function LessonPlanFormPage() {
       <div className="space-y-6">
         {/* Turma e matéria */}
         <section className="card p-5">
-          <h2 className="mb-3 text-sm font-bold text-ink">Turma e matéria</h2>
+          <h2 className="section-title">
+            <School2 size={17} className="text-primary" /> Turma e matéria
+          </h2>
           <div className="grid gap-3 sm:grid-cols-2">
             <div>
               <label className="label" htmlFor="lp-class">Turma</label>
@@ -240,7 +242,9 @@ export function LessonPlanFormPage() {
 
         {/* Bloco da semana */}
         <section className="card p-5">
-          <h2 className="mb-3 text-sm font-bold text-ink">A semana</h2>
+          <h2 className="section-title">
+            <ClipboardList size={17} className="text-purple" /> A semana
+          </h2>
           <div className="space-y-3">
             {WEEK_FIELDS.map((f) => (
               <div key={f.key}>
@@ -260,16 +264,19 @@ export function LessonPlanFormPage() {
 
         {/* Dia a dia */}
         <section className="card p-5">
-          <h2 className="mb-3 text-sm font-bold text-ink">Dia a dia</h2>
+          <h2 className="section-title">
+            <CalendarDays size={17} className="text-accent" /> Dia a dia
+          </h2>
           <div className="space-y-3">
             {WEEKDAYS.map((w) => {
               const d = days[w.n] ?? { weekday: w.n };
               const set = (k: keyof LessonPlanDay, v: string) =>
                 setDays({ ...days, [w.n]: { ...d, weekday: w.n, [k]: v } });
               return (
-                <div key={w.n} className="rounded-xl border border-border p-3">
-                  <p className="mb-2 text-sm font-semibold text-ink">{w.label}</p>
-                  <div className="grid gap-2 sm:grid-cols-3">
+                <div key={w.n} className="overflow-hidden rounded-xl border border-border">
+                  {/* Faixa com o dia: separa visualmente um dia do outro. */}
+                  <p className="bg-canvas px-3 py-2 text-[13px] font-bold text-ink">{w.label}</p>
+                  <div className="grid gap-2 bg-surface p-3 sm:grid-cols-3">
                     <textarea
                       className="input min-h-[3.5rem] resize-y" placeholder="Conteúdo"
                       aria-label={`Conteúdo de ${w.label}`} value={d.content ?? ''}
@@ -295,8 +302,8 @@ export function LessonPlanFormPage() {
         {/* Conversa */}
         {plan && (
           <section className="card p-5">
-            <h2 className="mb-3 flex items-center gap-1.5 text-sm font-bold text-ink">
-              <MessageSquare size={15} /> Comentários
+            <h2 className="section-title">
+              <MessageSquare size={17} className="text-warning" /> Comentários
             </h2>
             {plan.comments.length === 0 ? (
               <p className="text-sm text-ink-subtle">Nenhum comentário ainda.</p>
