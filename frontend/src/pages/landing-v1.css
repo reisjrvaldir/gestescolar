@@ -484,10 +484,15 @@ html.lp-active, html.lp-active body {
 .lp-features {
   display: grid;
   grid-auto-flow: column;
-  grid-auto-columns: calc((100% - 48px) / 3);
+  grid-auto-columns: calc((100% - 96px) / 5);
   gap: 24px;
   overflow-x: auto;
   scroll-snap-type: x mandatory;
+  cursor: grab;
+}
+.lp-features.dragging {
+  cursor: grabbing;
+}
   /* NÃO usar `scroll-behavior: smooth` aqui: junto com o snap mandatory ele
      faz o Chrome descartar o scroll programático (scrollLeft/scrollBy ficam
      presos em 0) e as setas não saem do lugar. A animação suave vem do
@@ -528,11 +533,24 @@ html.lp-active, html.lp-active body {
   .lp-carousel-next { right: -60px; }
 }
 
+/* Telas médias: 4 cards visíveis */
+@media (max-width: 1200px) {
+  .lp-features { grid-auto-columns: calc((100% - 72px) / 4); }
+}
+
+/* Telas pequenas: 3 cards visíveis */
 @media (max-width: 900px) {
+  .lp-features { grid-auto-columns: calc((100% - 48px) / 3); }
+}
+
+/* Telas muito pequenas: 2 cards visíveis */
+@media (max-width: 640px) {
   .lp-features { grid-auto-columns: calc((100% - 24px) / 2); }
 }
-@media (max-width: 640px) {
-  .lp-features { grid-auto-columns: 86%; }
+
+/* Mobile: 1 card visível */
+@media (max-width: 420px) {
+  .lp-features { grid-auto-columns: calc(100% - 16px); }
 }
 .lp-feature-card {
   background: #fff; border-radius: 20px; padding: 32px;

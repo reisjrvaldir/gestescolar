@@ -270,6 +270,67 @@ export function LandingPage() {
     window.addEventListener('resize', syncSetas);
     syncSetas();
 
+    // Drag para arrastar a trilha com mouse (click e hold)
+    // Auto-scroll: avança automaticamente a cada 4 segundos, pausando na interação
+    if (trilha) {
+      let isDragging = false;
+      let startX = 0;
+      let startScroll = 0;
+      let autoScrollTimer: NodeJS.Timeout;
+
+      const pauseAutoScroll = () => {
+        if (autoScrollTimer) clearInterval(autoScrollTimer);
+      };
+
+      const startDrag = (e: MouseEvent) => {
+        if ((e.target as Element).closest('button')) return; // não arrasta ao clicar nas setas
+        isDragging = true;
+        startX = e.clientX;
+        startScroll = trilha.scrollLeft;
+        trilha.classList.add('dragging');
+        pauseAutoScroll();
+      };
+
+      const moveDrag = (e: MouseEvent) => {
+        if (!isDragging) return;
+        const diff = startX - e.clientX; // positivo = move pra frente
+        trilha.scrollLeft = startScroll + diff;
+      };
+
+      const endDrag = () => {
+        isDragging = false;
+        trilha.classList.remove('dragging');
+        startAutoScroll(); // retoma após soltar
+      };
+
+      trilha.addEventListener('mousedown', startDrag);
+      document.addEventListener('mousemove', moveDrag);
+      document.addEventListener('mouseup', endDrag);
+
+      // Auto-scroll: avança a cada 4 segundos
+      const startAutoScroll = () => {
+        pauseAutoScroll();
+        autoScrollTimer = setInterval(() => {
+          const max = trilha.scrollWidth - trilha.clientWidth;
+          const proximoScroll = trilha.scrollLeft + 200; // 200px por passo
+          if (proximoScroll < max) {
+            trilha.style.scrollSnapType = 'none';
+            trilha.scrollLeft = proximoScroll;
+            trilha.style.scrollSnapType = '';
+          } else {
+            // volta ao início
+            trilha.scrollLeft = 0;
+          }
+        }, 4000);
+      };
+
+      // Pausa auto-scroll quando clica nas setas
+      btnPrev?.addEventListener('click', () => { pauseAutoScroll(); startAutoScroll(); });
+      btnNext?.addEventListener('click', () => { pauseAutoScroll(); startAutoScroll(); });
+
+      // Inicializa auto-scroll
+      startAutoScroll();
+
     const mockup = document.getElementById('lpMockup');
     const onMouseMove = (e: MouseEvent) => {
       if (!mockup) return;
