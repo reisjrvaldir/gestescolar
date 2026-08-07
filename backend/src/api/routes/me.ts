@@ -50,56 +50,27 @@ meRouter.post('/password-changed', requireIdentity, async (req, res) => {
   res.json({ ok: true });
 });
 
-// POST /api/me/onboarding — cria escola + perfil (school_admin) no 1º acesso.
+// POST /api/me/onboarding — FECHADO desde 07/08/2026.
+//
+// Antes, qualquer identidade autenticada criava uma escola e virava school_admin
+// dela: bastava se cadastrar no Neon Auth. Por decisão de produto a operação
+// passou a ser curada — só o superadmin abre escola, via POST /api/saas/schools,
+// que já cria o perfil do gestor junto. Quem é cadastrado por lá loga com perfil
+// pronto e nunca passa por aqui.
+//
+// A rota continua existindo (em vez de sumir) para responder de forma explícita
+// a quem tenha o fluxo antigo em cache — 404 pareceria bug de deploy.
 meRouter.post('/onboarding', requireIdentity, validateBody(onboardingSchema), async (req, res) => {
   const id = req.identity!;
 
-  // Já tem perfil? Retorna idempotente.
+  // Já tem perfil? Retorna idempotente — o app segue normal.
   const existing = await resolveProfile(id.authUserId);
   if (existing) return res.status(200).json({ ok: true, alreadyOnboarded: true });
 
-  const { school_name, admin_name, cnpj, phone, terms_version, privacy_version } =
-    req.body as import('../../../../shared/schemas').OnboardingOutput;
-
-  const tv = terms_version ?? CURRENT_TERMS_VERSION;
-  const pv = privacy_version ?? CURRENT_PRIVACY_VERSION;
-  const ipHash = hashValue(req.ip ?? '');
-  const uaHash = hashValue(req.headers['user-agent'] ?? '');
-
-  const { schoolId } = await withSystem(async (client) => {
-    // Trial de 7 dias a partir de agora.
-    const school = await client.query(
-      `insert into public.schools (name, cnpj, phone, status, subscription_status, trial_ends_at)
-       values ($1, $2, $3, 'active', 'trialing', now() + interval '7 days')
-       returning id`,
-      [school_name, cnpj ?? null, phone ?? null],
-    );
-    const newSchoolId = school.rows[0].id;
-
-    const profileRes = await client.query(
-      `insert into public.profiles (auth_user_id, school_id, name, email, role, status)
-       values ($1, $2, $3, $4, 'school_admin', 'active') returning id`,
-      [id.authUserId, newSchoolId, admin_name, id.email ?? null],
-    );
-    const newProfileId = profileRes.rows[0].id;
-
-    await client.query(
-      `insert into public.school_balances (school_id) values ($1)`,
-      [newSchoolId],
-    );
-
-    // Registra o aceite dos termos com evidência técnica mínima (hashes).
-    await client.query(
-      `insert into public.consent_log
-         (profile_id, school_id, terms_version, privacy_version, ip_hash, user_agent_hash, purpose)
-       values ($1, $2, $3, $4, $5, $6, 'signup')`,
-      [newProfileId, newSchoolId, tv, pv, ipHash, uaHash],
-    );
-
-    return { schoolId: newSchoolId };
+  return res.status(403).json({
+    code: 'onboarding_closed',
+    message: 'A criação de escolas é feita pela equipe GestEscolar. Entre em contato para abrir a sua.',
   });
-
-  res.status(201).json({ ok: true, school_id: schoolId });
 });
 
 // GET /api/me/consents — histórico de aceites de termos do usuário atual.

@@ -2,12 +2,15 @@ import { useEffect, useMemo, useState } from 'react';
 import {
   Search, RefreshCw, Loader2, CalendarClock, PauseCircle, PlayCircle,
   Users, GraduationCap, MoreHorizontal, Check, Pencil, CreditCard, AlertCircle, MinusCircle,
+  Plus, Copy, KeyRound,
 } from 'lucide-react';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { StatusBadge } from '@/components/ui/StatusBadge';
 import { Modal } from '@/components/ui/Modal';
 import { fmtDate } from '@/lib/dates';
-import { saasService, type SaasSchool, type SchoolDerivedStatus } from '@/services/saas';
+import {
+  saasService, type SaasSchool, type SchoolDerivedStatus, type NewSchoolResult,
+} from '@/services/saas';
 
 const STATUS: Record<SchoolDerivedStatus, { tone: 'success' | 'warning' | 'danger' | 'primary' | 'neutral'; label: string }> = {
   ativa:     { tone: 'success', label: 'Ativa' },
@@ -51,6 +54,8 @@ export function SaasSchoolsPage() {
   const [menuFor, setMenuFor] = useState<string | null>(null);
   const [action, setAction] = useState<{ kind: ActionKind; school: SaasSchool } | null>(null);
   const [editing, setEditing] = useState<SaasSchool | null>(null);
+  const [creating, setCreating] = useState(false);
+  const [created, setCreated] = useState<NewSchoolResult | null>(null);
   const [toast, setToast] = useState<string | null>(null);
 
   function showToast(msg: string) {
@@ -99,9 +104,14 @@ export function SaasSchoolsPage() {
         title="Todas as escolas"
         subtitle="Gerencie todas as escolas cadastradas na plataforma"
         actions={
-          <button className="btn-outline" onClick={load} title="Atualizar">
-            <RefreshCw size={15} /> Atualizar
-          </button>
+          <div className="flex items-center gap-2">
+            <button className="btn-outline" onClick={load} title="Atualizar">
+              <RefreshCw size={15} /> Atualizar
+            </button>
+            <button className="btn-primary" onClick={() => setCreating(true)}>
+              <Plus size={15} /> Nova escola
+            </button>
+          </div>
         }
       />
 
@@ -264,7 +274,188 @@ export function SaasSchoolsPage() {
           onDone={(updated) => { onDone(updated, `Dados de ${updated.name} atualizados.`); setEditing(null); }}
         />
       )}
+
+      {creating && (
+        <NewSchoolModal
+          onClose={() => setCreating(false)}
+          onDone={(r) => { setCreating(false); setCreated(r); load(); }}
+        />
+      )}
+
+      {created && (
+        <CredentialsModal result={created} onClose={() => setCreated(null)} />
+      )}
     </>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Nova escola — cria a escola e a conta do gestor de uma vez.
+// Substitui o auto-cadastro público, fechado em 07/08/2026.
+// ---------------------------------------------------------------------------
+function NewSchoolModal({
+  onClose, onDone,
+}: {
+  onClose: () => void;
+  onDone: (r: NewSchoolResult) => void;
+}) {
+  const [schoolName, setSchoolName] = useState('');
+  const [adminName, setAdminName] = useState('');
+  const [adminEmail, setAdminEmail] = useState('');
+  const [cnpj, setCnpj] = useState('');
+  const [phone, setPhone] = useState('');
+  const [trialDays, setTrialDays] = useState(7);
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+
+  const emailOk = /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(adminEmail.trim());
+  const canSubmit = schoolName.trim().length >= 2 && adminName.trim().length >= 2 && emailOk;
+
+  async function submit() {
+    setErr(null);
+    setBusy(true);
+    try {
+      onDone(await saasService.createSchool({
+        school_name: schoolName.trim(),
+        admin_name: adminName.trim(),
+        admin_email: adminEmail.trim(),
+        cnpj: cnpj.trim() || undefined,
+        phone: phone.trim() || undefined,
+        trial_days: trialDays,
+      }));
+    } catch (e: any) {
+      setErr(e?.message ?? 'Não foi possível criar a escola.');
+      setBusy(false);
+    }
+  }
+
+  return (
+    <Modal
+      open
+      title="Nova escola"
+      onClose={onClose}
+      footer={
+        <>
+          <button className="btn-outline" onClick={onClose} disabled={busy}>Cancelar</button>
+          <button className="btn-primary" onClick={submit} disabled={busy || !canSubmit}>
+            {busy ? <Loader2 size={15} className="animate-spin" /> : <Plus size={15} />} Criar escola
+          </button>
+        </>
+      }
+    >
+      {err && (
+        <div role="alert" className="mb-3 rounded-xl bg-danger-soft px-3.5 py-2.5 text-sm text-danger">{err}</div>
+      )}
+
+      <div className="space-y-3">
+        <div>
+          <label className="label" htmlFor="ns-school">Nome da escola</label>
+          <input id="ns-school" className="input" value={schoolName}
+                 onChange={(e) => setSchoolName(e.target.value)} placeholder="Colégio Exemplo" />
+        </div>
+
+        <div className="grid gap-3 sm:grid-cols-2">
+          <div>
+            <label className="label" htmlFor="ns-cnpj">CNPJ <span className="font-normal text-ink-subtle">(opcional)</span></label>
+            <input id="ns-cnpj" className="input" value={cnpj} onChange={(e) => setCnpj(e.target.value)} />
+          </div>
+          <div>
+            <label className="label" htmlFor="ns-phone">Telefone <span className="font-normal text-ink-subtle">(opcional)</span></label>
+            <input id="ns-phone" className="input" value={phone} onChange={(e) => setPhone(e.target.value)} />
+          </div>
+        </div>
+
+        <div className="border-t border-border pt-3">
+          <p className="mb-3 text-[13px] font-semibold text-ink">Gestor responsável</p>
+          <div className="space-y-3">
+            <div>
+              <label className="label" htmlFor="ns-admin">Nome do gestor</label>
+              <input id="ns-admin" className="input" value={adminName}
+                     onChange={(e) => setAdminName(e.target.value)} placeholder="Maria Silva" />
+            </div>
+            <div>
+              <label className="label" htmlFor="ns-email">E-mail de acesso</label>
+              <input id="ns-email" className="input" type="email" value={adminEmail}
+                     onChange={(e) => setAdminEmail(e.target.value)} placeholder="maria@colegio.com.br" />
+              <p className="mt-1 text-xs text-ink-subtle">
+                Vira o login do gestor. A senha inicial é a padrão da plataforma, com troca obrigatória no 1º acesso.
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <div className="border-t border-border pt-3">
+          <label className="label" htmlFor="ns-trial">Dias de teste</label>
+          <input id="ns-trial" className="input" type="number" min={0} max={365} value={trialDays}
+                 onChange={(e) => setTrialDays(Math.max(0, Math.min(365, Number(e.target.value) || 0)))} />
+          <p className="mt-1 text-xs text-ink-subtle">
+            {trialDays === 0 ? 'A escola nasce ativa, sem período de teste.' : `Acesso liberado por ${trialDays} dias antes de exigir assinatura.`}
+          </p>
+        </div>
+      </div>
+    </Modal>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Credenciais geradas — mostradas UMA vez, logo após criar a escola.
+// ---------------------------------------------------------------------------
+function CredentialsModal({ result, onClose }: { result: NewSchoolResult; onClose: () => void }) {
+  const [copied, setCopied] = useState(false);
+  const texto = `Escola: ${result.name}\nAcesse: https://gestescolar.com.br\nLogin: ${result.admin_email}\nSenha inicial: ${result.initial_password}\n\nA senha deve ser trocada no primeiro acesso.`;
+
+  async function copiar() {
+    try {
+      await navigator.clipboard.writeText(texto);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 3000);
+    } catch {
+      setCopied(false);
+    }
+  }
+
+  return (
+    <Modal
+      open
+      title={`${result.name} criada`}
+      onClose={onClose}
+      footer={<button className="btn-primary" onClick={onClose}>Fechar</button>}
+    >
+      <div className="mb-3 flex items-start gap-2 rounded-xl bg-success-soft px-3.5 py-2.5 text-sm text-cta-hover">
+        <Check size={16} className="mt-0.5 shrink-0" />
+        <span>Escola e acesso do gestor criados. Envie os dados abaixo para ele.</span>
+      </div>
+
+      <div className="rounded-xl border border-border bg-canvas p-3.5">
+        <div className="flex items-center gap-2 text-[13px] font-bold text-ink">
+          <KeyRound size={15} className="text-primary" /> Dados de acesso
+        </div>
+        <dl className="mt-2.5 space-y-1.5 text-sm">
+          <div className="flex justify-between gap-3">
+            <dt className="text-ink-muted">Login</dt>
+            <dd className="font-medium text-ink">{result.admin_email}</dd>
+          </div>
+          <div className="flex justify-between gap-3">
+            <dt className="text-ink-muted">Senha inicial</dt>
+            <dd className="font-mono font-medium text-ink">{result.initial_password}</dd>
+          </div>
+          {result.trial_ends_at && (
+            <div className="flex justify-between gap-3">
+              <dt className="text-ink-muted">Teste até</dt>
+              <dd className="font-medium text-ink">{fmtDate(result.trial_ends_at)}</dd>
+            </div>
+          )}
+        </dl>
+      </div>
+
+      <button className="btn-outline mt-3 w-full" onClick={copiar}>
+        {copied ? <><Check size={15} /> Copiado</> : <><Copy size={15} /> Copiar dados de acesso</>}
+      </button>
+
+      <p className="mt-3 text-xs text-ink-subtle">
+        A senha é a padrão da plataforma e o sistema obriga a troca no primeiro acesso.
+      </p>
+    </Modal>
   );
 }
 

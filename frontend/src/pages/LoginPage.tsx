@@ -1,20 +1,12 @@
-import React, { useEffect, useId, useState } from 'react';
+import React, { useId, useState } from 'react';
 import { useNavigate, Link, useSearchParams } from 'react-router-dom';
 import {
-  GraduationCap, Loader2, ShieldCheck, Zap, Headset, ArrowLeft,
-  CheckCircle2, Sparkles,
+  GraduationCap, Loader2, ShieldCheck, Zap, Headset, ArrowLeft, Sparkles,
 } from 'lucide-react';
-import { signIn, signUp } from '@/lib/authClient';
+import { signIn } from '@/lib/authClient';
 import { PasswordInput } from '@/components/ui/PasswordInput';
-import { CURRENT_TERMS_VERSION } from '@/lib/consentVersions';
 import { funnel } from '@/lib/analytics';
-
-type Tab = 'login' | 'signup';
-
-const PLAN_LABELS: Record<string, string> = {
-  gestao_100: 'Gestão 100',
-  gestao_250: 'Gestão 250',
-};
+import { contactHref } from '@/lib/siteConfig';
 
 /**
  * Fundo em 3 camadas (a primeira listada fica por cima):
@@ -39,32 +31,18 @@ const BACKDROP: React.CSSProperties = {
 
 export function LoginPage() {
   const [params] = useSearchParams();
-  // A landing manda ?tab=signup nos CTAs de teste grátis. Sem isso o visitante
-  // caía no formulário de login de uma conta que ele ainda não tem.
-  const [tab, setTab] = useState<Tab>(params.get('tab') === 'signup' ? 'signup' : 'login');
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<React.ReactNode | null>(null);
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [name, setName] = useState('');
-  const [accept, setAccept] = useState(false);
   const resetOk = params.get('reset') === '1';
-  const plan = params.get('plan');
 
   const uid = useId();
   const loginEmailId = `${uid}-login-email`;
   const loginPasswordId = `${uid}-login-password`;
-  const signupNameId = `${uid}-signup-name`;
-  const signupEmailId = `${uid}-signup-email`;
-  const signupPasswordId = `${uid}-signup-password`;
-  const signupAcceptId = `${uid}-signup-accept`;
   const errorId = `${uid}-error`;
-
-  useEffect(() => {
-    if (tab === 'signup') funnel.signupView(plan ? `plan:${plan}` : 'direct');
-  }, [tab, plan]);
 
   async function handleLogin(e: React.FormEvent) {
     e.preventDefault();
@@ -98,40 +76,6 @@ export function LoginPage() {
       setError('Falha ao entrar. Verifique os dados e tente novamente.');
     }
   }
-
-  async function handleSignup(e: React.FormEvent) {
-    e.preventDefault();
-    setError(null);
-    if (!accept) return setError('Você precisa aceitar os Termos e a Política de Privacidade.');
-    setLoading(true);
-    const { error } = await signUp.email({ email, password, name });
-    setLoading(false);
-    if (error) {
-      const msg = error.message ?? '';
-      if (msg.toLowerCase().includes('already exists') || msg.toLowerCase().includes('user already')) {
-        return setError(
-          <span>
-            Este e-mail já possui cadastro.{' '}
-            <button
-              type="button"
-              className="font-semibold underline"
-              onClick={() => { setTab('login'); setError(null); }}
-            >
-              Clique aqui para entrar
-            </button>.
-          </span>
-        );
-      }
-      return setError(msg || 'Falha ao cadastrar');
-    }
-    funnel.signupSuccess();
-    navigate('/app'); // cai no onboarding (criar escola)
-  }
-
-  const tabBtn = (t: Tab) =>
-    `flex-1 rounded-lg py-2.5 text-sm font-semibold transition-all duration-200 ${
-      tab === t ? 'bg-surface text-primary shadow-card' : 'text-ink-muted hover:text-ink'
-    }`;
 
   return (
     <div className="relative min-h-screen w-full" style={BACKDROP}>
@@ -197,54 +141,27 @@ export function LoginPage() {
             <div className="rounded-2xl bg-surface/[0.97] p-6 shadow-2xl ring-1 ring-white/40 backdrop-blur-2xl sm:p-7">
               <div>
                 <h2 className="text-xl font-extrabold tracking-tight text-ink">
-                  {tab === 'login' ? 'Bem-vindo de volta' : 'Crie sua conta'}
+                  Bem-vindo de volta
                 </h2>
                 <p className="mt-1 text-sm text-ink-muted">
-                  {tab === 'login'
-                    ? 'Entre para acessar o painel da sua escola.'
-                    : 'Comece o teste grátis de 7 dias. Sem cartão de crédito.'}
+                  Entre para acessar o painel da sua escola.
                 </p>
               </div>
 
-              {plan && PLAN_LABELS[plan] && tab === 'signup' && (
-                <div className="mt-4 flex items-center gap-2 rounded-xl bg-primary-soft px-3 py-2 text-sm text-primary-ink">
-                  <CheckCircle2 size={15} className="shrink-0" />
-                  Plano <strong className="font-semibold">{PLAN_LABELS[plan]}</strong> selecionado
-                </div>
-              )}
-
-              <div role="tablist" className="my-5 flex gap-1 rounded-xl bg-canvas p-1">
-                <button
-                  role="tab"
-                  aria-selected={tab === 'login'}
-                  className={tabBtn('login')}
-                  onClick={() => { setTab('login'); setError(null); }}
-                >
-                  Entrar
-                </button>
-                <button
-                  role="tab"
-                  aria-selected={tab === 'signup'}
-                  className={tabBtn('signup')}
-                  onClick={() => { setTab('signup'); setError(null); }}
-                >
-                  Criar conta
-                </button>
-              </div>
+              <div className="my-5" />
 
               {error && (
                 <div id={errorId} role="alert" className="mb-4 rounded-xl bg-danger-soft px-3.5 py-2.5 text-sm text-danger">
                   {error}
                 </div>
               )}
-              {resetOk && tab === 'login' && (
+              {resetOk && (
                 <div className="mb-4 rounded-xl bg-success-soft px-3.5 py-2.5 text-sm text-ink">
                   Senha redefinida com sucesso. Faça login com a nova senha.
                 </div>
               )}
 
-              {tab === 'login' ? (
-                <form className="space-y-4" onSubmit={handleLogin}>
+              <form className="space-y-4" onSubmit={handleLogin}>
                   <div>
                     <label htmlFor={loginEmailId} className="label">E-mail ou Matrícula</label>
                     <input
@@ -283,75 +200,22 @@ export function LoginPage() {
                     {loading && <Loader2 size={16} className="animate-spin" aria-hidden="true" />} Entrar na conta
                   </button>
                 </form>
-              ) : (
-                <form className="space-y-4" onSubmit={handleSignup}>
-                  <div>
-                    <label htmlFor={signupNameId} className="label">Seu nome</label>
-                    <input
-                      id={signupNameId}
-                      autoComplete="name"
-                      className="input"
-                      placeholder="Como podemos te chamar?"
-                      value={name}
-                      onChange={(e) => setName(e.target.value)}
-                      required
-                    />
-                  </div>
-                  <div>
-                    <label htmlFor={signupEmailId} className="label">E-mail</label>
-                    <input
-                      id={signupEmailId}
-                      type="email"
-                      autoComplete="email"
-                      className="input"
-                      placeholder="seu@email.com"
-                      value={email}
-                      onChange={(e) => setEmail(e.target.value)}
-                      aria-describedby={error ? errorId : undefined}
-                      required
-                    />
-                  </div>
-                  <div>
-                    <label htmlFor={signupPasswordId} className="label">Senha</label>
-                    <PasswordInput
-                      id={signupPasswordId}
-                      autoComplete="new-password"
-                      value={password}
-                      onChange={(e) => setPassword(e.target.value)}
-                      required
-                      minLength={8}
-                    />
-                    <p className="mt-1.5 text-xs text-ink-subtle">Mínimo 8 caracteres.</p>
-                  </div>
-                  <div className="flex items-start gap-2.5 text-sm text-ink-muted">
-                    <input
-                      id={signupAcceptId}
-                      type="checkbox"
-                      className="mt-1 accent-primary"
-                      checked={accept}
-                      required
-                      onChange={(e) => setAccept(e.target.checked)}
-                    />
-                    <label htmlFor={signupAcceptId} className="text-[13px] leading-snug">
-                      Li e aceito os{' '}
-                      <Link to="/termos" target="_blank" className="font-medium text-primary hover:underline">
-                        Termos de Uso
-                      </Link>{' '}
-                      e a{' '}
-                      <Link to="/privacidade" target="_blank" className="font-medium text-primary hover:underline">
-                        Política de Privacidade
-                      </Link>{' '}
-                      <span className="text-xs text-ink-subtle">(v{CURRENT_TERMS_VERSION})</span>
-                    </label>
-                  </div>
-                  <button className="btn-primary w-full justify-center py-3" disabled={loading}>
-                    {loading && <Loader2 size={16} className="animate-spin" aria-hidden="true" />} Começar teste grátis
-                  </button>
-                  <p className="text-center text-xs text-ink-subtle">
-                    Grátis por 7 dias · Sem cartão de crédito · Cancele quando quiser
-                  </p>
-                </form>
-              )}
+
+              {/* Sem auto-cadastro: quem abre escola é a equipe (ver LandingPage). */}
+              <div className="mt-5 border-t border-border pt-4 text-center">
+                <p className="text-sm text-ink-muted">
+                  Sua escola ainda não usa o GestEscolar?
+                </p>
+                <a
+                  href={contactHref('Olá! Quero abrir a conta da minha escola no GestEscolar.')}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  onClick={() => funnel.contactClick('login')}
+                  className="mt-1 inline-flex items-center gap-1.5 text-sm font-semibold text-primary hover:underline"
+                >
+                  <Headset size={15} /> Falar com a nossa equipe
+                </a>
+              </div>
             </div>
           </div>
         </div>

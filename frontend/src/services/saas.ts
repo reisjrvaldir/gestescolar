@@ -50,6 +50,28 @@ export interface SaasSchool {
   payment_ready?: boolean;
 }
 
+export interface NewSchoolInput {
+  school_name: string;
+  admin_name: string;
+  admin_email: string;
+  cnpj?: string;
+  phone?: string;
+  plan_id?: string;
+  /** Dias de teste. 0 = a escola já nasce ativa. */
+  trial_days?: number;
+}
+
+export interface NewSchoolResult {
+  id: string;
+  name: string;
+  created_at: string;
+  trial_ends_at?: string | null;
+  admin_email: string;
+  /** Senha padrão da plataforma — o gestor troca no 1º acesso. */
+  initial_password: string;
+  login_password_hint: string;
+}
+
 export interface SaasRevenue {
   mrr: number;
   arr: number;
@@ -230,6 +252,12 @@ export const saasService = {
   },
   async updateSchool(id: string, body: { name: string; email?: string; phone?: string; cnpj?: string }) {
     const r = await api.put<{ ok: boolean; data: SaasSchool }>(`/saas/schools/${id}`, body);
+    return r.data;
+  },
+  /** Abre uma escola nova junto com a conta do gestor. Único caminho de entrada
+   *  desde 07/08/2026 — o auto-cadastro público foi fechado. */
+  async createSchool(body: NewSchoolInput): Promise<NewSchoolResult> {
+    const r = await api.post<{ ok: boolean; data: NewSchoolResult }>('/saas/schools', body);
     return r.data;
   },
 };

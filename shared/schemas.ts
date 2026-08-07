@@ -200,3 +200,21 @@ export const onboardingSchema = z.object({
 });
 
 export type OnboardingOutput = z.output<typeof onboardingSchema>;
+
+// ─── Nova escola (superadmin) ─────────────────────────────────────────────────
+// Substitui o auto-cadastro: só o superadmin abre escola, criando junto a conta
+// do gestor. Decidido em 07/08/2026 ao reiniciar a operação.
+
+export const saasSchoolCreateSchema = z.object({
+  school_name: z.string({ required_error: 'Informe o nome da escola' }).min(2, 'Nome da escola muito curto').max(200),
+  admin_name:  z.string({ required_error: 'Informe o nome do gestor' }).min(2, 'Nome muito curto').max(120),
+  admin_email: emailSchema,
+  cnpj:        z.string().max(20).optional(),
+  phone:       phoneSchema.optional(),
+  plan_id:     z.string().uuid('Plano inválido').optional(),
+  /** Dias de teste antes de exigir assinatura. 0 = já nasce ativa. */
+  trial_days:  z.number().int().min(0).max(365).optional(),
+});
+
+export type SaasSchoolCreateInput = z.input<typeof saasSchoolCreateSchema>;
+export type SaasSchoolCreateOutput = z.output<typeof saasSchoolCreateSchema>;

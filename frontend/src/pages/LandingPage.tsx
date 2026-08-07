@@ -6,6 +6,14 @@ import { signIn } from '@/lib/authClient';
 import { contactHref, HAS_WHATSAPP } from '@/lib/siteConfig';
 import { funnel } from '@/lib/analytics';
 
+/** Slug do plano no HTML da landing → nome legível, usado na mensagem de contato. */
+const PLAN_NAMES: Record<string, string> = {
+  free: 'Free',
+  gestao_100: 'Gestão 100',
+  gestao_250: 'Gestão 250',
+  ilimitado: 'Ilimitado',
+};
+
 /**
  * Landing page — reprodução fiel da versão v1 (backup gestescolar-v1).
  * O markup original (HTML puro) é injetado via dangerouslySetInnerHTML e o
@@ -35,16 +43,20 @@ export function LandingPage() {
       },
       goLogin() { navigate('/login'); },
       /**
-       * Vai direto para a aba de CADASTRO. Antes apontava para /onboarding,
-       * que exige sessão e rebatia o visitante para /login na aba "Entrar" —
-       * ou seja, todo clique no CTA principal terminava num formulário de
-       * login para uma conta que a pessoa ainda não tinha.
+       * CTA principal → CONTATO, não cadastro.
+       *
+       * Até 07/08/2026 isto abria a aba de cadastro e a pessoa criava a própria
+       * escola sozinha. A operação passou a ser curada: quem abre escola é a
+       * equipe, pelo painel de superadmin. O CTA vira captura de contato e o
+       * plano de interesse segue junto para o funil.
        */
       goRegister(plan?: string) {
         funnel.ctaClick(plan ? 'plan_card' : 'nav_hero', plan);
-        const q = new URLSearchParams({ tab: 'signup' });
-        if (plan && plan !== 'free') q.set('plan', plan);
-        navigate(`/login?${q.toString()}`);
+        funnel.contactClick(plan ? `plan_${plan}` : 'hero');
+        const msg = plan
+          ? `Olá! Tenho interesse no GestEscolar (plano ${PLAN_NAMES[plan] ?? plan}) e quero abrir a conta da minha escola.`
+          : 'Olá! Tenho interesse no GestEscolar e quero abrir a conta da minha escola.';
+        window.open(contactHref(msg), '_blank', 'noopener,noreferrer');
       },
       goContact() {
         funnel.contactClick('landing');

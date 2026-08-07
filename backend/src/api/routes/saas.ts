@@ -1,6 +1,10 @@
 import { Router } from 'express';
 import { withTenant } from '../../db/withTenant';
 import { requireAuth, requireRole } from '../../middleware/auth';
+import { signUpGuardian } from '../../lib/authSignup';
+import { DEFAULT_GUARDIAN_PASSWORD, toStoredPassword } from '../../lib/validation';
+import { validateBody } from '../../lib/validateBody';
+import { saasSchoolCreateSchema } from '../../../../shared/schemas';
 
 export const saasRouter = Router();
 saasRouter.use(requireAuth, requireRole('superadmin'));
@@ -143,6 +147,73 @@ saasRouter.get('/schools', async (req, res) => {
     return rows;
   });
   res.json({ ok: true, data });
+});
+
+// POST /api/saas/schools — abre uma escola nova junto com a conta do gestor.
+//
+// Desde 07/08/2026 este é o ÚNICO caminho para uma escola entrar na plataforma:
+// o auto-cadastro público (/api/me/onboarding) foi fechado. Como o perfil do
+// gestor nasce aqui, ele loga e já cai direto no app — nunca vê o onboarding.
+saasRouter.post('/schools', validateBody(saasSchoolCreateSchema), async (req, res) => {
+  const s = req.body as import('../../../../shared/schemas').SaasSchoolCreateOutput;
+  const trialDays = s.trial_days ?? 7;
+
+  try {
+    // A conta de auth é criada ANTES da transação: é uma chamada HTTP ao Neon
+    // Auth e não participa do rollback. Se ela falhar, nada foi gravado ainda;
+    // se o banco falhar depois, sobra uma conta órfã — o erro devolve o e-mail
+    // para você reaproveitar ou limpar.
+    const auth = await signUpGuardian({
+      email: s.admin_email,
+      password: toStoredPassword(DEFAULT_GUARDIAN_PASSWORD),
+      name: s.admin_name,
+    });
+
+    const data = await withTenant(req.ctx!, async (c) => {
+      const school = await c.query(
+        `insert into public.schools
+           (name, cnpj, phone, email, plan_id, status, subscription_status, trial_ends_at)
+         values ($1, nullif($2,''), nullif($3,''), $4, $5, 'active', $6,
+                 case when $7::int > 0 then now() + ($7::int || ' days')::interval else null end)
+         returning id, name, created_at, trial_ends_at`,
+        [s.school_name, s.cnpj ?? '', s.phone ?? '', s.admin_email, s.plan_id ?? null,
+         trialDays > 0 ? 'trialing' : 'active', trialDays],
+      );
+      const schoolId = school.rows[0].id;
+
+      await c.query(
+        `insert into public.profiles
+           (auth_user_id, school_id, name, email, phone, role, password_change_required)
+         values ($1, $2, $3, $4, nullif($5,''), 'school_admin', true)`,
+        [auth.authUserId, schoolId, s.admin_name, s.admin_email, s.phone ?? ''],
+      );
+
+      // Saldo zerado da escola — o financeiro conta com a linha existindo.
+      await c.query(`insert into public.school_balances (school_id) values ($1)`, [schoolId]);
+
+      await c.query(
+        `insert into public.audit_logs (school_id, user_id, action, entity_type, entity_id, metadata)
+         values ($1,$2,'SCHOOL_CREATED','school',$1,$3)`,
+        [schoolId, req.ctx!.profileId,
+         JSON.stringify({ name: s.school_name, admin_email: s.admin_email, actor: req.identity?.email ?? null })],
+      );
+
+      return {
+        ...school.rows[0],
+        admin_email: s.admin_email,
+        initial_password: DEFAULT_GUARDIAN_PASSWORD,
+        login_password_hint: `Login: ${s.admin_email} • Senha inicial: ${DEFAULT_GUARDIAN_PASSWORD} — troca obrigatória no 1º acesso.`,
+      };
+    });
+
+    res.status(201).json({ ok: true, data });
+  } catch (err: any) {
+    console.error('[saas.createSchool] erro:', err?.message ?? err);
+    res.status(err?.http ?? 500).json({
+      code: err?.code ?? 'create_failed',
+      message: err?.message ?? 'Falha ao criar escola',
+    });
+  }
 });
 
 // PUT /api/saas/schools/:id — edita dados de contato/cadastro da escola.
