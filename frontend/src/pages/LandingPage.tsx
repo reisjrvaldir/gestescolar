@@ -42,6 +42,46 @@ export function LandingPage() {
         el.scrollIntoView({ behavior: 'smooth', block: 'start' });
       },
       goLogin() { navigate('/login'); },
+      /** Empurra o carrossel de módulos uma "página" (dir: -1 volta, 1 avança). */
+      slideFeatures(dir: number) {
+        const t = document.getElementById('lpFeatTrack');
+        if (!t) return;
+        // Uma página = a largura visível menos um card, para o último card da
+        // tela virar o primeiro da próxima — o olho não perde o fio.
+        const card = t.querySelector('.lp-feature-card') as HTMLElement | null;
+        const passo = card ? t.clientWidth - card.offsetWidth / 2 : t.clientWidth;
+        const max = t.scrollWidth - t.clientWidth;
+        const destino = Math.max(0, Math.min(max, t.scrollLeft + dir * passo));
+
+        // Anima scrollLeft na mão em vez de scrollBy({behavior:'smooth'}):
+        // com `scroll-snap-type` mandatory o Chrome cancela o scroll suave
+        // nativo. Pior: o snap reposiciona a CADA passo pequeno da animação,
+        // grudando a trilha de volta no primeiro card. Por isso desligamos o
+        // snap durante a animação e religamos no fim, quando ele acomoda o
+        // resultado no card mais próximo.
+        if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+          t.style.scrollSnapType = 'none';
+          t.scrollLeft = destino;
+          t.style.scrollSnapType = '';
+          return;
+        }
+        const inicio = t.scrollLeft;
+        const t0 = performance.now();
+        const dur = 380;
+        t.style.scrollSnapType = 'none';
+        const anima = (agora: number) => {
+          const p = Math.min(1, (agora - t0) / dur);
+          // easeOutCubic — arranca e desacelera no fim.
+          const e = 1 - Math.pow(1 - p, 3);
+          t.scrollLeft = inicio + (destino - inicio) * e;
+          if (p < 1) {
+            requestAnimationFrame(anima);
+          } else {
+            t.style.scrollSnapType = ''; // volta ao snap do CSS
+          }
+        };
+        requestAnimationFrame(anima);
+      },
       /**
        * CTA principal → CONTATO, não cadastro.
        *
@@ -202,6 +242,21 @@ export function LandingPage() {
       card.addEventListener('mouseleave', leave);
     });
 
+    // Setas do carrossel: somem nas pontas, para não virarem botão morto.
+    const trilha = document.getElementById('lpFeatTrack');
+    const btnPrev = document.getElementById('lpFeatPrev');
+    const btnNext = document.getElementById('lpFeatNext');
+    const syncSetas = () => {
+      if (!trilha || !btnPrev || !btnNext) return;
+      const fim = trilha.scrollWidth - trilha.clientWidth;
+      btnPrev.toggleAttribute('hidden', trilha.scrollLeft <= 4);
+      // Margem de 4px absorve o arredondamento sub-pixel do scroll.
+      btnNext.toggleAttribute('hidden', trilha.scrollLeft >= fim - 4);
+    };
+    trilha?.addEventListener('scroll', syncSetas, { passive: true });
+    window.addEventListener('resize', syncSetas);
+    syncSetas();
+
     const mockup = document.getElementById('lpMockup');
     const onMouseMove = (e: MouseEvent) => {
       if (!mockup) return;
@@ -214,6 +269,8 @@ export function LandingPage() {
     return () => {
       window.removeEventListener('scroll', onScroll);
       document.removeEventListener('mousemove', onMouseMove);
+      trilha?.removeEventListener('scroll', syncSetas);
+      window.removeEventListener('resize', syncSetas);
       fadeObs.disconnect();
       metricsObs.disconnect();
       delete (window as any).LandingPage;

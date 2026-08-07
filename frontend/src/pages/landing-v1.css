@@ -364,6 +364,40 @@ html.lp-active, html.lp-active body {
 .lp-section { padding: 100px 32px; max-width: 1200px; margin: 0 auto; }
 .lp-section-gray { background: #fafbfe; }
 
+/* ══════════════════════════════════════════════
+   SEÇÃO ESCURA — mesmo fundo do hero (#050518).
+   Usada no "Em breve": corta a sequência de seções claras e amarra o fim
+   da página ao topo. Como o fundo inverte, todo texto que herda cor
+   escura precisa ser reescrito aqui.
+   ══════════════════════════════════════════════ */
+.lp-section-dark { background: #050518; }
+.lp-section-dark .lp-section-title { color: #fff; }
+.lp-section-dark .lp-section-sub { color: rgba(255,255,255,.62); }
+.lp-section-dark .lp-section-eyebrow {
+  background: rgba(116,185,255,.12);
+  color: #74b9ff;
+  border-color: rgba(116,185,255,.28);
+}
+/* Cards viram vidro sobre o fundo escuro em vez de blocos brancos. */
+.lp-section-dark .lp-coming-card {
+  background: rgba(255,255,255,.05);
+  border-color: rgba(255,255,255,.10);
+  box-shadow: none;
+}
+.lp-section-dark .lp-coming-card:hover {
+  background: rgba(255,255,255,.08);
+  border-color: rgba(116,185,255,.35);
+  box-shadow: 0 12px 40px rgba(0,0,0,.35);
+}
+.lp-section-dark .lp-coming-card h3 { color: #fff; }
+/* rgba(255,255,255,.72) sobre #050518 dá ~11:1 — bem acima do mínimo AA. */
+.lp-section-dark .lp-coming-card p  { color: rgba(255,255,255,.72); }
+.lp-section-dark .lp-coming-badge {
+  background: rgba(255,159,67,.16);
+  color: #ffb86b;
+  border-color: rgba(255,159,67,.32);
+}
+
 .lp-section-eyebrow {
   display: inline-block;
   background: linear-gradient(135deg,rgba(26,115,232,.08),rgba(108,92,231,.08));
@@ -389,8 +423,56 @@ html.lp-active, html.lp-active body {
 /* ══════════════════════════════════════════════
    FEATURE CARDS — 3D TILT
 ══════════════════════════════════════════════ */
+/* ══════════════════════════════════════════════
+   CARROSSEL DE MÓDULOS
+   Antes era uma grade 3×N: com 13 módulos a seção virava uma parede de
+   cards e o visitante rolava muito antes de chegar em Planos. Agora é uma
+   trilha horizontal com scroll-snap; as setas empurram uma "página".
+   ══════════════════════════════════════════════ */
+.lp-carousel { position: relative; }
+
 .lp-features {
-  display: grid; grid-template-columns: repeat(3,1fr); gap: 24px;
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: calc((100% - 48px) / 3);
+  gap: 24px;
+  overflow-x: auto;
+  scroll-snap-type: x mandatory;
+  /* NÃO usar `scroll-behavior: smooth` aqui: junto com o snap mandatory ele
+     faz o Chrome descartar o scroll programático (scrollLeft/scrollBy ficam
+     presos em 0) e as setas não saem do lugar. A animação suave vem do
+     `behavior: 'smooth'` passado no scrollBy() de slideFeatures(). */
+  /* Respiro para a sombra dos cards no hover não ser cortada pelo overflow */
+  padding: 6px 4px 20px;
+  scrollbar-width: none;
+}
+.lp-features::-webkit-scrollbar { display: none; }
+.lp-features > * { scroll-snap-align: start; }
+
+.lp-carousel-arrow {
+  position: absolute; top: 50%; transform: translateY(-50%);
+  z-index: 3;
+  width: 46px; height: 46px; border-radius: 50%;
+  border: 1px solid #e5e8f3; background: #fff; color: #1a73e8;
+  font-size: 15px; cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  box-shadow: 0 6px 22px rgba(15,15,26,.10);
+  transition: background .2s, color .2s, box-shadow .2s, opacity .2s;
+}
+.lp-carousel-arrow:hover { background: #1a73e8; color: #fff; box-shadow: 0 10px 28px rgba(26,115,232,.32); }
+.lp-carousel-arrow:focus-visible { outline: 3px solid rgba(26,115,232,.45); outline-offset: 2px; }
+.lp-carousel-prev { left: -14px; }
+.lp-carousel-next { right: -14px; }
+/* Ponta da trilha: a seta some em vez de virar um botão que não faz nada. */
+.lp-carousel-arrow[hidden] { display: none; }
+
+@media (max-width: 900px) {
+  .lp-features { grid-auto-columns: calc((100% - 24px) / 2); }
+}
+@media (max-width: 640px) {
+  .lp-features { grid-auto-columns: 82%; }
+  .lp-carousel-prev { left: -6px; }
+  .lp-carousel-next { right: -6px; }
 }
 .lp-feature-card {
   background: #fff; border-radius: 20px; padding: 32px;

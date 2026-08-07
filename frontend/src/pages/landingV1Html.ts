@@ -15,9 +15,9 @@ export const LANDING_V1_HTML = `
         </a>
         <div class="lp-nav-links" id="lpNavLinks">
           <a href="#lp-features" onclick="event.preventDefault();LandingPage.scrollTo('features')">Funcionalidades</a>
+          <a href="#lp-coming" onclick="event.preventDefault();LandingPage.scrollTo('coming')">Em breve</a>
           <a href="#lp-how" onclick="event.preventDefault();LandingPage.scrollTo('how')">Como funciona</a>
           <a href="#lp-plans" onclick="event.preventDefault();LandingPage.scrollTo('plans')">Planos</a>
-          <a href="#lp-coming" onclick="event.preventDefault();LandingPage.scrollTo('coming')">Em breve</a>
           <a href="#lp-faq" onclick="event.preventDefault();LandingPage.scrollTo('faq')">FAQ</a>
         </div>
         <div class="lp-nav-btns">
@@ -188,9 +188,15 @@ export const LANDING_V1_HTML = `
         <div style="text-align:center;">
           <div class="lp-section-eyebrow lp-fade-up">Funcionalidades</div>
           <div class="lp-section-title lp-fade-up">Tudo que sua escola precisa,<br><span class="lp-grad">em um só lugar</span></div>
-          <div class="lp-section-sub lp-fade-up">12 módulos funcionando agora — do administrativo ao controle de ponto docente.</div>
+          <div class="lp-section-sub lp-fade-up">13 módulos funcionando agora — do administrativo ao planejamento pedagógico.</div>
         </div>
-        <div class="lp-features">
+        <div class="lp-carousel">
+          <button class="lp-carousel-arrow lp-carousel-prev" id="lpFeatPrev" type="button"
+                  aria-label="Ver módulos anteriores" aria-controls="lpFeatTrack"
+                  onclick="LandingPage.slideFeatures(-1)">
+            <i class="fa-solid fa-chevron-left"></i>
+          </button>
+          <div class="lp-features" id="lpFeatTrack" tabindex="0" role="group" aria-label="Módulos disponíveis">
           <div class="lp-feature-card lp-fade-up lp-tilt" style="--card-color:#1a73e8;">
             <div class="lp-feature-icon" style="background:linear-gradient(135deg,#1a73e8,#0d47a1);"><i class="fa-solid fa-school"></i></div>
             <h3>Gestão Escolar</h3>
@@ -205,6 +211,11 @@ export const LANDING_V1_HTML = `
             <div class="lp-feature-icon" style="background:linear-gradient(135deg,#6c5ce7,#4a3dbb);"><i class="fa-solid fa-chart-bar"></i></div>
             <h3>Acadêmico Completo</h3>
             <p>Notas por disciplina e turma, frequência diária, boletim digital e relatórios de desempenho por aluno.</p>
+          </div>
+          <div class="lp-feature-card lp-fade-up lp-tilt" style="--card-color:#1565c0;">
+            <div class="lp-feature-icon" style="background:linear-gradient(135deg,#1565c0,#0d47a1);"><i class="fa-solid fa-chalkboard-user"></i></div>
+            <h3>Planejamento de Aulas</h3>
+            <p>Professor monta o planejamento da semana por turma e matéria; a coordenação define temas, comenta e aprova.</p>
           </div>
           <div class="lp-feature-card lp-fade-up lp-tilt" style="--card-color:#5e35b1;">
             <div class="lp-feature-icon" style="background:linear-gradient(135deg,#5e35b1,#311b92);"><i class="fa-solid fa-fingerprint"></i></div>
@@ -250,6 +261,65 @@ export const LANDING_V1_HTML = `
             <div class="lp-feature-icon" style="background:linear-gradient(135deg,#c62828,#7f0000);"><i class="fa-solid fa-headset"></i></div>
             <h3>Suporte via Ticket</h3>
             <p>Abra chamados diretamente pelo sistema. Acompanhe o status e histórico de atendimento em tempo real.</p>
+          </div>
+          </div>
+          <button class="lp-carousel-arrow lp-carousel-next" id="lpFeatNext" type="button"
+                  aria-label="Ver mais módulos" aria-controls="lpFeatTrack"
+                  onclick="LandingPage.slideFeatures(1)">
+            <i class="fa-solid fa-chevron-right"></i>
+          </button>
+        </div>
+      </div>
+    </section>
+
+    <!-- ═══ EM BREVE ═══ -->
+    <section class="lp-section-dark" id="lp-coming">
+      <div class="lp-section">
+        <div style="text-align:center;">
+          <div class="lp-section-eyebrow lp-fade-up">Roadmap</div>
+          <div class="lp-section-title lp-fade-up">Em breve no <span class="lp-grad">GestEscolar</span></div>
+          <div class="lp-section-sub lp-fade-up">Novos módulos chegando para transformar ainda mais a experiência da sua escola.</div>
+        </div>
+        <div class="lp-coming">
+          <div class="lp-coming-card lp-fade-up">
+            <div class="lp-coming-icon" style="background:linear-gradient(135deg,#00b894,#00838f);"><i class="fa-solid fa-spell-check"></i></div>
+            <div>
+              <div class="lp-coming-badge">EM BREVE</div>
+              <h3>Provas e Correção Automática</h3>
+              <p>Aplicação de provas online com correção automática e análise de desempenho individual e por turma.</p>
+            </div>
+          </div>
+          <div class="lp-coming-card lp-fade-up">
+            <div class="lp-coming-icon" style="background:linear-gradient(135deg,#ff6f00,#e65100);"><i class="fa-solid fa-brain"></i></div>
+            <div>
+              <div class="lp-coming-badge">EM BREVE</div>
+              <h3>Análise Pedagógica por IA</h3>
+              <p>Identificação automática de dificuldades por turma com sugestão de planos de ação pedagógica.</p>
+            </div>
+          </div>
+          <div class="lp-coming-card lp-fade-up">
+            <div class="lp-coming-icon" style="background:linear-gradient(135deg,#e84393,#c2185b);"><i class="fa-solid fa-paperclip"></i></div>
+            <div>
+              <div class="lp-coming-badge">EM BREVE</div>
+              <h3>Arquivos no Chat</h3>
+              <p>Compartilhe documentos, imagens e atividades diretamente pelo chat entre escola e família.</p>
+            </div>
+          </div>
+          <div class="lp-coming-card lp-fade-up">
+            <div class="lp-coming-icon" style="background:linear-gradient(135deg,#3ddc84,#1f6e3f);"><i class="fa-brands fa-android"></i></div>
+            <div>
+              <div class="lp-coming-badge">EM BREVE</div>
+              <h3>Aplicativo Android</h3>
+              <p>App nativo para Android com acesso offline, notificações push e integração perfeita com o sistema.</p>
+            </div>
+          </div>
+          <div class="lp-coming-card lp-fade-up">
+            <div class="lp-coming-icon" style="background:linear-gradient(135deg,#555555,#000000);"><i class="fa-brands fa-apple"></i></div>
+            <div>
+              <div class="lp-coming-badge">EM BREVE</div>
+              <h3>Aplicativo iOS</h3>
+              <p>App nativo para iPhone com design elegante, acesso offline e sincronização contínua com a plataforma.</p>
+            </div>
           </div>
         </div>
       </div>
@@ -440,66 +510,6 @@ export const LANDING_V1_HTML = `
       </div>
     </section>
 
-    <!-- ═══ EM BREVE ═══ -->
-    <section class="lp-section-gray" id="lp-coming">
-      <div class="lp-section">
-        <div style="text-align:center;">
-          <div class="lp-section-eyebrow lp-fade-up">Roadmap</div>
-          <div class="lp-section-title lp-fade-up">Em breve no <span class="lp-grad">GestEscolar</span></div>
-          <div class="lp-section-sub lp-fade-up">Novos módulos chegando para transformar ainda mais a experiência da sua escola.</div>
-        </div>
-        <div class="lp-coming">
-          <div class="lp-coming-card lp-fade-up">
-            <div class="lp-coming-icon" style="background:linear-gradient(135deg,#00b894,#00838f);"><i class="fa-solid fa-spell-check"></i></div>
-            <div>
-              <div class="lp-coming-badge">EM BREVE</div>
-              <h3>Provas e Correção Automática</h3>
-              <p>Aplicação de provas online com correção automática e análise de desempenho individual e por turma.</p>
-            </div>
-          </div>
-          <div class="lp-coming-card lp-fade-up">
-            <div class="lp-coming-icon" style="background:linear-gradient(135deg,#ff6f00,#e65100);"><i class="fa-solid fa-brain"></i></div>
-            <div>
-              <div class="lp-coming-badge">EM BREVE</div>
-              <h3>Análise Pedagógica por IA</h3>
-              <p>Identificação automática de dificuldades por turma com sugestão de planos de ação pedagógica.</p>
-            </div>
-          </div>
-          <div class="lp-coming-card lp-fade-up">
-            <div class="lp-coming-icon" style="background:linear-gradient(135deg,#e84393,#c2185b);"><i class="fa-solid fa-paperclip"></i></div>
-            <div>
-              <div class="lp-coming-badge">EM BREVE</div>
-              <h3>Arquivos no Chat</h3>
-              <p>Compartilhe documentos, imagens e atividades diretamente pelo chat entre escola e família.</p>
-            </div>
-          </div>
-          <div class="lp-coming-card lp-fade-up">
-            <div class="lp-coming-icon" style="background:linear-gradient(135deg,#1565c0,#0d47a1);"><i class="fa-solid fa-chalkboard-user"></i></div>
-            <div>
-              <div class="lp-coming-badge">EM BREVE</div>
-              <h3>Plano de Aula Digital</h3>
-              <p>Professor cria e compartilha planos de aula digitais vinculados às disciplinas e turmas da escola.</p>
-            </div>
-          </div>
-          <div class="lp-coming-card lp-fade-up">
-            <div class="lp-coming-icon" style="background:linear-gradient(135deg,#3ddc84,#1f6e3f);"><i class="fa-brands fa-android"></i></div>
-            <div>
-              <div class="lp-coming-badge">EM BREVE</div>
-              <h3>Aplicativo Android</h3>
-              <p>App nativo para Android com acesso offline, notificações push e integração perfeita com o sistema.</p>
-            </div>
-          </div>
-          <div class="lp-coming-card lp-fade-up">
-            <div class="lp-coming-icon" style="background:linear-gradient(135deg,#555555,#000000);"><i class="fa-brands fa-apple"></i></div>
-            <div>
-              <div class="lp-coming-badge">EM BREVE</div>
-              <h3>Aplicativo iOS</h3>
-              <p>App nativo para iPhone com design elegante, acesso offline e sincronização contínua com a plataforma.</p>
-            </div>
-          </div>
-        </div>
-      </div>
-    </section>
 
     <!-- ═══ FAQ ═══ -->
     <section id="lp-faq">
