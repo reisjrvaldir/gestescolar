@@ -427,7 +427,7 @@ html.lp-active, html.lp-active body {
    CARROSSEL DE MÓDULOS
    Antes era uma grade 3×N: com 13 módulos a seção virava uma parede de
    cards e o visitante rolava muito antes de chegar em Planos. Agora é uma
-   trilha horizontal com scroll-snap; as setas empurram uma "página".
+   trilha horizontal com scroll-snap; cada clique na seta avança 1 card.
    ══════════════════════════════════════════════ */
 .lp-carousel { position: relative; }
 
@@ -441,9 +441,10 @@ html.lp-active, html.lp-active body {
   /* NÃO usar `scroll-behavior: smooth` aqui: junto com o snap mandatory ele
      faz o Chrome descartar o scroll programático (scrollLeft/scrollBy ficam
      presos em 0) e as setas não saem do lugar. A animação suave vem do
-     `behavior: 'smooth'` passado no scrollBy() de slideFeatures(). */
-  /* Respiro para a sombra dos cards no hover não ser cortada pelo overflow */
-  padding: 6px 4px 20px;
+     rAF em slideFeatures(), que desliga o snap durante o movimento. */
+  /* Cards de canto a canto: sem recuo lateral. O respiro em cima/baixo é só
+     para a sombra dos cards não ser cortada pelo overflow. */
+  padding: 8px 0 24px;
   scrollbar-width: none;
 }
 .lp-features::-webkit-scrollbar { display: none; }
@@ -456,33 +457,54 @@ html.lp-active, html.lp-active body {
   border: 1px solid #e5e8f3; background: #fff; color: #1a73e8;
   font-size: 15px; cursor: pointer;
   display: flex; align-items: center; justify-content: center;
-  box-shadow: 0 6px 22px rgba(15,15,26,.10);
+  box-shadow: 0 8px 24px rgba(15,15,26,.14);
   transition: background .2s, color .2s, box-shadow .2s, opacity .2s;
 }
 .lp-carousel-arrow:hover { background: #1a73e8; color: #fff; box-shadow: 0 10px 28px rgba(26,115,232,.32); }
 .lp-carousel-arrow:focus-visible { outline: 3px solid rgba(26,115,232,.45); outline-offset: 2px; }
-.lp-carousel-prev { left: -14px; }
-.lp-carousel-next { right: -14px; }
+/* Padrão (telas estreitas): seta sobreposta na borda, com fundo translúcido
+   para não brigar com o card embaixo. */
+.lp-carousel-prev { left: 8px; }
+.lp-carousel-next { right: 8px; }
+.lp-carousel-arrow { background: rgba(255,255,255,.94); backdrop-filter: blur(6px); }
 /* Ponta da trilha: a seta some em vez de virar um botão que não faz nada. */
 .lp-carousel-arrow[hidden] { display: none; }
+
+/* Telas largas: há margem fora do container (1200px) — as setas saem para
+   fora dos cards, deixando-os realmente de canto a canto. */
+@media (min-width: 1320px) {
+  .lp-carousel-arrow { background: #fff; backdrop-filter: none; }
+  .lp-carousel-prev { left: -60px; }
+  .lp-carousel-next { right: -60px; }
+}
 
 @media (max-width: 900px) {
   .lp-features { grid-auto-columns: calc((100% - 24px) / 2); }
 }
 @media (max-width: 640px) {
-  .lp-features { grid-auto-columns: 82%; }
-  .lp-carousel-prev { left: -6px; }
-  .lp-carousel-next { right: -6px; }
+  .lp-features { grid-auto-columns: 86%; }
 }
 .lp-feature-card {
   background: #fff; border-radius: 20px; padding: 32px;
-  border: 1px solid #eef0f8;
+  border: 1px solid #e6eaf4;
+  /* Sombra base mais firme: sobre o fundo #fafbfe da seção o card antes
+     quase sumia. Agora descola do fundo mesmo sem hover. */
+  box-shadow: 0 10px 30px rgba(15,23,42,.08), 0 2px 6px rgba(15,23,42,.05);
   transition: box-shadow 0.3s, border-color 0.3s;
   position: relative; overflow: hidden;
   transform-style: preserve-3d;
   will-change: transform;
   cursor: default;
 }
+/* Numeração do card (NN / TT): mostra a posição e, pelo total, quantos
+   módulos ativos existem. Injetada em JS (ver LandingPage). */
+.lp-feature-num {
+  position: absolute; top: 16px; right: 18px;
+  font-size: 12px; font-weight: 800; letter-spacing: .3px;
+  color: #aab2c5; font-variant-numeric: tabular-nums;
+  pointer-events: none;
+}
+.lp-feature-num b { color: var(--card-color, #1a73e8); font-weight: 800; }
 .lp-feature-card::before {
   content: ''; position: absolute; top: 0; left: 0;
   width: 100%; height: 3px;

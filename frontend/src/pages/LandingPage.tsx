@@ -42,14 +42,15 @@ export function LandingPage() {
         el.scrollIntoView({ behavior: 'smooth', block: 'start' });
       },
       goLogin() { navigate('/login'); },
-      /** Empurra o carrossel de módulos uma "página" (dir: -1 volta, 1 avança). */
+      /** Avança/volta exatamente 1 card no carrossel (dir: -1 volta, 1 avança). */
       slideFeatures(dir: number) {
         const t = document.getElementById('lpFeatTrack');
         if (!t) return;
-        // Uma página = a largura visível menos um card, para o último card da
-        // tela virar o primeiro da próxima — o olho não perde o fio.
+        // Passo = largura de um card + o gap, para o próximo card encostar na
+        // borda esquerda (scroll-snap-align: start acomoda o resto).
         const card = t.querySelector('.lp-feature-card') as HTMLElement | null;
-        const passo = card ? t.clientWidth - card.offsetWidth / 2 : t.clientWidth;
+        const gap = parseFloat(getComputedStyle(t).columnGap) || 24;
+        const passo = card ? card.offsetWidth + gap : t.clientWidth;
         const max = t.scrollWidth - t.clientWidth;
         const destino = Math.max(0, Math.min(max, t.scrollLeft + dir * passo));
 
@@ -240,6 +241,18 @@ export function LandingPage() {
       const leave = () => { card.style.transform = ''; card.style.boxShadow = ''; };
       card.addEventListener('mousemove', move);
       card.addEventListener('mouseleave', leave);
+    });
+
+    // Numera cada card (NN / TT). O total revela quantos módulos ativos
+    // existem; feito em JS para não repetir o número em 13 blocos de HTML.
+    const cards = document.querySelectorAll<HTMLElement>('#lpFeatTrack .lp-feature-card');
+    const total = String(cards.length).padStart(2, '0');
+    cards.forEach((c, i) => {
+      if (c.querySelector('.lp-feature-num')) return; // idempotente
+      const n = document.createElement('span');
+      n.className = 'lp-feature-num';
+      n.innerHTML = `<b>${String(i + 1).padStart(2, '0')}</b> / ${total}`;
+      c.appendChild(n);
     });
 
     // Setas do carrossel: somem nas pontas, para não virarem botão morto.
