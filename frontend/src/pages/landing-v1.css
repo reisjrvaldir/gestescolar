@@ -410,12 +410,20 @@ html.lp-active, html.lp-active body {
   box-shadow: 0 12px 40px rgba(0,0,0,.45), inset 0 1px 1px rgba(255,255,255,.1);
 }
 .lp-section-dark .lp-plan-card.popular {
-  background: rgba(26,115,232,.08);
-  border-color: rgba(26,115,232,.35);
+  background: #fff;
+  border-color: #1a73e8;
+  box-shadow: 0 20px 60px rgba(26,115,232,.25);
 }
 .lp-section-dark .lp-plan-card.popular:hover {
-  background: rgba(26,115,232,.12);
-  border-color: rgba(26,115,232,.45);
+  background: linear-gradient(180deg, #f0f7ff 0%, #fff 50%);
+  box-shadow: 0 24px 70px rgba(26,115,232,.3);
+}
+.lp-section-dark .lp-plan-card.popular .lp-plan-name,
+.lp-section-dark .lp-plan-card.popular .lp-plan-price,
+.lp-section-dark .lp-plan-card.popular .lp-plan-price small,
+.lp-section-dark .lp-plan-card.popular .lp-plan-limit,
+.lp-section-dark .lp-plan-card.popular .lp-plan-features li {
+  color: inherit;
 }
 .lp-section-dark .lp-plan-name { color: #fff; }
 .lp-section-dark .lp-plan-price { color: #74b9ff; }
