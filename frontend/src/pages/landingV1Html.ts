@@ -164,7 +164,7 @@ export const LANDING_V1_HTML = `
     <section class="lp-metrics">
       <div class="lp-metrics-inner">
         <div class="lp-metric-wrap lp-fade-up">
-          <div class="lp-metric-num" data-count="8">0</div>
+          <div class="lp-metric-num" data-count="13">0</div>
           <div class="lp-metric-label">Módulos integrados</div>
         </div>
         <div class="lp-metric-wrap lp-fade-up">
