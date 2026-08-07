@@ -330,6 +330,7 @@ export function LandingPage() {
 
       // Inicializa auto-scroll
       startAutoScroll();
+    }
 
     const mockup = document.getElementById('lpMockup');
     const onMouseMove = (e: MouseEvent) => {

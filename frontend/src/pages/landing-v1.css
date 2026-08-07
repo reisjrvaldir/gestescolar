@@ -489,10 +489,6 @@ html.lp-active, html.lp-active body {
   overflow-x: auto;
   scroll-snap-type: x mandatory;
   cursor: grab;
-}
-.lp-features.dragging {
-  cursor: grabbing;
-}
   /* NÃO usar `scroll-behavior: smooth` aqui: junto com o snap mandatory ele
      faz o Chrome descartar o scroll programático (scrollLeft/scrollBy ficam
      presos em 0) e as setas não saem do lugar. A animação suave vem do
@@ -501,6 +497,9 @@ html.lp-active, html.lp-active body {
      para a sombra dos cards não ser cortada pelo overflow. */
   padding: 8px 0 24px;
   scrollbar-width: none;
+}
+.lp-features.dragging {
+  cursor: grabbing;
 }
 .lp-features::-webkit-scrollbar { display: none; }
 .lp-features > * { scroll-snap-align: start; }
