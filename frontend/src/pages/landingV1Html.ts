@@ -325,7 +325,8 @@ export const LANDING_V1_HTML = `
       </div>
     </section>
 
-    <!-- ═══ DEPOIMENTOS ═══ -->
+    <!-- ═══ DEPOIMENTOS (OCULTO) ═══
+         Seção removida da navegação. Reativar descomentando se necessário.
     <section id="lp-testimonials">
       <div class="lp-section">
         <div style="text-align:center;">
@@ -373,6 +374,7 @@ export const LANDING_V1_HTML = `
         </div>
       </div>
     </section>
+    -->
 
     <!-- ═══ COMO FUNCIONA ═══ -->
     <section class="lp-section-gray" id="lp-how">
