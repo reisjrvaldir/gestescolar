@@ -321,6 +321,14 @@ export const LANDING_V1_HTML = `
               <p>App nativo para iPhone com design elegante, acesso offline e sincronização contínua com a plataforma.</p>
             </div>
           </div>
+          <div class="lp-coming-card lp-fade-up">
+            <div class="lp-coming-icon" style="background:linear-gradient(135deg,#7c3aed,#6d28d9);"><i class="fa-solid fa-clipboard-list"></i></div>
+            <div>
+              <div class="lp-coming-badge">DISPONÍVEL</div>
+              <h3>Pré-matrícula Online</h3>
+              <p>Formulário digital para pré-cadastro de alunos. Famílias preenchem dados online e a equipe valida no sistema.</p>
+            </div>
+          </div>
         </div>
       </div>
     </section>
