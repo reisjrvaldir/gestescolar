@@ -417,7 +417,7 @@ export const LANDING_V1_HTML = `
     </section>
 
     <!-- ═══ PLANOS ═══ -->
-    <section id="lp-plans">
+    <section class="lp-section-dark" id="lp-plans">
       <div class="lp-section">
         <div style="text-align:center;">
           <div class="lp-section-eyebrow lp-fade-up">Preços</div>

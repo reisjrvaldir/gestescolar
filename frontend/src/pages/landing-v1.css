@@ -398,6 +398,48 @@ html.lp-active, html.lp-active body {
   border-color: rgba(255,159,67,.32);
 }
 
+/* Seção escura — cards de planos em vidro (glassmorphism). */
+.lp-section-dark .lp-plan-card {
+  background: rgba(255,255,255,.06);
+  border-color: rgba(255,255,255,.12);
+  box-shadow: 0 8px 24px rgba(0,0,0,.32), inset 0 1px 1px rgba(255,255,255,.1);
+}
+.lp-section-dark .lp-plan-card:hover {
+  background: rgba(255,255,255,.09);
+  border-color: rgba(255,255,255,.18);
+  box-shadow: 0 12px 40px rgba(0,0,0,.45), inset 0 1px 1px rgba(255,255,255,.1);
+}
+.lp-section-dark .lp-plan-card.popular {
+  background: rgba(26,115,232,.08);
+  border-color: rgba(26,115,232,.35);
+}
+.lp-section-dark .lp-plan-card.popular:hover {
+  background: rgba(26,115,232,.12);
+  border-color: rgba(26,115,232,.45);
+}
+.lp-section-dark .lp-plan-name { color: #fff; }
+.lp-section-dark .lp-plan-price { color: #74b9ff; }
+.lp-section-dark .lp-plan-price-annual { color: #b19bff; }
+.lp-section-dark .lp-plan-price small,
+.lp-section-dark .lp-plan-price-annual small { color: rgba(255,255,255,.62); }
+.lp-section-dark .lp-plan-limit {
+  color: rgba(255,255,255,.62);
+  border-bottom-color: rgba(255,255,255,.1);
+}
+.lp-section-dark .lp-plan-features li {
+  color: rgba(255,255,255,.72);
+  border-bottom-color: rgba(255,255,255,.05);
+}
+.lp-section-dark .lp-section-eyebrow {
+  background: rgba(116,185,255,.12);
+  color: #74b9ff;
+  border-color: rgba(116,185,255,.28);
+}
+.lp-section-dark .lp-section-title { color: #fff; }
+.lp-section-dark .lp-section-sub { color: rgba(255,255,255,.62); }
+.lp-section-dark .lp-billing-label { color: rgba(255,255,255,.62); }
+.lp-section-dark #lbl-monthly { color: #74b9ff !important; }
+
 .lp-section-eyebrow {
   display: inline-block;
   background: linear-gradient(135deg,rgba(26,115,232,.08),rgba(108,92,231,.08));
