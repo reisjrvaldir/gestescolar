@@ -104,11 +104,13 @@ begin
     return;
   end if;
 
+  -- profiles.auth_user_id é text; a coluna equivalente no neon_auth (userId/
+  -- user_id) é uuid — sem o cast, o comparador text = uuid não existe no Postgres.
   execute format($f$
     update neon_auth.%1$I a
        set password = 'revoked-' || gen_random_uuid()::text || gen_random_uuid()::text
       from public.profiles p
-     where p.auth_user_id = a.%2$s
+     where p.auth_user_id = a.%2$s::text
        and a.%3$s = 'credential'
        and p.access_activated_at is null
        and coalesce(p.password_change_required, true) = true
