@@ -305,6 +305,7 @@ function NewSchoolModal({
   const [cnpj, setCnpj] = useState('');
   const [phone, setPhone] = useState('');
   const [trialDays, setTrialDays] = useState(7);
+  const [isPilot, setIsPilot] = useState(false);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
@@ -322,6 +323,7 @@ function NewSchoolModal({
         cnpj: cnpj.trim() || undefined,
         phone: phone.trim() || undefined,
         trial_days: trialDays,
+        is_pilot: isPilot,
       }));
     } catch (e: any) {
       setErr(e?.message ?? 'Não foi possível criar a escola.');
@@ -390,6 +392,16 @@ function NewSchoolModal({
                  onChange={(e) => setTrialDays(Math.max(0, Math.min(365, Number(e.target.value) || 0)))} />
           <p className="mt-1 text-xs text-ink-subtle">
             {trialDays === 0 ? 'A escola nasce ativa, sem período de teste.' : `Acesso liberado por ${trialDays} dias antes de exigir assinatura.`}
+          </p>
+        </div>
+
+        <div className="border-t border-border pt-3">
+          <label className="flex items-center gap-2.5">
+            <input type="checkbox" checked={isPilot} onChange={(e) => setIsPilot(e.target.checked)} />
+            <span className="text-sm font-medium text-ink">É piloto/teste?</span>
+          </label>
+          <p className="mt-1 text-xs text-ink-subtle">
+            Marque se esta escola é um piloto interno ou conta de teste (para analytics e relatórios).
           </p>
         </div>
       </div>

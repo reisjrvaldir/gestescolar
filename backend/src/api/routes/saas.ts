@@ -172,12 +172,12 @@ saasRouter.post('/schools', validateBody(saasSchoolCreateSchema), async (req, re
     const data = await withTenant(req.ctx!, async (c) => {
       const school = await c.query(
         `insert into public.schools
-           (name, cnpj, phone, email, plan_id, status, subscription_status, trial_ends_at)
+           (name, cnpj, phone, email, plan_id, status, subscription_status, trial_ends_at, is_pilot)
          values ($1, nullif($2,''), nullif($3,''), $4, $5, 'active', $6,
-                 case when $7::int > 0 then now() + ($7::int || ' days')::interval else null end)
+                 case when $7::int > 0 then now() + ($7::int || ' days')::interval else null end, $8)
          returning id, name, created_at, trial_ends_at`,
         [s.school_name, s.cnpj ?? '', s.phone ?? '', s.admin_email, s.plan_id ?? null,
-         trialDays > 0 ? 'trialing' : 'active', trialDays],
+         trialDays > 0 ? 'trialing' : 'active', trialDays, s.is_pilot ?? false],
       );
       const schoolId = school.rows[0].id;
 

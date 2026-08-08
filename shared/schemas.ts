@@ -214,6 +214,8 @@ export const saasSchoolCreateSchema = z.object({
   plan_id:     z.string().uuid('Plano inválido').optional(),
   /** Dias de teste antes de exigir assinatura. 0 = já nasce ativa. */
   trial_days:  z.number().int().min(0).max(365).optional(),
+  /** Marca a escola como piloto/teste (para analytics, quotas especiais, etc). */
+  is_pilot:    z.boolean().optional().default(false),
 });
 
 export type SaasSchoolCreateInput = z.input<typeof saasSchoolCreateSchema>;

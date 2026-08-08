@@ -59,6 +59,8 @@ export interface NewSchoolInput {
   plan_id?: string;
   /** Dias de teste. 0 = a escola já nasce ativa. */
   trial_days?: number;
+  /** Marca como piloto/teste (para analytics e relatórios). */
+  is_pilot?: boolean;
 }
 
 export interface NewSchoolResult {
