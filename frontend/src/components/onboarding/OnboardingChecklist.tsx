@@ -17,31 +17,31 @@ const STEPS = [
     key: 'has_plan' as const,
     label: 'Crie um plano de mensalidade',
     description: 'Defina o valor mensal que os alunos pagarão.',
-    path: '/planos',
+    path: '/app/settings',
   },
   {
     key: 'has_class' as const,
     label: 'Cadastre as turmas',
     description: 'Organize os alunos por ano, turno e nível.',
-    path: '/turmas',
+    path: '/app/classes',
   },
   {
     key: 'has_staff' as const,
     label: 'Adicione professores',
     description: 'Convide a equipe da escola para o sistema.',
-    path: '/funcionarios',
+    path: '/app/staff',
   },
   {
     key: 'has_student' as const,
     label: 'Matricule o primeiro aluno',
     description: 'Cadastre um aluno e vincule a uma turma e plano.',
-    path: '/alunos',
+    path: '/app/students',
   },
   {
     key: 'payment_ready' as const,
     label: 'Configure o recebimento',
     description: 'Ative o PIX/boleto abrindo sua subconta de pagamentos.',
-    path: '/financeiro/recebimento',
+    path: '/app/finance/receivables',
   },
 ];
 
