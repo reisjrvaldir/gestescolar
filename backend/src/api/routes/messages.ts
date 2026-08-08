@@ -58,6 +58,25 @@ messagesRouter.get('/threads', async (req, res) => {
   res.json({ ok: true, data });
 });
 
+// GET /api/messages/unread-count — total de mensagens não lidas do usuário
+// (badge no menu lateral). Não bloqueia a UI: se falhar, o front trata como 0.
+messagesRouter.get('/unread-count', async (req, res) => {
+  try {
+    const count = await withTenant(req.ctx!, async (c) => {
+      const { rows } = await c.query(
+        `select count(*)::int as count from public.messages
+          where school_id = $1 and recipient_id = $2 and read_at is null`,
+        [req.ctx!.schoolId, req.ctx!.profileId],
+      );
+      return rows[0]?.count ?? 0;
+    });
+    res.json({ ok: true, data: { count } });
+  } catch (err: any) {
+    console.error('[messages.unreadCount] erro:', err?.message ?? err);
+    res.status(500).json({ code: 'unread_count_failed', message: 'Não foi possível contar mensagens não lidas.' });
+  }
+});
+
 // GET /api/messages/contacts — lista pessoas para destinar mensagem
 messagesRouter.get('/contacts', async (req, res) => {
   const data = await withTenant(req.ctx!, async (c) => {

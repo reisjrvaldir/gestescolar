@@ -7,6 +7,8 @@ import { messagesService, type Thread, type Message, type Contact } from '@/serv
 import { classesService } from '@/services/classes';
 import type { SchoolClass } from '@/types/models';
 import { useMe } from '@/auth/AuthGate';
+import { useUnreadMessages } from '@/hooks/useUnreadMessages';
+import { EmojiPicker } from '@/components/messages/EmojiPicker';
 
 const ROLE_LABEL: Record<string, string> = {
   school_admin: 'Gestão',
@@ -46,6 +48,7 @@ function formatDateSep(iso: string) {
 export function MessagesPage() {
   const me = useMe();
   const canBroadcast = me && ['school_admin', 'teacher', 'superadmin'].includes(me.role);
+  const { refresh: refreshUnread } = useUnreadMessages();
 
   const [threads, setThreads] = useState<Thread[]>([]);
   const [contacts, setContacts] = useState<Contact[]>([]);
@@ -72,6 +75,7 @@ export function MessagesPage() {
 
   const chatEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const newTextareaRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => { loadThreads(); }, []);
   useEffect(() => {
@@ -98,6 +102,9 @@ export function MessagesPage() {
       setThreads(prev => prev.map(t =>
         t.partner_id === thread.partner_id ? { ...t, unread_count: 0 } : t,
       ));
+      // O GET acima já marca as mensagens como lidas no backend — atualiza o
+      // badge do menu lateral imediatamente, sem esperar o próximo polling.
+      if (thread.unread_count > 0) refreshUnread();
     } catch (e) { console.error(e); }
     setChatLoading(false);
   }
@@ -172,6 +179,31 @@ export function MessagesPage() {
       e.preventDefault();
       sendMessage();
     }
+  }
+
+  // Insere na posição do cursor (não só no final) e devolve o foco ao textarea.
+  function insertEmojiInBody(emoji: string) {
+    const el = textareaRef.current;
+    const start = el?.selectionStart ?? body.length;
+    const end = el?.selectionEnd ?? body.length;
+    const next = body.slice(0, start) + emoji + body.slice(end);
+    setBody(next);
+    requestAnimationFrame(() => {
+      el?.focus();
+      el?.setSelectionRange(start + emoji.length, start + emoji.length);
+    });
+  }
+
+  function insertEmojiInNewBody(emoji: string) {
+    const el = newTextareaRef.current;
+    const start = el?.selectionStart ?? newBody.length;
+    const end = el?.selectionEnd ?? newBody.length;
+    const next = newBody.slice(0, start) + emoji + newBody.slice(end);
+    setNewBody(next);
+    requestAnimationFrame(() => {
+      el?.focus();
+      el?.setSelectionRange(start + emoji.length, start + emoji.length);
+    });
   }
 
   function autoResize(e: React.ChangeEvent<HTMLTextAreaElement>) {
@@ -368,6 +400,7 @@ export function MessagesPage() {
                     className="flex-1 resize-none rounded-xl border border-border bg-canvas px-4 py-2.5 text-sm text-ink outline-none placeholder:text-ink-muted focus:border-primary focus:ring-2 focus:ring-primary/20"
                     style={{ maxHeight: '120px' }}
                   />
+                  <EmojiPicker onSelect={insertEmojiInBody} />
                   <button
                     className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-primary text-white hover:bg-primary/90 disabled:opacity-40"
                     onClick={sendMessage}
@@ -454,12 +487,18 @@ export function MessagesPage() {
           </div>
           <div>
             <label className="label">Mensagem *</label>
-            <textarea
-              className="input min-h-[100px] resize-none"
-              placeholder="Digite a mensagem..."
-              value={newBody}
-              onChange={e => setNewBody(e.target.value)}
-            />
+            <div className="relative">
+              <textarea
+                ref={newTextareaRef}
+                className="input min-h-[100px] resize-none pr-12"
+                placeholder="Digite a mensagem..."
+                value={newBody}
+                onChange={e => setNewBody(e.target.value)}
+              />
+              <div className="absolute bottom-2 right-2">
+                <EmojiPicker onSelect={insertEmojiInNewBody} direction="down" />
+              </div>
+            </div>
           </div>
         </div>
       </Modal>

@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { NavLink } from 'react-router-dom';
 import { GraduationCap, X, ChevronDown } from 'lucide-react';
 import { MENUS, type Role } from '@/config/menu';
+import { useUnreadMessages } from '@/hooks/useUnreadMessages';
 
 interface Props {
   role: Role;
@@ -22,6 +23,7 @@ function loadCollapsed(): Record<string, boolean> {
 export function Sidebar({ role, open, onClose }: Props) {
   const sections = MENUS[role] ?? [];
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>(loadCollapsed);
+  const { count: unreadCount } = useUnreadMessages();
 
   function toggle(title: string) {
     setCollapsed((prev) => {
@@ -79,23 +81,31 @@ export function Sidebar({ role, open, onClose }: Props) {
                     />
                   </button>
                 )}
-                {!isCollapsed && section.items.map((item) => (
-                  <NavLink
-                    key={item.to}
-                    to={item.to}
-                    end={item.to === '/app'}
-                    onClick={onClose}
-                    className={({ isActive }) =>
-                      `flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-colors
-                      ${isActive
-                        ? 'bg-primary-soft text-primary'
-                        : 'text-ink-muted hover:bg-canvas hover:text-ink'}`
-                    }
-                  >
-                    <item.icon size={18} />
-                    {item.label}
-                  </NavLink>
-                ))}
+                {!isCollapsed && section.items.map((item) => {
+                  const badge = item.to === '/app/messages' && unreadCount > 0 ? unreadCount : null;
+                  return (
+                    <NavLink
+                      key={item.to}
+                      to={item.to}
+                      end={item.to === '/app'}
+                      onClick={onClose}
+                      className={({ isActive }) =>
+                        `flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-colors
+                        ${isActive
+                          ? 'bg-primary-soft text-primary'
+                          : 'text-ink-muted hover:bg-canvas hover:text-ink'}`
+                      }
+                    >
+                      <item.icon size={18} />
+                      <span className="flex-1">{item.label}</span>
+                      {badge !== null && (
+                        <span className="flex h-5 min-w-[20px] items-center justify-center rounded-full bg-danger px-1.5 text-[11px] font-bold text-white">
+                          {badge > 99 ? '99+' : badge}
+                        </span>
+                      )}
+                    </NavLink>
+                  );
+                })}
               </div>
             );
           })}

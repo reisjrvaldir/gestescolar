@@ -73,4 +73,8 @@ export const messagesService = {
   async markRead(id: string): Promise<void> {
     await api.patch(`/messages/${id}/read`);
   },
+  async unreadCount(): Promise<number> {
+    const r = await api.get<{ data: { count: number } }>('/messages/unread-count');
+    return r.data.count;
+  },
 };
