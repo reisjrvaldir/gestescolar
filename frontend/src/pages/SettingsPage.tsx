@@ -40,7 +40,7 @@ export function SettingsPage() {
       .finally(() => setLoading(false));
   }
 
-  useEffect(() => { loadSettings(); }, [reset]);
+  useEffect(() => { loadSettings(); }, []);
 
   function handleLogoChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
