@@ -3,6 +3,7 @@ import { Outlet, useNavigate } from 'react-router-dom';
 import { Sidebar } from './Sidebar';
 import { Topbar } from './Topbar';
 import { IdleCountdown } from './IdleCountdown';
+import { OnboardingTour } from './OnboardingTour';
 import { useMe } from '@/auth/AuthGate';
 import { signOut } from '@/lib/authClient';
 import { useIdleTimer } from '@/hooks/useIdleTimer';
@@ -50,6 +51,7 @@ export function AppLayout() {
         {warning && (
           <IdleCountdown secondsLeft={secondsLeft} onStay={reset} onLogout={handleLogout} />
         )}
+        {role === 'school_admin' && <OnboardingTour />}
       </div>
     </UnreadMessagesProvider>
   );

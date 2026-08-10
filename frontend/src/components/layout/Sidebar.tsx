@@ -66,7 +66,7 @@ export function Sidebar({ role, open, onClose }: Props) {
           {sections.map((section, i) => {
             const isCollapsed = section.title ? collapsed[section.title] : false;
             return (
-              <div key={section.title ?? `sec-${i}`} className="space-y-1">
+              <div key={section.title ?? `sec-${i}`} className="space-y-1" data-tour-section={section.title}>
                 {section.title && (
                   <button
                     type="button"
@@ -89,6 +89,7 @@ export function Sidebar({ role, open, onClose }: Props) {
                       to={item.to}
                       end={item.to === '/app'}
                       onClick={onClose}
+                      data-tour-target={item.to === '/app/ajuda' ? 'ajuda' : undefined}
                       className={({ isActive }) =>
                         `flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-colors
                         ${isActive

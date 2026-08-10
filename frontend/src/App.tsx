@@ -50,6 +50,7 @@ const LessonPlanFormPage = lazyPage(() => import('@/pages/LessonPlanFormPage'), 
 const SettingsPage       = lazyPage(() => import('@/pages/SettingsPage'),       'SettingsPage');
 const TicketsPage        = lazyPage(() => import('@/pages/TicketsPage'),        'TicketsPage');
 const LgpdPage           = lazyPage(() => import('@/pages/LgpdPage'),           'LgpdPage');
+const HelpCenterPage     = lazyPage(() => import('@/pages/HelpCenterPage'),     'HelpCenterPage');
 
 // Páginas do /saas — lazy-loaded
 const SaasDashboardPage           = lazyPage(() => import('@/saas/pages/SaasDashboardPage'),           'SaasDashboardPage');
@@ -126,6 +127,7 @@ export default function App() {
               <Route path="settings" element={<Admin><SettingsPage /></Admin>} />
               <Route path="tickets" element={<TicketsPage />} />
               <Route path="lgpd" element={<LgpdPage />} />
+              <Route path="ajuda" element={<HelpCenterPage />} />
               <Route path="*" element={<PlaceholderPage title="Página não encontrada" />} />
             </Route>
 

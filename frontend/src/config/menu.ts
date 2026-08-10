@@ -1,7 +1,7 @@
 import {
   LayoutDashboard, GraduationCap, Users, School2, Star, ClipboardCheck,
   Fingerprint, CalendarDays, CreditCard,
-  Headset, Crown, Mail,
+  Headset, Crown, Mail, HelpCircle,
   CalendarOff, FolderOpen, PiggyBank, ArrowUpRight, Wallet,
   FileText, ArrowDownRight, AlertTriangle, ShieldCheck, BookOpen,
   type LucideIcon,
@@ -25,6 +25,7 @@ export interface MenuSection {
 }
 
 const TICKETS: MenuItem = { to: '/app/tickets', label: 'Chamados', icon: Headset };
+const HELP: MenuItem = { to: '/app/ajuda', label: 'Central de Ajuda', icon: HelpCircle };
 
 export const MENUS: Record<Role, MenuSection[]> = {
   school_admin: [
@@ -67,6 +68,7 @@ export const MENUS: Record<Role, MenuSection[]> = {
     {
       items: [
         { to: '/app/messages', label: 'Mensagens', icon: Mail },
+        HELP,
         TICKETS,
       ],
     },
@@ -81,7 +83,7 @@ export const MENUS: Record<Role, MenuSection[]> = {
         { to: '/app/finance/balance', label: 'Saldo / Resgate', icon: PiggyBank },
       ],
     },
-    { items: [TICKETS] },
+    { items: [HELP, TICKETS] },
   ],
   teacher: [
     { items: [{ to: '/app', label: 'Dashboard', icon: LayoutDashboard }] },
@@ -103,7 +105,7 @@ export const MENUS: Record<Role, MenuSection[]> = {
         { to: '/app/documents', label: 'Meus Documentos', icon: FolderOpen },
       ],
     },
-    { items: [{ to: '/app/messages', label: 'Mensagens', icon: Mail }] },
+    { items: [{ to: '/app/messages', label: 'Mensagens', icon: Mail }, HELP] },
   ],
   coordinator: [
     { items: [{ to: '/app', label: 'Dashboard', icon: LayoutDashboard }] },
@@ -124,7 +126,7 @@ export const MENUS: Record<Role, MenuSection[]> = {
         { to: '/app/documents', label: 'Meus Documentos', icon: FolderOpen },
       ],
     },
-    { items: [{ to: '/app/messages', label: 'Mensagens', icon: Mail }, TICKETS] },
+    { items: [{ to: '/app/messages', label: 'Mensagens', icon: Mail }, HELP, TICKETS] },
   ],
   guardian: [
     { items: [{ to: '/app', label: 'Dashboard', icon: LayoutDashboard }] },
