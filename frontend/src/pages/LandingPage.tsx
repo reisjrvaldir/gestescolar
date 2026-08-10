@@ -1,18 +1,11 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import './landing-v1.css';
 import { LANDING_V1_HTML } from './landingV1Html';
 import { signIn } from '@/lib/authClient';
 import { contactHref, HAS_WHATSAPP } from '@/lib/siteConfig';
 import { funnel } from '@/lib/analytics';
-
-/** Slug do plano no HTML da landing → nome legível, usado na mensagem de contato. */
-const PLAN_NAMES: Record<string, string> = {
-  free: 'Free',
-  gestao_100: 'Gestão 100',
-  gestao_250: 'Gestão 250',
-  ilimitado: 'Ilimitado',
-};
+import { TestingPopup } from '@/components/landing/TestingPopup';
 
 /**
  * Landing page — reprodução fiel da versão v1 (backup gestescolar-v1).
@@ -23,6 +16,8 @@ const PLAN_NAMES: Record<string, string> = {
  */
 export function LandingPage() {
   const navigate = useNavigate();
+  const [testingPopupOpen, setTestingPopupOpen] = useState(false);
+  const [testingPopupPlan, setTestingPopupPlan] = useState<string | undefined>();
 
   // Neutraliza o `height: 100%` global (index.css) enquanto a landing está
   // montada — sem isso o body vira um container de scroll de 1 viewport de
@@ -84,20 +79,19 @@ export function LandingPage() {
         requestAnimationFrame(anima);
       },
       /**
-       * CTA principal → CONTATO, não cadastro.
+       * CTA principal → POPUP de teste controlado, não cadastro direto.
        *
        * Até 07/08/2026 isto abria a aba de cadastro e a pessoa criava a própria
        * escola sozinha. A operação passou a ser curada: quem abre escola é a
-       * equipe, pelo painel de superadmin. O CTA vira captura de contato e o
-       * plano de interesse segue junto para o funil.
+       * equipe, pelo painel de superadmin. Desde então o CTA virou captura de
+       * contato via WhatsApp; agora explica o estágio de teste controlado e
+       * captura o lead num formulário (public.leads), com desconto de
+       * lançamento como incentivo — ver TestingPopup.
        */
       goRegister(plan?: string) {
         funnel.ctaClick(plan ? 'plan_card' : 'nav_hero', plan);
-        funnel.contactClick(plan ? `plan_${plan}` : 'hero');
-        const msg = plan
-          ? `Olá! Tenho interesse no GestEscolar (plano ${PLAN_NAMES[plan] ?? plan}) e quero abrir a conta da minha escola.`
-          : 'Olá! Tenho interesse no GestEscolar e quero abrir a conta da minha escola.';
-        window.open(contactHref(msg), '_blank', 'noopener,noreferrer');
+        setTestingPopupPlan(plan);
+        setTestingPopupOpen(true);
       },
       goContact() {
         funnel.contactClick('landing');
@@ -353,5 +347,14 @@ export function LandingPage() {
     };
   }, [navigate]);
 
-  return <div dangerouslySetInnerHTML={{ __html: LANDING_V1_HTML }} />;
+  return (
+    <>
+      <div dangerouslySetInnerHTML={{ __html: LANDING_V1_HTML }} />
+      <TestingPopup
+        open={testingPopupOpen}
+        plan={testingPopupPlan}
+        onClose={() => setTestingPopupOpen(false)}
+      />
+    </>
+  );
 }

@@ -54,6 +54,7 @@ const LgpdPage           = lazyPage(() => import('@/pages/LgpdPage'),           
 // Páginas do /saas — lazy-loaded
 const SaasDashboardPage           = lazyPage(() => import('@/saas/pages/SaasDashboardPage'),           'SaasDashboardPage');
 const SaasSchoolsPage             = lazyPage(() => import('@/saas/pages/SaasSchoolsPage'),           'SaasSchoolsPage');
+const SaasLeadsPage               = lazyPage(() => import('@/saas/pages/SaasLeadsPage'),             'SaasLeadsPage');
 const SaasPlansAndSubscriptionsPage = lazyPage(() => import('@/saas/pages/SaasPlansAndSubscriptionsPage'), 'SaasPlansAndSubscriptionsPage');
 const SaasExpirationsPage         = lazyPage(() => import('@/saas/pages/SaasExpirationsPage'),       'SaasExpirationsPage');
 const SaasUsersPage         = lazyPage(() => import('@/saas/pages/SaasUsersPage'),         'SaasUsersPage');
@@ -133,6 +134,7 @@ export default function App() {
               <Route element={<SaasAdminLayout />}>
                 <Route index element={<SaasDashboardPage />} />
                 <Route path="escolas"          element={<SaasSchoolsPage />} />
+                <Route path="leads"            element={<SaasLeadsPage />} />
                 <Route path="planos"           element={<SaasPlansAndSubscriptionsPage />} />
                 <Route path="vencimentos"      element={<SaasExpirationsPage />} />
                 <Route path="usuarios-escolas" element={<SaasUsersPage />} />

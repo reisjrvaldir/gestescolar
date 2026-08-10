@@ -3,7 +3,7 @@ import { Outlet, NavLink, useNavigate } from 'react-router-dom';
 import {
   LayoutDashboard, School2, Package, CalendarClock,
   Users, Activity, Wallet, ArrowLeftRight, Receipt,
-  LifeBuoy, Search,
+  LifeBuoy, Search, UserPlus,
   Bell as BellIcon, HelpCircle, Menu, X, ChevronDown, LogOut, Crown,
   ArrowLeft, type LucideIcon,
 } from 'lucide-react';
@@ -23,6 +23,7 @@ const NAV: NavGroup[] = [
     title: 'Escolas',
     items: [
       { to: '/saas/escolas', label: 'Todas as escolas', icon: School2 },
+      { to: '/saas/leads', label: 'Leads — Teste controlado', icon: UserPlus },
       { to: '/saas/planos', label: 'Planos e assinaturas', icon: Package },
       { to: '/saas/vencimentos', label: 'Vencimentos', icon: CalendarClock },
     ],

@@ -31,6 +31,7 @@ import { staffDocumentsRouter } from './routes/staffDocuments';
 import { cronRouter } from './routes/cron';
 import { webhooksRouter } from './routes/webhooks';
 import { publicAuthRouter } from './routes/publicAuth';
+import { publicLeadsRouter } from './routes/publicLeads';
 import { chargesRouter } from './routes/charges';
 import { financeRouter } from './routes/finance';
 import { billingRouter } from './routes/billing';
@@ -78,6 +79,7 @@ app.get('/api/health', (_req, res) => {
 });
 
 app.use('/api/public', publicAuthRouter);
+app.use('/api/public', publicLeadsRouter);
 app.use('/api/plans', plansRouter);
 app.use('/api/students', studentsRouter);
 app.use('/api/staff', staffRouter);

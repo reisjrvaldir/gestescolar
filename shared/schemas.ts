@@ -220,3 +220,17 @@ export const saasSchoolCreateSchema = z.object({
 
 export type SaasSchoolCreateInput = z.input<typeof saasSchoolCreateSchema>;
 export type SaasSchoolCreateOutput = z.output<typeof saasSchoolCreateSchema>;
+
+// ─── Lead do popup de teste controlado (landing page) ─────────────────────────
+
+export const publicLeadSchema = z.object({
+  name:        z.string({ required_error: 'Informe seu nome' }).min(2, 'Nome muito curto').max(120),
+  email:       emailSchema,
+  phone:       phoneSchema.optional(),
+  school_name: z.string().max(200).optional(),
+  message:     z.string().max(1000).optional(),
+  source:      z.string().max(60).optional(),
+});
+
+export type PublicLeadInput = z.input<typeof publicLeadSchema>;
+export type PublicLeadOutput = z.output<typeof publicLeadSchema>;

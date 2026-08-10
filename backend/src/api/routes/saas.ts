@@ -672,3 +672,38 @@ saasRouter.get('/subscriptions', async (req, res) => {
   });
   res.json({ ok: true, data });
 });
+
+// GET /api/saas/leads — interessados capturados no popup de teste controlado.
+saasRouter.get('/leads', async (req, res) => {
+  try {
+    const data = await withTenant(req.ctx!, async (c) => {
+      const { rows } = await c.query(
+        `select id, name, email, phone, school_name, message, status, created_at
+           from public.leads order by created_at desc limit 300`,
+      );
+      return rows;
+    });
+    res.json({ ok: true, data });
+  } catch (err: any) {
+    console.error('[saas.leads] erro:', err?.message ?? err);
+    res.status(500).json({ code: 'leads_load_failed', message: 'Não foi possível carregar os leads.' });
+  }
+});
+
+// PATCH /api/saas/leads/:id — marca status (contatado/convertido/descartado).
+const LEAD_STATUSES = ['new', 'contacted', 'converted', 'discarded'];
+saasRouter.patch('/leads/:id', async (req, res) => {
+  const status = String(req.body?.status ?? '');
+  if (!LEAD_STATUSES.includes(status)) {
+    return res.status(400).json({ code: 'invalid_status', message: 'Status inválido.' });
+  }
+  try {
+    await withTenant(req.ctx!, async (c) => {
+      await c.query(`update public.leads set status = $1 where id = $2`, [status, req.params.id]);
+    });
+    res.json({ ok: true });
+  } catch (err: any) {
+    console.error('[saas.leads.update] erro:', err?.message ?? err);
+    res.status(500).json({ code: 'lead_update_failed', message: 'Não foi possível atualizar o lead.' });
+  }
+});

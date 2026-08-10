@@ -86,4 +86,9 @@ export const funnel = {
   },
   /** Clique em falar com consultor / WhatsApp. */
   contactClick: (where: string) => trackEvent('contact_click', { where }),
+  /** Formulário do popup de teste controlado enviado com sucesso. */
+  leadSubmit: (plan?: string) => {
+    trackEvent('lead_submit', { plan: plan ?? 'none' });
+    window.fbq?.('track', 'Lead');
+  },
 };

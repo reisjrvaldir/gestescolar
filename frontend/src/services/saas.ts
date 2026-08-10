@@ -74,6 +74,19 @@ export interface NewSchoolResult {
   login_password_hint: string;
 }
 
+export type LeadStatus = 'new' | 'contacted' | 'converted' | 'discarded';
+
+export interface Lead {
+  id: string;
+  name: string;
+  email: string;
+  phone?: string | null;
+  school_name?: string | null;
+  message?: string | null;
+  status: LeadStatus;
+  created_at: string;
+}
+
 export interface SaasRevenue {
   mrr: number;
   arr: number;
@@ -261,6 +274,13 @@ export const saasService = {
   async createSchool(body: NewSchoolInput): Promise<NewSchoolResult> {
     const r = await api.post<{ ok: boolean; data: NewSchoolResult }>('/saas/schools', body);
     return r.data;
+  },
+  async leads(): Promise<Lead[]> {
+    const r = await api.get<{ ok: boolean; data: Lead[] }>('/saas/leads');
+    return r.data;
+  },
+  async updateLeadStatus(id: string, status: LeadStatus): Promise<void> {
+    await api.patch(`/saas/leads/${id}`, { status });
   },
 };
 
