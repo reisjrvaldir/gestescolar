@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { z } from 'zod';
 import { withTenant } from '../../db/withTenant';
 import { requireAuth } from '../../middleware/auth';
+import { audit } from '../../lib/audit';
 
 export const messagesRouter = Router();
 messagesRouter.use(requireAuth);
@@ -168,6 +169,11 @@ messagesRouter.post('/', async (req, res) => {
       [req.ctx!.schoolId, req.ctx!.profileId, p.data.recipient_id,
        p.data.student_id ?? null, p.data.subject, p.data.body],
     );
+    await audit(c, {
+      schoolId: req.ctx!.schoolId!, userId: req.ctx!.profileId, action: 'MESSAGE_SENT',
+      entityType: 'message', entityId: rows[0].id,
+      metadata: { recipient_id: p.data.recipient_id, subject: p.data.subject },
+    });
     return { data: rows[0] };
   });
 
@@ -236,6 +242,11 @@ messagesRouter.post('/broadcast', async (req, res) => {
         sent++;
       }
     }
+    await audit(c, {
+      schoolId: schoolId!, userId: profileId, action: 'MESSAGE_BROADCAST',
+      entityType: 'message_broadcast',
+      metadata: { subject: p.data.subject, class_id: p.data.class_id ?? null, sent },
+    });
     return sent;
   });
 

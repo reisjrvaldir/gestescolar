@@ -1,6 +1,6 @@
 import { createContext, useContext, useEffect, useState } from 'react';
-import { Navigate, Outlet, useLocation, Link } from 'react-router-dom';
-import { Loader2, ShieldAlert, CreditCard } from 'lucide-react';
+import { Navigate, Outlet, useLocation, Link, useNavigate } from 'react-router-dom';
+import { Loader2, ShieldAlert, CreditCard, Building2, ArrowRight } from 'lucide-react';
 import { useSession, signOut } from '@/lib/authClient';
 import { api } from '@/lib/api';
 import { SubscribePanel } from '@/components/settings/SubscribePanel';
@@ -17,6 +17,9 @@ export interface Me {
   password_change_required?: boolean;
   subscription_status?: string | null;
   trial_ends_at?: string | null;
+  logo_url?: string | null;
+  legal_name?: string | null;
+  cnpj?: string | null;
 }
 
 /** Assinatura inativa = past_due/canceled, ou trial já vencido. */
@@ -64,6 +67,58 @@ function SubscriptionBlocked({ me }: { me: Me }) {
           </p>
         )}
 
+        <button
+          className="mt-3 w-full text-center text-xs text-ink-subtle hover:text-ink-muted"
+          onClick={() => signOut().then(() => { window.location.href = '/login'; })}
+        >
+          Sair
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/** Dados que carimbam todo documento oficial gerado (declaração, ficha de
+ *  transferência, histórico, informe de rendimentos — ver documents.ts).
+ *  Sem eles o documento sai incompleto ou incorreto, então o preenchimento
+ *  é bloqueante para quem pode corrigi-lo (só o school_admin). */
+function isSchoolProfileIncomplete(me: Me): boolean {
+  if (me.role !== 'school_admin') return false;
+  return !me.legal_name?.trim() || !me.cnpj?.trim() || !me.logo_url?.trim();
+}
+
+function SchoolProfileIncomplete({ me }: { me: Me }) {
+  const navigate = useNavigate();
+  const missing = [
+    !me.logo_url?.trim() && 'Logo',
+    !me.legal_name?.trim() && 'Razão social',
+    !me.cnpj?.trim() && 'CNPJ',
+  ].filter(Boolean) as string[];
+
+  return (
+    <div className="flex min-h-screen items-center justify-center bg-canvas p-4">
+      <div className="card w-full max-w-md p-7 text-center">
+        <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-primary-soft text-primary">
+          <Building2 size={28} />
+        </div>
+        <h1 className="text-lg font-bold text-ink">Complete o cadastro da escola</h1>
+        <p className="mt-2 text-sm text-ink-muted">
+          Antes de usar o sistema, preencha os dados que aparecem em todo documento oficial
+          gerado pela plataforma (declarações, histórico, informe de rendimentos).
+        </p>
+        <div className="mt-4 flex flex-wrap justify-center gap-1.5">
+          {missing.map((m) => (
+            <span key={m} className="rounded-full bg-warning-soft px-2.5 py-1 text-xs font-medium text-warning">
+              {m}
+            </span>
+          ))}
+        </div>
+        <button
+          className="btn-primary mt-5 w-full justify-center"
+          onClick={() => navigate('/app/settings')}
+        >
+          Completar cadastro <ArrowRight size={15} />
+        </button>
         <button
           className="mt-3 w-full text-center text-xs text-ink-subtle hover:text-ink-muted"
           onClick={() => signOut().then(() => { window.location.href = '/login'; })}
@@ -154,6 +209,13 @@ export function AuthGate() {
   // Paywall: assinatura inativa bloqueia o app (exceto Configurações p/ regularizar).
   if (isSubscriptionInactive(me.profile) && location.pathname !== '/app/settings') {
     return <SubscriptionBlocked me={me.profile} />;
+  }
+
+  // Cadastro incompleto (logo/razão social/CNPJ) — só bloqueia o gestor, que é
+  // quem pode corrigir; professor/responsável/financeiro seguem usando o
+  // sistema normalmente enquanto isso não é preenchido.
+  if (isSchoolProfileIncomplete(me.profile) && location.pathname !== '/app/settings') {
+    return <SchoolProfileIncomplete me={me.profile} />;
   }
 
   return (

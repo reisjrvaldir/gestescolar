@@ -548,17 +548,21 @@ saasRouter.delete('/plans/:id', async (req, res) => {
   res.json({ ok: true });
 });
 
-// GET /api/saas/audit-logs — auditoria de ações críticas (últimos 200 eventos).
+// GET /api/saas/audit-logs?school_id=... — auditoria de ações críticas
+// (últimos 200 eventos, ou os últimos 200 de UMA escola se filtrado).
 saasRouter.get('/audit-logs', async (req, res) => {
+  const schoolId = typeof req.query.school_id === 'string' && req.query.school_id ? req.query.school_id : null;
   const data = await withTenant(req.ctx!, async (c) => {
     const { rows } = await c.query(
       `select a.id, a.action, a.entity_type, a.entity_id, a.metadata, a.ip_address, a.created_at,
-              s.name as school_name,
+              a.school_id, s.name as school_name,
               coalesce(p.name, p.email, a.metadata->>'actor') as actor
          from public.audit_logs a
          left join public.schools s on s.id = a.school_id
          left join public.profiles p on p.id = a.user_id
+        where ($1::uuid is null or a.school_id = $1)
         order by a.created_at desc limit 200`,
+      [schoolId],
     );
     return rows;
   });

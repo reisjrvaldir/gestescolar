@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Loader2, RefreshCw, Search } from 'lucide-react';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { StatusBadge } from '@/components/ui/StatusBadge';
-import { saasService, type SaasAuditLogRow } from '@/services/saas';
+import { saasService, type SaasAuditLogRow, type SaasSchool } from '@/services/saas';
 
 type Tone = 'success' | 'warning' | 'danger' | 'primary' | 'neutral';
 
@@ -11,8 +11,23 @@ const ACTION: Record<string, { label: string; tone: Tone }> = {
   SUBSCRIPTION_PAYMENT_CONFIRMED: { label: 'Pagamento de assinatura', tone: 'success' },
   SCHOOL_SUSPENDED: { label: 'Escola suspensa', tone: 'danger' },
   SCHOOL_REACTIVATED: { label: 'Escola reativada', tone: 'success' },
+  SCHOOL_CREATED: { label: 'Escola criada', tone: 'primary' },
+  SCHOOL_UPDATED: { label: 'Escola editada', tone: 'neutral' },
   ACCESS_EXTENDED: { label: 'Acesso prorrogado', tone: 'warning' },
   WITHDRAWAL_REQUESTED: { label: 'Saque solicitado', tone: 'primary' },
+  MESSAGE_SENT: { label: 'Mensagem enviada', tone: 'neutral' },
+  MESSAGE_BROADCAST: { label: 'Mensagem em massa', tone: 'neutral' },
+  PERSONAL_DATA_REVEALED: { label: 'Dado sensível revelado', tone: 'warning' },
+  INVOICE_PIX_GENERATED: { label: 'PIX gerado', tone: 'primary' },
+  INVOICE_SENT_TO_GUARDIAN: { label: 'Cobrança enviada ao responsável', tone: 'primary' },
+  INVOICE_CHARGED: { label: 'Cobrança emitida', tone: 'primary' },
+  INVOICE_BULK_CORRECT: { label: 'Faturas corrigidas em lote', tone: 'warning' },
+  PAYMENT_MANUAL: { label: 'Pagamento manual registrado', tone: 'success' },
+  CHARGE_BATCH_CREATED: { label: 'Cobrança avulsa criada', tone: 'primary' },
+  DECLARATION_ISSUED: { label: 'Declaração emitida', tone: 'neutral' },
+  TRANSFER_FORM_ISSUED: { label: 'Ficha de transferência emitida', tone: 'neutral' },
+  TRANSCRIPT_ISSUED: { label: 'Histórico escolar emitido', tone: 'neutral' },
+  INCOME_REPORT_ISSUED: { label: 'Informe de rendimentos emitido', tone: 'neutral' },
 };
 
 function label(action: string): { label: string; tone: Tone } {
@@ -25,16 +40,18 @@ function fmtDateTime(iso: string): string {
 
 export function SaasAuditLogsPage() {
   const [rows, setRows] = useState<SaasAuditLogRow[]>([]);
+  const [schools, setSchools] = useState<SaasSchool[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [query, setQuery] = useState('');
   const [action, setAction] = useState('todas');
+  const [schoolId, setSchoolId] = useState('');
 
-  async function load() {
+  async function load(forSchoolId = schoolId) {
     setLoading(true);
     setError(null);
     try {
-      setRows(await saasService.auditLogs());
+      setRows(await saasService.auditLogs(forSchoolId || undefined));
     } catch (e: any) {
       setError(e?.message ?? 'Erro ao carregar os logs.');
     } finally {
@@ -42,7 +59,16 @@ export function SaasAuditLogsPage() {
     }
   }
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => {
+    load();
+    saasService.schools().then(setSchools).catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  function onSchoolChange(id: string) {
+    setSchoolId(id);
+    load(id);
+  }
 
   const actions = useMemo(() => Array.from(new Set(rows.map((r) => r.action))), [rows]);
   const filtered = useMemo(() => {
@@ -61,7 +87,7 @@ export function SaasAuditLogsPage() {
     return (
       <div className="card p-8 text-center">
         <p className="text-sm text-danger">{error}</p>
-        <button className="btn-outline mt-4" onClick={load}><RefreshCw size={15} /> Tentar novamente</button>
+        <button className="btn-outline mt-4" onClick={() => load()}><RefreshCw size={15} /> Tentar novamente</button>
       </div>
     );
   }
@@ -70,16 +96,24 @@ export function SaasAuditLogsPage() {
     <>
       <PageHeader
         title="Logs de acesso"
-        subtitle="Auditoria das ações críticas da plataforma (últimos 200 eventos)."
-        actions={<button className="btn-outline" onClick={load} title="Atualizar"><RefreshCw size={15} /></button>}
+        subtitle={schoolId
+          ? `Auditoria de ${schools.find((s) => s.id === schoolId)?.name ?? 'uma escola'} (últimos 200 eventos).`
+          : 'Auditoria das ações críticas da plataforma (últimos 200 eventos).'}
+        actions={<button className="btn-outline" onClick={() => load()} title="Atualizar"><RefreshCw size={15} /></button>}
       />
 
       <div className="card overflow-hidden">
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border px-5 py-4">
-          <select className="input w-52" value={action} onChange={(e) => setAction(e.target.value)}>
-            <option value="todas">Todas as ações</option>
-            {actions.map((a) => <option key={a} value={a}>{label(a).label}</option>)}
-          </select>
+          <div className="flex flex-wrap items-center gap-2">
+            <select className="input w-56" value={schoolId} onChange={(e) => onSchoolChange(e.target.value)}>
+              <option value="">Todas as escolas</option>
+              {schools.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+            </select>
+            <select className="input w-52" value={action} onChange={(e) => setAction(e.target.value)}>
+              <option value="todas">Todas as ações</option>
+              {actions.map((a) => <option key={a} value={a}>{label(a).label}</option>)}
+            </select>
+          </div>
           <div className="relative">
             <Search size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-ink-subtle" />
             <input className="input w-64 pl-9" placeholder="Buscar escola, ator…" value={query} onChange={(e) => setQuery(e.target.value)} />

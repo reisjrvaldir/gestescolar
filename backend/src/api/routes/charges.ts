@@ -4,6 +4,7 @@ import { withTenant } from '../../db/withTenant';
 import { requireAuth, requireRole } from '../../middleware/auth';
 import { dateSchema } from '../../lib/validation';
 import { generatePixForNewInvoices } from '../../lib/billing/studentInvoices';
+import { audit } from '../../lib/audit';
 
 export const chargesRouter = Router();
 chargesRouter.use(requireAuth);
@@ -80,6 +81,12 @@ chargesRouter.post('/', requireRole('school_admin', 'financial', 'superadmin'), 
     }
 
     await c.query(`update public.charge_batches set invoices_count=$1 where id=$2`, [invoiceIds.length, batchId]);
+
+    await audit(c, {
+      schoolId: req.ctx!.schoolId!, userId: req.ctx!.profileId, action: 'CHARGE_BATCH_CREATED',
+      entityType: 'charge_batch', entityId: batchId,
+      metadata: { title, amount, scope, students_count: students.rows.length },
+    });
 
     return { batchId, invoiceIds, studentsCount: students.rows.length };
   });

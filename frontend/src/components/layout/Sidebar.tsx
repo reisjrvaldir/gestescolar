@@ -65,14 +65,18 @@ export function Sidebar({ role, open, onClose }: Props) {
         <nav className="flex-1 space-y-2 overflow-y-auto px-3 py-2">
           {sections.map((section, i) => {
             const isCollapsed = section.title ? collapsed[section.title] : false;
+            const hasTitle = !!section.title;
             return (
               <div key={section.title ?? `sec-${i}`} className="space-y-1" data-tour-section={section.title}>
-                {section.title && (
+                {hasTitle && (
                   <button
                     type="button"
                     onClick={() => toggle(section.title!)}
                     aria-expanded={!isCollapsed}
-                    className="flex w-full items-center justify-between rounded-lg px-3 py-1.5 text-[11px] font-bold uppercase tracking-wider text-ink-subtle transition-colors hover:text-ink-muted"
+                    className={`flex w-full items-center justify-between rounded-lg px-3 py-1.5 text-[11px] font-bold uppercase tracking-wider transition-colors
+                      ${isCollapsed
+                        ? 'text-ink-subtle hover:bg-canvas hover:text-ink-muted'
+                        : 'bg-primary-soft/70 text-primary hover:bg-primary-soft'}`}
                   >
                     {section.title}
                     <ChevronDown
@@ -81,32 +85,37 @@ export function Sidebar({ role, open, onClose }: Props) {
                     />
                   </button>
                 )}
-                {!isCollapsed && section.items.map((item) => {
-                  const badge = item.to === '/app/messages' && unreadCount > 0 ? unreadCount : null;
-                  return (
-                    <NavLink
-                      key={item.to}
-                      to={item.to}
-                      end={item.to === '/app'}
-                      onClick={onClose}
-                      data-tour-target={item.to === '/app/ajuda' ? 'ajuda' : undefined}
-                      className={({ isActive }) =>
-                        `flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-colors
-                        ${isActive
-                          ? 'bg-primary-soft text-primary'
-                          : 'text-ink-muted hover:bg-canvas hover:text-ink'}`
-                      }
-                    >
-                      <item.icon size={18} />
-                      <span className="flex-1">{item.label}</span>
-                      {badge !== null && (
-                        <span className="flex h-5 min-w-[20px] items-center justify-center rounded-full bg-danger px-1.5 text-[11px] font-bold text-white">
-                          {badge > 99 ? '99+' : badge}
-                        </span>
-                      )}
-                    </NavLink>
-                  );
-                })}
+                {!isCollapsed && (
+                  <div className={hasTitle ? 'relative ml-3 space-y-1 border-l-2 border-primary/15 py-0.5 pl-3' : 'space-y-1'}>
+                    {section.items.map((item) => {
+                      const badge = item.to === '/app/messages' && unreadCount > 0 ? unreadCount : null;
+                      return (
+                        <NavLink
+                          key={item.to}
+                          to={item.to}
+                          end={item.to === '/app'}
+                          onClick={onClose}
+                          data-tour-target={item.to === '/app/ajuda' ? 'ajuda' : undefined}
+                          className={({ isActive }) =>
+                            `relative flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-colors
+                            ${isActive
+                              ? 'bg-primary-soft text-primary'
+                              : 'text-ink-muted hover:bg-canvas hover:text-ink'}`
+                          }
+                        >
+                          {hasTitle && <span className="absolute -left-3 top-1/2 h-px w-3 bg-primary/15" aria-hidden="true" />}
+                          <item.icon size={18} />
+                          <span className="flex-1">{item.label}</span>
+                          {badge !== null && (
+                            <span className="flex h-5 min-w-[20px] items-center justify-center rounded-full bg-danger px-1.5 text-[11px] font-bold text-white">
+                              {badge > 99 ? '99+' : badge}
+                            </span>
+                          )}
+                        </NavLink>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
             );
           })}

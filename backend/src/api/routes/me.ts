@@ -27,7 +27,8 @@ meRouter.get('/', requireIdentity, async (req, res) => {
     const r = await c.query(
       `select p.id as profile_id, p.name, p.email, p.role, p.password_change_required,
               s.id as school_id, s.name as school_name,
-              s.status as school_status, s.subscription_status, s.trial_ends_at
+              s.status as school_status, s.subscription_status, s.trial_ends_at,
+              s.logo_url, s.legal_name, s.cnpj
          from public.profiles p
          left join public.schools s on s.id = p.school_id
         where p.auth_user_id = $1 limit 1`,

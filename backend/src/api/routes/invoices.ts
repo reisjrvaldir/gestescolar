@@ -4,6 +4,7 @@ import { requireAuth, requireRole } from '../../middleware/auth';
 import { withTenant } from '../../db/withTenant';
 import { buildChargeForInvoice, type BillingType } from '../../lib/payments';
 import { notifyChargeCreated } from '../../lib/email';
+import { audit } from '../../lib/audit';
 
 export const invoicesRouter = Router();
 invoicesRouter.use(requireAuth);
@@ -217,6 +218,10 @@ invoicesRouter.post('/:id/pix', requireRole('school_admin', 'financial', 'supera
         where i.id=$1 and i.school_id=$2`,
       [req.params.id, req.ctx!.schoolId],
     );
+    await audit(c, {
+      schoolId: req.ctx!.schoolId!, userId: req.ctx!.profileId, action: 'INVOICE_PIX_GENERATED',
+      entityType: 'invoice', entityId: req.params.id,
+    });
     return { charge: r.charge, info: info.rows[0] as any };
   });
   if ('error' in result) {
@@ -293,6 +298,10 @@ invoicesRouter.post('/:id/send-to-guardian', requireRole('school_admin', 'financ
       [req.ctx!.schoolId, req.ctx!.profileId, guardianProfileId, invRow.student_id,
        `Cobrança PIX — ${invRow.student_name}`, body],
     );
+    await audit(c, {
+      schoolId: req.ctx!.schoolId!, userId: req.ctx!.profileId, action: 'INVOICE_SENT_TO_GUARDIAN',
+      entityType: 'invoice', entityId: req.params.id,
+    });
 
     return { data: { sent_to: guardianProfileId, copy_paste: copyPaste } };
   });
@@ -314,7 +323,16 @@ invoicesRouter.post('/:id/send-to-guardian', requireRole('school_admin', 'financ
 // POST /api/invoices/:id/charge — cobrança PIX ou cartão de crédito
 invoicesRouter.post('/:id/charge', requireRole('school_admin', 'financial', 'superadmin'), async (req, res) => {
   const billingType: BillingType = req.body?.billingType === 'CREDIT_CARD' ? 'CREDIT_CARD' : 'PIX';
-  const result = await withTenant(req.ctx!, (c) => buildChargeForInvoice(c, req.ctx!.schoolId!, req.params.id, billingType));
+  const result = await withTenant(req.ctx!, async (c) => {
+    const r = await buildChargeForInvoice(c, req.ctx!.schoolId!, req.params.id, billingType);
+    if (!('error' in r)) {
+      await audit(c, {
+        schoolId: req.ctx!.schoolId!, userId: req.ctx!.profileId, action: 'INVOICE_CHARGED',
+        entityType: 'invoice', entityId: req.params.id, metadata: { billingType },
+      });
+    }
+    return r;
+  });
   if ('error' in result) {
     if (result.error === 'payout_not_ready') {
       return res.status(409).json({ code: 'payout_not_ready', message: 'Envie os documentos da conta de recebimento antes de gerar cobranças.' });

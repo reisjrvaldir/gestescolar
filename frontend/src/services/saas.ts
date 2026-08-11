@@ -132,6 +132,7 @@ export interface SaasAuditLogRow {
   metadata: Record<string, any> | null;
   ip_address: string | null;
   created_at: string;
+  school_id: string | null;
   school_name: string | null;
   actor: string | null;
 }
@@ -217,8 +218,9 @@ export const saasService = {
   async deletePlan(id: string): Promise<void> {
     await api.del(`/saas/plans/${id}`);
   },
-  async auditLogs(): Promise<SaasAuditLogRow[]> {
-    const r = await api.get<{ ok: boolean; data: SaasAuditLogRow[] }>('/saas/audit-logs');
+  async auditLogs(schoolId?: string): Promise<SaasAuditLogRow[]> {
+    const qs = schoolId ? `?school_id=${schoolId}` : '';
+    const r = await api.get<{ ok: boolean; data: SaasAuditLogRow[] }>(`/saas/audit-logs${qs}`);
     return r.data;
   },
   async transactions(): Promise<SaasTransactions> {

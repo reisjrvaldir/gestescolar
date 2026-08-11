@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { z } from 'zod';
 import { withTenant } from '../../db/withTenant';
 import { requireAuth, requireRole } from '../../middleware/auth';
+import { audit } from '../../lib/audit';
 
 export const personalDataRouter = Router();
 personalDataRouter.use(requireAuth);
@@ -63,7 +64,11 @@ personalDataRouter.post(
         const entityName: string = rows[0].name;
         const realValue: string | null = rows[0].value;
 
-        // Trilha de auditoria — o valor revelado NÃO é armazenado aqui
+        // Trilha de auditoria — o valor revelado NÃO é armazenado aqui.
+        // Duas tabelas de propósito diferente: personal_data_access_log é a
+        // trilha LGPD detalhada (com justificativa), audit_logs é a visão
+        // unificada que o superadmin já usa pra tudo — sem isto aqui, reveal
+        // de dado sensível nunca aparecia na tela de Logs de acesso.
         await c.query(
           `insert into public.personal_data_access_log
              (school_id, accessed_by_profile_id, entity_type, entity_id,
@@ -71,6 +76,11 @@ personalDataRouter.post(
            values ($1,$2,$3,$4,$5,$6,$7)`,
           [schoolId, req.ctx!.profileId, entity_type, entity_id, entityName, field, justification],
         );
+        await audit(c, {
+          schoolId: schoolId!, userId: req.ctx!.profileId, action: 'PERSONAL_DATA_REVEALED',
+          entityType: entity_type, entityId: entity_id,
+          metadata: { field, entity_name: entityName, justification },
+        });
 
         return { value: realValue };
       });
