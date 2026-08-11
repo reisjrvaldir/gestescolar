@@ -6,6 +6,7 @@ import { RoleGuard } from '@/auth/RoleGuard';
 import { SaasAdminGuard } from '@/saas/SaasAdminGuard';
 import { SaasAdminLayout } from '@/saas/SaasAdminLayout';
 import { PageSkeleton } from '@/components/ui/Skeleton';
+import { ChunkErrorBoundary } from '@/components/ChunkErrorBoundary';
 
 // Páginas públicas — carregadas imediatamente (sem autenticação, latência zero importa)
 import { LandingPage } from '@/pages/LandingPage';
@@ -83,8 +84,12 @@ const TeacherCoordination = ({ children }: { children: React.ReactNode }) => (
 export default function App() {
   return (
     <BrowserRouter>
-      {/* Suspense único na raiz: exibe PageSkeleton enquanto qualquer chunk lazy carrega */}
-      <Suspense fallback={<PageSkeleton />}>
+      {/* Suspense único na raiz: exibe PageSkeleton enquanto qualquer chunk lazy carrega.
+          ChunkErrorBoundary por fora: se um chunk falhar ao baixar (deploy novo
+          publicado enquanto a aba estava aberta), recarrega sozinho em vez de
+          deixar a tela em branco — ver o comentário no próprio arquivo. */}
+      <ChunkErrorBoundary>
+        <Suspense fallback={<PageSkeleton />}>
         <Routes>
           <Route path="/" element={<LandingPage />} />
           <Route path="/termos" element={<TermosPage />} />
@@ -151,7 +156,8 @@ export default function App() {
             </Route>
           </Route>
         </Routes>
-      </Suspense>
+        </Suspense>
+      </ChunkErrorBoundary>
     </BrowserRouter>
   );
 }
