@@ -180,7 +180,11 @@ export const schoolSettingsSchema = z.object({
   cnpj:        z.string().max(20).optional(),
   email:       z.string().email('E-mail inválido').max(254).optional().or(z.literal('')),
   phone:       phoneSchema.optional(),
-  logo_url:    z.string().max(1000).optional(),
+  // Armazenado como data-URI base64 (sem upload pra storage externo ainda).
+  // 500KB binário ≈ 683 mil caracteres em base64 (+ ~30 do prefixo "data:...")
+  // — o limite da UI é "Máx 500KB", então o schema precisa caber isso com folga.
+  // Um URL de imagem normal (poucas dezenas de caracteres) também passa aqui.
+  logo_url:    z.string().max(700_000, 'Imagem muito grande (máx. 500KB)').optional(),
   // Multa (% fixo) e juros de mora (% ao mês) aplicados a pagamentos em atraso.
   late_fine_pct:     pctSchema,
   late_interest_pct: pctSchema,

@@ -1,23 +1,51 @@
 import { useEffect, useState, useRef } from 'react';
 import { useForm } from 'react-hook-form';
-import { Settings, Save, Check, Loader2, Upload, Image, Percent } from 'lucide-react';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { z } from 'zod';
+import { Settings, Save, Check, Loader2, Upload, Image, Percent, AlertTriangle } from 'lucide-react';
 import { PageHero } from '@/components/ui/PageHero';
 import { StatusBadge } from '@/components/ui/StatusBadge';
-import { settingsService, type SchoolSettings, type UpdateSchoolSettings } from '@/services/settings';
+import { settingsService, type SchoolSettings } from '@/services/settings';
 import { PlansManager } from '@/components/settings/PlansManager';
 import { SubscribePanel } from '@/components/settings/SubscribePanel';
 import { PixPayoutCard } from '@/components/settings/PixPayoutCard';
 import { SubaccountForm } from '@/components/settings/SubaccountForm';
+import { applyServerErrors } from '@/hooks/useFormErrors';
+
+// Só neste formulário (que sempre envia tudo de uma vez, não é update
+// parcial): nome, razão social e CNPJ obrigatórios — são os mesmos três
+// campos que a AuthGate exige antes de liberar o sistema pro gestor,
+// porque carimbam todo documento oficial gerado (declaração, histórico
+// etc). O schema compartilhado (shared/schemas.ts) continua com esses
+// campos opcionais — outras chamadas ao PUT /settings podem enviar só
+// parte dos campos.
+const settingsFormSchema = z.object({
+  name: z.string({ required_error: 'Informe o nome da escola' }).min(2, 'Nome da escola muito curto'),
+  legal_name: z.string({ required_error: 'Informe a razão social' }).min(2, 'Razão social muito curta'),
+  cnpj: z.string({ required_error: 'Informe o CNPJ' }).min(14, 'CNPJ inválido'),
+  email: z.string().email('E-mail inválido').optional().or(z.literal('')),
+  phone: z.string().optional(),
+  late_fine_pct: z.number().min(0).max(100).optional(),
+  late_interest_pct: z.number().min(0).max(100).optional(),
+});
+type SettingsFormValues = z.infer<typeof settingsFormSchema>;
+
+const MAX_LOGO_BYTES = 500 * 1024;
 
 export function SettingsPage() {
   const [school, setSchool] = useState<SchoolSettings | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
   const [logoPreview, setLogoPreview] = useState<string | null>(null);
+  const [logoError, setLogoError] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
 
-  const { register, handleSubmit, reset } = useForm<UpdateSchoolSettings>();
+  const {
+    register, handleSubmit, reset, setError: setFieldError,
+    formState: { errors },
+  } = useForm<SettingsFormValues>({ resolver: zodResolver(settingsFormSchema) });
 
   function loadSettings() {
     setLoading(true);
@@ -45,16 +73,44 @@ export function SettingsPage() {
   function handleLogoChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
+    setLogoError(null);
+    if (file.size > MAX_LOGO_BYTES) {
+      setLogoError(`Imagem muito grande (${(file.size / 1024).toFixed(0)}KB). Máximo: 500KB.`);
+      e.target.value = '';
+      return;
+    }
     const reader = new FileReader();
     reader.onload = () => setLogoPreview(reader.result as string);
+    reader.onerror = () => setLogoError('Não foi possível ler o arquivo. Tente outra imagem.');
     reader.readAsDataURL(file);
   }
 
-  async function onSave(data: UpdateSchoolSettings) {
-    await settingsService.update({ ...data, logo_url: logoPreview ?? undefined });
-    setSaved(true);
-    setTimeout(() => setSaved(false), 3000);
+  async function onSave(data: SettingsFormValues) {
+    setSaveError(null);
+    if (!logoPreview) {
+      setLogoError('Envie a logo da escola.');
+      return;
+    }
+    try {
+      await settingsService.update({ ...data, logo_url: logoPreview });
+      setSaved(true);
+      setTimeout(() => setSaved(false), 3000);
+    } catch (e: any) {
+      if (!applyServerErrors(e, setFieldError)) {
+        setSaveError(e?.message ?? 'Não foi possível salvar as configurações.');
+      }
+    }
   }
+
+  // Lista consolidada de tudo que falta — mostrada abaixo do formulário
+  // quando o submit é bloqueado por validação (campo ausente/inválido).
+  const missingFields = [
+    errors.name && 'Nome da escola',
+    errors.legal_name && 'Razão social',
+    errors.cnpj && 'CNPJ',
+    errors.email && 'E-mail',
+    logoError && 'Logo da escola',
+  ].filter(Boolean) as string[];
 
   if (loading) {
     return <div className="flex items-center justify-center py-20 text-ink-muted"><Loader2 className="animate-spin" size={24} /> <span className="ml-2">Carregando…</span></div>;
@@ -99,10 +155,12 @@ export function SettingsPage() {
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
         <form id="settings-form" className="card space-y-4 p-5 lg:col-span-2" onSubmit={handleSubmit(onSave)}>
           <div>
-            <label className="label">Logo da escola</label>
+            <label className="label">Logo da escola *</label>
             <div className="flex items-center gap-4">
               <div
-                className="flex h-20 w-20 shrink-0 items-center justify-center overflow-hidden rounded-xl border-2 border-dashed border-border bg-canvas cursor-pointer hover:border-primary"
+                className={`flex h-20 w-20 shrink-0 items-center justify-center overflow-hidden rounded-xl border-2 border-dashed bg-canvas cursor-pointer hover:border-primary ${
+                  logoError ? 'border-danger' : 'border-border'
+                }`}
                 onClick={() => fileRef.current?.click()}
               >
                 {logoPreview ? (
@@ -117,21 +175,29 @@ export function SettingsPage() {
                 </button>
                 <p className="mt-1 text-xs text-ink-muted">PNG, JPG ou SVG. Máx 500KB.</p>
                 <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={handleLogoChange} />
+                {logoError && <p className="mt-1 text-xs text-danger">{logoError}</p>}
               </div>
             </div>
           </div>
           <div>
-            <label className="label">Nome da escola</label>
-            <input className="input" {...register('name')} />
+            <label className="label">Nome da escola *</label>
+            <input className={`input ${errors.name ? 'border-danger' : ''}`} {...register('name')} />
+            {errors.name && <p className="mt-1 text-xs text-danger">{errors.name.message}</p>}
           </div>
           <div>
-            <label className="label">Razão social</label>
-            <input className="input" {...register('legal_name')} />
+            <label className="label">Razão social *</label>
+            <input className={`input ${errors.legal_name ? 'border-danger' : ''}`} {...register('legal_name')} />
+            {errors.legal_name && <p className="mt-1 text-xs text-danger">{errors.legal_name.message}</p>}
           </div>
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div>
-              <label className="label">CNPJ</label>
-              <input className="input" placeholder="00.000.000/0001-00" {...register('cnpj')} />
+              <label className="label">CNPJ *</label>
+              <input
+                className={`input ${errors.cnpj ? 'border-danger' : ''}`}
+                placeholder="00.000.000/0001-00"
+                {...register('cnpj')}
+              />
+              {errors.cnpj && <p className="mt-1 text-xs text-danger">{errors.cnpj.message}</p>}
             </div>
             <div>
               <label className="label">Telefone</label>
@@ -140,7 +206,8 @@ export function SettingsPage() {
           </div>
           <div>
             <label className="label">E-mail da escola</label>
-            <input type="email" className="input" {...register('email')} />
+            <input type="email" className={`input ${errors.email ? 'border-danger' : ''}`} {...register('email')} />
+            {errors.email && <p className="mt-1 text-xs text-danger">{errors.email.message}</p>}
           </div>
 
           {/* Multa e juros por atraso */}
@@ -181,6 +248,23 @@ export function SettingsPage() {
               Padrão comum no Brasil: multa 2% + juros 1% ao mês. As taxas valem para novas cobranças geradas após salvar.
             </p>
           </div>
+
+          {/* Erro consolidado — some sozinho quando o campo é corrigido, já que
+              `missingFields` é recalculado a cada render a partir do formState. */}
+          {missingFields.length > 0 && (
+            <div role="alert" className="flex items-start gap-2 rounded-xl bg-danger-soft px-3.5 py-2.5 text-sm text-danger">
+              <AlertTriangle size={16} className="mt-0.5 shrink-0" />
+              <div>
+                <p className="font-semibold">Preencha os campos obrigatórios antes de salvar:</p>
+                <ul className="mt-0.5 list-inside list-disc">
+                  {missingFields.map((f) => <li key={f}>{f}</li>)}
+                </ul>
+              </div>
+            </div>
+          )}
+          {saveError && (
+            <div role="alert" className="rounded-xl bg-danger-soft px-3.5 py-2.5 text-sm text-danger">{saveError}</div>
+          )}
         </form>
 
         <div className="space-y-6">
