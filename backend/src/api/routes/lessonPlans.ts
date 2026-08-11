@@ -38,6 +38,13 @@ const WEEK_FIELDS = ['objectives', 'contents', 'methodology', 'resources', 'eval
 /**
  * Colunas de data como `date` chegam do pg como ISO completo; o app inteiro
  * compara "YYYY-MM-DD", então todo select usa to_char.
+ *
+ * `awaiting_from`: de quem é a vez de agir — 'teacher' ou 'reviewer' (ou
+ * null se não há pendência: rascunho, ou aprovado sem comentário depois).
+ * Base: status (submitted → revisor; changes_requested → professor).
+ * Um comentário livre (POST /:id/comments) não muda status, então se o
+ * ÚLTIMO comentário for mais recente que o último submit/review, ele manda:
+ * quem comentou por último passa a bola pro OUTRO lado responder.
  */
 const PLAN_SELECT = `
   select lp.id, lp.class_id, lp.subject_id, lp.teacher_id, lp.status,
@@ -48,12 +55,29 @@ const PLAN_SELECT = `
          cl.name  as class_name,
          s.name   as subject_name,
          t.name   as teacher_name,
-         rv.name  as reviewer_name
+         rv.name  as reviewer_name,
+         case
+           when lp.status = 'draft' then null
+           when lc.created_at is not null
+                and lc.created_at > coalesce(lp.reviewed_at, lp.submitted_at, '-infinity'::timestamptz)
+             then (case when lc.author_role = 'teacher' then 'reviewer' else 'teacher' end)
+           when lp.status = 'submitted' then 'reviewer'
+           when lp.status = 'changes_requested' then 'teacher'
+           else null
+         end as awaiting_from
     from public.lesson_plans lp
     join public.classes  cl on cl.id = lp.class_id
     join public.teachers t  on t.id  = lp.teacher_id
     left join public.subjects s  on s.id  = lp.subject_id
-    left join public.profiles rv on rv.id = lp.reviewed_by`;
+    left join public.profiles rv on rv.id = lp.reviewed_by
+    left join lateral (
+      select p2.role as author_role, cm.created_at
+        from public.lesson_plan_comments cm
+        join public.profiles p2 on p2.id = cm.author_id
+       where cm.plan_id = lp.id
+       order by cm.created_at desc
+       limit 1
+    ) lc on true`;
 
 /** Id do registro de professor do usuário logado (null se não for professor). */
 async function myTeacherId(c: any, ctx: any): Promise<string | null> {

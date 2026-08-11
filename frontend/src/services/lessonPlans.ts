@@ -62,6 +62,8 @@ export interface LessonPlan {
   reviewer_name?: string | null;
   created_at: string;
   updated_at: string;
+  /** De quem é a vez de agir — 'teacher' | 'reviewer' | null (sem pendência). */
+  awaiting_from?: 'teacher' | 'reviewer' | null;
 }
 
 export interface LessonPlanDetail extends LessonPlan {

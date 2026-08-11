@@ -3,7 +3,7 @@ import { useNavigate, Link, useSearchParams } from 'react-router-dom';
 import {
   GraduationCap, Loader2, ShieldCheck, Zap, Headset, ArrowLeft, Sparkles,
 } from 'lucide-react';
-import { signIn } from '@/lib/authClient';
+import { signIn, authClient } from '@/lib/authClient';
 import { PasswordInput } from '@/components/ui/PasswordInput';
 import { funnel } from '@/lib/analytics';
 import { contactHref } from '@/lib/siteConfig';
@@ -28,6 +28,26 @@ const BACKDROP: React.CSSProperties = {
   backgroundSize: 'cover, cover, cover',
   backgroundPosition: 'center, center, center',
 };
+
+/**
+ * O client do Better Auth confirma o login (signIn.email resolve sem erro)
+ * ANTES da sessão realmente propagar pro estado reativo que o AuthGate lê
+ * (useSession) — o próprio pacote agenda esse refresh com setTimeout interno.
+ * Sem esperar aqui, o AuthGate podia montar, checar a sessão, não achar
+ * nada ainda, e chutar de volta pro /login — apagando o formulário e dando
+ * a impressão de que "sumiu", exigindo login de novo. Confirma a sessão via
+ * chamada direta (não reativa) antes de navegar, corta essa corrida pela raiz.
+ */
+async function waitForSession(maxAttempts = 10, delayMs = 150): Promise<boolean> {
+  for (let i = 0; i < maxAttempts; i++) {
+    try {
+      const { data } = await authClient.getSession();
+      if (data) return true;
+    } catch { /* tenta de novo */ }
+    await new Promise((r) => setTimeout(r, delayMs));
+  }
+  return false;
+}
 
 export function LoginPage() {
   const [params] = useSearchParams();
@@ -68,8 +88,19 @@ export function LoginPage() {
       if (res.error && /^\d{6}$/.test(password)) {
         res = await signIn.email({ email: loginEmail, password: (password + password).slice(0, 8) });
       }
+      if (res.error) {
+        setLoading(false);
+        return setError(res.error.message ?? 'Falha ao entrar');
+      }
+
+      // Espera a sessão ficar disponível de fato antes de navegar — ver
+      // comentário em waitForSession. Sem isso, o AuthGate pode não
+      // enxergar a sessão recém-criada e mandar de volta pro login.
+      const ready = await waitForSession();
       setLoading(false);
-      if (res.error) return setError(res.error.message ?? 'Falha ao entrar');
+      if (!ready) {
+        return setError('Login confirmado, mas demorou para iniciar a sessão. Tente novamente.');
+      }
       navigate('/app');
     } catch {
       setLoading(false);

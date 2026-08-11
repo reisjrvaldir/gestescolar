@@ -232,11 +232,16 @@ export function LessonPlansPage() {
         <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
           {plans.map((p) => {
             const st = LESSON_PLAN_STATUS[p.status];
+            const myRole = canReview ? 'reviewer' : 'teacher';
+            const awaitingMe = p.awaiting_from === myRole;
+            const awaitingOther = p.awaiting_from && p.awaiting_from !== myRole;
             return (
               <button
                 key={p.id}
                 onClick={() => navigate(`/app/lesson-plans/${p.id}`)}
-                className="card p-4 text-left transition-shadow hover:shadow-card-hover"
+                className={`card p-4 text-left transition-shadow hover:shadow-card-hover ${
+                  awaitingMe ? 'ring-2 ring-primary/40' : ''
+                }`}
               >
                 <div className="mb-2 flex items-start justify-between gap-2">
                   <div className="min-w-0">
@@ -246,6 +251,16 @@ export function LessonPlansPage() {
                   <StatusBadge tone={st.tone}>{st.label}</StatusBadge>
                 </div>
                 {canReview && <p className="truncate text-xs text-ink-subtle">Prof. {p.teacher_name}</p>}
+                {awaitingMe && (
+                  <p className="mt-2 flex items-center gap-1 text-xs font-semibold text-primary">
+                    <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-primary" /> Aguardando sua resposta
+                  </p>
+                )}
+                {awaitingOther && (
+                  <p className="mt-2 text-xs text-ink-subtle">
+                    Aguardando resposta {p.awaiting_from === 'teacher' ? 'do professor' : 'da gestão'}
+                  </p>
+                )}
               </button>
             );
           })}
