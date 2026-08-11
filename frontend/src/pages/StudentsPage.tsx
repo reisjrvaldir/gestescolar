@@ -6,12 +6,14 @@ import {
   GraduationCap, Search, Loader2, Copy, Check, Save, Plus,
   User, Phone, FileText, Link2, Upload, Printer, Pencil,
   Users, UserPlus, Gift, AlertTriangle, Eye, MoreVertical,
+  FileBadge, ArrowLeftRight, BookMarked,
 } from 'lucide-react';
 import { PageHero } from '@/components/ui/PageHero';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { StatusBadge } from '@/components/ui/StatusBadge';
 import { SensitiveField } from '@/components/ui/SensitiveField';
 import { studentsService, type NewStudent, type CreatedStudent } from '@/services/students';
+import { documentsService } from '@/services/documents';
 import { classesService } from '@/services/classes';
 import { schoolPlansService, type SchoolPlan } from '@/services/schoolPlans';
 import { queryCache, CK, CACHE_TTL } from '@/lib/cache';
@@ -146,6 +148,9 @@ export function StudentsPage() {
   const [plans, setPlans] = useState<SchoolPlan[]>([]);
   const [selected, setSelected] = useState<Student | null>(null);
   const [detailTab, setDetailTab] = useState<DetailTab>('dados');
+  const [issuingDoc, setIssuingDoc] = useState<string | null>(null);
+  const [docError, setDocError] = useState<string | null>(null);
+  const [irYear, setIrYear] = useState(new Date().getFullYear() - 1);
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
   const [classFilter, setClassFilter] = useState<string>('');
   const [serieFilter, setSerieFilter] = useState<string>('');
@@ -154,6 +159,18 @@ export function StudentsPage() {
   const [copied, setCopied] = useState(false);
   const [photoPreview, setPhotoPreview] = useState<string | null>(null);
   const [editing, setEditing] = useState<Student | null>(null);
+
+  async function issueDocument(key: string, action: () => Promise<void>) {
+    setDocError(null);
+    setIssuingDoc(key);
+    try {
+      await action();
+    } catch (e: any) {
+      setDocError(e?.message ?? 'Não foi possível gerar o documento.');
+    } finally {
+      setIssuingDoc(null);
+    }
+  }
 
   const load = useCallback(async (force = false) => {
     // Cache-hit: usa dados válidos sem tocar a rede e sem piscar loading.
@@ -870,6 +887,84 @@ export function StudentsPage() {
                           <p className="text-xs text-ink-muted">Dados financeiros e responsável</p>
                         </div>
                       </button>
+
+                      <div className="border-t border-border pt-3">
+                        <p className="mb-2 text-[11px] font-bold uppercase tracking-wide text-ink-subtle">
+                          Documentos oficiais (gerados no servidor, com registro de emissão)
+                        </p>
+                      </div>
+
+                      {docError && (
+                        <div role="alert" className="rounded-xl bg-danger-soft px-3 py-2 text-xs text-danger">{docError}</div>
+                      )}
+
+                      {([
+                        {
+                          key: 'decl-matricula', icon: FileBadge, label: 'Declaração de Matrícula',
+                          desc: 'Confirma que o aluno está regularmente matriculado',
+                          action: () => documentsService.declaration(selected.id, 'matricula', selected.name),
+                        },
+                        {
+                          key: 'decl-conclusao', icon: FileBadge, label: 'Declaração de Conclusão',
+                          desc: 'Confirma a conclusão do ano letivo com aproveitamento',
+                          action: () => documentsService.declaration(selected.id, 'conclusao', selected.name),
+                        },
+                        {
+                          key: 'transfer', icon: ArrowLeftRight, label: 'Ficha de Transferência',
+                          desc: 'Formaliza a transferência para outra instituição, com situação acadêmica',
+                          action: () => documentsService.transferForm(selected.id, selected.name),
+                        },
+                        {
+                          key: 'transcript', icon: BookMarked, label: 'Histórico Escolar',
+                          desc: 'Notas e situação por turma/ano cursado no sistema',
+                          action: () => documentsService.transcript(selected.id, selected.name),
+                        },
+                      ] as const).map((d) => (
+                        <button
+                          key={d.key}
+                          disabled={issuingDoc === d.key}
+                          className="flex w-full items-center gap-3 rounded-xl border border-border p-3 text-left transition-colors hover:bg-canvas disabled:opacity-60"
+                          onClick={() => issueDocument(d.key, d.action)}
+                        >
+                          {issuingDoc === d.key
+                            ? <Loader2 size={18} className="shrink-0 animate-spin text-primary" />
+                            : <d.icon size={18} className="shrink-0 text-primary" />}
+                          <div>
+                            <p className="text-sm font-medium text-ink">{d.label}</p>
+                            <p className="text-xs text-ink-muted">{d.desc}</p>
+                          </div>
+                        </button>
+                      ))}
+
+                      {selected.guardian_id && (
+                        <div className="flex items-center gap-2 rounded-xl border border-border p-3">
+                          <FileBadge size={18} className="shrink-0 text-primary" />
+                          <div className="min-w-0 flex-1">
+                            <p className="text-sm font-medium text-ink">Informe de Rendimentos do responsável</p>
+                            <p className="text-xs text-ink-muted">Para declaração de Imposto de Renda — mensalidade e matrícula pagas no ano</p>
+                          </div>
+                          <select
+                            className="input w-20 py-1.5 text-xs"
+                            value={irYear}
+                            onChange={(e) => setIrYear(Number(e.target.value))}
+                            aria-label="Ano do informe"
+                          >
+                            {Array.from({ length: 5 }, (_, i) => new Date().getFullYear() - 1 - i).map((y) => (
+                              <option key={y} value={y}>{y}</option>
+                            ))}
+                          </select>
+                          <button
+                            className="btn-outline shrink-0 text-xs"
+                            disabled={issuingDoc === 'income-report'}
+                            onClick={() => issueDocument('income-report',
+                              () => documentsService.incomeReport(irYear, selected.guardian_id))}
+                          >
+                            {issuingDoc === 'income-report'
+                              ? <Loader2 size={13} className="animate-spin" />
+                              : <FileText size={13} />}
+                          </button>
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>

@@ -8,8 +8,9 @@ import { StatusBadge } from '@/components/ui/StatusBadge';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { QRCodeSVG } from 'qrcode.react';
 import { invoicesService, type MyInvoice, type InvoiceStatus } from '@/services/invoices';
+import { documentsService } from '@/services/documents';
 import { brl } from '@/lib/fees';
-import { fmtDate, fmtTimestamp, getYearBRT } from '@/lib/dates';
+import { fmtDate, fmtTimestamp } from '@/lib/dates';
 import { useMe } from '@/auth/AuthGate';
 import { api } from '@/lib/api';
 
@@ -36,44 +37,6 @@ interface ChildStat {
   class_year?: number;
 }
 
-function generateIRPdf(me: any, invoices: MyInvoice[], year: number) {
-  const paid = invoices.filter(i => i.status === 'paid' && i.paid_at && getYearBRT(i.paid_at) === year);
-  const total = paid.reduce((s, i) => s + i.amount, 0);
-  const w = window.open('', '_blank');
-  if (!w) return;
-  w.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>Comprovante IR ${year}</title>
-    <style>body{font-family:Arial,sans-serif;margin:40px;color:#333}
-    .header{text-align:center;margin-bottom:30px;border-bottom:2px solid #1a1a1a;padding-bottom:15px}
-    .header h1{font-size:18px;margin:0}
-    .header p{font-size:12px;color:#666;margin:4px 0}
-    table{width:100%;border-collapse:collapse;margin-top:20px;font-size:13px}
-    th,td{border:1px solid #ddd;padding:8px;text-align:left}
-    th{background:#f5f5f5;font-weight:bold}
-    .total{font-weight:bold;font-size:15px;margin-top:20px}
-    @media print{body{margin:20px}}
-    </style></head><body>
-    <div class="header">
-      <h1>${me?.school_name ?? 'Escola'}</h1>
-      <p>Comprovante de Pagamentos para Imposto de Renda — Ano ${year}</p>
-    </div>
-    <p><strong>Responsável:</strong> ${me?.name ?? ''}</p>
-    <table>
-      <thead><tr><th>Ref.</th><th>Aluno</th><th>Data Pgto.</th><th>Valor</th></tr></thead>
-      <tbody>
-      ${paid.map(i => `<tr>
-        <td>${i.kind === 'avulsa' ? (i.charge_title ?? 'Avulsa') : i.kind === 'matricula' ? 'Matrícula' : `Mensalidade ${i.reference_month ?? ''}`}</td>
-        <td>${i.student_name}</td>
-        <td>${i.paid_at ? fmtTimestamp(i.paid_at) : '—'}</td>
-        <td>R$ ${i.amount.toFixed(2)}</td>
-      </tr>`).join('')}
-      </tbody>
-    </table>
-    <p class="total">Total pago em ${year}: R$ ${total.toFixed(2)}</p>
-    </body></html>`);
-  w.document.close();
-  w.print();
-}
-
 export function FaturasPage() {
   const me = useMe();
   const [invoices, setInvoices] = useState<MyInvoice[]>([]);
@@ -82,6 +45,21 @@ export function FaturasPage() {
   const [copied, setCopied] = useState(false);
   const [childStats, setChildStats] = useState<ChildStat | null>(null);
   const [hiddenPayments, setHiddenPayments] = useState<Record<string, boolean>>({});
+  const [irYear, setIrYear] = useState(new Date().getFullYear() - 1);
+  const [issuingIR, setIssuingIR] = useState(false);
+  const [irError, setIrError] = useState<string | null>(null);
+
+  async function downloadIncomeReport() {
+    setIrError(null);
+    setIssuingIR(true);
+    try {
+      await documentsService.incomeReport(irYear);
+    } catch (e: any) {
+      setIrError(e?.message ?? 'Não foi possível gerar o informe.');
+    } finally {
+      setIssuingIR(false);
+    }
+  }
 
   useEffect(() => {
     async function load() {
@@ -170,14 +148,31 @@ export function FaturasPage() {
         subtitle="Mensalidades e cobranças do(s) seu(s) filho(s)."
         icon={Wallet}
         actions={
-          <button
-            className="inline-flex items-center gap-2 rounded-xl border border-border bg-white/60 px-4 py-2.5 text-sm font-semibold text-ink hover:bg-white"
-            onClick={() => generateIRPdf(me, invoices, new Date().getFullYear() - 1)}
-          >
-            <FileText size={14} /> Comprovante IR {new Date().getFullYear() - 1}
-          </button>
+          <div className="flex items-center gap-2">
+            <select
+              className="rounded-xl border border-border bg-white/60 px-2.5 py-2.5 text-sm text-ink"
+              value={irYear}
+              onChange={(e) => setIrYear(Number(e.target.value))}
+              aria-label="Ano do informe de rendimentos"
+            >
+              {Array.from({ length: 5 }, (_, i) => new Date().getFullYear() - 1 - i).map((y) => (
+                <option key={y} value={y}>{y}</option>
+              ))}
+            </select>
+            <button
+              className="inline-flex items-center gap-2 rounded-xl border border-border bg-white/60 px-4 py-2.5 text-sm font-semibold text-ink hover:bg-white disabled:opacity-60"
+              onClick={downloadIncomeReport}
+              disabled={issuingIR}
+            >
+              {issuingIR ? <Loader2 size={14} className="animate-spin" /> : <FileText size={14} />}
+              Informe de Rendimentos
+            </button>
+          </div>
         }
       />
+      {irError && (
+        <div role="alert" className="mb-4 rounded-xl bg-danger-soft px-3.5 py-2.5 text-sm text-danger">{irError}</div>
+      )}
 
       {invoices.length === 0 ? (
         <div className="card">

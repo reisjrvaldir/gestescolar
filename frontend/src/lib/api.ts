@@ -47,6 +47,23 @@ export class ApiError extends Error {
   }
 }
 
+/** Para respostas binárias (PDF etc.) — mesma autenticação de `request`, mas
+ *  sem forçar `res.json()`. Usado pelos endpoints de emissão de documentos. */
+async function requestBlob(path: string): Promise<Blob> {
+  if (!tokenInflight) {
+    tokenInflight = getToken().finally(() => { tokenInflight = null; });
+  }
+  const token = await tokenInflight;
+  const res = await fetch(`${BASE}${path}`, {
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new ApiError(res.status, body.code ?? 'error', body.message ?? res.statusText, body.errors);
+  }
+  return res.blob();
+}
+
 export const api = {
   get: <T>(p: string, signal?: AbortSignal) => request<T>(p, signal ? { signal } : {}),
   post: <T>(p: string, body?: unknown) =>
@@ -56,4 +73,5 @@ export const api = {
   patch: <T>(p: string, body?: unknown) =>
     request<T>(p, { method: 'PATCH', body: JSON.stringify(body ?? {}) }),
   del: <T>(p: string) => request<T>(p, { method: 'DELETE' }),
+  getBlob: requestBlob,
 };
