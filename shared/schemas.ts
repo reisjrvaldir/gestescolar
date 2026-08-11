@@ -109,7 +109,7 @@ export const guardianSchema = z.object({
 
 export const studentCreateSchema = z.object({
   name:                      z.string({ required_error: 'Nome obrigatório' }).min(2, 'Nome muito curto').max(120),
-  cpf:                       cpfSchema,
+  cpf:                       z.string().optional().transform((v) => (v ? cpfDigits(v) : undefined)).refine((v) => !v || isValidCpf(v), 'CPF inválido'),
   rg:                        z.string().max(20).optional(),
   birth_date:                dateSchema,
   blood_type:                z.enum(['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-']).optional(),

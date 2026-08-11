@@ -56,10 +56,16 @@ const ALLOWED_ORIGINS = [
 ].filter(Boolean);
 app.use(cors({
   origin(origin, cb) {
+    // Origens bloqueadas: cb(null, false) → cors não seta headers mas encaminha
+    // via next() em vez de next(err) — evita o 500 que o error handler global
+    // retornaria se usássemos cb(new Error(...)).
     if (!origin || ALLOWED_ORIGINS.includes(origin)) return cb(null, true);
-    cb(new Error('Blocked by CORS'));
+    cb(null, false);
   },
   credentials: true,
+  // Necessário para que o browser leia o JWT retornado pelo endpoint de
+  // autenticação por matrícula (set-auth-jwt é header não-padrão).
+  exposedHeaders: ['set-auth-jwt'],
 }));
 
 // --- Rate limiting global (60 req/min por IP) ---

@@ -24,5 +24,4 @@ export function calculatePixSplit(grossAmount: number): PixSplit {
   };
 }
 
-export const brl = (v: number) =>
-  new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v || 0);
+export { brl } from './money';

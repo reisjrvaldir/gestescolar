@@ -128,7 +128,7 @@ export function FaturasPage() {
       </div>
       <div class="row"><span>Aluno</span><span>${inv.student_name}</span></div>
       <div class="row"><span>Referente a</span><span>${inv.kind === 'avulsa' ? (inv.charge_title ?? 'Avulsa') : inv.kind === 'matricula' ? 'Matrícula' : `Mensalidade ${inv.reference_month ?? ''}`}</span></div>
-      <div class="row"><span>Valor</span><span>R$ ${inv.amount.toFixed(2)}</span></div>
+      <div class="row"><span>Valor</span><span>${brl(inv.amount)}</span></div>
       <div class="row"><span>Data de pagamento</span><span>${inv.paid_at ? fmtTimestamp(inv.paid_at) : '—'}</span></div>
       <div class="row"><span>Forma de pagamento</span><span>${inv.payment_method === 'card' ? 'Cartão de crédito' : inv.payment_method === 'pix' ? 'PIX' : 'Na escola'}</span></div>
       <div class="row"><span>Status</span><span style="color:#22c55e">Pago</span></div>

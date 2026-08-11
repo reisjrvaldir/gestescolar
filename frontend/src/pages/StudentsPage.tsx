@@ -101,7 +101,7 @@ function generatePdf(title: string, schoolName: string, student: Student) {
         <tr><td><strong>Aluno:</strong></td><td>${student.name}</td></tr>
         <tr><td><strong>Matrícula:</strong></td><td>${student.registration_number}</td></tr>
         <tr><td><strong>Turma:</strong></td><td>${student.class_name ?? '—'}</td></tr>
-        <tr><td><strong>Mensalidade:</strong></td><td>${student.monthly_fee != null ? 'R$ ' + Number(student.monthly_fee).toFixed(2).replace('.', ',') : '—'}</td></tr>
+        <tr><td><strong>Mensalidade:</strong></td><td>${student.monthly_fee != null ? brl(Number(student.monthly_fee)) : '—'}</td></tr>
         <tr><td><strong>Responsável:</strong></td><td>${student.guardian_name ?? '—'}</td></tr>
         <tr><td><strong>Status:</strong></td><td>${student.status === 'active' ? 'Ativo' : 'Inativo'}</td></tr>
       </tbody></table>

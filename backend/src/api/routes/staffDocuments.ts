@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { z } from 'zod';
 import { withTenant } from '../../db/withTenant';
 import { requireAuth } from '../../middleware/auth';
+import { validateMagicBytes } from '../../lib/validateMagicBytes';
 
 export const staffDocumentsRouter = Router();
 staffDocumentsRouter.use(requireAuth);
@@ -65,6 +66,9 @@ staffDocumentsRouter.post('/', async (req, res) => {
   // base64 inflado ~33%: validar tamanho aproximado também
   if (p.data.file_data.length > MAX_FILE_SIZE * 1.4) {
     return res.status(413).json({ code: 'file_too_large', message: 'Arquivo excede 2MB' });
+  }
+  if (!validateMagicBytes(p.data.file_data, p.data.mime_type)) {
+    return res.status(400).json({ code: 'invalid_file', message: 'Conteúdo do arquivo não corresponde ao tipo declarado.' });
   }
   const created = await withTenant(req.ctx!, async (c) => {
     const { rows } = await c.query(

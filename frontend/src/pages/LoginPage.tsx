@@ -70,32 +70,46 @@ export function LoginPage() {
     setLoading(true);
     try {
       const id = email.trim();
-      let loginEmail = id;
 
-      // Login por matrícula: resolve o e-mail da conta no backend.
-      if (!id.includes('@')) {
-        const API = (import.meta.env.VITE_API_URL as string | undefined) ?? '/api';
-        const r = await fetch(`${API}/public/login-email?matricula=${encodeURIComponent(id)}`);
-        if (!r.ok) {
-          setLoading(false);
-          return setError('Matrícula não encontrada. Verifique com a secretaria.');
+      if (id.includes('@')) {
+        // ── Login por e-mail: fluxo direto com Neon Auth ──
+        let res = await signIn.email({ email: id, password });
+        // Senha inicial de 6 dígitos: reconstrói a versão de 8 chars.
+        if (res.error && /^\d{6}$/.test(password)) {
+          res = await signIn.email({ email: id, password: (password + password).slice(0, 8) });
         }
-        loginEmail = (await r.json()).data.email;
+        if (res.error) {
+          setLoading(false);
+          return setError(res.error.message ?? 'Falha ao entrar');
+        }
+      } else {
+        // ── Login por matrícula: backend resolve o e-mail internamente ──
+        // O e-mail NUNCA é retornado ao browser. O backend autentica
+        // server-to-server com o Neon Auth e encaminha o JWT via header
+        // set-auth-jwt. O fetchPlugin do authClient processa esse header
+        // e injeta o token no estado interno sem expor o e-mail.
+        const API = (import.meta.env.VITE_API_URL as string | undefined) ?? '/api';
+        // Deve ser URL absoluta para o $fetch do authClient não prefixar
+        // com o baseURL do Neon Auth.
+        const apiBase = API.startsWith('http') ? API : `${window.location.origin}${API}`;
+
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const result = await (authClient as any).$fetch(
+          `${apiBase}/public/auth/matricula`,
+          {
+            method: 'POST',
+            body: JSON.stringify({ matricula: id, password }),
+            headers: { 'Content-Type': 'application/json' },
+            throw: false,
+          },
+        );
+        if (result?.error || !result?.data?.ok) {
+          setLoading(false);
+          return setError('Não foi possível entrar. Verifique os dados ou procure a escola.');
+        }
       }
 
-      let res = await signIn.email({ email: loginEmail, password });
-      // Senha inicial de 6 dígitos: reconstrói a versão de 8 chars armazenada no provedor.
-      if (res.error && /^\d{6}$/.test(password)) {
-        res = await signIn.email({ email: loginEmail, password: (password + password).slice(0, 8) });
-      }
-      if (res.error) {
-        setLoading(false);
-        return setError(res.error.message ?? 'Falha ao entrar');
-      }
-
-      // Espera a sessão ficar disponível de fato antes de navegar — ver
-      // comentário em waitForSession. Sem isso, o AuthGate pode não
-      // enxergar a sessão recém-criada e mandar de volta pro login.
+      // Espera a sessão ficar disponível de fato antes de navegar.
       const ready = await waitForSession();
       setLoading(false);
       if (!ready) {
@@ -104,7 +118,7 @@ export function LoginPage() {
       navigate('/app');
     } catch {
       setLoading(false);
-      setError('Falha ao entrar. Verifique os dados e tente novamente.');
+      setError('Não foi possível entrar. Verifique os dados ou procure a escola.');
     }
   }
 
