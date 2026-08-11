@@ -1,8 +1,9 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Bell, Menu, ChevronDown, LogOut, Settings, ShieldCheck } from 'lucide-react';
+import { Menu, ChevronDown, LogOut, Settings, ShieldCheck } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { SearchBar } from './SearchBar';
+import { NotificationsBell } from './NotificationsBell';
 import { ROLE_LABELS } from '@/types/models';
 
 interface Props {
@@ -45,10 +46,7 @@ export function Topbar({ userName, schoolName, role, onMenuClick, onLogout }: Pr
         </div>
 
         {/* Notificações */}
-        <button className="relative rounded-xl p-2 text-ink-muted hover:bg-canvas" aria-label="Notificações">
-          <Bell size={20} aria-hidden="true" />
-          <span className="absolute right-1.5 top-1.5 h-2 w-2 rounded-full bg-danger" aria-hidden="true" />
-        </button>
+        <NotificationsBell />
 
         {/* Avatar + nome + menu de conta */}
         <div className="relative">

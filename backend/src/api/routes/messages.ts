@@ -200,6 +200,13 @@ messagesRouter.post('/broadcast', async (req, res) => {
     let guardianRows: { profile_id: string }[];
 
     if (p.data.class_id) {
+      // Confirma que a turma é desta escola ANTES de usar o id em qualquer
+      // outra query — sem isso, um class_id de outra escola só devolveria 0
+      // destinatários hoje (não vaza mensagem), mas depender dessa
+      // coincidência não é o padrão que este projeto quer manter.
+      const cls = await c.query(`select 1 from public.classes where id=$1 and school_id=$2`, [p.data.class_id, schoolId]);
+      if (cls.rows.length === 0) return 'invalid_class' as const;
+
       const { rows } = await c.query(
         `SELECT DISTINCT g.user_id AS profile_id
            FROM public.guardians g
@@ -232,15 +239,21 @@ messagesRouter.post('/broadcast', async (req, res) => {
     return sent;
   });
 
+  if (result === 'invalid_class') {
+    return res.status(400).json({ code: 'invalid_class', message: 'Turma não encontrada nesta escola.' });
+  }
   res.status(201).json({ ok: true, sent: result });
 });
 
 messagesRouter.patch('/:id/read', async (req, res) => {
   await withTenant(req.ctx!, async (c) => {
+    // school_id explícito aqui por padrão/consistência com o resto do arquivo
+    // (não por vazamento real: recipient_id já restringe a mensagens do
+    // próprio usuário, que só pode pertencer a uma escola).
     await c.query(
       `update public.messages set read_at = now()
-        where id=$1 and recipient_id=$2 and read_at is null`,
-      [req.params.id, req.ctx!.profileId],
+        where id=$1 and recipient_id=$2 and school_id=$3 and read_at is null`,
+      [req.params.id, req.ctx!.profileId, req.ctx!.schoolId],
     );
   });
   res.status(204).end();

@@ -40,6 +40,7 @@ import { onboardingRouter } from './routes/onboarding';
 import { personalDataRouter } from './routes/personalData';
 import { searchRouter } from './routes/search';
 import { documentsRouter } from './routes/documents';
+import { notificationsRouter } from './routes/notifications';
 
 export const app = express();
 
@@ -114,6 +115,7 @@ app.use('/api/onboarding', onboardingRouter);
 app.use('/api/personal-data', personalDataRouter);
 app.use('/api/search', searchRouter);
 app.use('/api/documents', documentsRouter);
+app.use('/api/notifications', notificationsRouter);
 
 // 404 padrão
 app.use((_req, res) => res.status(404).json({ code: 'not_found', message: 'Rota não encontrada' }));

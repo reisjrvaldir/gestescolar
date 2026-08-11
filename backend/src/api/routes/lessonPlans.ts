@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { withTenant } from '../../db/withTenant';
 import { requireAuth, requireRole } from '../../middleware/auth';
 import { dateSchema } from '../../lib/validation';
+import { notify, notifyMany } from '../../lib/notifications';
 
 export const lessonPlansRouter = Router();
 lessonPlansRouter.use(requireAuth);
@@ -61,6 +62,32 @@ async function myTeacherId(c: any, ctx: any): Promise<string | null> {
     [ctx.profileId, ctx.schoolId],
   );
   return rows[0]?.id ?? null;
+}
+
+/** profile_id de todos os professores ativos da escola com login vinculado. */
+async function allTeacherProfileIds(c: any, schoolId: string): Promise<string[]> {
+  const { rows } = await c.query(
+    `select user_id from public.teachers
+      where school_id=$1 and status='active' and user_id is not null`,
+    [schoolId],
+  );
+  return rows.map((r: any) => r.user_id);
+}
+
+/** profile_id de coordenação/direção da escola (quem revisa planos). */
+async function allReviewerProfileIds(c: any, schoolId: string): Promise<string[]> {
+  const { rows } = await c.query(
+    `select id from public.profiles
+      where school_id=$1 and role = any($2) and status='active'`,
+    [schoolId, REVIEWERS],
+  );
+  return rows.map((r: any) => r.id);
+}
+
+/** profile_id do professor dono de um lesson_plan (null se sem login vinculado). */
+async function teacherProfileIdOf(c: any, teacherId: string): Promise<string | null> {
+  const { rows } = await c.query(`select user_id from public.teachers where id=$1`, [teacherId]);
+  return rows[0]?.user_id ?? null;
 }
 
 /** Normaliza qualquer data para a segunda-feira da sua semana (ISO). */
@@ -201,7 +228,20 @@ lessonPlansRouter.post('/themes', requireRole(...REVIEWERS), async (req, res) =>
       [req.ctx!.schoolId, mondayOf(p.data.week_start), p.data.title.trim(),
        p.data.description?.trim() || null, req.ctx!.profileId],
     );
-    return rows[0] ?? null;
+    const theme = rows[0] ?? null;
+    if (theme) {
+      const teacherProfileIds = await allTeacherProfileIds(c, req.ctx!.schoolId!);
+      await notifyMany(c, teacherProfileIds, {
+        schoolId: req.ctx!.schoolId!,
+        type: 'lesson_plan_theme',
+        title: 'Novo tema da semana',
+        body: `"${theme.title}" — semana de ${theme.week_start}`,
+        link: '/app/lesson-plans',
+        entityType: 'lesson_plan_theme',
+        entityId: theme.id,
+      });
+    }
+    return theme;
   });
 
   if (!created) return res.status(409).json({ code: 'conflict', message: 'Já existe um tema com esse título nesta semana.' });
@@ -347,7 +387,11 @@ lessonPlansRouter.put('/:id', async (req, res) => {
 lessonPlansRouter.post('/:id/submit', async (req, res) => {
   const out = await withTenant(req.ctx!, async (c) => {
     const cur = await c.query(
-      `select teacher_id, status from public.lesson_plans where id=$1 and school_id=$2`,
+      `select lp.teacher_id, lp.status, cl.name as class_name, t.name as teacher_name
+         from public.lesson_plans lp
+         join public.classes cl on cl.id = lp.class_id
+         join public.teachers t on t.id = lp.teacher_id
+        where lp.id=$1 and lp.school_id=$2`,
       [req.params.id, req.ctx!.schoolId],
     );
     const plan = cur.rows[0];
@@ -364,6 +408,18 @@ lessonPlansRouter.post('/:id/submit', async (req, res) => {
         where id=$1 and school_id=$2`,
       [req.params.id, req.ctx!.schoolId],
     );
+
+    const reviewerProfileIds = (await allReviewerProfileIds(c, req.ctx!.schoolId!))
+      .filter((id) => id !== req.ctx!.profileId);
+    await notifyMany(c, reviewerProfileIds, {
+      schoolId: req.ctx!.schoolId!,
+      type: 'lesson_plan_submitted',
+      title: 'Plano de aula para revisão',
+      body: `${plan.teacher_name} enviou o plano de ${plan.class_name}`,
+      link: `/app/lesson-plans/${req.params.id}`,
+      entityType: 'lesson_plan',
+      entityId: req.params.id,
+    });
     return 'ok';
   });
 
@@ -389,7 +445,8 @@ lessonPlansRouter.patch('/:id/review', requireRole(...REVIEWERS), async (req, re
       `update public.lesson_plans
           set status=$1, reviewed_by=$2, reviewed_at=now(), updated_at=now()
         where id=$3 and school_id=$4
-        returning id, status`,
+        returning id, status, teacher_id,
+                  (select name from public.classes where id = lesson_plans.class_id) as class_name`,
       [decision === 'approve' ? 'approved' : 'changes_requested',
        req.ctx!.profileId, req.params.id, req.ctx!.schoolId],
     );
@@ -401,6 +458,21 @@ lessonPlansRouter.patch('/:id/review', requireRole(...REVIEWERS), async (req, re
          values ($1,$2,$3,$4)`,
         [req.ctx!.schoolId, req.params.id, req.ctx!.profileId, note],
       );
+    }
+
+    const teacherProfileId = await teacherProfileIdOf(c, rows[0].teacher_id);
+    if (teacherProfileId && teacherProfileId !== req.ctx!.profileId) {
+      const approved = decision === 'approve';
+      await notify(c, {
+        schoolId: req.ctx!.schoolId!,
+        profileId: teacherProfileId,
+        type: approved ? 'lesson_plan_approved' : 'lesson_plan_changes_requested',
+        title: approved ? 'Plano de aula aprovado' : 'Ajuste solicitado no plano',
+        body: `${rows[0].class_name}${note ? ' — ' + note : ''}`,
+        link: `/app/lesson-plans/${req.params.id}`,
+        entityType: 'lesson_plan',
+        entityId: req.params.id,
+      });
     }
     return rows[0];
   });
@@ -416,13 +488,17 @@ lessonPlansRouter.post('/:id/comments', async (req, res) => {
 
   const out = await withTenant(req.ctx!, async (c) => {
     const cur = await c.query(
-      `select teacher_id from public.lesson_plans where id=$1 and school_id=$2`,
+      `select lp.teacher_id, cl.name as class_name
+         from public.lesson_plans lp
+         join public.classes cl on cl.id = lp.class_id
+        where lp.id=$1 and lp.school_id=$2`,
       [req.params.id, req.ctx!.schoolId],
     );
     if (!cur.rows[0]) return 'not_found';
+    const { teacher_id: teacherId, class_name: className } = cur.rows[0];
     if (!isReviewer(req.ctx!.role)) {
-      const teacherId = await myTeacherId(c, req.ctx!);
-      if (cur.rows[0].teacher_id !== teacherId) return 'forbidden';
+      const myId = await myTeacherId(c, req.ctx!);
+      if (teacherId !== myId) return 'forbidden';
     }
     const { rows } = await c.query(
       `insert into public.lesson_plan_comments (school_id, plan_id, author_id, body)
@@ -431,6 +507,36 @@ lessonPlansRouter.post('/:id/comments', async (req, res) => {
                  (select name from public.profiles where id = $3) as author_name`,
       [req.ctx!.schoolId, req.params.id, req.ctx!.profileId, body],
     );
+
+    // Notifica o outro lado da conversa: professor comentou → avisa a
+    // coordenação; coordenação comentou → avisa o professor dono do plano.
+    if (isReviewer(req.ctx!.role)) {
+      const teacherProfileId = await teacherProfileIdOf(c, teacherId);
+      if (teacherProfileId && teacherProfileId !== req.ctx!.profileId) {
+        await notify(c, {
+          schoolId: req.ctx!.schoolId!,
+          profileId: teacherProfileId,
+          type: 'lesson_plan_comment',
+          title: 'Novo comentário no seu plano de aula',
+          body: `${className}: ${body.slice(0, 140)}`,
+          link: `/app/lesson-plans/${req.params.id}`,
+          entityType: 'lesson_plan',
+          entityId: req.params.id,
+        });
+      }
+    } else {
+      const reviewerProfileIds = (await allReviewerProfileIds(c, req.ctx!.schoolId!))
+        .filter((id) => id !== req.ctx!.profileId);
+      await notifyMany(c, reviewerProfileIds, {
+        schoolId: req.ctx!.schoolId!,
+        type: 'lesson_plan_comment',
+        title: 'Novo comentário em plano de aula',
+        body: `${className}: ${body.slice(0, 140)}`,
+        link: `/app/lesson-plans/${req.params.id}`,
+        entityType: 'lesson_plan',
+        entityId: req.params.id,
+      });
+    }
     // O papel vem do contexto: quem acabou de comentar é o próprio usuário.
     return { ...rows[0], author_role: req.ctx!.role };
   });
