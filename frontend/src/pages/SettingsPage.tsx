@@ -19,14 +19,28 @@ import { applyServerErrors } from '@/hooks/useFormErrors';
 // etc). O schema compartilhado (shared/schemas.ts) continua com esses
 // campos opcionais — outras chamadas ao PUT /settings podem enviar só
 // parte dos campos.
+const FIELD_LABELS: Record<string, string> = {
+  name: 'Nome da escola',
+  legal_name: 'Razão social',
+  cnpj: 'CNPJ',
+  email: 'E-mail',
+  late_fine_pct: 'Multa por atraso',
+  late_interest_pct: 'Juros de mora',
+};
+
 const settingsFormSchema = z.object({
   name: z.string({ required_error: 'Informe o nome da escola' }).min(2, 'Nome da escola muito curto'),
   legal_name: z.string({ required_error: 'Informe a razão social' }).min(2, 'Razão social muito curta'),
   cnpj: z.string({ required_error: 'Informe o CNPJ' }).min(14, 'CNPJ inválido'),
   email: z.string().email('E-mail inválido').optional().or(z.literal('')),
   phone: z.string().optional(),
-  late_fine_pct: z.number().min(0).max(100).optional(),
-  late_interest_pct: z.number().min(0).max(100).optional(),
+  // Campo numérico HTML: quando fica vazio, `valueAsNumber` devolve NaN (não
+  // undefined), e o Zod rejeita NaN. Como esses dois campos nunca tiveram
+  // erro exibido na tela, isso travava o "Salvar" sem nenhum aviso — o
+  // usuário limpava/digitava vírgula no campo e o clique parecia não fazer
+  // nada. `setValueAs` normaliza vazio para undefined antes da validação.
+  late_fine_pct: z.number({ invalid_type_error: 'Percentual inválido' }).min(0, 'Não pode ser negativo').max(100, 'Máximo 100%').optional(),
+  late_interest_pct: z.number({ invalid_type_error: 'Percentual inválido' }).min(0, 'Não pode ser negativo').max(100, 'Máximo 100%').optional(),
 });
 type SettingsFormValues = z.infer<typeof settingsFormSchema>;
 
@@ -104,11 +118,11 @@ export function SettingsPage() {
 
   // Lista consolidada de tudo que falta — mostrada abaixo do formulário
   // quando o submit é bloqueado por validação (campo ausente/inválido).
+  // Genérica sobre `errors` (em vez de enumerar campo a campo) para que um
+  // campo novo — ou um campo sem exibição própria de erro, como aconteceu
+  // com multa/juros — nunca mais trave o "Salvar" sem nenhum aviso visível.
   const missingFields = [
-    errors.name && 'Nome da escola',
-    errors.legal_name && 'Razão social',
-    errors.cnpj && 'CNPJ',
-    errors.email && 'E-mail',
+    ...Object.keys(errors).map((k) => FIELD_LABELS[k] ?? k),
     logoError && 'Logo da escola',
   ].filter(Boolean) as string[];
 
@@ -224,24 +238,28 @@ export function SettingsPage() {
                 <div className="relative">
                   <input
                     type="number" step="0.01" min="0" max="100" inputMode="decimal"
-                    className="input pr-8" placeholder="Ex.: 2"
-                    {...register('late_fine_pct', { valueAsNumber: true })}
+                    className={`input pr-8 ${errors.late_fine_pct ? 'border-danger' : ''}`} placeholder="Ex.: 2"
+                    {...register('late_fine_pct', { setValueAs: (v) => (v === '' ? undefined : Number(v)) })}
                   />
                   <span className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-sm text-ink-subtle">%</span>
                 </div>
-                <p className="mt-1 text-[11px] text-ink-subtle">Cobrada uma vez sobre o valor em atraso.</p>
+                {errors.late_fine_pct
+                  ? <p className="mt-1 text-xs text-danger">{errors.late_fine_pct.message}</p>
+                  : <p className="mt-1 text-[11px] text-ink-subtle">Cobrada uma vez sobre o valor em atraso.</p>}
               </div>
               <div>
                 <label className="label">Juros de mora (% ao mês)</label>
                 <div className="relative">
                   <input
                     type="number" step="0.01" min="0" max="100" inputMode="decimal"
-                    className="input pr-8" placeholder="Ex.: 1"
-                    {...register('late_interest_pct', { valueAsNumber: true })}
+                    className={`input pr-8 ${errors.late_interest_pct ? 'border-danger' : ''}`} placeholder="Ex.: 1"
+                    {...register('late_interest_pct', { setValueAs: (v) => (v === '' ? undefined : Number(v)) })}
                   />
                   <span className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-sm text-ink-subtle">%</span>
                 </div>
-                <p className="mt-1 text-[11px] text-ink-subtle">Proporcional aos dias de atraso (≈ {'{'}mês{'}'}/30 ao dia).</p>
+                {errors.late_interest_pct
+                  ? <p className="mt-1 text-xs text-danger">{errors.late_interest_pct.message}</p>
+                  : <p className="mt-1 text-[11px] text-ink-subtle">Proporcional aos dias de atraso (≈ {'{'}mês{'}'}/30 ao dia).</p>}
               </div>
             </div>
             <p className="mt-2 text-[11px] text-ink-subtle">
