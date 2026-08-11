@@ -48,19 +48,21 @@ const STEPS: Step[] = [
   {
     number: 4,
     icon: School2,
-    title: 'Crie suas turmas',
+    title: 'Crie suas turmas — e vincule os professores',
     body: [
-      'Cadastre as turmas do ano letivo (ex.: "1º Ano A", turno manhã). Depois de criar a turma, vincule as matérias que ela terá e, se quiser, um professor responsável por cada matéria.',
-      'As turmas são a base de tudo: alunos, notas, frequência e planejamento de aula são sempre organizados por turma.',
+      'Em Turmas → "Nova turma", preencha nome, ano letivo, turno e nível. É nessa mesma tela que os professores entram: o campo "Professor responsável" define o regente da turma, e a seção "Matérias e professores da turma" deixa marcar cada matéria e escolher um professor por disciplina — assim vários professores atuam na mesma turma, um por matéria.',
+      'Se os funcionários ainda não estiverem cadastrados (passo 6), pode criar a turma sem professor por enquanto e voltar depois em "Editar turma" pra vincular.',
+      'Importante: a tela de Turmas só permite ver os alunos de cada turma (lista somente leitura) — não é onde você adiciona aluno. Isso é feito no cadastro do aluno, no passo seguinte.',
     ],
     cta: { label: 'Ir para Turmas', to: '/app/classes' },
   },
   {
     number: 5,
     icon: GraduationCap,
-    title: 'Adicione os alunos',
+    title: 'Adicione os alunos — e vincule a turma dele',
     body: [
-      'Cadastre cada aluno com seus dados, o responsável financeiro, a turma e o plano de mensalidade. O sistema gera uma matrícula e já libera o acesso do responsável pelo portal (se você criar a conta dele).',
+      'Em Alunos → "Novo aluno", preencha os dados do aluno e do responsável financeiro. O campo "Turma" (dropdown) é onde você faz a matrícula dele na turma que criou no passo anterior — é assim, pelo cadastro do aluno, que a vinculação acontece, não pela tela de Turmas.',
+      'Escolha também o plano de mensalidade (passo 1) nesse mesmo formulário. O sistema gera a matrícula e já libera o acesso do responsável pelo portal, se você criar a conta dele.',
     ],
     cta: { label: 'Ir para Alunos', to: '/app/students' },
   },
