@@ -15,6 +15,14 @@ export function Modal({ open, title, onClose, children, footer }: Props) {
   const titleId = useId();
   const dialogRef = useRef<HTMLDivElement>(null);
 
+  // `onClose` normalmente chega como arrow function inline (`onClose={() => setX(false)}`),
+  // então tem uma identidade NOVA a cada render do componente pai — inclusive a cada
+  // tecla digitada em qualquer campo de dentro do modal (o estado do input muda no pai,
+  // o pai re-renderiza, a prop troca de referência). Um ref sempre atualizado deixa o
+  // handler de Escape chamar a versão mais recente sem precisar entrar nas deps do efeito.
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
+
   useEffect(() => {
     if (!open) return;
     const el = dialogRef.current;
@@ -22,7 +30,7 @@ export function Modal({ open, title, onClose, children, footer }: Props) {
     Array.from(el.querySelectorAll<HTMLElement>(FOCUSABLE))[0]?.focus();
 
     function onKeyDown(e: KeyboardEvent) {
-      if (e.key === 'Escape') { onClose(); return; }
+      if (e.key === 'Escape') { onCloseRef.current(); return; }
       if (e.key !== 'Tab') return;
       const all = Array.from(el!.querySelectorAll<HTMLElement>(FOCUSABLE));
       const first = all[0];
@@ -35,7 +43,12 @@ export function Modal({ open, title, onClose, children, footer }: Props) {
     }
     document.addEventListener('keydown', onKeyDown);
     return () => document.removeEventListener('keydown', onKeyDown);
-  }, [open, onClose]);
+    // Só depende de `open`: antes, `onClose` entrava aqui e — por trocar de
+    // identidade a cada render do pai — reexecutava o efeito a cada tecla digitada
+    // em QUALQUER input do modal. O efeito refoca o primeiro elemento focável ao
+    // rodar, então cada letra digitada chutava o foco pro início do formulário —
+    // exatamente o bug relatado: "digita uma letra e dá tab, não deixa escrever frase".
+  }, [open]);
 
   if (!open) return null;
   return (
