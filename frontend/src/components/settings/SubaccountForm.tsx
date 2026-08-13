@@ -67,7 +67,10 @@ export function SubaccountForm({ active }: { active: boolean }) {
   }
 
   return (
-    <div className="card p-5">
+    // A âncora é o destino do passo "Configure o recebimento" do checklist de
+    // onboarding — este card fica no fim da coluna lateral das Configurações,
+    // então sem ela o gestor cai no topo da página e precisa caçar a seção.
+    <div id="subconta" className="card scroll-mt-6 p-5">
       <div className="mb-1 flex items-center gap-2 text-sm font-bold text-ink">
         <Landmark size={16} className="text-primary" /> Conta de recebimento (subconta)
       </div>

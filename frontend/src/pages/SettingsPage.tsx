@@ -1,4 +1,5 @@
 import { useEffect, useState, useRef } from 'react';
+import { useLocation } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -84,6 +85,18 @@ export function SettingsPage() {
   }
 
   useEffect(() => { loadSettings(); }, []);
+
+  // Rolagem para âncora (ex.: /app/settings#subconta, vindo do checklist de
+  // onboarding). A rolagem nativa do browser não serve aqui: enquanto o fetch
+  // não termina a página só renderiza o loader, então o elemento alvo ainda
+  // não existe quando a navegação acontece. getElementById em vez de
+  // querySelector porque o hash vem da URL e um valor malformado (#123) faria
+  // o seletor lançar.
+  const { hash } = useLocation();
+  useEffect(() => {
+    if (loading || !hash) return;
+    document.getElementById(hash.slice(1))?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }, [loading, hash]);
 
   function handleLogoChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];

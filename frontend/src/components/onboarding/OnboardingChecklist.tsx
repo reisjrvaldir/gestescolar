@@ -41,7 +41,10 @@ const STEPS = [
     key: 'payment_ready' as const,
     label: 'Configure o recebimento',
     description: 'Ative o PIX/boleto abrindo sua subconta de pagamentos.',
-    path: '/app/finance/receivables',
+    // Leva ao formulário + upload de documentos da subconta (SubaccountForm),
+    // que é o que este passo pede. Antes apontava para /finance/receivables,
+    // que só LISTA as cobranças e não permite abrir a subconta.
+    path: '/app/settings#subconta',
   },
 ];
 
