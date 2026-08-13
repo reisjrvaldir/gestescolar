@@ -14,7 +14,7 @@
 // =============================================================
 import { timingSafeEqual } from 'crypto';
 import type {
-  PaymentProvider, CreateChargeInput, ChargeResult, NormalizedWebhookEvent, ChargeCustomer,
+  PaymentProvider, CreateChargeInput, ChargeResult, NormalizedWebhookEvent, ChargeCustomer, SplitTarget,
 } from './types';
 
 /** Comparação em tempo constante (evita side-channel por timing no token). */
@@ -161,6 +161,9 @@ export const asaasProvider: PaymentProvider = {
     let type: NormalizedWebhookEvent['type'] = 'OTHER';
     if (rawType === 'PAYMENT_CONFIRMED') type = 'PAYMENT_CONFIRMED';
     else if (rawType === 'PAYMENT_RECEIVED') type = 'PAYMENT_RECEIVED';
+    // Recusa do cartão. O ASAAS usa nomes diferentes conforme o momento da
+    // falha (autorização na hora vs. captura depois), por isso o prefixo.
+    else if (rawType.startsWith('PAYMENT_CREDIT_CARD_CAPTURE_REFUSED')) type = 'PAYMENT_FAILED';
 
     return {
       type,
@@ -170,6 +173,7 @@ export const asaasProvider: PaymentProvider = {
       amount: payment.value != null ? Number(payment.value) : undefined,
       billingType: payment.billingType === 'CREDIT_CARD' ? 'CREDIT_CARD' : 'PIX',
       externalReference: payment.externalReference ? String(payment.externalReference) : undefined,
+      providerSubscriptionId: payment.subscription ? String(payment.subscription) : undefined,
     };
   },
 
@@ -348,6 +352,10 @@ export async function asaasEnsureBillingCustomer(input: {
  */
 export async function asaasCreateSubscription(input: {
   customerId: string; value: number; description: string; externalReference: string; nextDueDate?: string;
+  /** Repasse à subconta da escola. Obrigatório na mensalidade do aluno —
+   *  sem isso o valor fica retido na conta da plataforma. Não se aplica à
+   *  assinatura SaaS (a escola pagando a plataforma), onde é omitido. */
+  split?: SplitTarget[];
 }): Promise<{ subscriptionId: string; checkoutUrl?: string }> {
   const sub = await asaasFetch<{ id: string }>('/subscriptions', {
     method: 'POST',
@@ -359,6 +367,15 @@ export async function asaasCreateSubscription(input: {
       nextDueDate: input.nextDueDate ?? todayIso(),
       description: input.description,
       externalReference: input.externalReference,
+      ...(input.split?.length
+        ? {
+          split: input.split.map((s) => ({
+            walletId: s.walletId,
+            ...(s.fixedValue != null ? { fixedValue: s.fixedValue } : {}),
+            ...(s.percentualValue != null ? { percentualValue: s.percentualValue } : {}),
+          })),
+        }
+        : {}),
     }),
   });
   // Busca a 1ª cobrança da assinatura para obter o link de checkout hospedado.
@@ -366,6 +383,20 @@ export async function asaasCreateSubscription(input: {
     `/subscriptions/${sub.id}/payments`,
   );
   return { subscriptionId: sub.id, checkoutUrl: payments.data?.[0]?.invoiceUrl };
+}
+
+/**
+ * Cancela uma assinatura recorrente no ASAAS. Idempotente: assinatura já
+ * removida (404) é o estado desejado. Usado quando o responsável desliga o
+ * pagamento automático — sem isso o cartão seguiria sendo cobrado todo mês.
+ */
+export async function asaasCancelSubscription(subscriptionId: string): Promise<void> {
+  try {
+    await asaasFetch(`/subscriptions/${subscriptionId}`, { method: 'DELETE' });
+  } catch (err: any) {
+    if (err?.http === 404) return;
+    throw err;
+  }
 }
 
 /**

@@ -43,6 +43,7 @@ const ReceivablesPage    = lazyPage(() => import('@/pages/ReceivablesPage'),    
 const DelinquencyPage    = lazyPage(() => import('@/pages/DelinquencyPage'),    'DelinquencyPage');
 const BalancePage        = lazyPage(() => import('@/pages/BalancePage'),        'BalancePage');
 const FaturasPage        = lazyPage(() => import('@/pages/FaturasPage'),        'FaturasPage');
+const RecurringPaymentPage = lazyPage(() => import('@/pages/RecurringPaymentPage'), 'RecurringPaymentPage');
 const MessagesPage       = lazyPage(() => import('@/pages/MessagesPage'),       'MessagesPage');
 const LeaveRequestsPage  = lazyPage(() => import('@/pages/LeaveRequestsPage'),  'LeaveRequestsPage');
 const StaffDocumentsPage = lazyPage(() => import('@/pages/StaffDocumentsPage'), 'StaffDocumentsPage');
@@ -126,6 +127,7 @@ export default function App() {
               <Route path="finance/balance" element={<AdminFinancial><BalancePage /></AdminFinancial>} />
               <Route path="invoices" element={<AdminFinancial><ReceivablesPage /></AdminFinancial>} />
               <Route path="faturas" element={<FaturasPage />} />
+              <Route path="pagamento-recorrente" element={<RecurringPaymentPage />} />
               <Route path="messages" element={<MessagesPage />} />
               <Route path="leave-requests" element={<LeaveRequestsPage />} />
               <Route path="documents" element={<StaffDocumentsPage />} />

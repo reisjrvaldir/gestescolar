@@ -145,7 +145,10 @@ export const MENUS: Record<Role, MenuSection[]> = {
     },
     {
       title: 'Financeiro',
-      items: [{ to: '/app/faturas', label: 'Faturas', icon: Wallet }],
+      items: [
+        { to: '/app/faturas', label: 'Faturas', icon: Wallet },
+        { to: '/app/pagamento-recorrente', label: 'Pagamento recorrente', icon: CreditCard },
+      ],
     },
     { items: [{ to: '/app/messages', label: 'Mensagens', icon: Mail, moduleKey: 'messages' }, TICKETS] },
   ],

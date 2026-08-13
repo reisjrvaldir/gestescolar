@@ -9,7 +9,10 @@ import { simulationProvider } from './simulation';
 
 export * from './types';
 export { isAsaasConfigured } from './asaas';
-export { asaasCreateSubaccount, asaasCreateSubscription, asaasCreateInstallmentCharge, asaasEnsureBillingCustomer } from './asaas';
+export {
+  asaasCreateSubaccount, asaasCreateSubscription, asaasCancelSubscription,
+  asaasCreateInstallmentCharge, asaasEnsureBillingCustomer,
+} from './asaas';
 export { processConfirmedPayment, processSubscriptionPayment } from './settlement';
 export { buildChargeForInvoice } from './invoiceCharge';
 

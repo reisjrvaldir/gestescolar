@@ -54,13 +54,19 @@ export interface ChargeResult {
 
 /** Evento de webhook normalizado (independente do provedor). */
 export interface NormalizedWebhookEvent {
-  type: 'PAYMENT_CONFIRMED' | 'PAYMENT_RECEIVED' | 'OTHER';
+  // PAYMENT_FAILED: cartão recusado (sem limite, vencido, bloqueado). Importa
+  // no pagamento recorrente — a fatura do mês volta para PIX para o
+  // responsável não ficar sem forma de pagar.
+  type: 'PAYMENT_CONFIRMED' | 'PAYMENT_RECEIVED' | 'PAYMENT_FAILED' | 'OTHER';
   providerPaymentId: string;
   providerChargeId?: string;
   amount?: number;
   billingType?: BillingType;
   /** Referência externa que enviamos na criação = invoiceId. */
   externalReference?: string;
+  /** Presente quando a cobrança veio de uma assinatura recorrente — é por ele
+   *  que localizamos qual recorrência falhou ou foi cobrada. */
+  providerSubscriptionId?: string;
   rawType: string;
 }
 
