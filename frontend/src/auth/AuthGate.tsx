@@ -2,7 +2,7 @@ import { createContext, useContext, useEffect, useState } from 'react';
 import { Navigate, Outlet, useLocation, Link, useNavigate } from 'react-router-dom';
 import { Loader2, ShieldAlert, CreditCard, Building2, ArrowRight, RefreshCw } from 'lucide-react';
 import { useSession, signOut } from '@/lib/authClient';
-import { api } from '@/lib/api';
+import { api, ApiError } from '@/lib/api';
 import { SubscribePanel } from '@/components/settings/SubscribePanel';
 import type { Role } from '@/config/menu';
 import type { EnabledModules } from '@shared/moduleCatalog';
@@ -173,7 +173,12 @@ function FullScreenLoader() {
   );
 }
 
-function ProfileLoadError({ onRetry }: { onRetry: () => void }) {
+interface ProfileErrorInfo {
+  status?: number;
+  code: string;
+}
+
+function ProfileLoadError({ onRetry, error }: { onRetry: () => void; error: ProfileErrorInfo }) {
   return (
     <div className="flex min-h-screen items-center justify-center bg-canvas p-4">
       <div className="card w-full max-w-md p-7 text-center">
@@ -184,6 +189,9 @@ function ProfileLoadError({ onRetry }: { onRetry: () => void }) {
         <p className="mt-2 text-sm text-ink-muted">
           Seu login foi confirmado, mas houve uma falha ao buscar os dados do seu perfil.
           Verifique sua conexão e tente novamente.
+        </p>
+        <p className="mt-3 text-xs text-ink-subtle">
+          Código técnico: {error.status ? `${error.status} · ` : ''}{error.code}
         </p>
         <button className="btn-primary mt-5 w-full justify-center" onClick={onRetry}>
           <RefreshCw size={16} /> Tentar novamente
@@ -206,6 +214,7 @@ export function AuthGate() {
   const [me, setMe] = useState<MeResponse | null>(null);
   const [loadingMe, setLoadingMe] = useState(true);
   const [profileLoadFailed, setProfileLoadFailed] = useState(false);
+  const [profileError, setProfileError] = useState<ProfileErrorInfo>({ code: 'profile_unavailable' });
   const [retryCount, setRetryCount] = useState(0);
   const location = useLocation();
 
@@ -222,10 +231,13 @@ export function AuthGate() {
     setProfileLoadFailed(false);
     api.get<MeResponse>('/me')
       .then((r) => { if (active) setMe(r); })
-      .catch(() => {
+      .catch((error: unknown) => {
         if (active) {
           setMe(null);
           setProfileLoadFailed(true);
+          setProfileError(error instanceof ApiError
+            ? { status: error.status, code: error.code }
+            : { code: error instanceof TypeError ? 'network_error' : 'profile_unavailable' });
         }
       })
       .finally(() => { if (active) setLoadingMe(false); });
@@ -234,9 +246,9 @@ export function AuthGate() {
 
   if (isPending || loadingMe) return <FullScreenLoader />;
   if (!session) return <Navigate to="/login" replace />;
-  if (profileLoadFailed) return <ProfileLoadError onRetry={() => setRetryCount((n) => n + 1)} />;
+  if (profileLoadFailed) return <ProfileLoadError error={profileError} onRetry={() => setRetryCount((n) => n + 1)} />;
   if (me && !me.hasProfile) return <Navigate to="/onboarding" replace />;
-  if (!me?.profile) return <ProfileLoadError onRetry={() => setRetryCount((n) => n + 1)} />;
+  if (!me?.profile) return <ProfileLoadError error={{ code: 'profile_missing' }} onRetry={() => setRetryCount((n) => n + 1)} />;
 
   // Troca obrigatória de senha — bloqueia tudo até trocar.
   if (me.profile.password_change_required && location.pathname !== '/app/change-password') {

@@ -8,16 +8,42 @@ export const authClient = createAuthClient({
   plugins: [jwtClient()],
 });
 
-// O backend valida o JWT (via JWKS). Aqui obtemos o token do Better Auth
-// e registramos no client de API para anexar em cada request.
-setTokenProvider(async () => {
-  try {
-    const { data } = await authClient.token();
-    return data?.token ?? null;
-  } catch {
-    return null;
+/** Obtém o JWT emitido pelo plugin do Better Auth.
+ *
+ * O endpoint /token é a fonte principal. Logo após o sign-in, porém, a sessão
+ * pode aparecer em getSession alguns milissegundos antes de /token responder.
+ * Nessa janela usamos o cabeçalho oficial set-auth-jwt retornado por
+ * get-session e repetimos brevemente, evitando chamar a API sem Authorization.
+ */
+export async function getAccessToken(maxAttempts = 4): Promise<string | null> {
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    try {
+      const { data } = await authClient.token();
+      if (data?.token) return data.token;
+    } catch { /* tenta o cabeçalho de get-session */ }
+
+    try {
+      let headerToken: string | null = null;
+      await (authClient as any).getSession({
+        fetchOptions: {
+          onSuccess: (ctx: any) => {
+            headerToken = ctx?.response?.headers?.get?.('set-auth-jwt') ?? null;
+          },
+        },
+      });
+      if (headerToken) return headerToken;
+    } catch { /* tenta novamente após o atraso */ }
+
+    if (attempt < maxAttempts - 1) {
+      await new Promise((resolve) => setTimeout(resolve, 150 * (attempt + 1)));
+    }
   }
-});
+  return null;
+}
+
+// O backend valida o JWT (via JWKS). Registramos a fonte resiliente acima no
+// client de API para anexar o token em cada request protegido.
+setTokenProvider(() => getAccessToken());
 
 export const { useSession, signIn, signUp, signOut, changePassword } = authClient;
 

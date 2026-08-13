@@ -16,7 +16,7 @@ export function setTokenProvider(fn: () => Promise<string | null>) {
 // várias buscas de token simultaneamente.
 let tokenInflight: Promise<string | null> | null = null;
 
-async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
+async function request<T>(path: string, init: RequestInit = {}, retryUnauthorized = true): Promise<T> {
   if (!tokenInflight) {
     tokenInflight = getToken().finally(() => { tokenInflight = null; });
   }
@@ -29,6 +29,12 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
       ...init.headers,
     },
   });
+  // A sessão e o JWT podem propagar em momentos ligeiramente diferentes logo
+  // após o login. Em 401, obtenha um token novo e repita uma única vez.
+  if (res.status === 401 && retryUnauthorized) {
+    await new Promise((resolve) => setTimeout(resolve, 200));
+    return request<T>(path, init, false);
+  }
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
     throw new ApiError(res.status, body.code ?? 'error', body.message ?? res.statusText, body.errors);
