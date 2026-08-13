@@ -268,17 +268,20 @@ invoicesRouter.post('/:id/guardian-response', async (req, res) => {
   res.json({ ok: true });
 });
 
-// POST /api/invoices/:id/card-checkout — o RESPONSÁVEL troca a forma de
-// pagamento da própria fatura para cartão de crédito e recebe o link do
-// checkout hospedado do provedor.
+// POST /api/invoices/:id/card-checkout — garante que a fatura do responsável
+// aceite PIX **e** cartão, devolvendo o link do checkout do provedor.
+//
+// Faturas novas já nascem UNDEFINED (aceitam ambos) e caem no atalho
+// idempotente abaixo. Este caminho existe para as faturas ANTIGAS, criadas
+// quando a cobrança era emitida como 'PIX' fixo: como um pagamento tem um
+// único billingType, ampliá-la exige recriar a cobrança.
+//
+// Ao recriar é obrigatório cancelar a anterior: buildChargeForInvoice sempre
+// cria uma cobrança NOVA no provedor, então sem o cancelamento a fatura
+// ficaria com duas cobranças pagáveis e o responsável poderia pagar duas vezes.
 //
 // Os dados do cartão são digitados NA PÁGINA DO PROVEDOR, nunca em tela
 // nossa: o sistema não deve tocar em número de cartão (escopo PCI).
-//
-// A fatura já nasce com uma cobrança PIX (studentInvoices.ts gera assim).
-// Como buildChargeForInvoice sempre cria uma cobrança NOVA no provedor, é
-// obrigatório cancelar a anterior antes — sem isso a fatura fica com duas
-// cobranças pagáveis e o responsável pode pagar duas vezes.
 invoicesRouter.post('/:id/card-checkout', async (req, res) => {
   const outcome = await withTenant(req.ctx!, async (c) => {
     const g = await c.query(`select id from public.guardians where user_id=$1 limit 1`, [req.ctx!.profileId]);
@@ -298,26 +301,28 @@ invoicesRouter.post('/:id/card-checkout', async (req, res) => {
     if (row.status === 'paid') return { error: 'already_paid' as const };
     if (row.status !== 'pending') return { error: 'not_pending' as const };
 
-    // Idempotente: já está no cartão e tem link válido → devolve o mesmo.
-    // Evita cancelar/recriar a cada clique do responsável.
-    if (row.billing_type === 'CREDIT_CARD' && row.checkout_url) {
-      return { data: { checkout_url: row.checkout_url as string } };
+    // Já aceita os dois métodos → devolve o link existente sem recriar nada.
+    // É o caso de toda fatura nova, e o que mantém o PIX exibido na tela
+    // válido: nenhuma cobrança é cancelada aqui.
+    if (row.billing_type === 'UNDEFINED' && row.checkout_url) {
+      return { data: { checkout_url: row.checkout_url as string, pix_changed: false } };
     }
 
     if (row.nuvende_charge_id) {
       await getPaymentProvider().cancelCharge(String(row.nuvende_charge_id));
     }
 
-    const r = await buildChargeForInvoice(c, req.ctx!.schoolId!, req.params.id, 'CREDIT_CARD');
+    const r = await buildChargeForInvoice(c, req.ctx!.schoolId!, req.params.id, 'UNDEFINED');
     if ('error' in r) return r;
     if (!r.charge.invoiceUrl) return { error: 'no_checkout_url' as const };
 
     await audit(c, {
       schoolId: req.ctx!.schoolId!, userId: req.ctx!.profileId,
       action: 'INVOICE_BILLING_TYPE_CHANGED', entityType: 'invoice', entityId: req.params.id,
-      metadata: { from: row.billing_type ?? null, to: 'CREDIT_CARD', by: 'guardian' },
+      metadata: { from: row.billing_type ?? null, to: 'UNDEFINED', by: 'guardian' },
     });
-    return { data: { checkout_url: r.charge.invoiceUrl } };
+    // A cobrança foi recriada: o código PIX que estava na tela não vale mais.
+    return { data: { checkout_url: r.charge.invoiceUrl, pix_changed: true } };
   });
 
   if ('error' in outcome) {
@@ -335,10 +340,12 @@ invoicesRouter.post('/:id/card-checkout', async (req, res) => {
   res.json({ ok: true, data: outcome.data });
 });
 
-// POST /api/invoices/:id/pix — gera/renova a cobrança PIX da fatura
+// POST /api/invoices/:id/pix — gera/renova a cobrança da fatura.
+// Emite como UNDEFINED: o QR PIX continua saindo, e a mesma cobrança também
+// aceita cartão. Gerar como 'PIX' prenderia o responsável a um método só.
 invoicesRouter.post('/:id/pix', requireRole('school_admin', 'financial', 'superadmin'), async (req, res) => {
   const result = await withTenant(req.ctx!, async (c) => {
-    const r = await buildChargeForInvoice(c, req.ctx!.schoolId!, req.params.id, 'PIX');
+    const r = await buildChargeForInvoice(c, req.ctx!.schoolId!, req.params.id, 'UNDEFINED');
     if ('error' in r) return r;
     // Dados para notificar o responsável por e-mail (fora da transação).
     const info = await c.query(
@@ -397,7 +404,9 @@ invoicesRouter.post('/:id/send-to-guardian', requireRole('school_admin', 'financ
     const invRow = cur.rows[0];
 
     if (!copyPaste) {
-      const r = await buildChargeForInvoice(c, req.ctx!.schoolId!, req.params.id, 'PIX');
+      // UNDEFINED e não 'PIX': regerar não deve estreitar a cobrança para um
+      // método só — o responsável continua podendo pagar no cartão.
+      const r = await buildChargeForInvoice(c, req.ctx!.schoolId!, req.params.id, 'UNDEFINED');
       if ('error' in r) return { error: r.error };
       copyPaste = r.charge.pixCopyPaste ?? null;
     }

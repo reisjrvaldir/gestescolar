@@ -65,9 +65,14 @@ export async function processConfirmedPayment(
   );
 
   // 4. fatura paga
+  // invoices.payment_method usa o vocabulário 'pix|card' (ver 0001_init.sql),
+  // enquanto payments.payment_method guarda 'credit_card'. Sem normalizar, um
+  // pagamento no cartão gravava 'credit_card' na fatura e a tela do
+  // responsável — que compara com 'card' — exibia "Na escola".
+  const invoiceMethod = method === 'credit_card' ? 'card' : method;
   await client.query(
     `update public.invoices set status='paid', paid_at=now(), payment_method=$3 where id=$1 and school_id=$2`,
-    [input.invoiceId, input.schoolId, method],
+    [input.invoiceId, input.schoolId, invoiceMethod],
   );
 
   // 5. auditoria

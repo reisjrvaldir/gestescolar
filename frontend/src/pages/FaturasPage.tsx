@@ -531,12 +531,14 @@ export function FaturasPage() {
                       </div>
                     </>
                   )}
-                  {/* Antes isto era um link direto para checkout_url. Como a
-                      fatura nasce com cobrança PIX, a página do provedor só
-                      oferecia PIX — o botão prometia cartão e não entregava.
-                      Agora o backend converte a cobrança antes de redirecionar. */}
+                  {/* PIX (acima) e cartão convivem: a cobrança é emitida como
+                      UNDEFINED, então o responsável escolhe o método na hora
+                      de pagar sem perder o outro. */}
                   {selected.status !== 'paid' && (
                     <div>
+                      <div className="mb-2 flex items-center gap-2 text-[11px] text-ink-subtle">
+                        <span className="h-px flex-1 bg-border" />ou<span className="h-px flex-1 bg-border" />
+                      </div>
                       <button
                         className="btn-primary w-full justify-center"
                         onClick={payWithCard}
@@ -547,8 +549,8 @@ export function FaturasPage() {
                           : <><ExternalLink size={14} /> Pagar com cartão</>}
                       </button>
                       <p className="mt-1.5 text-center text-[11px] text-ink-subtle">
-                        Você será levado ao ambiente seguro do provedor. Ao trocar para
-                        cartão, o código PIX acima deixa de valer.
+                        Você será levado ao ambiente seguro do provedor, onde também
+                        é possível pagar por PIX.
                       </p>
                       {cardError && <p className="mt-1 text-center text-xs text-danger">{cardError}</p>}
                     </div>
