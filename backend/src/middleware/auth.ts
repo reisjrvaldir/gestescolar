@@ -8,13 +8,37 @@ import type { TenantContext } from '../db/withTenant';
 const jwksUrl = process.env.NEON_AUTH_JWKS_URL;
 const JWKS = jwksUrl ? createRemoteJWKSet(new URL(jwksUrl)) : null;
 
-// Better Auth usa o baseURL COMPLETO como issuer/audience por padrão. Como o
-// Neon Auth é montado em /neondb/auth, remover esse caminho faz todo JWT válido
-// falhar com JWTClaimValidationFailed. Um issuer explícito ainda pode substituir
-// o padrão; normalizamos apenas a barra final para evitar divergência acidental.
-const AUTH_ISSUER = (
-  process.env.NEON_AUTH_ISSUER || process.env.NEON_AUTH_URL
-)?.replace(/\/$/, '');
+// O Neon Auth carimba `iss` e `aud` com a ORIGEM, sem o mount `/neondb/auth`.
+// Verificado no token real de produção (2026-08-13):
+//   iss = aud = https://<projeto>.neonauth.<região>.aws.neon.tech
+// Isso contraria o default documentado do Better Auth (baseURL completo) — o
+// Neon configura o issuer explicitamente. Usar o baseURL com path aqui faz
+// TODO token válido falhar com `unexpected "iss" claim value`.
+//
+// Por isso derivamos a origem em vez de reaproveitar a env crua: a
+// NEON_AUTH_URL precisa manter o `/neondb/auth` para as chamadas
+// server-to-server (ver publicAuth.ts), então os dois usos divergem.
+// NEON_AUTH_ISSUER continua disponível como override explícito caso o Neon
+// mude o formato.
+function originOf(raw: string | undefined): string | undefined {
+  const value = raw?.trim();
+  if (!value) return undefined;
+  try {
+    return new URL(value).origin;
+  } catch {
+    return undefined;
+  }
+}
+
+// String vazia precisa virar `undefined`: em produção a NEON_AUTH_URL já
+// apareceu setada como "". O jose trata issuer/audience falsy como AUSENTES e
+// pula a checagem de claims silenciosamente — qualquer JWT assinado pela
+// instância seria aceito, para qualquer destinatário. Falhar alto é melhor
+// do que validar de mentira.
+const AUTH_ISSUER =
+  originOf(process.env.NEON_AUTH_ISSUER)
+  ?? originOf(process.env.NEON_AUTH_URL)
+  ?? originOf(process.env.NEON_AUTH_JWKS_URL);
 
 export interface AuthIdentity {
   authUserId: string;
@@ -52,6 +76,15 @@ async function verifyAuthToken(req: Request): Promise<AuthIdentity | null> {
 
   if (!JWKS) {
     throw Object.assign(new Error('NEON_AUTH_JWKS_URL não configurado'), { code: 'AUTH_NOT_CONFIGURED' });
+  }
+  // Sem issuer não há como saber para QUEM o token foi emitido. Recusar é
+  // obrigatório: seguir adiante faria o jose ignorar iss/aud e aceitar
+  // qualquer JWT assinado pela instância, inclusive de outro destinatário.
+  if (!AUTH_ISSUER) {
+    throw Object.assign(
+      new Error('NEON_AUTH_URL/NEON_AUTH_ISSUER não configurado'),
+      { code: 'AUTH_NOT_CONFIGURED' },
+    );
   }
 
   // Verifica assinatura do JWT contra o JWKS do Neon Auth (Better Auth),
