@@ -183,6 +183,19 @@ export const asaasProvider: PaymentProvider = {
     });
     return { providerWithdrawalId: t.id };
   },
+
+  async cancelCharge(providerChargeId: string): Promise<void> {
+    try {
+      await asaasFetch(`/payments/${providerChargeId}`, { method: 'DELETE' });
+    } catch (err: any) {
+      // Cobrança já removida/inexistente (404) é o estado desejado — o
+      // contrato é idempotente. Qualquer outro erro precisa subir: se o
+      // cancelamento falhou de verdade e seguíssemos criando a nova, a
+      // fatura ficaria com duas cobranças pagáveis.
+      if (err?.http === 404) return;
+      throw err;
+    }
+  },
 };
 
 /**

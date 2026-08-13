@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { z } from 'zod';
 import { requireAuth, requireRole } from '../../middleware/auth';
 import { withTenant } from '../../db/withTenant';
-import { buildChargeForInvoice, type BillingType } from '../../lib/payments';
+import { buildChargeForInvoice, getPaymentProvider, type BillingType } from '../../lib/payments';
 import { notifyChargeCreated } from '../../lib/email';
 import { audit } from '../../lib/audit';
 
@@ -266,6 +266,73 @@ invoicesRouter.post('/:id/guardian-response', async (req, res) => {
     return res.status(m.http).json({ code: result.error, message: m.msg });
   }
   res.json({ ok: true });
+});
+
+// POST /api/invoices/:id/card-checkout — o RESPONSÁVEL troca a forma de
+// pagamento da própria fatura para cartão de crédito e recebe o link do
+// checkout hospedado do provedor.
+//
+// Os dados do cartão são digitados NA PÁGINA DO PROVEDOR, nunca em tela
+// nossa: o sistema não deve tocar em número de cartão (escopo PCI).
+//
+// A fatura já nasce com uma cobrança PIX (studentInvoices.ts gera assim).
+// Como buildChargeForInvoice sempre cria uma cobrança NOVA no provedor, é
+// obrigatório cancelar a anterior antes — sem isso a fatura fica com duas
+// cobranças pagáveis e o responsável pode pagar duas vezes.
+invoicesRouter.post('/:id/card-checkout', async (req, res) => {
+  const outcome = await withTenant(req.ctx!, async (c) => {
+    const g = await c.query(`select id from public.guardians where user_id=$1 limit 1`, [req.ctx!.profileId]);
+    if (g.rows.length === 0) return { error: 'not_guardian' as const };
+
+    // Filtro por guardian_id no WHERE: sem ele, um responsável trocaria a
+    // forma de pagamento da fatura de outro aluno passando o id direto.
+    const inv = await c.query(
+      `select i.id, i.status, i.billing_type, i.checkout_url, i.nuvende_charge_id
+         from public.invoices i
+         join public.students s on s.id = i.student_id
+        where i.id=$1 and i.school_id=$2 and s.guardian_id=$3 limit 1`,
+      [req.params.id, req.ctx!.schoolId, g.rows[0].id],
+    );
+    if (inv.rows.length === 0) return { error: 'not_found' as const };
+    const row = inv.rows[0];
+    if (row.status === 'paid') return { error: 'already_paid' as const };
+    if (row.status !== 'pending') return { error: 'not_pending' as const };
+
+    // Idempotente: já está no cartão e tem link válido → devolve o mesmo.
+    // Evita cancelar/recriar a cada clique do responsável.
+    if (row.billing_type === 'CREDIT_CARD' && row.checkout_url) {
+      return { data: { checkout_url: row.checkout_url as string } };
+    }
+
+    if (row.nuvende_charge_id) {
+      await getPaymentProvider().cancelCharge(String(row.nuvende_charge_id));
+    }
+
+    const r = await buildChargeForInvoice(c, req.ctx!.schoolId!, req.params.id, 'CREDIT_CARD');
+    if ('error' in r) return r;
+    if (!r.charge.invoiceUrl) return { error: 'no_checkout_url' as const };
+
+    await audit(c, {
+      schoolId: req.ctx!.schoolId!, userId: req.ctx!.profileId,
+      action: 'INVOICE_BILLING_TYPE_CHANGED', entityType: 'invoice', entityId: req.params.id,
+      metadata: { from: row.billing_type ?? null, to: 'CREDIT_CARD', by: 'guardian' },
+    });
+    return { data: { checkout_url: r.charge.invoiceUrl } };
+  });
+
+  if ('error' in outcome) {
+    const map: Record<string, [number, string]> = {
+      not_guardian:     [403, 'Apenas responsáveis podem alterar a forma de pagamento.'],
+      not_found:        [404, 'Cobrança não encontrada.'],
+      already_paid:     [409, 'Esta cobrança já foi paga.'],
+      not_pending:      [409, 'Esta cobrança não está mais em aberto.'],
+      payout_not_ready: [409, 'A escola ainda não concluiu o cadastro da conta de recebimento.'],
+      no_checkout_url:  [502, 'O provedor não retornou o link de pagamento. Tente novamente.'],
+    };
+    const [http, message] = map[String(outcome.error)] ?? [400, 'Não foi possível gerar o pagamento no cartão.'];
+    return res.status(http).json({ code: outcome.error, message });
+  }
+  res.json({ ok: true, data: outcome.data });
 });
 
 // POST /api/invoices/:id/pix — gera/renova a cobrança PIX da fatura

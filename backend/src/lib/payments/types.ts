@@ -69,4 +69,9 @@ export interface PaymentProvider {
   parseWebhook(body: unknown): NormalizedWebhookEvent | null;
   /** Solicita transferência/saque do saldo (opcional conforme provedor). */
   requestWithdrawal(input: { amount: number; pixKey?: string }): Promise<{ providerWithdrawalId: string }>;
+  /** Cancela uma cobrança no provedor. Necessário ao trocar a forma de
+   *  pagamento: sem cancelar a anterior, a fatura fica com DUAS cobranças
+   *  pagáveis no ASAAS e o responsável pode pagar duas vezes.
+   *  Idempotente — cancelar algo já cancelado/inexistente não deve lançar. */
+  cancelCharge(providerChargeId: string): Promise<void>;
 }

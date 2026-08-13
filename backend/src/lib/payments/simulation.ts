@@ -51,4 +51,7 @@ export const simulationProvider: PaymentProvider = {
   async requestWithdrawal(): Promise<{ providerWithdrawalId: string }> {
     return { providerWithdrawalId: `sim_wd_${Date.now()}` };
   },
+
+  // Sem cobrança real para cancelar — no-op mantém o contrato idempotente.
+  async cancelCharge(): Promise<void> {},
 };

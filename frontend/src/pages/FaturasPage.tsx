@@ -50,6 +50,8 @@ export function FaturasPage() {
   const [issuingIR, setIssuingIR] = useState(false);
   const [irError, setIrError] = useState<string | null>(null);
   // Diálogo unificado para "Contestar" / "Não participar"
+  const [cardBusy, setCardBusy] = useState(false);
+  const [cardError, setCardError] = useState<string | null>(null);
   const [responding, setResponding] = useState<{ inv: MyInvoice; action: 'decline' | 'dispute' } | null>(null);
   const [responseNote, setResponseNote] = useState('');
   const [responseBusy, setResponseBusy] = useState(false);
@@ -134,6 +136,23 @@ export function FaturasPage() {
     navigator.clipboard.writeText(selected.pix_copy_paste);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
+  }
+
+  /** Troca a cobrança para cartão e manda o responsável ao checkout do
+   *  provedor, onde os dados do cartão são digitados — nunca aqui.
+   *  Redireciona na mesma aba de propósito: abrir janela depois do await
+   *  costuma ser barrado por bloqueador de pop-up. */
+  async function payWithCard() {
+    if (!selected || cardBusy) return;
+    setCardBusy(true);
+    setCardError(null);
+    try {
+      const { checkout_url } = await invoicesService.cardCheckout(selected.id);
+      window.location.href = checkout_url;
+    } catch (e: any) {
+      setCardError(e?.message ?? 'Não foi possível abrir o pagamento no cartão.');
+      setCardBusy(false);
+    }
   }
 
   const currentMonth = `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}`;
@@ -512,10 +531,27 @@ export function FaturasPage() {
                       </div>
                     </>
                   )}
-                  {selected.checkout_url && (
-                    <a href={selected.checkout_url} target="_blank" rel="noreferrer" className="btn-primary w-full justify-center">
-                      <ExternalLink size={14} /> Pagar com cartão
-                    </a>
+                  {/* Antes isto era um link direto para checkout_url. Como a
+                      fatura nasce com cobrança PIX, a página do provedor só
+                      oferecia PIX — o botão prometia cartão e não entregava.
+                      Agora o backend converte a cobrança antes de redirecionar. */}
+                  {selected.status !== 'paid' && (
+                    <div>
+                      <button
+                        className="btn-primary w-full justify-center"
+                        onClick={payWithCard}
+                        disabled={cardBusy}
+                      >
+                        {cardBusy
+                          ? <><Loader2 size={14} className="animate-spin" /> Abrindo pagamento…</>
+                          : <><ExternalLink size={14} /> Pagar com cartão</>}
+                      </button>
+                      <p className="mt-1.5 text-center text-[11px] text-ink-subtle">
+                        Você será levado ao ambiente seguro do provedor. Ao trocar para
+                        cartão, o código PIX acima deixa de valer.
+                      </p>
+                      {cardError && <p className="mt-1 text-center text-xs text-danger">{cardError}</p>}
+                    </div>
                   )}
                 </div>
                 <button className="btn-outline mt-4 w-full justify-center text-xs" onClick={() => setSelected(null)}>

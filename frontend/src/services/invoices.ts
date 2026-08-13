@@ -64,6 +64,14 @@ export const invoicesService = {
     return res.data;
   },
 
+  /** Troca a forma de pagamento da fatura do próprio responsável para cartão e
+   *  devolve o link do checkout hospedado do provedor. O cartão é digitado lá,
+   *  nunca em tela nossa. Cancela a cobrança PIX anterior no backend. */
+  async cardCheckout(id: string): Promise<{ checkout_url: string }> {
+    const res = await api.post<{ ok: boolean; data: { checkout_url: string } }>(`/invoices/${id}/card-checkout`);
+    return res.data;
+  },
+
   /** Gera PIX (se preciso) e envia o copia-e-cola ao responsável via mensagem interna. */
   async sendChargeToGuardian(id: string): Promise<{ sent_to: string; copy_paste: string }> {
     const res = await api.post<{ ok: boolean; data: { sent_to: string; copy_paste: string } }>(
