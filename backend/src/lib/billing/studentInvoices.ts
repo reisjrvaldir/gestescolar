@@ -172,10 +172,9 @@ export async function insertEnrollmentInvoice(
 export async function generatePixForNewInvoices(ctx: TenantContext, invoiceIds: string[]): Promise<void> {
   await Promise.allSettled(
     invoiceIds.map((id) =>
-      // UNDEFINED: a cobrança nasce aceitando PIX e cartão, e o responsável
-      // escolhe na hora de pagar. Com 'PIX' fixo ele ficava preso a um método
-      // só, e oferecer cartão exigiria cancelar e recriar a cobrança.
-      withTenant(ctx, (c) => buildChargeForInvoice(c, ctx.schoolId!, id, 'UNDEFINED')).catch((err) => {
+      // Nasce em PIX (método mais barato e imediato). O responsável troca para
+      // cartão pela própria tela quando quiser — ver /invoices/:id/card-checkout.
+      withTenant(ctx, (c) => buildChargeForInvoice(c, ctx.schoolId!, id, 'PIX')).catch((err) => {
         console.error('[studentInvoices] falha ao gerar cobrança da fatura', id, err?.message ?? err);
       }),
     ),

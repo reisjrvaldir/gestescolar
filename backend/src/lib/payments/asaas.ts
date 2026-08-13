@@ -125,7 +125,7 @@ export const asaasProvider: PaymentProvider = {
     // PIX: buscar QR code + copia-e-cola. O ASAAS pode levar um instante para
     // gerar o QR logo após criar a cobrança (especialmente na 1ª cobrança da
     // conta), retornando 400. Tentamos algumas vezes com pequeno intervalo.
-    if (input.billingType === 'PIX' || input.billingType === 'UNDEFINED') {
+    if (input.billingType === 'PIX') {
       let qr: { encodedImage?: string; payload?: string } | undefined;
       for (let attempt = 0; attempt < 4; attempt++) {
         try {
@@ -134,15 +134,7 @@ export const asaasProvider: PaymentProvider = {
           );
           if (qr?.payload) break;
         } catch (err) {
-          // Em PIX puro, sem o copia-e-cola a cobrança é inútil na nossa tela:
-          // falha alto. Em UNDEFINED o QR é um extra — a cobrança segue
-          // pagável pelo checkout do provedor, então derrubar a criação (e
-          // com ela a geração de mensalidades) seria pior que ficar sem QR.
-          if (attempt === 3) {
-            if (input.billingType === 'PIX') throw err;
-            console.error('[asaas] QR PIX indisponível para cobrança UNDEFINED', charge.id, err);
-            break;
-          }
+          if (attempt === 3) throw err;
         }
         await new Promise((r) => setTimeout(r, 800));
       }

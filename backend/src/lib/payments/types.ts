@@ -4,11 +4,12 @@
 //  A lógica de split/saldo/baixa fica em settlement.ts (agnóstica).
 // =============================================================
 
-// UNDEFINED = o pagador escolhe a forma no checkout do provedor. É o que
-// permite oferecer PIX **e** cartão na MESMA cobrança: um pagamento só tem um
-// billingType, então PIX/CREDIT_CARD fixos são mutuamente exclusivos e trocar
-// entre eles exigiria cancelar e recriar a cobrança.
-export type BillingType = 'PIX' | 'CREDIT_CARD' | 'UNDEFINED';
+// Só PIX e cartão de crédito, por decisão de produto — boleto não é oferecido.
+// Por isso NÃO usamos o 'UNDEFINED' do ASAAS: nesse modo quem decide os
+// métodos exibidos é a configuração da conta, e o boleto entraria junto.
+// Fixar o billingType é o que garante o controle. O custo é que a cobrança
+// tem um método só: trocar exige cancelar e recriar (ver card-checkout).
+export type BillingType = 'PIX' | 'CREDIT_CARD';
 
 /** Alvo de split: uma carteira ASAAS (subconta da escola) recebe parte do valor. */
 export interface SplitTarget {

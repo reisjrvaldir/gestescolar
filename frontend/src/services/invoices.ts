@@ -16,6 +16,7 @@ export interface Invoice {
   reference_month?: string;
   payment_method?: 'pix' | 'card' | 'cash' | 'other';
   checkout_url?: string;
+  billing_type?: 'PIX' | 'CREDIT_CARD' | null;
   paid_at?: string;
   created_at?: string;
 }
@@ -64,14 +65,18 @@ export const invoicesService = {
     return res.data;
   },
 
-  /** Garante que a fatura aceite PIX e cartão e devolve o link do checkout do
-   *  provedor, onde o cartão é digitado — nunca em tela nossa.
-   *  `pix_changed` indica que a cobrança precisou ser recriada (fatura antiga,
-   *  emitida só como PIX), então o código PIX exibido ficou obsoleto. */
-  async cardCheckout(id: string): Promise<{ checkout_url: string; pix_changed: boolean }> {
-    const res = await api.post<{ ok: boolean; data: { checkout_url: string; pix_changed: boolean } }>(
-      `/invoices/${id}/card-checkout`,
-    );
+  /** Define a forma de pagamento da fatura do próprio responsável.
+   *  Só PIX e cartão de crédito — boleto não é oferecido.
+   *  No cartão devolve `checkout_url` (o cartão é digitado no provedor, nunca
+   *  em tela nossa); no PIX devolve o novo copia-e-cola e QR.
+   *  Alternar recria a cobrança, então o código PIX anterior deixa de valer. */
+  async setPaymentMethod(id: string, billingType: 'PIX' | 'CREDIT_CARD'): Promise<{
+    billing_type: 'PIX' | 'CREDIT_CARD';
+    checkout_url: string | null;
+    pix_copy_paste: string | null;
+    pix_qr_code: string | null;
+  }> {
+    const res = await api.post<{ ok: boolean; data: any }>(`/invoices/${id}/card-checkout`, { billingType });
     return res.data;
   },
 

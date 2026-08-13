@@ -138,19 +138,34 @@ export function FaturasPage() {
     setTimeout(() => setCopied(false), 2000);
   }
 
-  /** Troca a cobrança para cartão e manda o responsável ao checkout do
-   *  provedor, onde os dados do cartão são digitados — nunca aqui.
-   *  Redireciona na mesma aba de propósito: abrir janela depois do await
-   *  costuma ser barrado por bloqueador de pop-up. */
-  async function payWithCard() {
+  /** Define a forma de pagamento da fatura. Como a cobrança tem um método só,
+   *  alternar recria a cobrança no provedor — por isso o estado local é
+   *  atualizado com o que voltou (o código PIX anterior deixa de valer).
+   *  No cartão, redireciona na mesma aba de propósito: abrir janela depois
+   *  do await costuma ser barrado por bloqueador de pop-up. */
+  async function choosePaymentMethod(billingType: 'PIX' | 'CREDIT_CARD') {
     if (!selected || cardBusy) return;
     setCardBusy(true);
     setCardError(null);
     try {
-      const { checkout_url } = await invoicesService.cardCheckout(selected.id);
-      window.location.href = checkout_url;
+      const r = await invoicesService.setPaymentMethod(selected.id, billingType);
+      if (billingType === 'CREDIT_CARD') {
+        if (!r.checkout_url) throw new Error('O provedor não devolveu o link de pagamento.');
+        window.location.href = r.checkout_url;
+        return;
+      }
+      const updated: MyInvoice = {
+        ...selected,
+        billing_type: r.billing_type,
+        pix_copy_paste: r.pix_copy_paste ?? undefined,
+        pix_qr_code: r.pix_qr_code ?? undefined,
+        checkout_url: r.checkout_url ?? undefined,
+      };
+      setSelected(updated);
+      setInvoices((list) => list.map((i) => (i.id === updated.id ? updated : i)));
+      setCardBusy(false);
     } catch (e: any) {
-      setCardError(e?.message ?? 'Não foi possível abrir o pagamento no cartão.');
+      setCardError(e?.message ?? 'Não foi possível alterar a forma de pagamento.');
       setCardBusy(false);
     }
   }
@@ -531,26 +546,51 @@ export function FaturasPage() {
                       </div>
                     </>
                   )}
-                  {/* PIX (acima) e cartão convivem: a cobrança é emitida como
-                      UNDEFINED, então o responsável escolhe o método na hora
-                      de pagar sem perder o outro. */}
+                  {/* Escolha do método. A cobrança aceita um método por vez,
+                      então trocar recria a cobrança no provedor — o código PIX
+                      acima é substituído por um novo. Só PIX e crédito. */}
                   {selected.status !== 'paid' && (
                     <div>
                       <div className="mb-2 flex items-center gap-2 text-[11px] text-ink-subtle">
                         <span className="h-px flex-1 bg-border" />ou<span className="h-px flex-1 bg-border" />
                       </div>
-                      <button
-                        className="btn-primary w-full justify-center"
-                        onClick={payWithCard}
-                        disabled={cardBusy}
-                      >
-                        {cardBusy
-                          ? <><Loader2 size={14} className="animate-spin" /> Abrindo pagamento…</>
-                          : <><ExternalLink size={14} /> Pagar com cartão</>}
-                      </button>
+                      {selected.billing_type === 'CREDIT_CARD' ? (
+                        <>
+                          {selected.checkout_url && (
+                            <a
+                              href={selected.checkout_url}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="btn-primary w-full justify-center"
+                            >
+                              <ExternalLink size={14} /> Pagar no cartão de crédito
+                            </a>
+                          )}
+                          <button
+                            className="btn-outline mt-2 w-full justify-center text-xs"
+                            onClick={() => choosePaymentMethod('PIX')}
+                            disabled={cardBusy}
+                          >
+                            {cardBusy
+                              ? <><Loader2 size={13} className="animate-spin" /> Alterando…</>
+                              : 'Prefiro pagar por PIX'}
+                          </button>
+                        </>
+                      ) : (
+                        <button
+                          className="btn-primary w-full justify-center"
+                          onClick={() => choosePaymentMethod('CREDIT_CARD')}
+                          disabled={cardBusy}
+                        >
+                          {cardBusy
+                            ? <><Loader2 size={14} className="animate-spin" /> Abrindo pagamento…</>
+                            : <><ExternalLink size={14} /> Pagar no cartão de crédito</>}
+                        </button>
+                      )}
                       <p className="mt-1.5 text-center text-[11px] text-ink-subtle">
-                        Você será levado ao ambiente seguro do provedor, onde também
-                        é possível pagar por PIX.
+                        {selected.billing_type === 'CREDIT_CARD'
+                          ? 'Os dados do cartão são digitados no ambiente seguro do provedor.'
+                          : 'Ao escolher o cartão, um novo código será gerado e o PIX acima deixa de valer.'}
                       </p>
                       {cardError && <p className="mt-1 text-center text-xs text-danger">{cardError}</p>}
                     </div>
