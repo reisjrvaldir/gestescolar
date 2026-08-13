@@ -28,160 +28,176 @@ export function LandingPage() {
   }, []);
 
   useEffect(() => {
-    // ── Handlers de navegação (substituem Router.go / LandingPage.* da v1) ──
-    const LP: any = {
-      _annual: false,
-      scrollTo(section: string) {
-        const el = document.getElementById('lp-' + section);
-        if (!el) return;
-        el.scrollIntoView({ behavior: 'smooth', block: 'start' });
-      },
-      goLogin() { navigate('/login'); },
-      /** Avança/volta exatamente 1 card no carrossel (dir: -1 volta, 1 avança). */
-      slideFeatures(dir: number) {
-        const t = document.getElementById('lpFeatTrack');
-        if (!t) return;
-        // Passo = largura de um card + o gap, para o próximo card encostar na
-        // borda esquerda (scroll-snap-align: start acomoda o resto).
-        const card = t.querySelector('.lp-feature-card') as HTMLElement | null;
-        const gap = parseFloat(getComputedStyle(t).columnGap) || 24;
-        const passo = card ? card.offsetWidth + gap : t.clientWidth;
-        const max = t.scrollWidth - t.clientWidth;
-        const destino = Math.max(0, Math.min(max, t.scrollLeft + dir * passo));
+    // ── Handlers da landing v1, disparados via delegação por `data-lp-action`.
+    // Antes vinham como atributos `onclick=`/`onchange=`/`onkeydown=` inline,
+    // mas a CSP `script-src 'self'` bloqueia handlers inline — os botões
+    // "silenciavam" em produção. Delegar num único listener resolve sem
+    // enfraquecer o CSP.
+    const state = { annual: false };
 
-        // Anima scrollLeft na mão em vez de scrollBy({behavior:'smooth'}):
-        // com `scroll-snap-type` mandatory o Chrome cancela o scroll suave
-        // nativo. Pior: o snap reposiciona a CADA passo pequeno da animação,
-        // grudando a trilha de volta no primeiro card. Por isso desligamos o
-        // snap durante a animação e religamos no fim, quando ele acomoda o
-        // resultado no card mais próximo.
-        if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
-          t.style.scrollSnapType = 'none';
-          t.scrollLeft = destino;
-          t.style.scrollSnapType = '';
-          return;
-        }
-        const inicio = t.scrollLeft;
-        const t0 = performance.now();
-        const dur = 380;
+    function scrollToSection(section: string) {
+      const el = document.getElementById('lp-' + section);
+      if (!el) return;
+      el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+    function slideFeatures(dir: number) {
+      const t = document.getElementById('lpFeatTrack');
+      if (!t) return;
+      const card = t.querySelector('.lp-feature-card') as HTMLElement | null;
+      const gap = parseFloat(getComputedStyle(t).columnGap) || 24;
+      const passo = card ? card.offsetWidth + gap : t.clientWidth;
+      const max = t.scrollWidth - t.clientWidth;
+      const destino = Math.max(0, Math.min(max, t.scrollLeft + dir * passo));
+      // scroll-snap mandatory cancela scroll suave nativo e "gruda" no primeiro
+      // card se avançarmos em passos pequenos. Desliga o snap durante a
+      // animação e religa no fim (o snap então acomoda o card mais próximo).
+      if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
         t.style.scrollSnapType = 'none';
-        const anima = (agora: number) => {
-          const p = Math.min(1, (agora - t0) / dur);
-          // easeOutCubic — arranca e desacelera no fim.
-          const e = 1 - Math.pow(1 - p, 3);
-          t.scrollLeft = inicio + (destino - inicio) * e;
-          if (p < 1) {
-            requestAnimationFrame(anima);
-          } else {
-            t.style.scrollSnapType = ''; // volta ao snap do CSS
-          }
-        };
-        requestAnimationFrame(anima);
-      },
-      /**
-       * CTA principal → POPUP de teste controlado, não cadastro direto.
-       *
-       * Até 07/08/2026 isto abria a aba de cadastro e a pessoa criava a própria
-       * escola sozinha. A operação passou a ser curada: quem abre escola é a
-       * equipe, pelo painel de superadmin. Desde então o CTA virou captura de
-       * contato via WhatsApp; agora explica o estágio de teste controlado e
-       * captura o lead num formulário (public.leads), com desconto de
-       * lançamento como incentivo — ver TestingPopup.
-       */
-      goRegister(plan?: string) {
-        funnel.ctaClick(plan ? 'plan_card' : 'nav_hero', plan);
-        setTestingPopupPlan(plan);
-        setTestingPopupOpen(true);
-      },
-      goContact() {
-        funnel.contactClick('landing');
-        window.open(contactHref(), '_blank', 'noopener,noreferrer');
-      },
-      openSuperadmin() {
-        const ov = document.getElementById('lpSaOverlay');
-        const err = document.getElementById('lpSaErr');
-        if (err) err.style.display = 'none';
-        if (ov) ov.classList.add('open');
-        setTimeout(() => document.getElementById('lpSaEmail')?.focus(), 50);
-      },
-      closeSuperadmin() {
-        document.getElementById('lpSaOverlay')?.classList.remove('open');
-      },
-      async superadminLogin() {
-        const email = (document.getElementById('lpSaEmail') as HTMLInputElement | null)?.value.trim() ?? '';
-        const pass = (document.getElementById('lpSaPass') as HTMLInputElement | null)?.value ?? '';
-        const err = document.getElementById('lpSaErr');
-        const btn = document.getElementById('lpSaSubmit') as HTMLButtonElement | null;
-        const showErr = (m: string) => { if (err) { err.textContent = m; err.style.display = 'block'; } };
-        if (!email || !pass) { showErr('Informe e-mail e senha.'); return; }
-        if (err) err.style.display = 'none';
-        if (btn) { btn.disabled = true; btn.textContent = 'Entrando…'; }
-        try {
-          const res: any = await signIn.email({ email, password: pass });
-          if (res?.error) { showErr('E-mail ou senha inválidos.'); return; }
-          navigate('/saas');
-        } catch {
-          showErr('Não foi possível entrar. Tente novamente.');
-        } finally {
-          if (btn) { btn.disabled = false; btn.textContent = 'Entrar'; }
-        }
-      },
-      toggleFaq(btn: HTMLElement) {
-        const item = btn.closest('.lp-faq-item');
-        if (!item) return;
-        const ans = item.querySelector('.lp-faq-a');
-        const open = btn.classList.toggle('open');
-        if (ans) ans.classList.toggle('open', open);
-      },
-      toggleBilling() {
-        const toggle = document.getElementById('billingToggle') as HTMLInputElement | null;
-        LP._annual = !!toggle?.checked;
-        const lblM = document.getElementById('lbl-monthly');
-        const lblA = document.getElementById('lbl-annual');
-        if (lblM) { lblM.style.fontWeight = LP._annual ? '400' : '700'; lblM.style.color = LP._annual ? '#999' : '#1a73e8'; }
-        if (lblA) { lblA.style.fontWeight = LP._annual ? '700' : '400'; lblA.style.color = LP._annual ? '#1a73e8' : '#999'; }
-        ['100', '250'].forEach((p) => {
-          const m = document.getElementById(`price-${p}`);
-          const a = document.getElementById(`price-${p}-annual`);
-          if (m) m.style.display = LP._annual ? 'none' : '';
-          if (a) a.style.display = LP._annual ? '' : 'none';
-        });
-      },
-      toggleMenu() {
-        const links = document.getElementById('lpNavLinks');
-        if (!links) return;
-        const show = links.style.display !== 'flex';
-        links.style.cssText = show
-          ? 'display:flex;flex-direction:column;position:absolute;top:68px;left:0;right:0;background:rgba(255,255,255,.97);backdrop-filter:blur(20px);padding:16px 24px;box-shadow:0 8px 24px rgba(0,0,0,.1);z-index:999;gap:16px;'
-          : '';
-      },
-      _animateCount(el: HTMLElement) {
-        if (el.dataset.animated) return;
-        el.dataset.animated = '1';
-        const target = parseInt(el.dataset.count || '0', 10);
-        const prefix = el.dataset.prefix || '';
-        const suffix = el.dataset.suffix || '';
-        const duration = 1800;
-        const startAt = Date.now();
-        const tick = () => {
-          const elapsed = Date.now() - startAt;
-          const progress = Math.min(elapsed / duration, 1);
-          const ease = 1 - Math.pow(1 - progress, 3);
-          const val = Math.round(target * ease);
-          el.textContent = prefix + val + suffix;
-          if (progress < 1) requestAnimationFrame(tick);
-        };
-        requestAnimationFrame(tick);
-      },
+        t.scrollLeft = destino;
+        t.style.scrollSnapType = '';
+        return;
+      }
+      const inicio = t.scrollLeft;
+      const t0 = performance.now();
+      const dur = 380;
+      t.style.scrollSnapType = 'none';
+      const anima = (agora: number) => {
+        const p = Math.min(1, (agora - t0) / dur);
+        const e = 1 - Math.pow(1 - p, 3);
+        t.scrollLeft = inicio + (destino - inicio) * e;
+        if (p < 1) requestAnimationFrame(anima);
+        else t.style.scrollSnapType = '';
+      };
+      requestAnimationFrame(anima);
+    }
+    /**
+     * CTA principal → POPUP de teste controlado, não cadastro direto.
+     *
+     * Até 07/08/2026 isto abria a aba de cadastro e a pessoa criava a própria
+     * escola sozinha. A operação passou a ser curada: quem abre escola é a
+     * equipe, pelo painel de superadmin. Desde então o CTA virou captura de
+     * lead com desconto de lançamento — ver TestingPopup.
+     */
+    function goRegister(plan?: string) {
+      funnel.ctaClick(plan ? 'plan_card' : 'nav_hero', plan);
+      setTestingPopupPlan(plan);
+      setTestingPopupOpen(true);
+    }
+    function openSuperadmin() {
+      const ov = document.getElementById('lpSaOverlay');
+      const err = document.getElementById('lpSaErr');
+      if (err) err.style.display = 'none';
+      if (ov) ov.classList.add('open');
+      setTimeout(() => document.getElementById('lpSaEmail')?.focus(), 50);
+    }
+    function closeSuperadmin() {
+      document.getElementById('lpSaOverlay')?.classList.remove('open');
+    }
+    async function superadminLogin() {
+      const email = (document.getElementById('lpSaEmail') as HTMLInputElement | null)?.value.trim() ?? '';
+      const pass = (document.getElementById('lpSaPass') as HTMLInputElement | null)?.value ?? '';
+      const err = document.getElementById('lpSaErr');
+      const btn = document.getElementById('lpSaSubmit') as HTMLButtonElement | null;
+      const showErr = (m: string) => { if (err) { err.textContent = m; err.style.display = 'block'; } };
+      if (!email || !pass) { showErr('Informe e-mail e senha.'); return; }
+      if (err) err.style.display = 'none';
+      if (btn) { btn.disabled = true; btn.textContent = 'Entrando…'; }
+      try {
+        const res: any = await signIn.email({ email, password: pass });
+        if (res?.error) { showErr('E-mail ou senha inválidos.'); return; }
+        navigate('/saas');
+      } catch {
+        showErr('Não foi possível entrar. Tente novamente.');
+      } finally {
+        if (btn) { btn.disabled = false; btn.textContent = 'Entrar'; }
+      }
+    }
+    function toggleFaq(btn: HTMLElement) {
+      const item = btn.closest('.lp-faq-item');
+      if (!item) return;
+      const ans = item.querySelector('.lp-faq-a');
+      const open = btn.classList.toggle('open');
+      if (ans) ans.classList.toggle('open', open);
+    }
+    function toggleBilling() {
+      const toggle = document.getElementById('billingToggle') as HTMLInputElement | null;
+      state.annual = !!toggle?.checked;
+      const lblM = document.getElementById('lbl-monthly');
+      const lblA = document.getElementById('lbl-annual');
+      if (lblM) { lblM.style.fontWeight = state.annual ? '400' : '700'; lblM.style.color = state.annual ? '#999' : '#1a73e8'; }
+      if (lblA) { lblA.style.fontWeight = state.annual ? '700' : '400'; lblA.style.color = state.annual ? '#1a73e8' : '#999'; }
+      ['100', '250'].forEach((p) => {
+        const m = document.getElementById(`price-${p}`);
+        const a = document.getElementById(`price-${p}-annual`);
+        if (m) m.style.display = state.annual ? 'none' : '';
+        if (a) a.style.display = state.annual ? '' : 'none';
+      });
+    }
+    function toggleMenu() {
+      const links = document.getElementById('lpNavLinks');
+      if (!links) return;
+      const show = links.style.display !== 'flex';
+      links.style.cssText = show
+        ? 'display:flex;flex-direction:column;position:absolute;top:68px;left:0;right:0;background:rgba(255,255,255,.97);backdrop-filter:blur(20px);padding:16px 24px;box-shadow:0 8px 24px rgba(0,0,0,.1);z-index:999;gap:16px;'
+        : '';
+    }
+    function animateCount(el: HTMLElement) {
+      if (el.dataset.animated) return;
+      el.dataset.animated = '1';
+      const target = parseInt(el.dataset.count || '0', 10);
+      const prefix = el.dataset.prefix || '';
+      const suffix = el.dataset.suffix || '';
+      const duration = 1800;
+      const startAt = Date.now();
+      const tick = () => {
+        const elapsed = Date.now() - startAt;
+        const progress = Math.min(elapsed / duration, 1);
+        const ease = 1 - Math.pow(1 - progress, 3);
+        const val = Math.round(target * ease);
+        el.textContent = prefix + val + suffix;
+        if (progress < 1) requestAnimationFrame(tick);
+      };
+      requestAnimationFrame(tick);
+    }
+
+    // ── Delegação: uma única função lida com todos os data-lp-action. ──
+    const onDelegatedClick = (e: MouseEvent) => {
+      const target = (e.target as HTMLElement | null)?.closest<HTMLElement>('[data-lp-action]');
+      if (!target) return;
+      const action = target.dataset.lpAction;
+      // Links usam data-lp-action + href — evita a navegação padrão do <a>.
+      if (target.tagName === 'A') e.preventDefault();
+      switch (action) {
+        case 'top':      window.scrollTo({ top: 0, behavior: 'smooth' }); break;
+        case 'scroll':   if (target.dataset.lpTarget) scrollToSection(target.dataset.lpTarget); break;
+        case 'login':    navigate('/login'); break;
+        case 'register': goRegister(target.dataset.lpPlan); break;
+        case 'contact':  funnel.contactClick('landing'); window.open(contactHref(), '_blank', 'noopener,noreferrer'); break;
+        case 'slide':    slideFeatures(Number(target.dataset.lpDir) || 1); break;
+        case 'menu':     toggleMenu(); break;
+        case 'faq':      toggleFaq(target); break;
+        case 'sa-open':  openSuperadmin(); break;
+        case 'sa-close': closeSuperadmin(); break;
+        case 'sa-submit': superadminLogin(); break;
+        // Fecha o modal do super-admin apenas ao clicar no overlay em si
+        // (fora do card). Sem esse guard, clicar no formulário fecharia.
+        case 'sa-overlay': if (e.target === target) closeSuperadmin(); break;
+      }
     };
-    (window as any).LandingPage = LP;
-    (window as any).Router = {
-      go: (page: string) => {
-        if (page === 'login') navigate('/login');
-        else if (page === 'school-register' || page === 'register' || page === 'checkout') navigate('/onboarding');
-        // 'privacy' / 'terms': sem rota dedicada no app atual — ignora.
-      },
+    const onDelegatedChange = (e: Event) => {
+      const target = (e.target as HTMLElement | null)?.closest<HTMLElement>('[data-lp-action]');
+      if (!target) return;
+      if (target.dataset.lpAction === 'billing') toggleBilling();
     };
+    const onDelegatedKeydown = (e: KeyboardEvent) => {
+      if (e.key !== 'Enter') return;
+      const target = (e.target as HTMLElement | null)?.closest<HTMLElement>('[data-lp-keydown]');
+      if (!target) return;
+      if (target.dataset.lpKeydown === 'sa-submit') superadminLogin();
+    };
+    document.addEventListener('click', onDelegatedClick);
+    document.addEventListener('change', onDelegatedChange);
+    document.addEventListener('keydown', onDelegatedKeydown);
 
     // Botão flutuante do WhatsApp: só aparece com número configurado.
     // Sem isso ele renderizava apontando para um número inexistente.
@@ -198,7 +214,7 @@ export function LandingPage() {
         if (entry.isIntersecting) {
           entry.target.classList.add('visible');
           if (entry.target.closest('.lp-metrics-inner')) {
-            entry.target.querySelectorAll<HTMLElement>('[data-count]').forEach((el) => LP._animateCount(el));
+            entry.target.querySelectorAll<HTMLElement>('[data-count]').forEach((el) => animateCount(el));
           }
         }
       });
@@ -208,7 +224,7 @@ export function LandingPage() {
     const metricsObs = new IntersectionObserver((entries) => {
       entries.forEach((e) => {
         if (e.isIntersecting) {
-          e.target.querySelectorAll<HTMLElement>('[data-count]').forEach((el) => LP._animateCount(el));
+          e.target.querySelectorAll<HTMLElement>('[data-count]').forEach((el) => animateCount(el));
           metricsObs.unobserve(e.target);
         }
       });
@@ -340,10 +356,11 @@ export function LandingPage() {
       document.removeEventListener('mousemove', onMouseMove);
       trilha?.removeEventListener('scroll', syncSetas);
       window.removeEventListener('resize', syncSetas);
+      document.removeEventListener('click', onDelegatedClick);
+      document.removeEventListener('change', onDelegatedChange);
+      document.removeEventListener('keydown', onDelegatedKeydown);
       fadeObs.disconnect();
       metricsObs.disconnect();
-      delete (window as any).LandingPage;
-      delete (window as any).Router;
     };
   }, [navigate]);
 

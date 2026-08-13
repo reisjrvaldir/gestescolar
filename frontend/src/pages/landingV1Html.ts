@@ -10,25 +10,25 @@ export const LANDING_V1_HTML = `
     <!-- ═══ NAVBAR ═══ -->
     <nav class="lp-nav" id="lpNav">
       <div class="lp-nav-inner">
-        <a class="lp-logo" href="/" onclick="event.preventDefault();window.scrollTo({top:0,behavior:'smooth'})">
+        <a class="lp-logo" href="/" data-lp-action="top">
           <i class="fa-solid fa-graduation-cap"></i> GestEscolar
         </a>
         <div class="lp-nav-links" id="lpNavLinks">
-          <a href="#lp-features" onclick="event.preventDefault();LandingPage.scrollTo('features')">Funcionalidades</a>
-          <a href="#lp-coming" onclick="event.preventDefault();LandingPage.scrollTo('coming')">Em breve</a>
-          <a href="#lp-how" onclick="event.preventDefault();LandingPage.scrollTo('how')">Como funciona</a>
-          <a href="#lp-plans" onclick="event.preventDefault();LandingPage.scrollTo('plans')">Planos</a>
-          <a href="#lp-faq" onclick="event.preventDefault();LandingPage.scrollTo('faq')">FAQ</a>
+          <a href="#lp-features" data-lp-action="scroll" data-lp-target="features">Funcionalidades</a>
+          <a href="#lp-coming" data-lp-action="scroll" data-lp-target="coming">Em breve</a>
+          <a href="#lp-how" data-lp-action="scroll" data-lp-target="how">Como funciona</a>
+          <a href="#lp-plans" data-lp-action="scroll" data-lp-target="plans">Planos</a>
+          <a href="#lp-faq" data-lp-action="scroll" data-lp-target="faq">FAQ</a>
         </div>
         <div class="lp-nav-btns">
-          <button class="lp-btn lp-btn-outline lp-btn-nav" onclick="LandingPage.goLogin()">
+          <button class="lp-btn lp-btn-outline lp-btn-nav" data-lp-action="login">
             <i class="fa-solid fa-right-to-bracket"></i> Entrar
           </button>
-          <button class="lp-btn lp-btn-accent lp-btn-nav" onclick="LandingPage.goRegister()">
+          <button class="lp-btn lp-btn-accent lp-btn-nav" data-lp-action="register">
             <i class="fa-solid fa-rocket"></i> Teste Grátis
           </button>
         </div>
-        <button class="lp-hamburger" onclick="LandingPage.toggleMenu()">
+        <button class="lp-hamburger" data-lp-action="menu">
           <i class="fa-solid fa-bars"></i>
         </button>
       </div>
@@ -50,10 +50,10 @@ export const LANDING_V1_HTML = `
           </h1>
           <p>Matrículas, financeiro, notas, frequência, ponto docente, calendário letivo e comunicação em um único lugar. 100% online, seguro e fácil de usar.</p>
           <div class="lp-hero-btns">
-            <button class="lp-btn lp-btn-accent lp-btn-hero" onclick="LandingPage.goRegister()">
+            <button class="lp-btn lp-btn-accent lp-btn-hero" data-lp-action="register">
               <i class="fa-solid fa-rocket"></i> Teste Grátis — 7 dias
             </button>
-            <button class="lp-btn lp-btn-hero lp-btn-hero-outline" onclick="LandingPage.scrollTo('features')">
+            <button class="lp-btn lp-btn-hero lp-btn-hero-outline" data-lp-action="scroll" data-lp-target="features">
               <i class="fa-solid fa-play-circle"></i> Ver funcionalidades
             </button>
           </div>
@@ -193,7 +193,7 @@ export const LANDING_V1_HTML = `
         <div class="lp-carousel">
           <button class="lp-carousel-arrow lp-carousel-prev" id="lpFeatPrev" type="button"
                   aria-label="Ver módulos anteriores" aria-controls="lpFeatTrack"
-                  onclick="LandingPage.slideFeatures(-1)">
+                  data-lp-action="slide" data-lp-dir="-1">
             <i class="fa-solid fa-chevron-left"></i>
           </button>
           <div class="lp-features" id="lpFeatTrack" tabindex="0" role="group" aria-label="Módulos disponíveis">
@@ -265,7 +265,7 @@ export const LANDING_V1_HTML = `
           </div>
           <button class="lp-carousel-arrow lp-carousel-next" id="lpFeatNext" type="button"
                   aria-label="Ver mais módulos" aria-controls="lpFeatTrack"
-                  onclick="LandingPage.slideFeatures(1)">
+                  data-lp-action="slide" data-lp-dir="1">
             <i class="fa-solid fa-chevron-right"></i>
           </button>
         </div>
@@ -436,7 +436,7 @@ export const LANDING_V1_HTML = `
         <div class="lp-billing-toggle lp-fade-up">
           <span class="lp-billing-label" id="lbl-monthly" style="font-weight:700;color:#1a73e8;">Mensal</span>
           <label class="lp-toggle-switch">
-            <input type="checkbox" id="billingToggle" onchange="LandingPage.toggleBilling()">
+            <input type="checkbox" id="billingToggle" data-lp-action="billing">
             <span class="lp-toggle-slider"></span>
           </label>
           <span class="lp-billing-label" id="lbl-annual">Anual</span>
@@ -456,7 +456,7 @@ export const LANDING_V1_HTML = `
               <li><i class="fa-solid fa-check"></i> 1 gestor</li>
               <li><i class="fa-solid fa-check"></i> Sem cartão de crédito</li>
             </ul>
-            <button class="lp-btn lp-btn-outline lp-plan-btn" onclick="LandingPage.goRegister('free')">
+            <button class="lp-btn lp-btn-outline lp-plan-btn" data-lp-action="register" data-lp-plan="free">
               Começar grátis
             </button>
           </div>
@@ -475,7 +475,7 @@ export const LANDING_V1_HTML = `
               <li><i class="fa-solid fa-check"></i> Suporte por e-mail</li>
               <li style="color:#bbb;font-size:12px;"><i class="fa-solid fa-circle-info" style="color:#bbb;"></i> Taxa de 3% por transferência</li>
             </ul>
-            <button class="lp-btn lp-btn-primary lp-plan-btn" onclick="LandingPage.goRegister('gestao_100')">
+            <button class="lp-btn lp-btn-primary lp-plan-btn" data-lp-action="register" data-lp-plan="gestao_100">
               Assinar agora
             </button>
           </div>
@@ -495,7 +495,7 @@ export const LANDING_V1_HTML = `
               <li><i class="fa-solid fa-check"></i> Suporte via WhatsApp</li>
               <li style="color:#bbb;font-size:12px;"><i class="fa-solid fa-circle-info" style="color:#bbb;"></i> Taxa de 3% por transferência</li>
             </ul>
-            <button class="lp-btn lp-btn-accent lp-plan-btn" onclick="LandingPage.goRegister('gestao_250')">
+            <button class="lp-btn lp-btn-accent lp-plan-btn" data-lp-action="register" data-lp-plan="gestao_250">
               Assinar agora
             </button>
           </div>
@@ -512,7 +512,7 @@ export const LANDING_V1_HTML = `
               <li><i class="fa-solid fa-check"></i> SLA garantido</li>
               <li><i class="fa-solid fa-check"></i> Gerente de conta dedicado</li>
             </ul>
-            <button class="lp-btn lp-btn-outline lp-plan-btn" onclick="LandingPage.goContact()">
+            <button class="lp-btn lp-btn-outline lp-plan-btn" data-lp-action="contact">
               Falar com consultor
             </button>
           </div>
@@ -531,7 +531,7 @@ export const LANDING_V1_HTML = `
         </div>
         <div class="lp-faq-list lp-fade-up">
           <div class="lp-faq-item">
-            <button class="lp-faq-q" onclick="LandingPage.toggleFaq(this)">
+            <button class="lp-faq-q" data-lp-action="faq">
               <span>Como recebo o dinheiro pago pelos responsáveis na plataforma?</span>
               <i class="fa-solid fa-chevron-down"></i>
             </button>
@@ -540,7 +540,7 @@ export const LANDING_V1_HTML = `
             </div>
           </div>
           <div class="lp-faq-item">
-            <button class="lp-faq-q" onclick="LandingPage.toggleFaq(this)">
+            <button class="lp-faq-q" data-lp-action="faq">
               <span>O GestEscolar fica com alguma parte do dinheiro das mensalidades?</span>
               <i class="fa-solid fa-chevron-down"></i>
             </button>
@@ -549,7 +549,7 @@ export const LANDING_V1_HTML = `
             </div>
           </div>
           <div class="lp-faq-item">
-            <button class="lp-faq-q" onclick="LandingPage.toggleFaq(this)">
+            <button class="lp-faq-q" data-lp-action="faq">
               <span>Quanto tempo leva para o dinheiro cair na minha conta?</span>
               <i class="fa-solid fa-chevron-down"></i>
             </button>
@@ -558,7 +558,7 @@ export const LANDING_V1_HTML = `
             </div>
           </div>
           <div class="lp-faq-item">
-            <button class="lp-faq-q" onclick="LandingPage.toggleFaq(this)">
+            <button class="lp-faq-q" data-lp-action="faq">
               <span>Os dados dos alunos ficam seguros? Outras escolas podem ver meus dados?</span>
               <i class="fa-solid fa-chevron-down"></i>
             </button>
@@ -567,7 +567,7 @@ export const LANDING_V1_HTML = `
             </div>
           </div>
           <div class="lp-faq-item">
-            <button class="lp-faq-q" onclick="LandingPage.toggleFaq(this)">
+            <button class="lp-faq-q" data-lp-action="faq">
               <span>Posso usar no celular? Precisa instalar algum aplicativo?</span>
               <i class="fa-solid fa-chevron-down"></i>
             </button>
@@ -576,7 +576,7 @@ export const LANDING_V1_HTML = `
             </div>
           </div>
           <div class="lp-faq-item">
-            <button class="lp-faq-q" onclick="LandingPage.toggleFaq(this)">
+            <button class="lp-faq-q" data-lp-action="faq">
               <span>Como funciona o período gratuito de 7 dias?</span>
               <i class="fa-solid fa-chevron-down"></i>
             </button>
@@ -593,10 +593,10 @@ export const LANDING_V1_HTML = `
       <h2 class="lp-fade-up">Pronto para <span>transformar</span><br>sua escola?</h2>
       <p class="lp-fade-up">Cadastro gratuito em menos de 2 minutos. Sem cartão de crédito.</p>
       <div class="lp-cta-btns lp-fade-up">
-        <button class="lp-btn lp-btn-accent lp-cta-btn" onclick="LandingPage.goRegister('free')">
+        <button class="lp-btn lp-btn-accent lp-cta-btn" data-lp-action="register" data-lp-plan="free">
           <i class="fa-solid fa-rocket"></i> Começar Grátis Agora
         </button>
-        <button class="lp-btn lp-cta-btn lp-cta-btn-ghost" onclick="LandingPage.goContact()">
+        <button class="lp-btn lp-cta-btn lp-cta-btn-ghost" data-lp-action="contact">
           <i class="fa-solid fa-headset"></i> Falar com Consultor
         </button>
       </div>
@@ -608,16 +608,16 @@ export const LANDING_V1_HTML = `
         <div>
           <div class="lp-footer-brand"><i class="fa-solid fa-graduation-cap"></i> GestEscolar</div>
           <p>Plataforma SaaS de gestão escolar. Simplifique matrículas, financeiro, notas e comunicação da sua instituição.</p>
-          <button type="button" class="lp-superadmin-btn" onclick="LandingPage.openSuperadmin()">
+          <button type="button" class="lp-superadmin-btn" data-lp-action="sa-open">
             <i class="fa-solid fa-user-shield"></i> Superadmin
           </button>
         </div>
         <div>
           <h4>Plataforma</h4>
           <ul>
-            <li><a href="#lp-features" onclick="event.preventDefault();LandingPage.scrollTo('features')">Funcionalidades</a></li>
-            <li><a href="#lp-plans" onclick="event.preventDefault();LandingPage.scrollTo('plans')">Planos</a></li>
-            <li><a href="#lp-coming" onclick="event.preventDefault();LandingPage.scrollTo('coming')">Em breve</a></li>
+            <li><a href="#lp-features" data-lp-action="scroll" data-lp-target="features">Funcionalidades</a></li>
+            <li><a href="#lp-plans" data-lp-action="scroll" data-lp-target="plans">Planos</a></li>
+            <li><a href="#lp-coming" data-lp-action="scroll" data-lp-target="coming">Em breve</a></li>
           </ul>
         </div>
         <div>
@@ -649,7 +649,7 @@ export const LANDING_V1_HTML = `
     </footer>
 
     <!-- Modal de login do Super Admin -->
-    <div class="lp-sa-overlay" id="lpSaOverlay" onclick="if(event.target===this)LandingPage.closeSuperadmin()">
+    <div class="lp-sa-overlay" id="lpSaOverlay" data-lp-action="sa-overlay">
       <div class="lp-sa-modal">
         <h3>Acesso Super Admin</h3>
         <p class="sub">Entre com sua conta de administrador da plataforma.</p>
@@ -658,10 +658,10 @@ export const LANDING_V1_HTML = `
         <input type="email" id="lpSaEmail" placeholder="voce@email.com" autocomplete="username" />
         <label>Senha</label>
         <input type="password" id="lpSaPass" placeholder="Sua senha" autocomplete="current-password"
-          onkeydown="if(event.key==='Enter')LandingPage.superadminLogin()" />
+          data-lp-keydown="sa-submit" />
         <div class="lp-sa-actions">
-          <button type="button" class="lp-sa-cancel" onclick="LandingPage.closeSuperadmin()">Cancelar</button>
-          <button type="button" class="lp-sa-submit" id="lpSaSubmit" onclick="LandingPage.superadminLogin()">Entrar</button>
+          <button type="button" class="lp-sa-cancel" data-lp-action="sa-close">Cancelar</button>
+          <button type="button" class="lp-sa-submit" id="lpSaSubmit" data-lp-action="sa-submit">Entrar</button>
         </div>
       </div>
     </div>
