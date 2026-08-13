@@ -5,6 +5,7 @@ import { useSession, signOut } from '@/lib/authClient';
 import { api } from '@/lib/api';
 import { SubscribePanel } from '@/components/settings/SubscribePanel';
 import type { Role } from '@/config/menu';
+import type { EnabledModules } from '@shared/moduleCatalog';
 
 export interface Me {
   profile_id: string;
@@ -20,6 +21,7 @@ export interface Me {
   logo_url?: string | null;
   legal_name?: string | null;
   cnpj?: string | null;
+  enabled_modules?: EnabledModules | null;
 }
 
 /** Assinatura inativa = past_due/canceled, ou trial já vencido. */

@@ -1,8 +1,10 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Loader2, RefreshCw, Search } from 'lucide-react';
+import { Loader2, RefreshCw, Search, Eye, X } from 'lucide-react';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { StatusBadge } from '@/components/ui/StatusBadge';
+import { Modal } from '@/components/ui/Modal';
 import { saasService, type SaasAuditLogRow, type SaasSchool } from '@/services/saas';
+import { brl } from '@/lib/fees';
 
 type Tone = 'success' | 'warning' | 'danger' | 'primary' | 'neutral';
 
@@ -38,6 +40,42 @@ function fmtDateTime(iso: string): string {
   return new Date(iso).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
 }
 
+// Rótulos amigáveis para os campos comuns em `metadata`. Chaves não mapeadas
+// caem no fallback (chave crua) — não sobrescreve nada.
+const FIELD_LABELS: Record<string, string> = {
+  amount: 'Valor',
+  title: 'Título',
+  description: 'Descrição',
+  scope: 'Escopo',
+  students_count: 'Alunos atingidos',
+  field: 'Campo revelado',
+  entity_name: 'Entidade',
+  justification: 'Justificativa',
+  student: 'Aluno',
+  reason: 'Motivo',
+  days: 'Dias',
+  until: 'Válido até',
+  actor: 'Ator',
+  admin_email: 'E-mail do admin',
+  name: 'Nome',
+  note: 'Observação',
+  student_name: 'Aluno',
+  reference_month: 'Mês de referência',
+  guardian: 'Responsável',
+  billingType: 'Forma de cobrança',
+  provider: 'Provedor',
+};
+
+/** Formata um valor de metadata para exibição legível. `amount` vira BRL,
+ *  strings vazias viram "—", objetos aninhados são serializados em JSON curto. */
+function formatValue(key: string, v: unknown): string {
+  if (v === null || v === undefined || v === '') return '—';
+  if (key === 'amount' && typeof v === 'number') return brl(v);
+  if (typeof v === 'boolean') return v ? 'Sim' : 'Não';
+  if (typeof v === 'object') return JSON.stringify(v, null, 2);
+  return String(v);
+}
+
 export function SaasAuditLogsPage() {
   const [rows, setRows] = useState<SaasAuditLogRow[]>([]);
   const [schools, setSchools] = useState<SaasSchool[]>([]);
@@ -46,6 +84,7 @@ export function SaasAuditLogsPage() {
   const [query, setQuery] = useState('');
   const [action, setAction] = useState('todas');
   const [schoolId, setSchoolId] = useState('');
+  const [detail, setDetail] = useState<SaasAuditLogRow | null>(null);
 
   async function load(forSchoolId = schoolId) {
     setLoading(true);
@@ -132,6 +171,7 @@ export function SaasAuditLogsPage() {
                   <th className="hidden px-5 py-2.5 md:table-cell">Escola</th>
                   <th className="hidden px-5 py-2.5 lg:table-cell">Entidade</th>
                   <th className="hidden px-5 py-2.5 lg:table-cell">IP</th>
+                  <th className="px-5 py-2.5 text-right">Detalhes</th>
                 </tr>
               </thead>
               <tbody>
@@ -145,6 +185,15 @@ export function SaasAuditLogsPage() {
                       <td className="hidden px-5 py-2.5 text-ink-muted md:table-cell">{r.school_name ?? '—'}</td>
                       <td className="hidden px-5 py-2.5 text-ink-muted lg:table-cell">{r.entity_type ?? '—'}</td>
                       <td className="hidden px-5 py-2.5 text-ink-subtle lg:table-cell">{r.ip_address ?? '—'}</td>
+                      <td className="px-5 py-2.5 text-right">
+                        <button
+                          type="button"
+                          className="inline-flex items-center gap-1 rounded-lg border border-border px-2.5 py-1 text-xs font-medium text-primary hover:bg-primary-soft"
+                          onClick={() => setDetail(r)}
+                        >
+                          <Eye size={12} /> Ver
+                        </button>
+                      </td>
                     </tr>
                   );
                 })}
@@ -153,6 +202,78 @@ export function SaasAuditLogsPage() {
           </div>
         )}
       </div>
+
+      {/* Modal — detalhes completos do log */}
+      <Modal
+        open={!!detail}
+        title={detail ? label(detail.action).label : ''}
+        onClose={() => setDetail(null)}
+        footer={<button className="btn-outline" onClick={() => setDetail(null)}><X size={14} /> Fechar</button>}
+      >
+        {detail && (() => {
+          const a = label(detail.action);
+          const metaEntries = detail.metadata ? Object.entries(detail.metadata) : [];
+          return (
+            <div className="space-y-4 text-sm">
+              {/* Cabeçalho: ator + timestamp */}
+              <div className="rounded-xl border border-border p-3">
+                <div className="mb-2 flex flex-wrap items-center gap-2">
+                  <StatusBadge tone={a.tone}>{a.label}</StatusBadge>
+                  <span className="text-xs text-ink-subtle">#{detail.id.slice(0, 8)}</span>
+                </div>
+                <div className="grid grid-cols-1 gap-1 text-xs sm:grid-cols-2">
+                  <p><span className="text-ink-muted">Quando:</span> <span className="font-medium text-ink">{fmtDateTime(detail.created_at)}</span></p>
+                  <p><span className="text-ink-muted">Ator:</span> <span className="font-medium text-ink">{detail.actor ?? '—'}</span></p>
+                  <p><span className="text-ink-muted">Escola:</span> <span className="font-medium text-ink">{detail.school_name ?? '—'}</span></p>
+                  <p><span className="text-ink-muted">IP:</span> <span className="font-mono text-ink">{detail.ip_address ?? '—'}</span></p>
+                  <p><span className="text-ink-muted">Entidade:</span> <span className="font-medium text-ink">{detail.entity_type ?? '—'}</span></p>
+                  {detail.entity_id && (
+                    <p><span className="text-ink-muted">ID:</span> <span className="font-mono text-[11px] text-ink">{detail.entity_id}</span></p>
+                  )}
+                </div>
+              </div>
+
+              {/* Metadados — legíveis */}
+              <div>
+                <p className="mb-2 text-xs font-bold uppercase tracking-wide text-ink-subtle">Detalhes da ação</p>
+                {metaEntries.length === 0 ? (
+                  <p className="rounded-xl border border-border bg-canvas px-3 py-3 text-xs text-ink-subtle">Sem detalhes adicionais.</p>
+                ) : (
+                  <div className="divide-y divide-border rounded-xl border border-border">
+                    {metaEntries.map(([k, v]) => {
+                      const isMultiline = typeof v === 'object' && v !== null;
+                      const label = FIELD_LABELS[k] ?? k;
+                      const value = formatValue(k, v);
+                      return (
+                        <div key={k} className="flex flex-col gap-1 px-3 py-2 sm:flex-row sm:justify-between sm:gap-3">
+                          <span className="shrink-0 text-xs font-semibold text-ink-muted">{label}</span>
+                          {isMultiline ? (
+                            <pre className="max-h-40 overflow-auto whitespace-pre-wrap rounded bg-canvas px-2 py-1 text-[11px] text-ink">{value}</pre>
+                          ) : (
+                            <span className="break-all text-right text-sm font-medium text-ink">{value}</span>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+
+              {/* Raw JSON — para casos em que o rótulo não bate */}
+              {detail.metadata && (
+                <details>
+                  <summary className="cursor-pointer text-xs font-semibold text-ink-muted hover:text-ink">
+                    Ver JSON bruto
+                  </summary>
+                  <pre className="mt-2 max-h-52 overflow-auto rounded-xl bg-canvas p-3 text-[11px] text-ink">
+                    {JSON.stringify(detail.metadata, null, 2)}
+                  </pre>
+                </details>
+              )}
+            </div>
+          );
+        })()}
+      </Modal>
     </>
   );
 }

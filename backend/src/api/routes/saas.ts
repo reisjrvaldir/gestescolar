@@ -634,6 +634,83 @@ saasRouter.get('/tickets', async (req, res) => {
   res.json({ ok: true, data });
 });
 
+// GET /api/saas/tickets/:id — detalhes de um ticket + histórico de comentários.
+saasRouter.get('/tickets/:id', async (req, res) => {
+  const data = await withTenant(req.ctx!, async (c) => {
+    const ticket = await c.query(
+      `select t.id, t.title, t.description, t.status, t.priority, t.category,
+              coalesce(t.attachments,'[]'::jsonb) as attachments,
+              t.created_at, t.updated_at,
+              s.name as school_name, op.name as opened_by_name
+         from public.support_tickets t
+         left join public.schools s on s.id = t.school_id
+         left join public.profiles op on op.id = t.opened_by
+        where t.id=$1`,
+      [req.params.id],
+    );
+    if (ticket.rows.length === 0) return null;
+    const comments = await c.query(
+      `select tc.id, tc.message, tc.created_at,
+              p.name as user_name, p.role as user_role
+         from public.ticket_comments tc
+         left join public.profiles p on p.id = tc.user_id
+        where tc.ticket_id=$1
+        order by tc.created_at asc`,
+      [req.params.id],
+    );
+    return { ...ticket.rows[0], comments: comments.rows };
+  });
+  if (!data) return res.status(404).json({ code: 'not_found' });
+  res.json({ ok: true, data });
+});
+
+// PATCH /api/saas/tickets/:id/status — muda status pelo suporte.
+// Estados permitidos: 'in_progress' | 'resolved' | 'closed' | 'open' (reabrir).
+saasRouter.patch('/tickets/:id/status', async (req, res) => {
+  const allowed = ['open', 'in_progress', 'resolved', 'closed'];
+  const status = String(req.body?.status ?? '');
+  if (!allowed.includes(status)) {
+    return res.status(400).json({ code: 'validation', message: 'Status inválido.' });
+  }
+  const updated = await withTenant(req.ctx!, async (c) => {
+    const { rows } = await c.query(
+      `update public.support_tickets set status=$1, updated_at=now()
+        where id=$2
+        returning id, status, school_id`,
+      [status, req.params.id],
+    );
+    return rows[0] ?? null;
+  });
+  if (!updated) return res.status(404).json({ code: 'not_found' });
+  res.json({ ok: true, data: updated });
+});
+
+// POST /api/saas/tickets/:id/reply — comentário do suporte (superadmin).
+saasRouter.post('/tickets/:id/reply', async (req, res) => {
+  const message = String(req.body?.message ?? '').trim();
+  if (!message) return res.status(400).json({ code: 'validation', message: 'Mensagem obrigatória.' });
+  const created = await withTenant(req.ctx!, async (c) => {
+    const owns = await c.query(`select 1 from public.support_tickets where id=$1 limit 1`, [req.params.id]);
+    if (owns.rows.length === 0) return null;
+    // Ao responder, se ainda estava 'open', avança para 'in_progress'.
+    await c.query(
+      `update public.support_tickets
+          set status = case when status='open' then 'in_progress' else status end,
+              updated_at = now()
+        where id=$1`,
+      [req.params.id],
+    );
+    const { rows } = await c.query(
+      `insert into public.ticket_comments (ticket_id, user_id, message)
+       values ($1,$2,$3) returning id, message, created_at`,
+      [req.params.id, req.ctx!.profileId, message],
+    );
+    return rows[0];
+  });
+  if (!created) return res.status(404).json({ code: 'not_found' });
+  res.status(201).json({ ok: true, data: created });
+});
+
 // GET /api/saas/expirations — escolas com trial vencendo (30d) ou já em atraso.
 saasRouter.get('/expirations', async (req, res) => {
   const data = await withTenant(req.ctx!, async (c) => {

@@ -104,12 +104,17 @@ attendanceRouter.get('/top-absences', async (req, res) => {
   const month = req.query.month ? Number(req.query.month) : now.getMonth() + 1;
   const data = await withTenant(req.ctx!, async (c) => {
     const { rows } = await c.query(
+      // Ausência = qualquer status que não seja presença: falta simples,
+      // justificada, com atestado em análise (attested) ou já abonada por
+      // atestado aprovado (excused). Antes contava apenas absent+attested,
+      // deixando de fora justificadas — e como muitas escolas registram a
+      // maioria das faltas como "justificada", o card aparecia zerado.
       `select a.student_id, s.name as student_name, cl.name as class_name, count(*)::int as absences
          from public.attendance a
          join public.students s on s.id = a.student_id
          left join public.classes cl on cl.id = a.class_id
         where a.school_id = $1
-          and a.status in ('absent', 'attested')
+          and a.status in ('absent', 'justified', 'attested', 'excused')
           and ($2::uuid is null or a.class_id = $2)
           and extract(year  from a.date) = $3
           and extract(month from a.date) = $4
@@ -139,6 +144,35 @@ attendanceRouter.get('/school-events', async (req, res) => {
           and (date_end is null or date_end >= $3)
         order by date_start`,
       [req.ctx!.schoolId, lastDay, firstDay],
+    );
+    return rows;
+  });
+  res.json({ ok: true, data });
+});
+
+// GET /attendance/attestations → histórico completo de atestados da escola
+// (aprovados + rejeitados), ordenado do mais recente. A fila em análise já
+// vive em /pending-approvals — aqui é o histórico do que já foi decidido.
+attendanceRouter.get('/attestations', requireRole('school_admin', 'superadmin'), async (req, res) => {
+  const status = String(req.query.status ?? 'reviewed'); // 'reviewed' | 'all' | 'approved' | 'rejected'
+  const data = await withTenant(req.ctx!, async (c) => {
+    let where = `att.school_id = $1`;
+    if (status === 'approved' || status === 'rejected') where += ` and att.status = '${status}'`;
+    else if (status === 'reviewed') where += ` and att.status in ('approved','rejected')`;
+    // 'all' → sem filtro adicional
+    const { rows } = await c.query(
+      `select att.id, att.student_id, s.name as student_name, att.class_id, cl.name as class_name,
+              att.date::text as date, att.filename, att.file_size, att.uploaded_at,
+              att.uploaded_by_guardian, att.status, att.reviewed_at, att.review_note,
+              rp.name as reviewed_by_name
+         from public.attendance_attestations att
+         join public.students s on s.id = att.student_id
+         left join public.classes cl on cl.id = att.class_id
+         left join public.profiles rp on rp.id = att.reviewed_by
+        where ${where}
+        order by coalesce(att.reviewed_at, att.uploaded_at) desc
+        limit 200`,
+      [req.ctx!.schoolId],
     );
     return rows;
   });

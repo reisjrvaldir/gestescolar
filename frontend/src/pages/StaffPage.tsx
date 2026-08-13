@@ -16,6 +16,7 @@ import { STAFF_ROLE_LABELS, CONTRACT_TYPE_LABELS, type Staff, type StaffRole } f
 import { useMe } from '@/auth/AuthGate';
 import { staffCreateSchema } from '@/lib/schemas';
 import { applyServerErrors } from '@/hooks/useFormErrors';
+import { SUBJECTS, SCHOOL_YEARS } from '@shared/teachingCatalog';
 
 const DEFAULT_STAFF_PASSWORD = 'Escola@2026';
 
@@ -91,10 +92,31 @@ function defaultSlots(): SlotState[] {
   }));
 }
 
-interface FormFields extends NewStaff {}
+// Alinhado com o output do zod (mesmos campos obrigatórios).
+// Estende com os campos auxiliares de UI (matéria e ano) que somem no submit.
+interface FormFields extends NewStaff {
+  admission_date: string;
+  contract_type: NonNullable<NewStaff['contract_type']>;
+  weekly_hours: number;
+  /** UI apenas — combinados em `subject_teaches` no submit. */
+  subject_teaches_subject?: string;
+  subject_teaches_year?: string;
+}
 
-/** Limpa valor mascarado antes de pré-popular formulário de edição. */
-const unmasked = (v?: string) => (v?.includes('*') ? '' : (v ?? ''));
+/** Divide o subject_teaches salvo ("Matemática — 5º ano — Fundamental") de
+ *  volta em matéria + ano, para pré-popular os dois selects na edição. */
+function splitSubjectTeaches(v?: string | null): { subject: string; year: string } {
+  if (!v) return { subject: '', year: '' };
+  const parts = v.split(' — ').map((p) => p.trim());
+  // Se o primeiro pedaço bate com uma matéria conhecida, resto é ano.
+  if (parts.length >= 2 && SUBJECTS.includes(parts[0])) {
+    return { subject: parts[0], year: parts.slice(1).join(' — ') };
+  }
+  // Só ano/série (educação infantil, por exemplo)
+  if (SCHOOL_YEARS.includes(v)) return { subject: '', year: v };
+  // Fallback: primeiro pedaço vira matéria, resto vira ano.
+  return { subject: parts[0] ?? '', year: parts.slice(1).join(' — ') };
+}
 
 export function StaffPage() {
   const me = useMe();
@@ -129,6 +151,7 @@ export function StaffPage() {
 
   const { register, handleSubmit, reset, watch, setError: setFieldError, formState: { errors } } = useForm<FormFields>({ resolver: zodResolver(staffCreateSchema) });
   const watchRole = watch('role_type');
+  const [loadingEdit, setLoadingEdit] = useState(false);
 
   useEffect(() => { load(); }, []);
 
@@ -166,27 +189,43 @@ export function StaffPage() {
     setEditing(null);
     setSlots(defaultSlots());
     setSchedError(null);
-    reset({ name: '', cpf: '', email: '', phone: '', role_type: 'teacher', subject_teaches: '',
-      position: '', admission_date: '', contract_type: undefined, weekly_hours: undefined, timeclock_enabled: true });
+    reset({ name: '', cpf: '', email: '', phone: '', role_type: 'teacher',
+      subject_teaches: '', subject_teaches_subject: '', subject_teaches_year: '',
+      position: '', admission_date: '', contract_type: undefined as unknown as FormFields['contract_type'],
+      weekly_hours: undefined as unknown as number, timeclock_enabled: true });
     setOpen(true);
   }
 
-  function openEdit(s: Staff) {
+  async function openEdit(s: Staff) {
     setEditing(s);
-    reset({
-      name: s.name,
-      cpf: unmasked(s.cpf),
-      email: unmasked(s.email),
-      phone: unmasked(s.phone),
-      role_type: (s.role_type ?? s.role) as FormFields['role_type'],
-      subject_teaches: s.subject_teaches ?? '',
-      position: s.position ?? '',
-      admission_date: s.admission_date ? s.admission_date.slice(0, 10) : '',
-      contract_type: s.contract_type,
-      weekly_hours: s.weekly_hours,
-      timeclock_enabled: s.timeclock_enabled ?? true,
-    });
     setOpen(true);
+    setLoadingEdit(true);
+    setError(null);
+    try {
+      // Busca dados completos (sem máscara) para não obrigar o gestor a redigitar
+      // CPF/e-mail/telefone só para ajustar cargo ou carga horária.
+      const full = await staffService.getFull(s.id);
+      const split = splitSubjectTeaches(full.subject_teaches);
+      reset({
+        name: full.name,
+        cpf: full.cpf ?? '',
+        email: full.email ?? '',
+        phone: full.phone ?? '',
+        role_type: (full.role_type ?? full.role) as FormFields['role_type'],
+        subject_teaches: full.subject_teaches ?? '',
+        subject_teaches_subject: split.subject,
+        subject_teaches_year: split.year,
+        position: full.position ?? '',
+        admission_date: full.admission_date ? full.admission_date.slice(0, 10) : '',
+        contract_type: (full.contract_type ?? undefined) as FormFields['contract_type'],
+        weekly_hours: (full.weekly_hours ?? undefined) as unknown as number,
+        timeclock_enabled: full.timeclock_enabled ?? true,
+      });
+    } catch (e: any) {
+      setError(e?.message ?? 'Não foi possível carregar os dados do funcionário.');
+    } finally {
+      setLoadingEdit(false);
+    }
   }
 
   function closeModal() { reset(); setEditing(null); setSlots(defaultSlots()); setSchedError(null); setOpen(false); }
@@ -220,14 +259,28 @@ export function StaffPage() {
     try {
       const hours = data.weekly_hours != null && !Number.isNaN(Number(data.weekly_hours))
         ? Number(data.weekly_hours) : undefined;
+      // Junta matéria + ano em uma única string para o backend.
+      const subjectTeaches = data.role_type === 'teacher'
+        ? [data.subject_teaches_subject, data.subject_teaches_year]
+            .filter((v) => v && v.trim())
+            .join(' — ') || undefined
+        : undefined;
+      // Professor: cargo é sempre "Professor(a)" — o campo é oculto para não
+      // criar redundância com o perfil. Demais perfis mantêm o cargo digitável.
+      const position = data.role_type === 'teacher'
+        ? 'Professor(a)'
+        : (data.position || undefined);
       const payload = {
         ...data,
-        subject_teaches: data.subject_teaches || undefined,
-        position: data.position || undefined,
+        subject_teaches: subjectTeaches,
+        position,
         admission_date: data.admission_date || undefined,
         contract_type: data.contract_type || undefined,
         weekly_hours: hours,
       };
+      // Remove os campos auxiliares antes de mandar pro backend.
+      delete (payload as Partial<FormFields>).subject_teaches_subject;
+      delete (payload as Partial<FormFields>).subject_teaches_year;
       if (editing) {
         await staffService.update(editing.id, payload);
       } else {
@@ -609,6 +662,11 @@ export function StaffPage() {
         }
       >
         <form id="staff-form" className="space-y-4" onSubmit={handleSubmit(onSubmit)}>
+          {loadingEdit && (
+            <div className="flex items-center gap-2 rounded-lg bg-primary-soft px-3 py-2 text-xs text-primary">
+              <Loader2 size={14} className="animate-spin" /> Carregando dados do funcionário…
+            </div>
+          )}
           <div>
             <label htmlFor={fId('name')} className="label">Nome completo *</label>
             <input id={fId('name')} className="input" autoComplete="name" maxLength={120} {...register('name')} />
@@ -645,10 +703,23 @@ export function StaffPage() {
           </div>
           {watchRole === 'teacher' && (
             <div>
-              <label htmlFor={fId('subject')} className="label">Matéria / Ano que leciona</label>
-              <input id={fId('subject')} className="input" placeholder="Ex.: Matemática / 5º ano, ou Maternal" {...register('subject_teaches')} />
+              <label className="label">Matéria e ano que leciona</label>
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <div>
+                  <select id={fId('subject')} className="input" {...register('subject_teaches_subject')}>
+                    <option value="">— Matéria —</option>
+                    {SUBJECTS.map((s) => <option key={s} value={s}>{s}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <select id={fId('year')} className="input" {...register('subject_teaches_year')}>
+                    <option value="">— Ano / Série —</option>
+                    {SCHOOL_YEARS.map((y) => <option key={y} value={y}>{y}</option>)}
+                  </select>
+                </div>
+              </div>
               <p className="mt-1 text-xs text-ink-muted">
-                Para escolas infantis use o ano (ex.: "Maternal", "Pré I"). Para fundamental/médio use a matéria.
+                Educação infantil: escolha apenas o ano. Fundamental/médio: matéria + ano.
               </p>
             </div>
           )}
@@ -656,27 +727,32 @@ export function StaffPage() {
           <fieldset className="border-t border-border pt-4">
             <legend className="mb-3 text-xs font-bold uppercase tracking-wide text-ink-subtle">Dados trabalhistas</legend>
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              {watchRole !== 'teacher' && (
+                <div>
+                  <label htmlFor={fId('position')} className="label">Cargo</label>
+                  <input id={fId('position')} className="input" placeholder="Ex.: Analista adm." {...register('position')} />
+                </div>
+              )}
               <div>
-                <label htmlFor={fId('position')} className="label">Cargo</label>
-                <input id={fId('position')} className="input" placeholder="Ex.: Professor(a) titular" {...register('position')} />
+                <label htmlFor={fId('admission')} className="label">Data de admissão *</label>
+                <input id={fId('admission')} type="date" className="input" aria-invalid={!!errors.admission_date} {...register('admission_date')} />
+                {errors.admission_date && <p className="mt-1 text-xs text-danger">{errors.admission_date.message}</p>}
               </div>
               <div>
-                <label htmlFor={fId('admission')} className="label">Data de admissão</label>
-                <input id={fId('admission')} type="date" className="input" {...register('admission_date')} />
-              </div>
-              <div>
-                <label htmlFor={fId('contract')} className="label">Tipo de contrato</label>
-                <select id={fId('contract')} className="input" {...register('contract_type')}>
-                  <option value="">—</option>
+                <label htmlFor={fId('contract')} className="label">Tipo de contrato *</label>
+                <select id={fId('contract')} className="input" aria-invalid={!!errors.contract_type} {...register('contract_type')}>
+                  <option value="">Selecione…</option>
                   <option value="clt">CLT</option>
                   <option value="pj">PJ</option>
                   <option value="estagio">Estágio</option>
                   <option value="temporario">Temporário</option>
                 </select>
+                {errors.contract_type && <p className="mt-1 text-xs text-danger">{errors.contract_type.message}</p>}
               </div>
               <div>
-                <label htmlFor={fId('hours')} className="label">Carga horária semanal (h)</label>
-                <input id={fId('hours')} type="number" step="0.5" min="0" max="80" className="input" placeholder="Ex.: 40" {...register('weekly_hours', { valueAsNumber: true })} />
+                <label htmlFor={fId('hours')} className="label">Carga horária semanal (h) *</label>
+                <input id={fId('hours')} type="number" step="0.5" min="0" max="80" className="input" placeholder="Ex.: 40" aria-invalid={!!errors.weekly_hours} {...register('weekly_hours', { valueAsNumber: true })} />
+                {errors.weekly_hours && <p className="mt-1 text-xs text-danger">{errors.weekly_hours.message}</p>}
               </div>
             </div>
             <label className="mt-3 flex items-center gap-2 text-sm text-ink">

@@ -222,12 +222,7 @@ export function LoginPage() {
                     />
                   </div>
                   <div>
-                    <div className="flex items-baseline justify-between">
-                      <label htmlFor={loginPasswordId} className="label">Senha</label>
-                      <Link to="/forgot-password" className="text-xs font-medium text-primary hover:underline">
-                        Esqueci minha senha
-                      </Link>
-                    </div>
+                    <label htmlFor={loginPasswordId} className="label">Senha</label>
                     <PasswordInput
                       id={loginPasswordId}
                       autoComplete="current-password"
@@ -244,6 +239,11 @@ export function LoginPage() {
                   <button className="btn-primary w-full justify-center py-3" disabled={loading}>
                     {loading && <Loader2 size={16} className="animate-spin" aria-hidden="true" />} Entrar na conta
                   </button>
+                  <div className="text-center">
+                    <Link to="/forgot-password" className="text-xs font-medium text-primary hover:underline">
+                      Esqueci minha senha
+                    </Link>
+                  </div>
                 </form>
 
               {/* Sem auto-cadastro: quem abre escola é a equipe (ver LandingPage). */}

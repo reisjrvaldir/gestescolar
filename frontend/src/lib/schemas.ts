@@ -55,6 +55,13 @@ export const studentFormSchema = z.object({
   discount_percentage:       z.number().min(0).max(100).optional(),
   enrollment_payment_method: z.enum(['cash', 'pix', 'card']).optional().or(z.literal('')),
   first_due:                 z.enum(['30', '05', '10', '15']).optional().or(z.literal('')),
+  address_zip:               z.string().max(9).optional(),
+  address_street:            z.string().max(200).optional(),
+  address_number:            z.string().max(20).optional(),
+  address_complement:        z.string().max(100).optional(),
+  address_neighborhood:      z.string().max(100).optional(),
+  address_city:              z.string().max(100).optional(),
+  address_state:             z.string().max(2).optional(),
   // responsável
   guardian_name:   z.string({ required_error: 'Nome do responsável obrigatório' }).min(2, 'Nome do responsável obrigatório').max(120),
   guardian_email:  emailSchema,

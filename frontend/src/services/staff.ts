@@ -42,6 +42,11 @@ export const staffService = {
     const r = await api.get<{ ok: boolean; data: Staff[] }>('/staff');
     return r.data;
   },
+  /** Dados completos (sem máscara) para pré-popular o formulário de edição. */
+  async getFull(id: string): Promise<Staff> {
+    const r = await api.get<{ ok: boolean; data: Staff }>(`/staff/${id}/full`);
+    return r.data;
+  },
   async create(input: NewStaff): Promise<CreatedStaff> {
     const r = await api.post<{ ok: boolean; data: CreatedStaff }>('/staff', input);
     return r.data;

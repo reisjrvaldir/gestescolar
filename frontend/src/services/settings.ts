@@ -1,4 +1,5 @@
 import { api } from '@/lib/api';
+import type { EnabledModules } from '@shared/moduleCatalog';
 
 export interface SchoolSettings {
   id: string;
@@ -33,5 +34,13 @@ export const settingsService = {
   },
   async update(data: UpdateSchoolSettings): Promise<void> {
     await api.put('/settings', data);
+  },
+  async getModules(): Promise<EnabledModules> {
+    const r = await api.get<{ ok: boolean; data: EnabledModules }>('/settings/modules');
+    return r.data ?? {};
+  },
+  async updateModules(enabled_modules: EnabledModules): Promise<EnabledModules> {
+    const r = await api.put<{ ok: boolean; data: EnabledModules }>('/settings/modules', { enabled_modules });
+    return r.data ?? {};
   },
 };

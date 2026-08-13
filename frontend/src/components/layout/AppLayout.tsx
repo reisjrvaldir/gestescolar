@@ -37,7 +37,12 @@ export function AppLayout() {
     <UnreadMessagesProvider>
       <NotificationsProvider>
         <div className="flex h-screen overflow-hidden bg-canvas">
-          <Sidebar role={role} open={sidebarOpen} onClose={() => setSidebarOpen(false)} />
+          <Sidebar
+            role={role}
+            enabledModules={me?.enabled_modules ?? null}
+            open={sidebarOpen}
+            onClose={() => setSidebarOpen(false)}
+          />
           <div className="flex flex-1 flex-col overflow-hidden">
             <Topbar
               userName={me?.name ?? '—'}

@@ -25,6 +25,9 @@ export interface MyInvoice extends Invoice {
   pix_copy_paste?: string;
   charge_title?: string;
   charge_description?: string;
+  guardian_response?: 'declined' | 'disputed' | null;
+  guardian_response_note?: string | null;
+  guardian_response_at?: string | null;
 }
 
 export interface ChargeResult {
@@ -67,6 +70,13 @@ export const invoicesService = {
       `/invoices/${id}/send-to-guardian`,
     );
     return res.data;
+  },
+
+  /** Resposta do responsável a uma cobrança avulsa em aberto:
+   *  - 'decline'  → não vai participar; cancela a fatura.
+   *  - 'dispute'  → quer mais informações; fatura fica pendente + sinalizada. */
+  async respondToAvulsa(id: string, action: 'decline' | 'dispute', note?: string): Promise<void> {
+    await api.post(`/invoices/${id}/guardian-response`, { action, note });
   },
 
   /** Registra pagamento recebido offline (dinheiro/na escola). Não entra no saldo sacável. */

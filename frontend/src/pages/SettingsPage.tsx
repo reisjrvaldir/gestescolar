@@ -7,6 +7,7 @@ import { PageHero } from '@/components/ui/PageHero';
 import { StatusBadge } from '@/components/ui/StatusBadge';
 import { settingsService, type SchoolSettings } from '@/services/settings';
 import { PlansManager } from '@/components/settings/PlansManager';
+import { ModulesManager } from '@/components/settings/ModulesManager';
 import { SubscribePanel } from '@/components/settings/SubscribePanel';
 import { PixPayoutCard } from '@/components/settings/PixPayoutCard';
 import { SubaccountForm } from '@/components/settings/SubaccountForm';
@@ -164,6 +165,10 @@ export function SettingsPage() {
 
       <div className="mb-6">
         <PlansManager />
+      </div>
+
+      <div className="mb-6">
+        <ModulesManager />
       </div>
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">

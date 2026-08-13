@@ -86,6 +86,31 @@ calendarRouter.post('/', requireRole('school_admin', 'superadmin'), async (req, 
   res.status(201).json({ ok: true, data: created });
 });
 
+calendarRouter.put('/:id', requireRole('school_admin', 'superadmin'), async (req, res) => {
+  const p = eventSchema.safeParse(req.body);
+  if (!p.success) return res.status(400).json({ code: 'validation', message: p.error.issues[0]?.message });
+  const updated = await withTenant(req.ctx!, async (c) => {
+    const { rows } = await c.query(
+      `update public.school_calendar set
+          title=$1, description=$2, date_start=$3, date_end=$4,
+          event_type=$5, start_time=$6, end_time=$7, class_id=$8
+        where id=$9 and school_id=$10
+        returning id, title, to_char(date_start,'YYYY-MM-DD') as date_start,
+                  to_char(date_end,'YYYY-MM-DD') as date_end,
+                  event_type, class_id,
+                  to_char(start_time,'HH24:MI') as start_time,
+                  to_char(end_time,'HH24:MI') as end_time`,
+      [p.data.title, p.data.description ?? null,
+       p.data.date_start, p.data.date_end ?? null, p.data.event_type ?? 'event',
+       p.data.start_time ?? null, p.data.end_time ?? null, p.data.class_id ?? null,
+       req.params.id, req.ctx!.schoolId],
+    );
+    return rows[0];
+  });
+  if (!updated) return res.status(404).json({ code: 'not_found' });
+  res.json({ ok: true, data: updated });
+});
+
 calendarRouter.delete('/:id', requireRole('school_admin', 'superadmin'), async (req, res) => {
   await withTenant(req.ctx!, async (c) => {
     await c.query(

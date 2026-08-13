@@ -198,6 +198,20 @@ export interface SaasTicketRow {
   opened_by_name: string | null;
 }
 
+export interface SaasTicketComment {
+  id: string;
+  message: string;
+  created_at: string;
+  user_name: string | null;
+  user_role: string | null;
+}
+
+export interface SaasTicketDetail extends SaasTicketRow {
+  description: string | null;
+  attachments: string[];
+  comments: SaasTicketComment[];
+}
+
 export const saasService = {
   async dashboard(): Promise<SaasDashboard> {
     const r = await api.get<{ ok: boolean; data: SaasDashboard }>('/saas/dashboard');
@@ -242,6 +256,16 @@ export const saasService = {
   async tickets(): Promise<SaasTicketRow[]> {
     const r = await api.get<{ ok: boolean; data: SaasTicketRow[] }>('/saas/tickets');
     return r.data;
+  },
+  async ticket(id: string): Promise<SaasTicketDetail> {
+    const r = await api.get<{ ok: boolean; data: SaasTicketDetail }>(`/saas/tickets/${id}`);
+    return r.data;
+  },
+  async setTicketStatus(id: string, status: 'open' | 'in_progress' | 'resolved' | 'closed'): Promise<void> {
+    await api.patch(`/saas/tickets/${id}/status`, { status });
+  },
+  async replyTicket(id: string, message: string): Promise<void> {
+    await api.post(`/saas/tickets/${id}/reply`, { message });
   },
   async revenue(): Promise<SaasRevenue> {
     const r = await api.get<{ ok: boolean; data: SaasRevenue }>('/saas/revenue');

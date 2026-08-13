@@ -5,6 +5,7 @@ import { requireAuth, requireRole } from '../../middleware/auth';
 import { signUpGuardian } from '../../lib/authSignup';
 import { DEFAULT_GUARDIAN_PASSWORD, toStoredPassword } from '../../lib/validation';
 import { validateBody } from '../../lib/validateBody';
+import { audit } from '../../lib/audit';
 import { staffCreateSchema, staffUpdateSchema } from '../../../../shared/schemas';
 
 /**
@@ -45,6 +46,35 @@ staffRouter.get('/', requireRole('school_admin', 'financial', 'teacher', 'supera
     );
     return rows;
   });
+  res.json({ ok: true, data });
+});
+
+// GET /:id/full — dados completos para pré-popular o formulário de edição.
+// Restrito a school_admin/superadmin e registrado em audit_logs. A listagem
+// pública já mascara CPF/e-mail/telefone; este endpoint devolve os valores
+// reais especificamente para o formulário — evita que o gestor precise
+// redigitar tudo do zero ao apenas ajustar o cargo ou a carga horária.
+staffRouter.get('/:id/full', requireRole('school_admin', 'superadmin'), async (req, res) => {
+  const data = await withTenant(req.ctx!, async (c) => {
+    const { rows } = await c.query(
+      `select id, name, email, phone, cpf, registration_number, role_type, subject_teaches,
+              position, admission_date::text as admission_date, contract_type,
+              weekly_hours::float8 as weekly_hours,
+              coalesce(timeclock_enabled, true) as timeclock_enabled,
+              status, user_id
+         from public.teachers
+        where id=$1 and school_id=$2 limit 1`,
+      [req.params.id, req.ctx!.schoolId],
+    );
+    if (rows.length === 0) return null;
+    await audit(c, {
+      schoolId: req.ctx!.schoolId!, userId: req.ctx!.profileId,
+      action: 'STAFF_EDIT_OPENED', entityType: 'staff', entityId: req.params.id,
+      metadata: { name: rows[0].name },
+    });
+    return rows[0];
+  });
+  if (!data) return res.status(404).json({ code: 'not_found' });
   res.json({ ok: true, data });
 });
 

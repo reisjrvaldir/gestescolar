@@ -5,6 +5,7 @@ import { signUpGuardian } from '../../lib/authSignup';
 import { DEFAULT_GUARDIAN_PASSWORD, toStoredPassword } from '../../lib/validation';
 import { insertMonthlyInvoices, insertEnrollmentInvoice, generatePixForNewInvoices, type FirstDueRule } from '../../lib/billing/studentInvoices';
 import { validateBody } from '../../lib/validateBody';
+import { audit } from '../../lib/audit';
 import { studentCreateSchema, studentUpdateSchema } from '../../../../shared/schemas';
 
 export const studentsRouter = Router();
@@ -49,6 +50,37 @@ studentsRouter.get('/', requireRole('school_admin', 'financial', 'teacher', 'sup
     );
     return rows;
   });
+  res.json({ ok: true, data });
+});
+
+// GET /:id/full — dados completos para pré-popular o formulário de edição
+// do aluno (inclui responsável). Restrito e auditado — a listagem pública
+// mascara CPF/e-mail/telefone; este devolve valores reais para não obrigar
+// o gestor a redigitar tudo só para alterar o plano ou a turma.
+studentsRouter.get('/:id/full', requireRole('school_admin', 'superadmin'), async (req, res) => {
+  const data = await withTenant(req.ctx!, async (c) => {
+    const { rows } = await c.query(
+      `select s.id, s.name, s.cpf, s.rg, s.birth_date::text as birth_date, s.blood_type,
+              s.naturality, s.photo_url, s.father_name, s.mother_name, s.class_id, s.plan_id,
+              s.registration_number, s.monthly_fee::float8 as monthly_fee, s.status,
+              s.address_zip, s.address_street, s.address_number, s.address_complement,
+              s.address_neighborhood, s.address_city, s.address_state,
+              g.id as guardian_id, g.name as guardian_name, g.email as guardian_email,
+              g.cpf as guardian_cpf, g.phone as guardian_phone, g.phone2 as guardian_phone2
+         from public.students s
+         left join public.guardians g on g.id = s.guardian_id
+        where s.id=$1 and s.school_id=$2 limit 1`,
+      [req.params.id, req.ctx!.schoolId],
+    );
+    if (rows.length === 0) return null;
+    await audit(c, {
+      schoolId: req.ctx!.schoolId!, userId: req.ctx!.profileId,
+      action: 'STUDENT_EDIT_OPENED', entityType: 'student', entityId: req.params.id,
+      metadata: { name: rows[0].name },
+    });
+    return rows[0];
+  });
+  if (!data) return res.status(404).json({ code: 'not_found' });
   res.json({ ok: true, data });
 });
 
@@ -133,13 +165,19 @@ studentsRouter.post('/', requireRole('school_admin', 'superadmin'), validateBody
         `insert into public.students
            (school_id, name, cpf, rg, birth_date, blood_type, naturality, photo_url,
             registration_number, class_id, guardian_id,
-            father_name, mother_name, monthly_fee, plan_id)
-         values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)
+            father_name, mother_name, monthly_fee, plan_id,
+            address_zip, address_street, address_number, address_complement,
+            address_neighborhood, address_city, address_state)
+         values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,
+                 $16,$17,$18,$19,$20,$21,$22)
          returning id, name, registration_number, status, monthly_fee`,
         [req.ctx!.schoolId, s.name, s.cpf, s.rg ?? null, s.birth_date,
          s.blood_type ?? null, s.naturality ?? null, s.photo_url ?? null,
          matricula, s.class_id ?? null, guardianId,
-         s.father_name, s.mother_name, monthlyFee, s.plan_id],
+         s.father_name, s.mother_name, monthlyFee, s.plan_id,
+         s.address_zip ?? null, s.address_street ?? null, s.address_number ?? null,
+         s.address_complement ?? null, s.address_neighborhood ?? null,
+         s.address_city ?? null, s.address_state ?? null],
       );
       const student = studentRow.rows[0];
 

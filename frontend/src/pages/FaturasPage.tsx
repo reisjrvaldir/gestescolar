@@ -1,8 +1,9 @@
 import { useEffect, useState, useMemo } from 'react';
 import {
   Loader2, Wallet, Copy, Check, QrCode, ExternalLink,
-  Eye, EyeOff, Download, FileText, CreditCard,
+  Eye, EyeOff, Download, FileText, CreditCard, XCircle, HelpCircle, AlertTriangle,
 } from 'lucide-react';
+import { Modal } from '@/components/ui/Modal';
 import { PageHero } from '@/components/ui/PageHero';
 import { StatusBadge } from '@/components/ui/StatusBadge';
 import { EmptyState } from '@/components/ui/EmptyState';
@@ -48,6 +49,12 @@ export function FaturasPage() {
   const [irYear, setIrYear] = useState(new Date().getFullYear() - 1);
   const [issuingIR, setIssuingIR] = useState(false);
   const [irError, setIrError] = useState<string | null>(null);
+  // Diálogo unificado para "Contestar" / "Não participar"
+  const [responding, setResponding] = useState<{ inv: MyInvoice; action: 'decline' | 'dispute' } | null>(null);
+  const [responseNote, setResponseNote] = useState('');
+  const [responseBusy, setResponseBusy] = useState(false);
+  const [responseError, setResponseError] = useState<string | null>(null);
+  const [responseFeedback, setResponseFeedback] = useState<string | null>(null);
 
   async function downloadIncomeReport() {
     setIrError(null);
@@ -75,6 +82,52 @@ export function FaturasPage() {
     }
     load();
   }, []);
+
+  function openResponseDialog(inv: MyInvoice, action: 'decline' | 'dispute') {
+    setResponseNote('');
+    setResponseError(null);
+    setResponding({ inv, action });
+  }
+
+  async function submitResponse() {
+    if (!responding) return;
+    // "Contestar" precisa de uma mensagem para o gestor entender o pedido.
+    if (responding.action === 'dispute' && responseNote.trim().length < 5) {
+      setResponseError('Descreva sua dúvida ou pedido de informação (mín. 5 caracteres).');
+      return;
+    }
+    setResponseBusy(true);
+    setResponseError(null);
+    try {
+      await invoicesService.respondToAvulsa(
+        responding.inv.id,
+        responding.action,
+        responseNote.trim() || undefined,
+      );
+      // Atualiza a lista local para refletir o novo estado sem recarregar tudo.
+      setInvoices((prev) => prev.map((i) => i.id === responding.inv.id
+        ? {
+            ...i,
+            guardian_response: responding.action === 'decline' ? 'declined' : 'disputed',
+            guardian_response_note: responseNote.trim() || null,
+            guardian_response_at: new Date().toISOString(),
+            status: responding.action === 'decline' ? 'cancelled' : i.status,
+          }
+        : i));
+      setResponseFeedback(
+        responding.action === 'decline'
+          ? `Registramos que o(a) aluno(a) não vai participar de "${responding.inv.charge_title ?? 'esta cobrança'}".`
+          : 'Sua contestação foi enviada à escola. Aguarde retorno.',
+      );
+      setResponding(null);
+      setResponseNote('');
+      setTimeout(() => setResponseFeedback(null), 6000);
+    } catch (e: any) {
+      setResponseError(e?.message ?? 'Não foi possível enviar sua resposta.');
+    } finally {
+      setResponseBusy(false);
+    }
+  }
 
   function copyCode() {
     if (!selected?.pix_copy_paste) return;
@@ -172,6 +225,11 @@ export function FaturasPage() {
       />
       {irError && (
         <div role="alert" className="mb-4 rounded-xl bg-danger-soft px-3.5 py-2.5 text-sm text-danger">{irError}</div>
+      )}
+      {responseFeedback && (
+        <div role="status" className="mb-4 flex items-center gap-2 rounded-xl bg-success-soft px-3.5 py-2.5 text-sm text-success">
+          <Check size={16} /> {responseFeedback}
+        </div>
       )}
 
       {invoices.length === 0 ? (
@@ -286,8 +344,11 @@ export function FaturasPage() {
                 <div className="divide-y divide-border">
                   {avulsas.map((inv) => {
                     const isPaid = inv.status === 'paid';
+                    const isOpen = inv.status === 'pending' || inv.status === 'overdue';
+                    const alreadyDeclined = inv.guardian_response === 'declined' || inv.status === 'cancelled';
+                    const alreadyDisputed = inv.guardian_response === 'disputed';
                     return (
-                      <div key={inv.id} className="flex flex-wrap items-center justify-between gap-2 px-5 py-3">
+                      <div key={inv.id} className="flex flex-wrap items-start justify-between gap-2 px-5 py-3">
                         <div className="min-w-0 flex-1">
                           <p className="font-medium text-ink">{inv.charge_title ?? 'Cobrança avulsa'}</p>
                           <p className="text-xs text-ink-muted">
@@ -295,15 +356,45 @@ export function FaturasPage() {
                             {inv.due_date && ` · Vence ${fmtDate(inv.due_date)}`}
                             {isPaid && inv.paid_at && ` · Pago em ${fmtDate(inv.paid_at)}`}
                           </p>
-                        </div>
-                        <div className="flex items-center gap-3">
-                          <span className="font-bold text-ink">{brl(inv.amount)}</span>
-                          <StatusBadge tone={STATUS[inv.status].tone}>{STATUS[inv.status].label}</StatusBadge>
-                          {!isPaid && (inv.pix_copy_paste || inv.checkout_url) && (
-                            <button className="btn-primary text-xs" onClick={() => setSelected(inv)}>
-                              <CreditCard size={13} /> Pagar
-                            </button>
+                          {alreadyDeclined && (
+                            <p className="mt-1 text-xs text-danger">Você indicou que o aluno não vai participar.</p>
                           )}
+                          {alreadyDisputed && (
+                            <p className="mt-1 text-xs text-warning">
+                              Contestação enviada à escola{inv.guardian_response_note ? ` — “${inv.guardian_response_note}”` : ''}.
+                            </p>
+                          )}
+                        </div>
+                        <div className="flex flex-col items-end gap-2">
+                          <div className="flex items-center gap-2">
+                            <span className="font-bold text-ink">{brl(inv.amount)}</span>
+                            <StatusBadge tone={STATUS[inv.status].tone}>{STATUS[inv.status].label}</StatusBadge>
+                          </div>
+                          <div className="flex flex-wrap items-center justify-end gap-2">
+                            {!isPaid && (inv.pix_copy_paste || inv.checkout_url) && (
+                              <button className="btn-primary text-xs" onClick={() => setSelected(inv)}>
+                                <CreditCard size={13} /> Pagar
+                              </button>
+                            )}
+                            {isOpen && !alreadyDisputed && (
+                              <button
+                                type="button"
+                                className="inline-flex items-center gap-1 rounded-lg border border-warning/40 bg-warning-soft/50 px-2.5 py-1.5 text-xs font-semibold text-warning hover:bg-warning-soft"
+                                onClick={() => openResponseDialog(inv, 'dispute')}
+                              >
+                                <HelpCircle size={13} /> Contestar
+                              </button>
+                            )}
+                            {isOpen && !alreadyDeclined && (
+                              <button
+                                type="button"
+                                className="inline-flex items-center gap-1 rounded-lg border border-danger/40 bg-danger-soft/50 px-2.5 py-1.5 text-xs font-semibold text-danger hover:bg-danger-soft"
+                                onClick={() => openResponseDialog(inv, 'decline')}
+                              >
+                                <XCircle size={13} /> Não participar
+                              </button>
+                            )}
+                          </div>
                         </div>
                       </div>
                     );
@@ -440,6 +531,78 @@ export function FaturasPage() {
           </div>
         </div>
       )}
+
+      {/* Diálogo: contestar / não participar de uma cobrança avulsa */}
+      <Modal
+        open={!!responding}
+        title={responding?.action === 'decline' ? 'Não participar da cobrança' : 'Contestar cobrança'}
+        onClose={() => { if (!responseBusy) { setResponding(null); setResponseError(null); } }}
+        footer={
+          <>
+            <button
+              className="btn-outline"
+              onClick={() => { setResponding(null); setResponseError(null); }}
+              disabled={responseBusy}
+            >
+              Cancelar
+            </button>
+            <button
+              className={responding?.action === 'decline'
+                ? 'inline-flex items-center gap-1.5 rounded-xl bg-danger px-4 py-2 text-sm font-semibold text-white hover:bg-danger/90 disabled:opacity-60'
+                : 'inline-flex items-center gap-1.5 rounded-xl bg-warning px-4 py-2 text-sm font-semibold text-white hover:bg-warning/90 disabled:opacity-60'}
+              onClick={submitResponse}
+              disabled={responseBusy}
+            >
+              {responseBusy
+                ? <Loader2 size={15} className="animate-spin" />
+                : responding?.action === 'decline' ? <XCircle size={15} /> : <HelpCircle size={15} />}
+              {responding?.action === 'decline' ? 'Confirmar não participação' : 'Enviar contestação'}
+            </button>
+          </>
+        }
+      >
+        {responding && (
+          <div className="space-y-3 text-sm">
+            {responding.action === 'decline' ? (
+              <div className="flex items-start gap-2 rounded-xl bg-danger-soft px-3 py-2.5 text-xs text-danger">
+                <AlertTriangle size={15} className="mt-0.5 shrink-0" />
+                <span>
+                  Ao confirmar, a cobrança de <b>{responding.inv.charge_title ?? 'esta atividade'}</b> ({brl(responding.inv.amount)})
+                  para <b>{responding.inv.student_name}</b> será cancelada. O aluno não vai participar e não haverá cobrança.
+                  A escola será notificada da sua decisão.
+                </span>
+              </div>
+            ) : (
+              <div className="flex items-start gap-2 rounded-xl bg-warning-soft px-3 py-2.5 text-xs text-warning">
+                <HelpCircle size={15} className="mt-0.5 shrink-0" />
+                <span>
+                  Descreva sua dúvida sobre <b>{responding.inv.charge_title ?? 'esta cobrança'}</b> ({brl(responding.inv.amount)}).
+                  A escola verá a mensagem e retornará com mais informações. A cobrança fica em aberto até a resolução.
+                </span>
+              </div>
+            )}
+            <div>
+              <label className="label">
+                {responding.action === 'decline' ? 'Motivo (opcional)' : 'Sua mensagem para a escola *'}
+              </label>
+              <textarea
+                className="input min-h-[90px] resize-y"
+                placeholder={responding.action === 'decline'
+                  ? 'Ex.: viajamos nesse dia'
+                  : 'Ex.: gostaria de saber para qual passeio esse valor está sendo cobrado.'}
+                maxLength={500}
+                value={responseNote}
+                onChange={(e) => setResponseNote(e.target.value)}
+              />
+            </div>
+            {responseError && (
+              <div className="flex items-center gap-2 rounded-xl bg-danger-soft px-3 py-2 text-xs text-danger">
+                <AlertTriangle size={14} /> {responseError}
+              </div>
+            )}
+          </div>
+        )}
+      </Modal>
     </>
   );
 }

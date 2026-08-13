@@ -1,11 +1,13 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { NavLink } from 'react-router-dom';
 import { GraduationCap, X, ChevronDown } from 'lucide-react';
 import { MENUS, type Role } from '@/config/menu';
 import { useUnreadMessages } from '@/hooks/useUnreadMessages';
+import { isModuleEnabled, type EnabledModules } from '@shared/moduleCatalog';
 
 interface Props {
   role: Role;
+  enabledModules?: EnabledModules | null;
   open: boolean;
   onClose: () => void;
 }
@@ -20,10 +22,22 @@ function loadCollapsed(): Record<string, boolean> {
   }
 }
 
-export function Sidebar({ role, open, onClose }: Props) {
-  const sections = MENUS[role] ?? [];
+export function Sidebar({ role, enabledModules, open, onClose }: Props) {
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>(loadCollapsed);
   const { count: unreadCount } = useUnreadMessages();
+
+  // Aplica o filtro de módulos: itens sem `moduleKey` sempre aparecem (core);
+  // itens com `moduleKey` só quando o módulo está ativo. Seções que ficam
+  // sem itens depois do filtro são omitidas.
+  const sections = useMemo(() => {
+    const raw = MENUS[role] ?? [];
+    return raw
+      .map((sec) => ({
+        ...sec,
+        items: sec.items.filter((it) => !it.moduleKey || isModuleEnabled(enabledModules ?? undefined, it.moduleKey)),
+      }))
+      .filter((sec) => sec.items.length > 0);
+  }, [role, enabledModules]);
 
   function toggle(title: string) {
     setCollapsed((prev) => {

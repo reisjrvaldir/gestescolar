@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useId, useMemo, useState } from 'react';
 import { useForm } from 'react-hook-form';
+import { lookupCep, formatCep, normalizeCep } from '@/lib/viaCep';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useLocation, useNavigate } from 'react-router-dom';
 import {
@@ -248,7 +249,9 @@ export function StudentsPage() {
     }).length;
   }, [students]);
 
-  const { register, handleSubmit, reset, watch, setError, formState: { errors } } = useForm<FormFields>({ resolver: zodResolver(studentFormSchema) });
+  const { register, handleSubmit, reset, watch, setError, setValue, formState: { errors } } = useForm<FormFields>({ resolver: zodResolver(studentFormSchema) });
+  const [cepLoading, setCepLoading] = useState(false);
+  const [cepError, setCepError] = useState<string | null>(null);
   const uid = useId();
   const fId = (f: string) => `${uid}-${f}`;
   const selectedPlanId = watch('plan_id');
@@ -262,8 +265,10 @@ export function StudentsPage() {
     if (isNewRoute) {
       setSelected(null);
       reset({
-        name: '', cpf: '', rg: '', birth_date: '', blood_type: '', naturality: '',
+        name: '', cpf: '', rg: '', birth_date: '', blood_type: '',
         father_name: '', mother_name: '', class_id: '', plan_id: '',
+        address_zip: '', address_street: '', address_number: '', address_complement: '',
+        address_neighborhood: '', address_city: '', address_state: '',
         guardian_name: '', guardian_email: '', guardian_cpf: '', guardian_phone: '', guardian_phone2: '',
       });
     }
@@ -279,8 +284,14 @@ export function StudentsPage() {
         rg: data.rg || undefined,
         birth_date: data.birth_date,
         blood_type: data.blood_type || undefined,
-        naturality: data.naturality || undefined,
         photo_url: photoPreview || undefined,
+        address_zip: data.address_zip || undefined,
+        address_street: data.address_street || undefined,
+        address_number: data.address_number || undefined,
+        address_complement: data.address_complement || undefined,
+        address_neighborhood: data.address_neighborhood || undefined,
+        address_city: data.address_city || undefined,
+        address_state: data.address_state || undefined,
         father_name: data.father_name ?? '',
         mother_name: data.mother_name ?? '',
         class_id: data.class_id || undefined,
@@ -299,8 +310,10 @@ export function StudentsPage() {
       const created = await studentsService.create(payload);
       setCredentials(created);
       queryCache.invalidate(CK.students);
-      await load(true);
-      navigate('/app/students');
+      // Recarrega em segundo plano — a navegação só acontece quando o usuário
+      // fechar o popup de credenciais (evita popup sumir sozinho após clicar em
+      // "Copiar dados" no meio do await).
+      load(true).catch(() => { /* silencioso — o popup já está mostrando o sucesso */ });
     } catch (e: any) {
       if (!applyServerErrors(e, setError)) {
         setError('root', { message: e?.message ?? 'Erro ao cadastrar aluno' });
@@ -380,8 +393,8 @@ export function StudentsPage() {
           </div>
 
           {/* Dados do aluno */}
-          <fieldset className="card p-6">
-            <legend className="mb-4 text-sm font-bold uppercase tracking-wide text-ink-subtle">Dados do aluno</legend>
+          <div className="card p-6">
+            <h3 className="mb-4 text-sm font-bold uppercase tracking-wide text-ink-subtle">Dados do aluno</h3>
 
             <div className="space-y-4">
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
@@ -412,10 +425,6 @@ export function StudentsPage() {
                   </select>
                   {errors.blood_type && <p id={`${fId('blood_type')}-err`} className="mt-1 text-xs text-danger">{errors.blood_type.message}</p>}
                 </div>
-                <div>
-                  <label htmlFor={fId('naturality')} className="label">Naturalidade</label>
-                  <input id={fId('naturality')} className="input" placeholder="Ex.: Salvador - BA" {...register('naturality')} />
-                </div>
               </div>
 
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
@@ -428,6 +437,72 @@ export function StudentsPage() {
                   <label htmlFor={fId('mother_name')} className="label">Nome da mãe *</label>
                   <input id={fId('mother_name')} className="input" maxLength={120} aria-describedby={errors.mother_name ? `${fId('mother_name')}-err` : undefined} {...register('mother_name')} />
                   {errors.mother_name && <p id={`${fId('mother_name')}-err`} className="mt-1 text-xs text-danger">{errors.mother_name.message}</p>}
+                </div>
+              </div>
+
+              {/* Endereço — CEP dispara o ViaCEP e preenche o restante */}
+              <div>
+                <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-ink-subtle">Endereço</p>
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-6">
+                  <div className="sm:col-span-2">
+                    <label htmlFor={fId('address_zip')} className="label">CEP</label>
+                    <div className="relative">
+                      <input
+                        id={fId('address_zip')}
+                        className="input"
+                        placeholder="00000-000"
+                        inputMode="numeric"
+                        maxLength={9}
+                        {...register('address_zip', {
+                          onChange: (e) => {
+                            const formatted = formatCep(e.target.value);
+                            e.target.value = formatted;
+                            setCepError(null);
+                          },
+                          onBlur: async (e) => {
+                            const digits = normalizeCep(e.target.value);
+                            if (digits.length !== 8) return;
+                            setCepLoading(true);
+                            const found = await lookupCep(digits);
+                            setCepLoading(false);
+                            if (!found) { setCepError('CEP não encontrado.'); return; }
+                            setValue('address_street', found.street, { shouldValidate: false });
+                            setValue('address_neighborhood', found.neighborhood, { shouldValidate: false });
+                            setValue('address_city', found.city, { shouldValidate: false });
+                            setValue('address_state', found.state, { shouldValidate: false });
+                          },
+                        })}
+                      />
+                      {cepLoading && (
+                        <Loader2 size={14} className="absolute right-3 top-1/2 -translate-y-1/2 animate-spin text-ink-subtle" aria-hidden="true" />
+                      )}
+                    </div>
+                    {cepError && <p className="mt-1 text-xs text-danger">{cepError}</p>}
+                  </div>
+                  <div className="sm:col-span-4">
+                    <label htmlFor={fId('address_street')} className="label">Endereço</label>
+                    <input id={fId('address_street')} className="input" placeholder="Rua / Avenida" {...register('address_street')} />
+                  </div>
+                  <div className="sm:col-span-1">
+                    <label htmlFor={fId('address_number')} className="label">Número</label>
+                    <input id={fId('address_number')} className="input" placeholder="123" {...register('address_number')} />
+                  </div>
+                  <div className="sm:col-span-2">
+                    <label htmlFor={fId('address_complement')} className="label">Complemento</label>
+                    <input id={fId('address_complement')} className="input" placeholder="Apto, bloco…" {...register('address_complement')} />
+                  </div>
+                  <div className="sm:col-span-3">
+                    <label htmlFor={fId('address_neighborhood')} className="label">Bairro</label>
+                    <input id={fId('address_neighborhood')} className="input" {...register('address_neighborhood')} />
+                  </div>
+                  <div className="sm:col-span-4">
+                    <label htmlFor={fId('address_city')} className="label">Cidade</label>
+                    <input id={fId('address_city')} className="input" {...register('address_city')} />
+                  </div>
+                  <div className="sm:col-span-2">
+                    <label htmlFor={fId('address_state')} className="label">UF</label>
+                    <input id={fId('address_state')} className="input uppercase" maxLength={2} {...register('address_state')} />
+                  </div>
                 </div>
               </div>
 
@@ -483,11 +558,11 @@ export function StudentsPage() {
                 </div>
               )}
             </div>
-          </fieldset>
+          </div>
 
           {/* Responsável */}
-          <fieldset className="card p-6">
-            <legend className="mb-4 text-sm font-bold uppercase tracking-wide text-ink-subtle">Responsável *</legend>
+          <div className="card p-6">
+            <h3 className="mb-4 text-sm font-bold uppercase tracking-wide text-ink-subtle">Responsável *</h3>
             <p className="mb-4 text-xs text-ink-muted">
               Uma conta de acesso será criada automaticamente. Senha temporária gerada — troca obrigatória no 1º acesso.
             </p>
@@ -523,7 +598,7 @@ export function StudentsPage() {
                 </div>
               </div>
             </div>
-          </fieldset>
+          </div>
 
           {/* Ações */}
           <div className="flex items-center justify-end gap-3">
@@ -559,7 +634,7 @@ export function StudentsPage() {
                 <button className="btn-outline flex items-center gap-1.5" onClick={copyCredentials}>
                   {copied ? <Check size={14} /> : <Copy size={14} />} {copied ? 'Copiado!' : 'Copiar dados'}
                 </button>
-                <button className="btn-primary" onClick={() => setCredentials(null)}>Fechar</button>
+                <button className="btn-primary" onClick={() => { setCredentials(null); navigate('/app/students'); }}>Fechar</button>
               </div>
             </div>
           </div>

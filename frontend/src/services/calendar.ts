@@ -41,6 +41,11 @@ export async function createEvent(data: Omit<CalendarEvent, 'id' | 'created_at'>
   return r.data;
 }
 
+export async function updateEvent(id: string, data: Omit<CalendarEvent, 'id' | 'created_at'>): Promise<CalendarEvent> {
+  const r = await api.put<{ data: CalendarEvent }>(`/calendar/${id}`, data);
+  return r.data;
+}
+
 export async function removeEvent(id: string): Promise<void> {
   await api.del(`/calendar/${id}`);
 }

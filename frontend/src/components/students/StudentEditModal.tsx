@@ -1,4 +1,4 @@
-import { useId, useState } from 'react';
+import { useEffect, useId, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Loader2, Save, Upload, X } from 'lucide-react';
@@ -30,13 +30,16 @@ export function StudentEditModal({
 }) {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [loadingFull, setLoadingFull] = useState(true);
   const [photo, setPhoto] = useState<string | null>(student.photo_url ?? null);
   const [photoTouched, setPhotoTouched] = useState(false);
   const uid = useId();
   const fId = (f: string) => `${uid}-${f}`;
 
-  const { register, handleSubmit, setError: setFieldError, formState: { errors } } = useForm<EditFields>({
+  const { register, handleSubmit, reset, setError: setFieldError, formState: { errors } } = useForm<EditFields>({
     resolver: zodResolver(studentEditFormSchema),
+    // Preenche já com o que temos (mascarado se necessário) — o useEffect abaixo
+    // substitui pelos valores reais assim que o /full retornar.
     defaultValues: {
       name: student.name ?? '',
       cpf: (student.cpf ?? '').includes('*') ? '' : (student.cpf ?? ''),
@@ -50,6 +53,34 @@ export function StudentEditModal({
       plan_id: student.plan_id ?? '',
     },
   });
+
+  // Busca dados completos (sem máscara) para pré-popular o formulário — sem
+  // isso, CPF/RG etc. abririam vazios só porque a listagem devolve mascarado.
+  useEffect(() => {
+    let active = true;
+    setLoadingFull(true);
+    studentsService.getFull(student.id)
+      .then((full) => {
+        if (!active) return;
+        reset({
+          name: full.name ?? '',
+          cpf: full.cpf ?? '',
+          rg: full.rg ?? '',
+          birth_date: full.birth_date ? full.birth_date.slice(0, 10) : '',
+          blood_type: (full.blood_type ?? '') as '' | typeof BLOOD_TYPES[number],
+          naturality: full.naturality ?? '',
+          father_name: full.father_name ?? '',
+          mother_name: full.mother_name ?? '',
+          class_id: full.class_id ?? '',
+          plan_id: full.plan_id ?? '',
+        });
+      })
+      .catch((e: any) => {
+        if (active) setError(e?.message ?? 'Não foi possível carregar os dados do aluno.');
+      })
+      .finally(() => { if (active) setLoadingFull(false); });
+    return () => { active = false; };
+  }, [student.id, reset]);
 
   async function onPhoto(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -110,6 +141,11 @@ export function StudentEditModal({
     >
       <form id="student-edit-form" className="space-y-5" onSubmit={handleSubmit(onSubmit)}>
         {error && <div role="alert" className="rounded-xl bg-danger-soft px-3 py-2 text-sm text-danger">{error}</div>}
+        {loadingFull && (
+          <div className="flex items-center gap-2 rounded-lg bg-primary-soft px-3 py-2 text-xs text-primary">
+            <Loader2 size={14} className="animate-spin" /> Carregando dados do aluno…
+          </div>
+        )}
 
         {/* Foto */}
         <div className="flex items-center gap-4">

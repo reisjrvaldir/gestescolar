@@ -188,6 +188,7 @@ invoicesRouter.get('/mine', async (req, res) => {
       `select i.id, i.student_name, i.amount::float8 as amount, i.due_date, i.status, i.kind,
               i.reference_month, i.pix_qr_code, i.pix_copy_paste, i.checkout_url, i.paid_at,
               i.payment_method, i.created_at,
+              i.guardian_response, i.guardian_response_note, i.guardian_response_at,
               b.title as charge_title, b.description as charge_description
          from public.invoices i
          join public.students s on s.id = i.student_id
@@ -199,6 +200,72 @@ invoicesRouter.get('/mine', async (req, res) => {
     return rows;
   });
   res.json({ ok: true, data });
+});
+
+// POST /api/invoices/:id/guardian-response — resposta do responsável a uma
+// cobrança avulsa: "decline" (não vai participar → cancela a fatura) ou
+// "dispute" (quer mais informações → mantém pendente e sinaliza para gestão).
+// Só funciona em faturas kind='avulsa' status='pending' pertencentes a um
+// aluno do responsável autenticado.
+invoicesRouter.post('/:id/guardian-response', async (req, res) => {
+  const action = req.body?.action;
+  const note = typeof req.body?.note === 'string' ? String(req.body.note).slice(0, 500) : null;
+  if (action !== 'decline' && action !== 'dispute') {
+    return res.status(400).json({ code: 'validation', message: 'Ação inválida.' });
+  }
+  const result = await withTenant(req.ctx!, async (c) => {
+    const g = await c.query(`select id from public.guardians where user_id=$1 limit 1`, [req.ctx!.profileId]);
+    if (g.rows.length === 0) return { error: 'not_guardian' as const };
+    const guardianId = g.rows[0].id;
+
+    // Verifica dono + tipo/status antes de atualizar. Faz o filtro por
+    // guardian_id no WHERE — sem isso, um responsável poderia responder à
+    // fatura avulsa de outro aluno passando o id direto.
+    const inv = await c.query(
+      `select i.id, i.status, i.kind, i.student_name, b.title as charge_title
+         from public.invoices i
+         join public.students s on s.id = i.student_id
+         left join public.charge_batches b on b.id = i.batch_id
+        where i.id=$1 and i.school_id=$2 and s.guardian_id=$3 limit 1`,
+      [req.params.id, req.ctx!.schoolId, guardianId],
+    );
+    if (inv.rows.length === 0) return { error: 'not_found' as const };
+    const row = inv.rows[0];
+    if (row.kind !== 'avulsa') return { error: 'not_avulsa' as const };
+    if (row.status !== 'pending') return { error: 'not_pending' as const };
+
+    const responseValue = action === 'decline' ? 'declined' : 'disputed';
+    // Não participar → cancela a fatura de fato. Contestar → mantém pendente.
+    const newStatus = action === 'decline' ? 'cancelled' : row.status;
+
+    await c.query(
+      `update public.invoices set
+          guardian_response=$1,
+          guardian_response_note=$2,
+          guardian_response_at=now(),
+          status=$3
+        where id=$4`,
+      [responseValue, note, newStatus, row.id],
+    );
+    await audit(c, {
+      schoolId: req.ctx!.schoolId!, userId: req.ctx!.profileId,
+      action: action === 'decline' ? 'INVOICE_DECLINED_BY_GUARDIAN' : 'INVOICE_DISPUTED_BY_GUARDIAN',
+      entityType: 'invoice', entityId: row.id,
+      metadata: { title: row.charge_title, student: row.student_name, note },
+    });
+    return { ok: true as const };
+  });
+  if ('error' in result) {
+    const map: Record<string, { http: number; msg: string }> = {
+      not_guardian: { http: 403, msg: 'Apenas responsáveis podem responder cobranças.' },
+      not_found:    { http: 404, msg: 'Cobrança não encontrada.' },
+      not_avulsa:   { http: 400, msg: 'Apenas cobranças avulsas podem ser recusadas ou contestadas.' },
+      not_pending:  { http: 400, msg: 'Esta cobrança não está mais em aberto.' },
+    };
+    const m = map[result.error];
+    return res.status(m.http).json({ code: result.error, message: m.msg });
+  }
+  res.json({ ok: true });
 });
 
 // POST /api/invoices/:id/pix — gera/renova a cobrança PIX da fatura

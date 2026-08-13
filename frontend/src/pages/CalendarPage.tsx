@@ -2,11 +2,11 @@ import { useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import {
   CalendarDays, Plus, Trash2, Loader2, Check, AlertTriangle,
-  ChevronLeft, ChevronRight, Calendar, School2, Clock, X,
+  ChevronLeft, ChevronRight, Calendar, School2, Clock, X, Pencil, Copy,
 } from 'lucide-react';
 import { Modal } from '@/components/ui/Modal';
 import { EmptyState } from '@/components/ui/EmptyState';
-import { listEvents, createEvent, removeEvent, EVENT_TYPE_LABELS, type CalendarEvent, type EventType } from '@/services/calendar';
+import { listEvents, createEvent, updateEvent, removeEvent, EVENT_TYPE_LABELS, type CalendarEvent, type EventType } from '@/services/calendar';
 import { classesService } from '@/services/classes';
 import type { SchoolClass } from '@/types/models';
 import { useMe } from '@/auth/AuthGate';
@@ -85,6 +85,8 @@ function CalendarView({ isAdmin }: { isAdmin: boolean }) {
   const [classes, setClasses] = useState<SchoolClass[]>([]);
   const [loading, setLoading] = useState(true);
   const [open, setOpen] = useState(false);
+  // Se editingId estiver setado → modal está no modo edição; senão é criação.
+  const [editingId, setEditingId] = useState<string | null>(null);
   const [selectedDay, setSelectedDay] = useState<CalendarEvent[]>([]);
   const [selectedDayLabel, setSelectedDayLabel] = useState('');
   const [dayOpen, setDayOpen] = useState(false);
@@ -110,21 +112,28 @@ function CalendarView({ isAdmin }: { isAdmin: boolean }) {
     else setCalMonth(m => m + 1);
   }
 
-  async function onCreate(data: FormFields) {
+  async function onSave(data: FormFields) {
     try {
-      await createEvent({
+      const payload = {
         ...data,
         date_end: data.date_end || undefined,
         start_time: data.start_time || undefined,
         end_time: data.end_time || undefined,
         class_id: data.class_id || undefined,
-      });
-      setToast({ type: 'success', msg: `Evento "${data.title}" criado` });
+      };
+      if (editingId) {
+        await updateEvent(editingId, payload);
+        setToast({ type: 'success', msg: `Evento "${data.title}" atualizado` });
+      } else {
+        await createEvent(payload);
+        setToast({ type: 'success', msg: `Evento "${data.title}" criado` });
+      }
       await load();
       reset();
+      setEditingId(null);
       setOpen(false);
     } catch (err: any) {
-      setToast({ type: 'error', msg: err?.message ?? 'Erro ao criar evento' });
+      setToast({ type: 'error', msg: err?.message ?? 'Erro ao salvar evento' });
     }
   }
 
@@ -141,7 +150,27 @@ function CalendarView({ isAdmin }: { isAdmin: boolean }) {
 
   function openCreate(dateStr?: string) {
     reset();
+    setEditingId(null);
     if (dateStr) setValue('date_start', dateStr);
+    setOpen(true);
+  }
+
+  // Abre o modal já preenchido com os dados do evento existente.
+  //  - modo "edit"  → salva por cima (PUT)
+  //  - modo "copy"  → limpa o id e a data, para virar um evento novo em outro dia
+  function openEditOrCopy(ev: CalendarEvent, mode: 'edit' | 'copy') {
+    reset({
+      title: ev.title,
+      description: ev.description ?? '',
+      date_start: mode === 'copy' ? '' : ev.date_start,
+      date_end: mode === 'copy' ? '' : (ev.date_end ?? ''),
+      event_type: ev.event_type,
+      start_time: ev.start_time ?? '',
+      end_time: ev.end_time ?? '',
+      class_id: ev.class_id ?? '',
+    });
+    setEditingId(mode === 'edit' ? ev.id : null);
+    setDayOpen(false);
     setOpen(true);
   }
 
@@ -430,19 +459,19 @@ function CalendarView({ isAdmin }: { isAdmin: boolean }) {
         </div>
       </div>
 
-      {/* MODAL CRIAR EVENTO */}
+      {/* MODAL CRIAR / EDITAR EVENTO */}
       <Modal
         open={open}
-        title="Novo evento"
-        onClose={() => { reset(); setOpen(false); }}
+        title={editingId ? 'Editar evento' : 'Novo evento'}
+        onClose={() => { reset(); setEditingId(null); setOpen(false); }}
         footer={
           <>
-            <button className="btn-outline" onClick={() => { reset(); setOpen(false); }}>Cancelar</button>
-            <button className="btn-primary" form="calendar-form" type="submit">Criar evento</button>
+            <button className="btn-outline" onClick={() => { reset(); setEditingId(null); setOpen(false); }}>Cancelar</button>
+            <button className="btn-primary" form="calendar-form" type="submit">{editingId ? 'Salvar alterações' : 'Criar evento'}</button>
           </>
         }
       >
-        <form id="calendar-form" className="space-y-4" onSubmit={handleSubmit(onCreate)}>
+        <form id="calendar-form" className="space-y-4" onSubmit={handleSubmit(onSave)}>
           <div>
             <label className="label">Título *</label>
             <input className="input" placeholder="Ex.: Prova de Matemática" {...register('title', { required: 'Informe o título' })} />
@@ -534,12 +563,29 @@ function CalendarView({ isAdmin }: { isAdmin: boolean }) {
                     {isNat && <p className="mt-1 text-xs italic text-ink-muted">Feriado Nacional</p>}
                   </div>
                   {isAdmin && !isNat && (
-                    <button
-                      className="shrink-0 rounded-lg p-1.5 text-ink-muted hover:bg-danger-soft hover:text-danger"
-                      onClick={() => onRemove(ev.id, ev.title)}
-                    >
-                      <Trash2 size={14} />
-                    </button>
+                    <div className="flex shrink-0 items-center gap-1">
+                      <button
+                        title="Editar evento"
+                        className="rounded-lg p-1.5 text-ink-muted hover:bg-primary-soft hover:text-primary"
+                        onClick={() => openEditOrCopy(ev, 'edit')}
+                      >
+                        <Pencil size={14} />
+                      </button>
+                      <button
+                        title="Duplicar para outro dia/horário"
+                        className="rounded-lg p-1.5 text-ink-muted hover:bg-success-soft hover:text-success"
+                        onClick={() => openEditOrCopy(ev, 'copy')}
+                      >
+                        <Copy size={14} />
+                      </button>
+                      <button
+                        title="Excluir evento"
+                        className="rounded-lg p-1.5 text-ink-muted hover:bg-danger-soft hover:text-danger"
+                        onClick={() => onRemove(ev.id, ev.title)}
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                    </div>
                   )}
                 </div>
               );

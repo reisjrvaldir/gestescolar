@@ -16,6 +16,13 @@ export interface NewStudent {
   discount_percentage?: number;
   enrollment_payment_method?: 'cash' | 'pix' | 'card';
   first_due?: '30' | '05' | '10' | '15';
+  address_zip?: string;
+  address_street?: string;
+  address_number?: string;
+  address_complement?: string;
+  address_neighborhood?: string;
+  address_city?: string;
+  address_state?: string;
   guardian: {
     name: string;
     email: string;
@@ -48,9 +55,25 @@ export interface CreatedStudent extends Student {
   login_password_hint?: string;
 }
 
+export interface StudentFull extends Omit<Student, 'guardian_id'> {
+  guardian_id?: string | null;
+  address_zip?: string | null;
+  address_street?: string | null;
+  address_number?: string | null;
+  address_complement?: string | null;
+  address_neighborhood?: string | null;
+  address_city?: string | null;
+  address_state?: string | null;
+}
+
 export const studentsService = {
   async list(): Promise<Student[]> {
     const r = await api.get<{ ok: boolean; data: Student[] }>('/students');
+    return r.data;
+  },
+  /** Dados completos (sem máscara) para o formulário de edição. */
+  async getFull(id: string): Promise<StudentFull> {
+    const r = await api.get<{ ok: boolean; data: StudentFull }>(`/students/${id}/full`);
     return r.data;
   },
   async create(input: NewStudent): Promise<CreatedStudent> {

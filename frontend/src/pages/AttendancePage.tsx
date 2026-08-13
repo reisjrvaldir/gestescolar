@@ -11,6 +11,7 @@ import { Modal } from '@/components/ui/Modal';
 import { AttendanceSummaryChart } from '@/components/attendance/AttendanceSummaryChart';
 import { AttendanceAlertsCard } from '@/components/attendance/AttendanceAlertsCard';
 import { ApprovalQueue } from '@/components/attendance/ApprovalQueue';
+import { AttestationsHistory } from '@/components/attendance/AttestationsHistory';
 import { GuardianAttestations } from '@/components/attendance/GuardianAttestations';
 import { classesService, type ClassSubject } from '@/services/classes';
 import {
@@ -460,12 +461,13 @@ function TeacherAttendanceView({ isAdmin, isTeacher }: { isAdmin: boolean; isTea
 
       {/* ===================== APROVAR ATESTADOS (só gestão) ===================== */}
       {view === 'aprovar' && isAdmin && (
-        <div className="space-y-4">
+        <div className="space-y-6">
           <div className="flex items-center gap-2 rounded-xl bg-primary-soft px-4 py-2.5 text-sm font-medium text-primary">
             <ShieldCheck size={16} />
             Ao aprovar, a falta do dia vira "Abono por Atestado". Ao recusar, ela permanece como falta.
           </div>
           <ApprovalQueue onToast={toastFor} />
+          <AttestationsHistory onToast={toastFor} />
         </div>
       )}
 

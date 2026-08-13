@@ -1,7 +1,7 @@
 import { useNavigate } from 'react-router-dom';
 import {
   HelpCircle, Wallet, Percent, Star, School2, GraduationCap, Users,
-  BookOpen, FileText, ArrowRight, type LucideIcon,
+  BookOpen, FileText, ArrowRight, CreditCard, type LucideIcon,
 } from 'lucide-react';
 import { PageHero } from '@/components/ui/PageHero';
 
@@ -96,6 +96,18 @@ const STEPS: Step[] = [
       'O responsável enxerga o boletim do próprio filho pelo portal — sem precisar pedir pra secretaria.',
     ],
     cta: { label: 'Ir para Boletim', to: '/app/grades/boletim' },
+  },
+  {
+    number: 9,
+    icon: CreditCard,
+    title: 'Ative os pagamentos por PIX — conta ASAAS + split',
+    body: [
+      'Para gerar QR Code de PIX nas mensalidades e cobranças avulsas, sua escola precisa abrir uma subconta no ASAAS (nosso parceiro de pagamentos). Em Configurações → Repasses, envie os documentos solicitados (CNPJ ou CPF do responsável legal, comprovante de endereço, dados bancários da escola). A análise leva de 1 a 3 dias úteis.',
+      'A GestEscolar NÃO administra o dinheiro da sua escola. Trabalhamos com split de pagamento: assim que o responsável paga, o valor cai direto na conta bancária da escola, sem intermediação — nós não retemos, não transferimos e não temos acesso ao saldo.',
+      'A taxa de serviço é de apenas 3% por operação recebida. Exemplo: mensalidade de R$ 100,00 → taxa de R$ 3,00; a escola recebe R$ 97,00 líquidos, com o repasse na mesma hora do pagamento.',
+      'Enquanto a subconta não estiver aprovada, você pode continuar cadastrando alunos, planos e turmas normalmente — apenas a geração de PIX fica pausada. Assim que aprovar, as cobranças passam a ser emitidas automaticamente.',
+    ],
+    cta: { label: 'Ir para Repasses', to: '/app/finance/balance' },
   },
 ];
 

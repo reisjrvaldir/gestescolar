@@ -3,6 +3,10 @@ import { withTenant } from '../../db/withTenant';
 import { requireAuth, requireRole } from '../../middleware/auth';
 import { validateBody } from '../../lib/validateBody';
 import { schoolSettingsSchema } from '../../../../shared/schemas';
+import { MODULE_CATALOG, type ModuleKey } from '../../../../shared/moduleCatalog';
+import { audit } from '../../lib/audit';
+
+const VALID_MODULE_KEYS = new Set<string>(MODULE_CATALOG.map((m) => m.key));
 
 export const settingsRouter = Router();
 settingsRouter.use(requireAuth);
@@ -28,6 +32,55 @@ settingsRouter.get('/', async (req, res) => {
   } catch (err: any) {
     console.error('[settings.get] erro:', err?.message ?? err);
     res.status(500).json({ code: 'settings_load_failed', message: 'Não foi possível carregar as configurações.' });
+  }
+});
+
+// GET /api/settings/modules — mapa { moduleKey: boolean } dos módulos habilitados.
+// Ausência da chave = ativo (default). Retorna o mapa cru — o frontend combina
+// com o catálogo para renderizar.
+settingsRouter.get('/modules', async (req, res) => {
+  try {
+    const data = await withTenant(req.ctx!, async (c) => {
+      const { rows } = await c.query(
+        `select coalesce(enabled_modules, '{}'::jsonb) as enabled_modules
+           from public.schools where id = $1`,
+        [req.ctx!.schoolId],
+      );
+      return rows[0]?.enabled_modules ?? {};
+    });
+    res.json({ ok: true, data });
+  } catch (err: any) {
+    console.error('[settings.modules.get] erro:', err?.message ?? err);
+    res.status(500).json({ code: 'modules_load_failed', message: 'Não foi possível carregar os módulos.' });
+  }
+});
+
+// PUT /api/settings/modules — atualiza o mapa de módulos habilitados.
+// Filtra chaves fora do catálogo antes de gravar (impede sujeira/injeção).
+settingsRouter.put('/modules', requireRole('school_admin', 'superadmin'), async (req, res) => {
+  const incoming = (req.body?.enabled_modules ?? {}) as Record<string, unknown>;
+  const clean: Record<ModuleKey, boolean> = {} as Record<ModuleKey, boolean>;
+  for (const [k, v] of Object.entries(incoming)) {
+    if (!VALID_MODULE_KEYS.has(k)) continue;
+    if (typeof v !== 'boolean') continue;
+    clean[k as ModuleKey] = v;
+  }
+  try {
+    await withTenant(req.ctx!, async (c) => {
+      await c.query(
+        `update public.schools set enabled_modules = $2::jsonb where id = $1`,
+        [req.ctx!.schoolId, JSON.stringify(clean)],
+      );
+      await audit(c, {
+        schoolId: req.ctx!.schoolId!, userId: req.ctx!.profileId,
+        action: 'MODULES_UPDATED', entityType: 'school', entityId: req.ctx!.schoolId!,
+        metadata: { enabled_modules: clean },
+      });
+    });
+    res.json({ ok: true, data: clean });
+  } catch (err: any) {
+    console.error('[settings.modules.put] erro:', err?.message ?? err);
+    res.status(500).json({ code: 'modules_save_failed', message: 'Não foi possível salvar os módulos.' });
   }
 });
 

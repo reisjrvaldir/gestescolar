@@ -81,11 +81,11 @@ export const staffCreateSchema = z.object({
   email:             emailSchema,
   phone:             phoneSchema.optional(),
   role_type:         z.enum(['school_admin', 'financial', 'teacher', 'coordinator'], { required_error: 'Perfil obrigatório', message: 'Perfil inválido' }),
-  subject_teaches:   z.string().max(100).optional(),
+  subject_teaches:   z.string().max(200).optional(),
   position:          z.string().max(100).optional(),
-  admission_date:    optionalDateSchema,
-  contract_type:     z.enum(['clt', 'pj', 'estagio', 'temporario']).optional(),
-  weekly_hours:      z.number().min(0).max(80).optional(),
+  admission_date:    dateSchema,
+  contract_type:     z.enum(['clt', 'pj', 'estagio', 'temporario'], { required_error: 'Tipo de contrato obrigatório', message: 'Tipo de contrato inválido' }),
+  weekly_hours:      z.number({ required_error: 'Carga horária obrigatória', invalid_type_error: 'Carga horária inválida' }).min(1, 'Carga horária deve ser maior que zero').max(80, 'Máximo 80h/semana'),
   timeclock_enabled: z.boolean().optional(),
 });
 
@@ -122,6 +122,13 @@ export const studentCreateSchema = z.object({
   discount_percentage:       z.number().min(0).max(100).optional(),
   enrollment_payment_method: z.enum(['cash', 'pix', 'card']).optional(),
   first_due:                 z.enum(['30', '05', '10', '15']).optional(),
+  address_zip:               z.string().max(9).optional(),
+  address_street:            z.string().max(200).optional(),
+  address_number:            z.string().max(20).optional(),
+  address_complement:        z.string().max(100).optional(),
+  address_neighborhood:      z.string().max(100).optional(),
+  address_city:              z.string().max(100).optional(),
+  address_state:             z.string().max(2).optional(),
   guardian:                  guardianSchema,
 });
 

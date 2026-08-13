@@ -51,6 +51,13 @@ export interface PendingApproval {
   uploaded_by_guardian: boolean;
 }
 
+export interface AttestationHistoryItem extends PendingApproval {
+  status: 'approved' | 'rejected' | 'pending';
+  reviewed_at: string | null;
+  review_note: string | null;
+  reviewed_by_name: string | null;
+}
+
 export interface MyChild {
   student_id: string;
   student_name: string;
@@ -151,6 +158,12 @@ export const attendanceService = {
   },
   async pendingApprovals(): Promise<PendingApproval[]> {
     const r = await api.get<{ ok: boolean; data: PendingApproval[] }>('/attendance/pending-approvals');
+    return r.data;
+  },
+  async attestationHistory(filter: 'reviewed' | 'all' | 'approved' | 'rejected' = 'reviewed'): Promise<AttestationHistoryItem[]> {
+    const r = await api.get<{ ok: boolean; data: AttestationHistoryItem[] }>(
+      `/attendance/attestations?status=${filter}`,
+    );
     return r.data;
   },
   async reviewAttestation(id: string, action: 'approve' | 'reject', note?: string): Promise<void> {
