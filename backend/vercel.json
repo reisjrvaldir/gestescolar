@@ -5,7 +5,7 @@
   "env": {
     "NEON_AUTH_URL": "https://ep-red-dew-ac308bfw.neonauth.sa-east-1.aws.neon.tech/neondb/auth",
     "NEON_AUTH_JWKS_URL": "https://ep-red-dew-ac308bfw.neonauth.sa-east-1.aws.neon.tech/neondb/auth/.well-known/jwks.json",
-    "NEON_AUTH_ISSUER": "https://ep-red-dew-ac308bfw.neonauth.sa-east-1.aws.neon.tech"
+    "NEON_AUTH_ISSUER": "https://ep-red-dew-ac308bfw.neonauth.sa-east-1.aws.neon.tech/neondb/auth"
   },
   "functions": {
     "api/index.js": { "maxDuration": 15 }

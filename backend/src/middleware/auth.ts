@@ -8,10 +8,13 @@ import type { TenantContext } from '../db/withTenant';
 const jwksUrl = process.env.NEON_AUTH_JWKS_URL;
 const JWKS = jwksUrl ? createRemoteJWKSet(new URL(jwksUrl)) : null;
 
-// O Neon Auth emite o JWT com iss/aud = ORIGEM (sem o path /neondb/auth).
-const AUTH_ORIGIN =
-  process.env.NEON_AUTH_ISSUER ||
-  (process.env.NEON_AUTH_URL ? new URL(process.env.NEON_AUTH_URL).origin : undefined);
+// Better Auth usa o baseURL COMPLETO como issuer/audience por padrão. Como o
+// Neon Auth é montado em /neondb/auth, remover esse caminho faz todo JWT válido
+// falhar com JWTClaimValidationFailed. Um issuer explícito ainda pode substituir
+// o padrão; normalizamos apenas a barra final para evitar divergência acidental.
+const AUTH_ISSUER = (
+  process.env.NEON_AUTH_ISSUER || process.env.NEON_AUTH_URL
+)?.replace(/\/$/, '');
 
 export interface AuthIdentity {
   authUserId: string;
@@ -54,8 +57,8 @@ async function verifyAuthToken(req: Request): Promise<AuthIdentity | null> {
   // Verifica assinatura do JWT contra o JWKS do Neon Auth (Better Auth),
   // checando issuer e audience (ambos = origem do Neon Auth).
   const { payload } = await jwtVerify(token, JWKS, {
-    issuer: AUTH_ORIGIN,
-    audience: AUTH_ORIGIN,
+    issuer: AUTH_ISSUER,
+    audience: AUTH_ISSUER,
   });
   const authUserId = String(payload.sub ?? '');
   if (!authUserId) return null;
