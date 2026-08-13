@@ -176,11 +176,6 @@ function FullScreenLoader() {
 interface ProfileErrorInfo {
   status?: number;
   code: string;
-  // O `code` sozinho é ambíguo: um 401 pode ser token não emitido pelo Neon Auth
-  // ("Token ausente ou inválido") ou JWT válido recusado na checagem de claims
-  // (iss/aud divergentes). São causas e correções completamente diferentes, e
-  // sem a mensagem do servidor não dá para distinguir uma da outra pela tela.
-  message?: string;
 }
 
 function ProfileLoadError({ onRetry, error }: { onRetry: () => void; error: ProfileErrorInfo }) {
@@ -197,7 +192,6 @@ function ProfileLoadError({ onRetry, error }: { onRetry: () => void; error: Prof
         </p>
         <p className="mt-3 text-xs text-ink-subtle">
           Código técnico: {error.status ? `${error.status} · ` : ''}{error.code}
-          {error.message ? <><br />{error.message}</> : null}
         </p>
         <button className="btn-primary mt-5 w-full justify-center" onClick={onRetry}>
           <RefreshCw size={16} /> Tentar novamente
@@ -241,8 +235,14 @@ export function AuthGate() {
         if (active) {
           setMe(null);
           setProfileLoadFailed(true);
+          // O `code` sozinho é ambíguo: um 401 tanto pode ser token não emitido
+          // pelo Neon Auth quanto JWT válido recusado na checagem de claims
+          // (iss/aud divergentes) — causas e correções bem diferentes. A
+          // mensagem do servidor separa as duas, mas não vai para a tela: é
+          // texto interno, e num 401 pode revelar detalhe de configuração.
+          console.debug('[AuthGate] falha ao carregar perfil:', error);
           setProfileError(error instanceof ApiError
-            ? { status: error.status, code: error.code, message: error.message }
+            ? { status: error.status, code: error.code }
             : { code: error instanceof TypeError ? 'network_error' : 'profile_unavailable' });
         }
       })
