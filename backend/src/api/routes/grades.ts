@@ -7,6 +7,12 @@ export const gradesRouter = Router();
 
 gradesRouter.use(requireAuth);
 
+// Consultas por TURMA devolvem nome, matrícula e notas de todos os alunos.
+// Sem esta guarda um responsável logado lia o boletim da turma inteira
+// passando um class_id qualquer da escola. Ele tem /my-boletim para os
+// próprios filhos.
+const STAFF = ['school_admin', 'coordinator', 'financial', 'teacher', 'superadmin'] as const;
+
 // GET /grades/settings → nota mínima de aprovação da escola
 gradesRouter.get('/settings', async (req, res) => {
   const data = await withTenant(req.ctx!, async (c) => {
@@ -40,7 +46,7 @@ gradesRouter.put('/settings', requireRole('school_admin', 'superadmin'), async (
 });
 
 // GET /grades?class_id=&subject=&period= → pivot AV1/AV2/Final por aluno
-gradesRouter.get('/', async (req, res) => {
+gradesRouter.get('/', requireRole(...STAFF), async (req, res) => {
   const { class_id, subject, period } = req.query;
   if (!class_id || !subject || !period) {
     return res.status(400).json({ code: 'validation', message: 'class_id, subject e period são obrigatórios' });
@@ -68,7 +74,7 @@ gradesRouter.get('/', async (req, res) => {
 });
 
 // GET /grades/boletim?class_id= → pivot completo (todos os períodos + matérias)
-gradesRouter.get('/boletim', async (req, res) => {
+gradesRouter.get('/boletim', requireRole(...STAFF), async (req, res) => {
   const { class_id } = req.query;
   if (!class_id) return res.status(400).json({ code: 'validation', message: 'class_id é obrigatório' });
   const result = await withTenant(req.ctx!, async (c) => {
@@ -147,7 +153,7 @@ gradesRouter.get('/my-boletim', async (req, res) => {
 });
 
 // GET /grades/summary?class_id=&period= → contagem por status e desempenho por disciplina
-gradesRouter.get('/summary', async (req, res) => {
+gradesRouter.get('/summary', requireRole(...STAFF), async (req, res) => {
   const { class_id, period } = req.query;
   if (!class_id || !period) return res.status(400).json({ code: 'validation', message: 'class_id e period são obrigatórios' });
   const data = await withTenant(req.ctx!, async (c) => {

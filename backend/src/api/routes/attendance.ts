@@ -18,7 +18,13 @@ const batchSchema = z.object({
 
 attendanceRouter.use(requireAuth);
 
-attendanceRouter.get('/', async (req, res) => {
+// Consultas por TURMA devolvem nome e matrícula de todos os alunos dela.
+// Sem esta guarda um responsável logado lia a turma inteira passando um
+// class_id qualquer da escola — dado de filho de outra família. O responsável
+// tem as rotas /my-* para os próprios filhos.
+const STAFF = ['school_admin', 'coordinator', 'financial', 'teacher', 'superadmin'] as const;
+
+attendanceRouter.get('/', requireRole(...STAFF), async (req, res) => {
   const { class_id, date } = req.query;
   const subjectId = (req.query.subject_id as string | undefined) || null;
   if (!class_id || !date) {
@@ -41,7 +47,7 @@ attendanceRouter.get('/', async (req, res) => {
 });
 
 // GET /attendance/calendar?class_id=&year=&month= → dias com chamada registrada
-attendanceRouter.get('/calendar', async (req, res) => {
+attendanceRouter.get('/calendar', requireRole(...STAFF), async (req, res) => {
   const { class_id, year, month } = req.query;
   if (!class_id || !year || !month) {
     return res.status(400).json({ code: 'validation', message: 'class_id, year e month são obrigatórios' });
@@ -72,7 +78,7 @@ attendanceRouter.get('/calendar', async (req, res) => {
 });
 
 // GET /attendance/summary?class_id=&scope=month|30d → contagem para o gráfico de pizza
-attendanceRouter.get('/summary', async (req, res) => {
+attendanceRouter.get('/summary', requireRole(...STAFF), async (req, res) => {
   const classId = (req.query.class_id as string | undefined) || null;
   const scope = req.query.scope === '30d' ? '30d' : 'month';
   const data = await withTenant(req.ctx!, async (c) => {
@@ -96,7 +102,7 @@ attendanceRouter.get('/summary', async (req, res) => {
 });
 
 // GET /attendance/top-absences?class_id=&year=&month=&limit=5 → alunos com mais faltas no mês
-attendanceRouter.get('/top-absences', async (req, res) => {
+attendanceRouter.get('/top-absences', requireRole(...STAFF), async (req, res) => {
   const classId = (req.query.class_id as string | undefined) || null;
   const limit = Math.min(Number(req.query.limit) || 5, 20);
   const now = new Date();
