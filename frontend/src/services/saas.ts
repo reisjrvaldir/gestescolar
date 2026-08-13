@@ -291,6 +291,13 @@ export const saasService = {
     const r = await api.post<{ ok: boolean; data: SaasSchool }>(`/saas/schools/${id}/reactivate`, body);
     return r.data;
   },
+  /** Marca a assinatura como paga. Override manual — usar quando o pagamento
+   *  foi acertado fora do fluxo automático. Não confundir com reactivateSchool,
+   *  que apenas tira a suspensão e mantém a escola em trial. */
+  async activateSchool(id: string, reason: string) {
+    const r = await api.post<{ ok: boolean; data: SaasSchool }>(`/saas/schools/${id}/activate`, { reason });
+    return r.data;
+  },
   async updateSchool(id: string, body: { name: string; email?: string; phone?: string; cnpj?: string }) {
     const r = await api.put<{ ok: boolean; data: SaasSchool }>(`/saas/schools/${id}`, body);
     return r.data;

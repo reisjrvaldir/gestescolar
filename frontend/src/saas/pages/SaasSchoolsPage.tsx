@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useState } from 'react';
+import { createPortal } from 'react-dom';
 import {
   Search, RefreshCw, Loader2, CalendarClock, PauseCircle, PlayCircle,
   Users, GraduationCap, MoreHorizontal, Check, Pencil, CreditCard, AlertCircle, MinusCircle,
-  Plus, Copy, KeyRound,
+  Plus, Copy, KeyRound, BadgeCheck,
 } from 'lucide-react';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { StatusBadge } from '@/components/ui/StatusBadge';
@@ -29,7 +30,7 @@ const FILTERS: { key: 'todas' | SchoolDerivedStatus; label: string }[] = [
   { key: 'cancelada', label: 'Canceladas' },
 ];
 
-type ActionKind = 'extend' | 'suspend' | 'reactivate';
+type ActionKind = 'extend' | 'suspend' | 'reactivate' | 'activate';
 
 // Prontidão de pagamento embutido (subconta ASAAS + documentos).
 function paymentInfo(s: SaasSchool): { tone: 'success' | 'warning' | 'neutral'; label: string; icon: typeof CreditCard } {
@@ -51,7 +52,9 @@ export function SaasSchoolsPage() {
   const [error, setError] = useState<string | null>(null);
   const [query, setQuery] = useState('');
   const [filter, setFilter] = useState<'todas' | SchoolDerivedStatus>('todas');
-  const [menuFor, setMenuFor] = useState<string | null>(null);
+  // Guarda a posição na tela junto com a escola: o menu é renderizado por
+  // portal no body (fora da tabela), então precisa de coordenadas próprias.
+  const [menu, setMenu] = useState<{ school: SaasSchool; top: number; right: number } | null>(null);
   const [action, setAction] = useState<{ kind: ActionKind; school: SaasSchool } | null>(null);
   const [editing, setEditing] = useState<SaasSchool | null>(null);
   const [creating, setCreating] = useState(false);
@@ -76,6 +79,23 @@ export function SaasSchoolsPage() {
   }
 
   useEffect(() => { load(); }, []);
+
+  // Posição fixa é calculada uma vez, então rolar a página deixaria o menu
+  // flutuando longe do botão. Fecha em vez de recalcular — mais previsível.
+  // `true` no scroll para capturar a rolagem do wrapper da tabela também.
+  useEffect(() => {
+    if (!menu) return;
+    const close = () => setMenu(null);
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setMenu(null); };
+    window.addEventListener('scroll', close, true);
+    window.addEventListener('resize', close);
+    document.addEventListener('keydown', onKey);
+    return () => {
+      window.removeEventListener('scroll', close, true);
+      window.removeEventListener('resize', close);
+      document.removeEventListener('keydown', onKey);
+    };
+  }, [menu]);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -203,48 +223,17 @@ export function SaasSchoolsPage() {
                         <span className="inline-flex items-center gap-1 text-ink-muted"><GraduationCap size={13} /> {s.students_count}</span>
                       </td>
                       <td className="px-5 py-3 text-right">
-                        <div className="relative inline-block text-left">
-                          <button
-                            onClick={() => setMenuFor(menuFor === s.id ? null : s.id)}
-                            className="rounded-lg border border-border p-1.5 text-ink-muted hover:bg-canvas"
-                          >
-                            <MoreHorizontal size={16} />
-                          </button>
-                          {menuFor === s.id && (
-                            <>
-                              <div className="fixed inset-0 z-10" onClick={() => setMenuFor(null)} />
-                              <div className="absolute right-0 z-20 mt-1 w-52 overflow-hidden rounded-xl border border-border bg-surface py-1 shadow-card-hover">
-                                <button
-                                  className="flex w-full items-center gap-2 px-4 py-2 text-left text-sm text-ink hover:bg-canvas"
-                                  onClick={() => { setMenuFor(null); setEditing(s); }}
-                                >
-                                  <Pencil size={15} className="text-primary" /> Editar dados
-                                </button>
-                                <button
-                                  className="flex w-full items-center gap-2 px-4 py-2 text-left text-sm text-ink hover:bg-canvas"
-                                  onClick={() => { setMenuFor(null); setAction({ kind: 'extend', school: s }); }}
-                                >
-                                  <CalendarClock size={15} className="text-primary" /> Prorrogar acesso
-                                </button>
-                                {s.derived_status === 'suspensa' ? (
-                                  <button
-                                    className="flex w-full items-center gap-2 px-4 py-2 text-left text-sm text-ink hover:bg-canvas"
-                                    onClick={() => { setMenuFor(null); setAction({ kind: 'reactivate', school: s }); }}
-                                  >
-                                    <PlayCircle size={15} className="text-success" /> Reativar escola
-                                  </button>
-                                ) : (
-                                  <button
-                                    className="flex w-full items-center gap-2 px-4 py-2 text-left text-sm text-danger hover:bg-canvas"
-                                    onClick={() => { setMenuFor(null); setAction({ kind: 'suspend', school: s }); }}
-                                  >
-                                    <PauseCircle size={15} /> Suspender escola
-                                  </button>
-                                )}
-                              </div>
-                            </>
-                          )}
-                        </div>
+                        <button
+                          aria-label={`Ações de ${s.name}`}
+                          onClick={(e) => {
+                            if (menu?.school.id === s.id) return setMenu(null);
+                            const r = e.currentTarget.getBoundingClientRect();
+                            setMenu({ school: s, top: r.bottom + 4, right: window.innerWidth - r.right });
+                          }}
+                          className="rounded-lg border border-border p-1.5 text-ink-muted hover:bg-canvas"
+                        >
+                          <MoreHorizontal size={16} />
+                        </button>
                       </td>
                     </tr>
                   );
@@ -256,6 +245,64 @@ export function SaasSchoolsPage() {
             </table>
           </div>
         </div>
+      )}
+
+      {/* Menu de ações via portal no body. Dentro da tabela ele era recortado:
+          o wrapper tem overflow-x-auto e, quando um eixo não é `visible`, o CSS
+          força o outro a `auto` — então o menu ficava preso na área rolável e
+          só a primeira opção aparecia. Posição fixa a partir do botão. */}
+      {menu && createPortal(
+        <>
+          <div className="fixed inset-0 z-40" onClick={() => setMenu(null)} />
+          <div
+            role="menu"
+            style={{ top: menu.top, right: menu.right }}
+            className="fixed z-50 w-52 overflow-hidden rounded-xl border border-border bg-surface py-1 shadow-card-hover"
+          >
+            <button
+              role="menuitem"
+              className="flex w-full items-center gap-2 px-4 py-2 text-left text-sm text-ink hover:bg-canvas"
+              onClick={() => { setEditing(menu.school); setMenu(null); }}
+            >
+              <Pencil size={15} className="text-primary" /> Editar dados
+            </button>
+            {/* Só faz sentido ativar quem ainda não é pagante. */}
+            {menu.school.subscription_status !== 'active' && (
+              <button
+                role="menuitem"
+                className="flex w-full items-center gap-2 px-4 py-2 text-left text-sm text-ink hover:bg-canvas"
+                onClick={() => { setAction({ kind: 'activate', school: menu.school }); setMenu(null); }}
+              >
+                <BadgeCheck size={15} className="text-success" /> Tornar escola ativa
+              </button>
+            )}
+            <button
+              role="menuitem"
+              className="flex w-full items-center gap-2 px-4 py-2 text-left text-sm text-ink hover:bg-canvas"
+              onClick={() => { setAction({ kind: 'extend', school: menu.school }); setMenu(null); }}
+            >
+              <CalendarClock size={15} className="text-primary" /> Prorrogar acesso
+            </button>
+            {menu.school.derived_status === 'suspensa' ? (
+              <button
+                role="menuitem"
+                className="flex w-full items-center gap-2 px-4 py-2 text-left text-sm text-ink hover:bg-canvas"
+                onClick={() => { setAction({ kind: 'reactivate', school: menu.school }); setMenu(null); }}
+              >
+                <PlayCircle size={15} className="text-success" /> Reativar escola
+              </button>
+            ) : (
+              <button
+                role="menuitem"
+                className="flex w-full items-center gap-2 px-4 py-2 text-left text-sm text-danger hover:bg-canvas"
+                onClick={() => { setAction({ kind: 'suspend', school: menu.school }); setMenu(null); }}
+              >
+                <PauseCircle size={15} /> Suspender escola
+              </button>
+            )}
+          </div>
+        </>,
+        document.body,
       )}
 
       {action && (
@@ -568,6 +615,7 @@ function ActionModal({
     extend:     { title: 'Prorrogar acesso',   cta: 'Prorrogar',  danger: false },
     suspend:    { title: 'Suspender escola',   cta: 'Suspender',  danger: true },
     reactivate: { title: 'Reativar escola',    cta: 'Reativar',   danger: false },
+    activate:   { title: 'Tornar escola ativa', cta: 'Ativar',    danger: false },
   }[kind];
 
   async function submit() {
@@ -581,6 +629,9 @@ function ActionModal({
       } else if (kind === 'suspend') {
         const s = await saasService.suspendSchool(school.id, reason);
         onDone(s, `${school.name} foi suspensa.`);
+      } else if (kind === 'activate') {
+        const s = await saasService.activateSchool(school.id, reason);
+        onDone(s, `${school.name} agora está ativa.`);
       } else {
         const s = await saasService.reactivateSchool(school.id, { reason, trial_days: Number(trialDays) });
         onDone(s, `${school.name} foi reativada.`);
@@ -618,6 +669,14 @@ function ActionModal({
       {kind === 'suspend' && (
         <div className="mb-4 rounded-xl bg-danger-soft px-4 py-3 text-sm text-danger">
           A escola perde o acesso ao sistema imediatamente. Gravações são bloqueadas até a reativação.
+        </div>
+      )}
+
+      {kind === 'activate' && (
+        <div className="mb-4 rounded-xl bg-primary-soft px-4 py-3 text-sm text-ink">
+          A assinatura passa a constar como <strong>paga</strong> e o paywall deixa de bloquear a
+          escola. Use quando o pagamento foi acertado fora do sistema (transferência, cortesia,
+          escola piloto) — a cobrança automática não é gerada por esta ação.
         </div>
       )}
 

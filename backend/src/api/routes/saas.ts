@@ -455,6 +455,36 @@ saasRouter.post('/schools/:id/reactivate', async (req, res) => {
   res.json({ ok: true, data });
 });
 
+// POST /api/saas/schools/:id/activate — marca a assinatura como ATIVA (paga).
+// Override manual do superadmin, para quando o pagamento foi acertado fora do
+// fluxo automático (transferência, cortesia, escola piloto). É diferente de
+// /reactivate, que só tira a suspensão e devolve a escola ao trial: aqui a
+// escola passa a ser tratada como pagante e deixa de ser barrada pelo paywall.
+saasRouter.post('/schools/:id/activate', async (req, res) => {
+  const schoolId = String(req.params.id);
+  const reason = typeof req.body?.reason === 'string' ? req.body.reason.trim() : '';
+  if (!reason) return res.status(400).json({ code: 'reason_required', message: 'Informe o motivo da ativação.' });
+
+  const data = await withTenant(req.ctx!, async (c) => {
+    const upd = await c.query(
+      `update public.schools set
+         status='active', subscription_status='active', updated_at=now()
+       where id=$1
+       returning id, name, status as school_status, subscription_status, trial_ends_at`,
+      [schoolId],
+    );
+    if (upd.rowCount === 0) return null;
+    await c.query(
+      `insert into public.audit_logs (school_id, user_id, action, entity_type, entity_id, metadata)
+       values ($1,$2,'SCHOOL_ACTIVATED','school',$1,$3)`,
+      [schoolId, req.ctx!.profileId, JSON.stringify({ reason, actor: req.identity?.email ?? null })],
+    );
+    return upd.rows[0];
+  });
+  if (!data) return res.status(404).json({ code: 'not_found', message: 'Escola não encontrada.' });
+  res.json({ ok: true, data });
+});
+
 // -------------------------------------------------------------------------
 // Configuração de planos (CRUD) — só superadmin.
 // -------------------------------------------------------------------------
