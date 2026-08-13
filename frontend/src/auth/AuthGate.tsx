@@ -1,6 +1,6 @@
 import { createContext, useContext, useEffect, useState } from 'react';
 import { Navigate, Outlet, useLocation, Link, useNavigate } from 'react-router-dom';
-import { Loader2, ShieldAlert, CreditCard, Building2, ArrowRight } from 'lucide-react';
+import { Loader2, ShieldAlert, CreditCard, Building2, ArrowRight, RefreshCw } from 'lucide-react';
 import { useSession, signOut } from '@/lib/authClient';
 import { api } from '@/lib/api';
 import { SubscribePanel } from '@/components/settings/SubscribePanel';
@@ -173,29 +173,70 @@ function FullScreenLoader() {
   );
 }
 
+function ProfileLoadError({ onRetry }: { onRetry: () => void }) {
+  return (
+    <div className="flex min-h-screen items-center justify-center bg-canvas p-4">
+      <div className="card w-full max-w-md p-7 text-center">
+        <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-warning-soft text-warning">
+          <ShieldAlert size={28} />
+        </div>
+        <h1 className="text-lg font-bold text-ink">Não foi possível carregar sua conta</h1>
+        <p className="mt-2 text-sm text-ink-muted">
+          Seu login foi confirmado, mas houve uma falha ao buscar os dados do seu perfil.
+          Verifique sua conexão e tente novamente.
+        </p>
+        <button className="btn-primary mt-5 w-full justify-center" onClick={onRetry}>
+          <RefreshCw size={16} /> Tentar novamente
+        </button>
+        <button
+          className="mt-3 w-full text-center text-xs text-ink-subtle hover:text-ink-muted"
+          onClick={() => signOut().then(() => { window.location.href = '/login'; })}
+        >
+          Sair e voltar ao login
+        </button>
+      </div>
+    </div>
+  );
+}
+
 /** Protege o /app: exige sessão Better Auth + perfil. Sem perfil → onboarding.
  *  Se senha ainda for a inicial (password_change_required), redireciona pra troca. */
 export function AuthGate() {
   const { data: session, isPending } = useSession();
   const [me, setMe] = useState<MeResponse | null>(null);
   const [loadingMe, setLoadingMe] = useState(true);
+  const [profileLoadFailed, setProfileLoadFailed] = useState(false);
+  const [retryCount, setRetryCount] = useState(0);
   const location = useLocation();
 
   useEffect(() => {
     if (isPending) return;
-    if (!session) { setLoadingMe(false); return; }
+    if (!session) {
+      setMe(null);
+      setProfileLoadFailed(false);
+      setLoadingMe(false);
+      return;
+    }
     let active = true;
+    setLoadingMe(true);
+    setProfileLoadFailed(false);
     api.get<MeResponse>('/me')
       .then((r) => { if (active) setMe(r); })
-      .catch(() => { if (active) setMe(null); })
+      .catch(() => {
+        if (active) {
+          setMe(null);
+          setProfileLoadFailed(true);
+        }
+      })
       .finally(() => { if (active) setLoadingMe(false); });
     return () => { active = false; };
-  }, [session, isPending]);
+  }, [session, isPending, retryCount]);
 
   if (isPending || loadingMe) return <FullScreenLoader />;
   if (!session) return <Navigate to="/login" replace />;
+  if (profileLoadFailed) return <ProfileLoadError onRetry={() => setRetryCount((n) => n + 1)} />;
   if (me && !me.hasProfile) return <Navigate to="/onboarding" replace />;
-  if (!me?.profile) return <FullScreenLoader />;
+  if (!me?.profile) return <ProfileLoadError onRetry={() => setRetryCount((n) => n + 1)} />;
 
   // Troca obrigatória de senha — bloqueia tudo até trocar.
   if (me.profile.password_change_required && location.pathname !== '/app/change-password') {
