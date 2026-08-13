@@ -10,6 +10,7 @@
 //  com dois filhos pode querer automatizar só um.
 // =============================================================
 import { Router } from 'express';
+import { requireAuth } from '../../middleware/auth';
 import { withTenant } from '../../db/withTenant';
 import {
   isAsaasConfigured, asaasCreateSubscription, asaasCancelSubscription, asaasEnsureBillingCustomer,
@@ -18,6 +19,10 @@ import { calculatePixSplit } from '../../lib/fees';
 import { audit } from '../../lib/audit';
 
 export const recurringRouter = Router();
+
+// Sem isto `req.ctx` fica indefinido e o withTenant trava a função inteira
+// (504 FUNCTION_INVOCATION_TIMEOUT), em vez de responder 401.
+recurringRouter.use(requireAuth);
 
 /** Resolve o guardian do usuário autenticado. */
 async function guardianOf(c: any, profileId: string): Promise<string | null> {
