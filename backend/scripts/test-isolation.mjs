@@ -200,6 +200,30 @@ async function main() {
     check('GET /staff/:id/full (dados sensiveis)', (await call(t, `/staff/${FAKE_UUID}/full`)).status, [403]);
     check('GET /staff/me (proprios dados)', (await call(t, '/staff/me')).status, [200, 404], 'deve ver apenas os proprios dados');
 
+    console.log('PROFESSOR — broadcast de mensagens (escopo por turma):');
+    // Sem class_id → 400 (professor nao pode fazer broadcast global).
+    check('POST /messages/broadcast sem class_id', (await call(t, '/messages/broadcast', {
+      method: 'POST',
+      body: JSON.stringify({ subject: 'Teste', body: 'Teste broadcast' }),
+    })).status, [400], 'class_id_required esperado');
+    // Turma propria → permitido (200 ou 201).
+    if (myClass) {
+      check('POST /messages/broadcast turma propria', (await call(t, '/messages/broadcast', {
+        method: 'POST',
+        body: JSON.stringify({ subject: 'Aviso turma', body: 'Teste', class_id: myClass }),
+      })).status, [200, 201], 'deve enviar para responsaveis da turma');
+    }
+    // Turma alheia → 403.
+    check('POST /messages/broadcast turma alheia', (await call(t, '/messages/broadcast', {
+      method: 'POST',
+      body: JSON.stringify({ subject: 'Tentativa', body: 'Teste', class_id: target }),
+    })).status, [403], label);
+    // UUID de turma de outra escola (FAKE) → 403.
+    check('POST /messages/broadcast class_id invalido', (await call(t, '/messages/broadcast', {
+      method: 'POST',
+      body: JSON.stringify({ subject: 'Tentativa', body: 'Teste', class_id: FAKE_UUID }),
+    })).status, [403], 'turma inexistente deve ser 403 para professor');
+
     console.log('PROFESSOR — nao pode administrar:');
     check('POST /classes (criar turma)', (await call(t, '/classes', {
       method: 'POST',
@@ -219,6 +243,16 @@ async function main() {
     check('GET /saas/dashboard', (await call(a, '/saas/dashboard')).status, [403]);
     check('GET /classes/:id/students (turma inexistente)', (await call(a, `/classes/${FAKE_UUID}/students`)).status, [200, 403, 404],
       'deve vir vazio ou negado, nunca dado de outra escola');
+
+    console.log('GESTOR — broadcast de mensagens (acesso global permitido):');
+    check('POST /messages/broadcast global (sem class_id)', (await call(a, '/messages/broadcast', {
+      method: 'POST',
+      body: JSON.stringify({ subject: 'Aviso geral', body: 'Teste broadcast admin' }),
+    })).status, [200, 201], 'admin pode fazer broadcast global');
+    check('POST /messages/broadcast turma invalida (admin)', (await call(a, '/messages/broadcast', {
+      method: 'POST',
+      body: JSON.stringify({ subject: 'Teste', body: 'Teste', class_id: FAKE_UUID }),
+    })).status, [400], 'invalid_class esperado');
 
     console.log('GESTOR — jornadas (equipe da propria escola):');
     check('GET /schedules (admin)', (await call(a, '/schedules')).status, [200]);

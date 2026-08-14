@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { withTenant } from '../../db/withTenant';
 import { requireAuth } from '../../middleware/auth';
 import { audit } from '../../lib/audit';
+import { teacherCanAccessClass } from '../../lib/classAccess';
 
 export const messagesRouter = Router();
 messagesRouter.use(requireAuth);
@@ -202,26 +203,43 @@ messagesRouter.post('/broadcast', async (req, res) => {
   const p = broadcastSchema.safeParse(req.body);
   if (!p.success) return res.status(400).json({ code: 'validation', message: p.error.issues[0]?.message });
 
+  // Professor deve sempre informar class_id — sem ele não há como limitar o
+  // broadcast às turmas que leciona; broadcast global é exclusivo de admin.
+  if (role === 'teacher' && !p.data.class_id) {
+    return res.status(400).json({ code: 'class_id_required', message: 'Professor deve informar a turma.' });
+  }
+
   const result = await withTenant(req.ctx!, async (c) => {
     let guardianRows: { profile_id: string }[];
 
     if (p.data.class_id) {
-      // Confirma que a turma é desta escola ANTES de usar o id em qualquer
-      // outra query — sem isso, um class_id de outra escola só devolveria 0
-      // destinatários hoje (não vaza mensagem), mas depender dessa
-      // coincidência não é o padrão que este projeto quer manter.
-      const cls = await c.query(`select 1 from public.classes where id=$1 and school_id=$2`, [p.data.class_id, schoolId]);
-      if (cls.rows.length === 0) return 'invalid_class' as const;
+      if (role === 'teacher') {
+        // Valida posse da turma via regra central: regente ou professor de matéria.
+        // teacherCanAccessClass já confirma school_id internamente.
+        const ok = await teacherCanAccessClass(c, req.ctx!, p.data.class_id);
+        if (!ok) return { error: 'forbidden' as const };
+      } else {
+        // Admin/superadmin: basta confirmar que a turma é desta escola.
+        const cls = await c.query(
+          `select 1 from public.classes where id=$1 and school_id=$2 limit 1`,
+          [p.data.class_id, schoolId],
+        );
+        if (cls.rows.length === 0) return { error: 'invalid_class' as const };
+      }
 
       const { rows } = await c.query(
         `SELECT DISTINCT g.user_id AS profile_id
            FROM public.guardians g
            JOIN public.students s ON s.guardian_id = g.id
-          WHERE g.school_id = $1 AND s.class_id = $2 AND g.user_id IS NOT NULL`,
+                                 AND s.school_id   = $1
+                                 AND s.class_id    = $2
+          WHERE g.school_id = $1 AND g.user_id IS NOT NULL`,
         [schoolId, p.data.class_id],
       );
       guardianRows = rows;
     } else {
+      // class_id ausente só chega aqui para admin/superadmin (teacher foi
+      // bloqueado antes de entrar no withTenant).
       const { rows } = await c.query(
         `SELECT DISTINCT user_id AS profile_id
            FROM public.guardians
@@ -247,13 +265,16 @@ messagesRouter.post('/broadcast', async (req, res) => {
       entityType: 'message_broadcast',
       metadata: { subject: p.data.subject, class_id: p.data.class_id ?? null, sent },
     });
-    return sent;
+    return { data: sent };
   });
 
-  if (result === 'invalid_class') {
-    return res.status(400).json({ code: 'invalid_class', message: 'Turma não encontrada nesta escola.' });
+  if ('error' in result) {
+    if (result.error === 'forbidden') {
+      return res.status(403).json({ code: 'forbidden', message: 'Professor não tem acesso a esta turma.' });
+    }
+    return res.status(400).json({ code: result.error, message: 'Turma não encontrada nesta escola.' });
   }
-  res.status(201).json({ ok: true, sent: result });
+  res.status(201).json({ ok: true, sent: result.data });
 });
 
 messagesRouter.patch('/:id/read', async (req, res) => {
