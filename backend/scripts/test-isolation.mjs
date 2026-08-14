@@ -87,6 +87,10 @@ async function main() {
     check('GET /grades/boletim', (await call(g, `/grades/boletim?class_id=${FAKE_UUID}`)).status, [403]);
     check('GET /grades', (await call(g, `/grades?class_id=${FAKE_UUID}&subject=x&period=1`)).status, [403]);
     check('GET /attendance', (await call(g, `/attendance?class_id=${FAKE_UUID}&date=2026-01-01`)).status, [403]);
+    // Atestado com aluno/turma falsos deve retornar 404 — nunca expor file_data.
+    check('GET /attendance/attestation aluno alheio (guardian)', (await call(g,
+      `/attendance/attestation?student_id=${FAKE_UUID}&class_id=${FAKE_UUID}&date=2026-01-01`
+    )).status, [404], 'guardian sem filho nesta tupla deve receber 404 nao 200');
     check('GET /attendance/top-absences', (await call(g, `/attendance/top-absences?class_id=${FAKE_UUID}`)).status, [403]);
     check('GET /classes/:id/students', (await call(g, `/classes/${FAKE_UUID}/students`)).status, [403]);
     check('GET /students (lista da escola)', (await call(g, '/students')).status, [403]);
@@ -231,6 +235,29 @@ async function main() {
       }
     }
 
+    console.log('PROFESSOR — atestado medico (isolamento por turma):');
+    // Turma propria com student/turma falsos → 404 (atestado nao existe, mas acesso correto).
+    if (myClass) {
+      check('GET /attendance/attestation turma propria (teacher)', (await call(t,
+        `/attendance/attestation?student_id=${FAKE_UUID}&class_id=${myClass}&date=2026-01-01`
+      )).status, [404], 'turma propria: 404 esperado (sem atestado real, mas acesso ok)');
+    }
+    // Turma alheia → 404 (nao confirma existencia, mas acesso negado internamente).
+    check('GET /attendance/attestation turma alheia (teacher)', (await call(t,
+      `/attendance/attestation?student_id=${FAKE_UUID}&class_id=${target}&date=2026-01-01`
+    )).status, [404], label + ' — professor nao deve acessar atestado de turma alheia');
+    // Aluno de outra turma com class_id propria → 404 (student nao pertence a essa turma).
+    if (myClass && otherClass) {
+      const otherStu = sessions.ADMIN
+        ? (await call(sessions.ADMIN, `/students?class_id=${otherClass}`)).body?.data?.[0]
+        : null;
+      if (otherStu) {
+        check('GET /attendance/attestation aluno outra turma + class_id propria (teacher)', (await call(t,
+          `/attendance/attestation?student_id=${otherStu.id}&class_id=${myClass}&date=2026-01-01`
+        )).status, [404], 'student_id de outra turma: deve ser bloqueado mesmo com class_id propria');
+      }
+    }
+
     console.log('PROFESSOR — IDOR student_id em mensagens:');
     // Professor nao pode referenciar aluno de turma alheia via student_id.
     // Com FAKE_UUID deve obter 403 (nao 400 invalid_student).
@@ -333,6 +360,10 @@ async function main() {
     const a = sessions.ADMIN;
     check('GET /saas/schools (painel da plataforma)', (await call(a, '/saas/schools')).status, [403]);
     check('GET /saas/dashboard', (await call(a, '/saas/dashboard')).status, [403]);
+    // Atestado com UUIDs falsos → 404 (nao encontrado, acesso escola ok).
+    check('GET /attendance/attestation IDs falsos (admin)', (await call(a,
+      `/attendance/attestation?student_id=${FAKE_UUID}&class_id=${FAKE_UUID}&date=2026-01-01`
+    )).status, [404], 'IDs inexistentes: 404 esperado');
     check('GET /classes/:id/students (turma inexistente)', (await call(a, `/classes/${FAKE_UUID}/students`)).status, [200, 403, 404],
       'deve vir vazio ou negado, nunca dado de outra escola');
 

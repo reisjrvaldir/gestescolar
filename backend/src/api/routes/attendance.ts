@@ -413,19 +413,56 @@ attendanceRouter.post('/attestation/mine', async (req, res) => {
 });
 
 // GET /attendance/attestation?student_id=&class_id=&date= → dados do PDF de um atestado
+// Atestado médico é dado pessoal sensível: autorização forte por papel.
+// financial bloqueado por ausência de justificativa formal (spec).
+// Retorna 404 em todas as negativas — não confirma existência do atestado.
 attendanceRouter.get('/attestation', async (req, res) => {
+  const { role, profileId, schoolId } = req.ctx!;
   const { student_id, class_id, date } = req.query;
   if (!student_id || !class_id || !date) {
     return res.status(400).json({ code: 'validation', message: 'student_id, class_id e date são obrigatórios' });
   }
+
+  if (role === 'financial') {
+    return res.status(403).json({ code: 'forbidden', message: 'Acesso não autorizado.' });
+  }
+
   const row = await withTenant(req.ctx!, async (c) => {
+    if (role === 'guardian') {
+      // Responsável: aluno deve ser filho seu nesta escola.
+      const ok = await c.query(
+        `SELECT 1 FROM public.students s
+           JOIN public.guardians g ON g.id        = s.guardian_id
+                                  AND g.school_id  = $3
+                                  AND g.user_id    = $2
+          WHERE s.id = $1 AND s.school_id = $3 LIMIT 1`,
+        [student_id, profileId, schoolId],
+      );
+      if (ok.rows.length === 0) return null;
+
+    } else if (role === 'teacher') {
+      // Professor: deve lecionar na turma informada (regente ou matéria).
+      if (!(await teacherCanAccessClass(c, req.ctx!, String(class_id)))) return null;
+      // Aluno deve pertencer àquela turma nesta escola — impede que o professor
+      // passe uma class_id própria mas um student_id de turma alheia.
+      const stuOk = await c.query(
+        `SELECT 1 FROM public.students
+          WHERE id = $1 AND school_id = $2 AND class_id = $3 LIMIT 1`,
+        [student_id, schoolId, class_id],
+      );
+      if (stuOk.rows.length === 0) return null;
+    }
+    // school_admin, coordinator, superadmin: school_id já garante isolamento.
+
     const { rows } = await c.query(
-      `select filename, file_size, file_data, status, review_note from public.attendance_attestations
-        where school_id=$1 and student_id=$2 and class_id=$3 and date=$4 limit 1`,
-      [req.ctx!.schoolId, student_id, class_id, date],
+      `SELECT filename, file_size, file_data, status, review_note
+         FROM public.attendance_attestations
+        WHERE school_id = $1 AND student_id = $2 AND class_id = $3 AND date = $4 LIMIT 1`,
+      [schoolId, student_id, class_id, date],
     );
     return rows[0] ?? null;
   });
+
   if (!row) return res.status(404).json({ code: 'not_found' });
   res.json({
     ok: true,
