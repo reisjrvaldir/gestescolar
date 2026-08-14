@@ -37,12 +37,37 @@ rodam em contexto superadmin, para continuarem funcionando quando a RLS valer.
 `withSystem` em: `middleware/auth.ts` (resolveProfile), `routes/me.ts`,
 `routes/publicAuth.ts`, `routes/cron.ts`, `routes/webhooks.ts`.
 
-### Fase B.1 — migração `0011` (policy de profiles + FORCE)  ⏳
+### Fase B.1 — migrações `0011` + `0021` + `0037`  ⏳
 
 `0011_force_rls.sql` adiciona a policy de **escrita tenant em `profiles`** (que
-faltava; senão criar aluno/funcionário quebra) e liga FORCE. Aplicar via
-`npm run migrate`. **Sozinha ainda não isola** (por causa do BYPASSRLS), mas é
-pré-requisito e é inócua com o role atual.
+faltava; senão criar aluno/funcionário quebra) e liga FORCE. **Sozinha ainda não
+isola** (por causa do BYPASSRLS), mas é pré-requisito e é inócua com o role atual.
+
+`0021_rls_gapfill.sql` e `0037_rls_gapfill_v2.sql` fecham as tabelas criadas
+depois da 0011. Aplicar as três **manualmente no SQL Editor do Neon**.
+
+> ⚠️ **NÃO usar `npm run migrate`.** As migrations vêm sendo aplicadas à mão, então
+> `public._migrations` não reflete o estado real do banco — o runner tentaria
+> reaplicar tudo a partir da 0012.
+
+#### Auditoria de cobertura — 2026-08-14
+
+Varredura de todas as tabelas criadas após a 0021, verificando policy + FORCE:
+
+| Verificação | Resultado |
+|---|---|
+| Tabela com RLS ligada mas **sem** policy (quebraria o app) | nenhuma |
+| Rotas usando `pool` direto sem contexto | nenhuma — `plans.ts` é catálogo global (`for select using (true)`); webhooks setam `app.user_role='superadmin'` |
+| Tabelas de tenant **sem** RLS | 5 → fechadas pela `0037` |
+
+As 5 lacunas eram `expense_audit_log`, `school_plan_history`,
+`guardian_recurring_payments`, `consent_log` e `leads`. Cada policy da 0037 foi
+escrita depois de auditar como a tabela é acessada (`leads` ficou
+superadmin-only: tem PII e não tem `school_id`).
+
+**Esta auditoria expira.** Toda tabela de tenant nova precisa entrar com
+`enable row level security` + policy na própria migration que a cria. Antes de
+executar a Fase B.2, refazer a varredura — senão o enforcement sobe com buraco.
 
 ### Fase B.2 — role de aplicação SEM bypassrls  ⏳ (é o que efetivamente isola)
 
