@@ -160,6 +160,24 @@ async function main() {
     // class_id alheia → deve retornar 403
     check('GET /students?class_id=alheia', (await call(t, `/students?class_id=${target}`)).status, [403], label);
 
+    console.log('PROFESSOR — busca global (escopo restrito a turmas proprias):');
+    const teacherSearch = await call(t, '/search?q=a');
+    check('GET /search?q=a (professor)', teacherSearch.status, [200]);
+    if (teacherSearch.status === 200) {
+      const items = teacherSearch.body?.data ?? [];
+      // Nenhum resultado deve ser de outra escola: verificacao implicita via school_id no backend.
+      // Turmas retornadas (se houver) devem ser apenas as do professor.
+      const foreignClasses = myClass
+        ? items.filter((i) => i.type === 'class' && i.id !== myClass)
+        : [];
+      if (foreignClasses.length === 0) {
+        console.log('  PASSA  busca nao retornou turmas alheias');
+      } else {
+        console.log(`  FALHA  turmas alheias na busca: ${foreignClasses.map((c) => c.id).slice(0, 3).join(', ')}`);
+        results.push({ ok: false, name: 'GET /search turma alheia vazou', actual: 'vazou', expected: 'escopo restrito', detail: '' });
+      }
+    }
+
     console.log('PROFESSOR — nao pode ver equipe alheia:');
     check('GET /staff (listagem geral)', (await call(t, '/staff')).status, [403], 'professor nao pode listar equipe');
     check('GET /staff/:id/full (dados sensiveis)', (await call(t, `/staff/${FAKE_UUID}/full`)).status, [403]);
@@ -184,6 +202,10 @@ async function main() {
     check('GET /saas/dashboard', (await call(a, '/saas/dashboard')).status, [403]);
     check('GET /classes/:id/students (turma inexistente)', (await call(a, `/classes/${FAKE_UUID}/students`)).status, [200, 403, 404],
       'deve vir vazio ou negado, nunca dado de outra escola');
+
+    console.log('GESTOR — busca global (escola inteira, nunca outra escola):');
+    const adminSearch = await call(a, '/search?q=a');
+    check('GET /search?q=a (admin)', adminSearch.status, [200]);
 
     console.log('GESTOR — listagem de equipe (acesso completo da propria escola):');
     check('GET /staff (admin ve equipe)', (await call(a, '/staff')).status, [200]);

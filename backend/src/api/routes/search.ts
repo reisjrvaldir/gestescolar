@@ -26,23 +26,63 @@ searchRouter.get('/', async (req, res) => {
     const sid = req.ctx!.schoolId;
     const pending: Promise<{ id: string; name: string; context: string | null; type: string }[]>[] = [];
 
-    // Alunos — todos exceto responsável (que só vê o próprio filho)
-    if (role !== 'guardian') {
-      pending.push(
-        c.query<{ id: string; name: string; context: string | null; type: string }>(
-          `select id::text, name,
-                  coalesce(registration_number, '') as context,
-                  'student' as type
-             from public.students
-            where school_id=$1 and status='active'
-              and (name ilike $2 or registration_number ilike $2)
-            order by name limit 5`,
-          [sid, term],
-        ).then((r) => r.rows),
+    // Professor: resolve teacherId a partir do JWT (nunca do request).
+    // Deve ocorrer antes das queries paralelas porque as queries de alunos
+    // e turmas dependem desse valor para escopo correto.
+    let teacherId: string | null = null;
+    if (role === 'teacher') {
+      const tv = await c.query(
+        `select id from public.teachers where user_id=$1 and school_id=$2 limit 1`,
+        [req.ctx!.profileId, sid],
       );
+      teacherId = tv.rows[0]?.id ?? null;
+      if (!teacherId) return []; // sem vínculo → sem resultados
     }
 
-    // Responsáveis — financeiro e admin
+    // Subquery de turmas do professor (reutilizada em alunos e turmas)
+    const teacherClassSubq = `(
+      select cl.id from public.classes cl
+       where cl.school_id=$1
+         and (cl.teacher_id = $3
+              or exists (
+                select 1 from public.class_subjects cs
+                 where cs.class_id = cl.id and cs.teacher_id = $3
+              ))
+    )`;
+
+    // Alunos — exceto responsável; professor restrito às próprias turmas
+    if (role !== 'guardian') {
+      if (role === 'teacher') {
+        pending.push(
+          c.query<{ id: string; name: string; context: string | null; type: string }>(
+            `select id::text, name,
+                    coalesce(registration_number, '') as context,
+                    'student' as type
+               from public.students
+              where school_id=$1 and status='active'
+                and (name ilike $2 or registration_number ilike $2)
+                and class_id in ${teacherClassSubq}
+              order by name limit 5`,
+            [sid, term, teacherId],
+          ).then((r) => r.rows),
+        );
+      } else {
+        pending.push(
+          c.query<{ id: string; name: string; context: string | null; type: string }>(
+            `select id::text, name,
+                    coalesce(registration_number, '') as context,
+                    'student' as type
+               from public.students
+              where school_id=$1 and status='active'
+                and (name ilike $2 or registration_number ilike $2)
+              order by name limit 5`,
+            [sid, term],
+          ).then((r) => r.rows),
+        );
+      }
+    }
+
+    // Responsáveis — financeiro e admin (teacher não incluído)
     if ((FINANCIAL_ROLES as readonly string[]).includes(role)) {
       pending.push(
         c.query<{ id: string; name: string; context: string | null; type: string }>(
@@ -58,7 +98,7 @@ searchRouter.get('/', async (req, res) => {
       );
     }
 
-    // Funcionários — apenas admin
+    // Funcionários — apenas admin (teacher não incluído)
     if ((ADMIN_ROLES as readonly string[]).includes(role)) {
       pending.push(
         c.query<{ id: string; name: string; context: string | null; type: string }>(
@@ -74,20 +114,36 @@ searchRouter.get('/', async (req, res) => {
       );
     }
 
-    // Turmas — todos exceto responsável
+    // Turmas — exceto responsável; professor restrito às próprias turmas
     if (role !== 'guardian') {
-      pending.push(
-        c.query<{ id: string; name: string; context: string | null; type: string }>(
-          `select id::text, name,
-                  null::text as context,
-                  'class' as type
-             from public.classes
-            where school_id=$1 and status='active'
-              and name ilike $2
-            order by name limit 5`,
-          [sid, term],
-        ).then((r) => r.rows),
-      );
+      if (role === 'teacher') {
+        pending.push(
+          c.query<{ id: string; name: string; context: string | null; type: string }>(
+            `select id::text, name,
+                    null::text as context,
+                    'class' as type
+               from public.classes
+              where school_id=$1 and status='active'
+                and name ilike $2
+                and id in ${teacherClassSubq}
+              order by name limit 5`,
+            [sid, term, teacherId],
+          ).then((r) => r.rows),
+        );
+      } else {
+        pending.push(
+          c.query<{ id: string; name: string; context: string | null; type: string }>(
+            `select id::text, name,
+                    null::text as context,
+                    'class' as type
+               from public.classes
+              where school_id=$1 and status='active'
+                and name ilike $2
+              order by name limit 5`,
+            [sid, term],
+          ).then((r) => r.rows),
+        );
+      }
     }
 
     // Cobranças — financeiro e admin
