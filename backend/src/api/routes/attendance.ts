@@ -490,9 +490,21 @@ attendanceRouter.post('/attestation', requireRole('school_admin', 'teacher', 'su
   const { student_id, class_id, date, filename, file_size, file_data } = parsed.data;
 
   const result = await withTenant(req.ctx!, async (c) => {
-    const cls = await c.query(`select 1 from public.classes where id=$1 and school_id=$2 limit 1`, [class_id, req.ctx!.schoolId]);
-    if (cls.rows.length === 0) return { error: 'class_not_found' as const };
-    const stu = await c.query(`select 1 from public.students where id=$1 and school_id=$2 limit 1`, [student_id, req.ctx!.schoolId]);
+    // Professor: verificar posse da turma antes de qualquer outra query.
+    if (req.ctx!.role === 'teacher') {
+      if (!(await teacherCanAccessClass(c, req.ctx!, class_id))) {
+        return { error: 'forbidden' as const };
+      }
+    }
+
+    // Validação atômica aluno + turma + escola.
+    // Uma query única evita que alguém passe class_id própria + student_id de
+    // outra turma — as duas verificações separadas passariam individualmente.
+    const stu = await c.query(
+      `SELECT 1 FROM public.students
+        WHERE id = $1 AND school_id = $2 AND class_id = $3 LIMIT 1`,
+      [student_id, req.ctx!.schoolId, class_id],
+    );
     if (stu.rows.length === 0) return { error: 'invalid_student' as const };
 
     await c.query(
@@ -507,8 +519,10 @@ attendanceRouter.post('/attestation', requireRole('school_admin', 'teacher', 'su
   });
 
   if ('error' in result) {
-    const msg = result.error === 'class_not_found' ? 'Turma não encontrada nesta escola.' : 'Aluno inválido para esta escola.';
-    return res.status(result.error === 'class_not_found' ? 404 : 400).json({ code: result.error, message: msg });
+    if (result.error === 'forbidden') {
+      return res.status(403).json({ code: 'forbidden', message: 'Você não leciona nesta turma.' });
+    }
+    return res.status(404).json({ code: 'invalid_student', message: 'Aluno não encontrado nesta turma.' });
   }
   res.json({ ok: true });
 });

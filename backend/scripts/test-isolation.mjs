@@ -258,6 +258,36 @@ async function main() {
       }
     }
 
+    // POST /attendance/attestation — isolamento de escrita por turma.
+    const FAKE_PDF = { filename: 'test.pdf', file_size: 4, file_data: 'dGVzdA==' };
+    console.log('PROFESSOR — atestado medico POST (escrita isolada por turma):');
+    // Turma alheia como class_id → 403 (teacherCanAccessClass falha).
+    const attPostWrongClass = await call(t, '/attendance/attestation', {
+      method: 'POST',
+      body: JSON.stringify({ student_id: FAKE_UUID, class_id: target, date: '2026-01-01', ...FAKE_PDF }),
+    });
+    check('POST /attendance/attestation turma alheia (teacher)', attPostWrongClass.status, [403],
+      'professor nao leciona nessa turma — deve ser 403');
+    // UUID qualquer como class_id → 403 (nao e turma do professor).
+    const attPostFakeClass = await call(t, '/attendance/attestation', {
+      method: 'POST',
+      body: JSON.stringify({ student_id: FAKE_UUID, class_id: FAKE_UUID, date: '2026-01-01', ...FAKE_PDF }),
+    });
+    check('POST /attendance/attestation class_id falso (teacher)', attPostFakeClass.status, [403],
+      'class_id inexistente nao e do professor — deve ser 403');
+    // Turma propria + aluno de outra turma → 404 (validacao atomica).
+    if (myClass && otherClass && sessions.ADMIN) {
+      const stOther = (await call(sessions.ADMIN, `/students?class_id=${otherClass}`)).body?.data?.[0];
+      if (stOther) {
+        const attPostCrossStudent = await call(t, '/attendance/attestation', {
+          method: 'POST',
+          body: JSON.stringify({ student_id: stOther.id, class_id: myClass, date: '2026-01-01', ...FAKE_PDF }),
+        });
+        check('POST /attendance/attestation aluno outra turma + class_id propria (teacher)', attPostCrossStudent.status, [404],
+          'aluno nao pertence a essa turma — validacao atomica deve barrar (404)');
+      }
+    }
+
     console.log('PROFESSOR — IDOR student_id em mensagens:');
     // Professor nao pode referenciar aluno de turma alheia via student_id.
     // Com FAKE_UUID deve obter 403 (nao 400 invalid_student).
