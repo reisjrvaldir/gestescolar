@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { withTenant } from '../../db/withTenant';
 import { requireAuth } from '../../middleware/auth';
+import { guardianCalendarWhere } from '../../lib/calendarScope';
 
 export const dashboardRouter = Router();
 dashboardRouter.use(requireAuth);
@@ -54,6 +55,7 @@ dashboardRouter.get('/stats', async (req, res) => {
       );
 
       const now = new Date();
+      // $1 = schoolId, $2 = profileId (user_id do guardian — mesma derivação do calendar.ts)
       const events = await c.query(
         `select id, title, description, date_start::text, date_end::text, event_type,
                 to_char(start_time, 'HH24:MI') as start_time,
@@ -62,8 +64,9 @@ dashboardRouter.get('/stats', async (req, res) => {
           where school_id = $1
             and (date_start >= current_date
                  or (date_end is not null and date_end >= current_date))
+            and ${guardianCalendarWhere('class_id', 1, 2)}
           order by date_start asc, start_time asc nulls last limit 6`,
-        [schoolId],
+        [schoolId, req.ctx!.profileId],
       );
 
       // Status efetivo em tempo real: fatura 'pending' com vencimento no passado

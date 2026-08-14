@@ -103,6 +103,34 @@ async function main() {
     check('GET /attendance/my-children', (await call(g, '/attendance/my-children')).status, [200]);
     check('GET /invoices/mine', (await call(g, '/invoices/mine')).status, [200]);
 
+    console.log('RESPONSAVEL — dashboard (eventos restritos as turmas dos filhos):');
+    const guardianDash = await call(g, '/dashboard/stats');
+    check('GET /dashboard/stats (guardian)', guardianDash.status, [200]);
+    if (guardianDash.status === 200) {
+      const gd = guardianDash.body?.data ?? {};
+      // upcoming_events deve ser array (query pode retornar vazio, nao deve crashar).
+      if (Array.isArray(gd.upcoming_events)) {
+        console.log(`  PASSA  upcoming_events e array (${gd.upcoming_events.length} evento(s))`);
+      } else {
+        console.log('  FALHA  upcoming_events nao e array');
+        results.push({ ok: false, name: 'GET /dashboard/stats upcoming_events type (guardian)', actual: typeof gd.upcoming_events, expected: 'array', detail: '' });
+      }
+      // Calendário publico (global): verificar que responsavel nao ve eventos de turmas alheias.
+      // Estrategia: comparar com GET /calendar e verificar que todos os eventos da turma
+      // presentes no dashboard tambem aparecem no calendario do proprio responsavel.
+      const guardianCal = await call(g, '/calendar');
+      if (guardianCal.status === 200 && Array.isArray(gd.upcoming_events)) {
+        const calIds = new Set((guardianCal.body?.data ?? []).map((e) => e.id));
+        const leaked = (gd.upcoming_events).filter((e) => !calIds.has(e.id));
+        if (leaked.length === 0) {
+          console.log('  PASSA  todos os eventos do dashboard estao dentro do escopo do calendario');
+        } else {
+          console.log(`  FALHA  ${leaked.length} evento(s) do dashboard nao passam pelo filtro do /calendar`);
+          results.push({ ok: false, name: 'GET /dashboard/stats eventos fora do escopo (guardian)', actual: `${leaked.length} fora`, expected: 'todos dentro de /calendar', detail: '' });
+        }
+      }
+    }
+
     console.log('RESPONSAVEL — IDOR student_id em mensagens:');
     // student_id de UUID falso: responsavel nao pode referenciar aluno alheio.
     // Deve retornar 403 (nao 400/invalid_student) para nao confirmar existencia.
