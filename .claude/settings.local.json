@@ -167,7 +167,11 @@
       "Bash(python -c \"import yaml; yaml.safe_load\\(open\\('.github/workflows/ci.yml'\\)\\); yaml.safe_load\\(open\\('.github/workflows/commit-lint.yml'\\)\\); print\\('YAMLs válidos'\\)\")",
       "Bash(node -e ' *)",
       "mcp__mcp-registry__search_mcp_registry",
-      "Bash(rm -f /tmp/supabase_win.tar.gz /tmp/supabase.exe /tmp/README.md /tmp/LICENSE 2>/dev/null *)"
+      "Bash(rm -f /tmp/supabase_win.tar.gz /tmp/supabase.exe /tmp/README.md /tmp/LICENSE 2>/dev/null *)",
+      "Bash(git add *)",
+      "Bash(git commit -m 'fix: proxy /api/* para o backend via Vercel rewrite *)",
+      "Bash(npx vercel *)",
+      "Bash(npx esbuild *)"
     ]
   }
 }
