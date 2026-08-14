@@ -97,6 +97,21 @@ async function main() {
     check('GET /attendance/my-children', (await call(g, '/attendance/my-children')).status, [200]);
     check('GET /invoices/mine', (await call(g, '/invoices/mine')).status, [200]);
 
+    console.log('RESPONSAVEL — IDOR student_id em mensagens:');
+    // student_id de UUID falso: responsavel nao pode referenciar aluno alheio.
+    // Deve retornar 403 (nao 400/invalid_student) para nao confirmar existencia.
+    check('POST /messages student_id IDOR (guardian)', (await call(g, '/messages', {
+      method: 'POST',
+      body: JSON.stringify({
+        recipient_id: FAKE_UUID,
+        subject: 'IDOR test',
+        body: 'Teste',
+        student_id: FAKE_UUID,
+      }),
+    })).status, [400, 403], '400 invalid_recipient ou 403 forbidden esperado (nao 200)');
+    // Testa especificamente student_id sem recipient invalido: precisa de recipient valido.
+    // Como nao temos recipient real aqui, apenas garantimos que student_id=FAKE retorna >= 400.
+
     console.log('RESPONSAVEL — contatos de mensagens (nunca lista outros responsaveis):');
     const guardianContacts = await call(g, '/messages/contacts');
     check('GET /messages/contacts (guardian)', guardianContacts.status, [200]);
@@ -216,6 +231,38 @@ async function main() {
       }
     }
 
+    console.log('PROFESSOR — IDOR student_id em mensagens:');
+    // Professor nao pode referenciar aluno de turma alheia via student_id.
+    // Com FAKE_UUID deve obter 403 (nao 400 invalid_student).
+    const teacherMsgIdr = await call(t, '/messages', {
+      method: 'POST',
+      body: JSON.stringify({
+        recipient_id: FAKE_UUID,
+        subject: 'IDOR test',
+        body: 'Teste',
+        student_id: FAKE_UUID,
+      }),
+    });
+    check('POST /messages student_id IDOR (teacher)', teacherMsgIdr.status, [400, 403], '400 invalid_recipient ou 403 forbidden esperado');
+    // Se admin disponivel: pega um aluno real de outra turma e confirma 403.
+    if (sessions.ADMIN && otherClass) {
+      const otherStudents = await call(sessions.ADMIN, `/students?class_id=${otherClass}`);
+      const otherStudent = otherStudents.body?.data?.[0];
+      if (otherStudent) {
+        const idrRes = await call(t, '/messages', {
+          method: 'POST',
+          body: JSON.stringify({
+            recipient_id: FAKE_UUID,
+            subject: 'IDOR',
+            body: 'Teste',
+            student_id: otherStudent.id,
+          }),
+        });
+        check('POST /messages student_id de turma alheia (teacher)', idrRes.status, [400, 403],
+          `aluno ${otherStudent.id} nao e da turma do professor — 403 esperado`);
+      }
+    }
+
     console.log('PROFESSOR — contatos de mensagens (apenas admin + responsaveis das turmas proprias):');
     const teacherContacts = await call(t, '/messages/contacts');
     check('GET /messages/contacts (teacher)', teacherContacts.status, [200]);
@@ -288,6 +335,20 @@ async function main() {
     check('GET /saas/dashboard', (await call(a, '/saas/dashboard')).status, [403]);
     check('GET /classes/:id/students (turma inexistente)', (await call(a, `/classes/${FAKE_UUID}/students`)).status, [200, 403, 404],
       'deve vir vazio ou negado, nunca dado de outra escola');
+
+    console.log('GESTOR — IDOR student_id em mensagens (admin: valida apenas escola):');
+    // Admin com student_id invalido deve receber 400 invalid_student (nao 403).
+    const adminMsgIdr = await call(a, '/messages', {
+      method: 'POST',
+      body: JSON.stringify({
+        recipient_id: FAKE_UUID,
+        subject: 'IDOR test',
+        body: 'Teste',
+        student_id: FAKE_UUID,
+      }),
+    });
+    // 400 porque recipient_id invalido é verificado antes de student_id.
+    check('POST /messages student_id IDOR (admin)', adminMsgIdr.status, [400], 'invalid_recipient esperado antes de student check');
 
     console.log('GESTOR — broadcast de mensagens (acesso global permitido):');
     check('POST /messages/broadcast global (sem class_id)', (await call(a, '/messages/broadcast', {

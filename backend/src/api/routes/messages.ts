@@ -220,7 +220,7 @@ messagesRouter.get('/', async (req, res) => {
          from public.messages m
          join public.profiles sender on sender.id = m.sender_id
          join public.profiles recipient on recipient.id = m.recipient_id
-         left join public.students st on st.id = m.student_id
+         left join public.students st on st.id = m.student_id and st.school_id = m.school_id
         where m.${field} = $1 and m.school_id = $2
         order by m.created_at desc
         limit 100`,
@@ -243,11 +243,49 @@ messagesRouter.post('/', async (req, res) => {
     if (recip.rows.length === 0) return { error: 'invalid_recipient' as const };
 
     if (p.data.student_id) {
-      const stu = await c.query(
-        `select 1 from public.students where id=$1 and school_id=$2 limit 1`,
-        [p.data.student_id, req.ctx!.schoolId],
-      );
-      if (stu.rows.length === 0) return { error: 'invalid_student' as const };
+      const { role, profileId, schoolId: sid } = req.ctx!;
+
+      if (role === 'guardian') {
+        // Responsável só pode referenciar o próprio filho.
+        const sv = await c.query(
+          `SELECT 1 FROM public.students s
+             JOIN public.guardians g ON g.id        = s.guardian_id
+                                    AND g.school_id  = $3
+                                    AND g.user_id    = $2
+            WHERE s.id = $1 AND s.school_id = $3 LIMIT 1`,
+          [p.data.student_id, profileId, sid],
+        );
+        if (sv.rows.length === 0) return { error: 'student_forbidden' as const };
+
+      } else if (role === 'teacher') {
+        // Professor só pode referenciar aluno de turma que leciona.
+        const sv = await c.query(
+          `SELECT 1 FROM public.students s
+             JOIN public.teachers t  ON t.user_id    = $2 AND t.school_id = $3
+             JOIN public.classes  cl ON cl.id         = s.class_id
+                                    AND cl.school_id  = $3
+                                    AND (
+                                      cl.teacher_id = t.id
+                                      OR EXISTS (
+                                        SELECT 1 FROM public.class_subjects cs
+                                         WHERE cs.class_id   = cl.id
+                                           AND cs.teacher_id = t.id
+                                           AND cs.school_id  = $3
+                                      )
+                                    )
+            WHERE s.id = $1 AND s.school_id = $3 LIMIT 1`,
+          [p.data.student_id, profileId, sid],
+        );
+        if (sv.rows.length === 0) return { error: 'student_forbidden' as const };
+
+      } else {
+        // Admin/financeiro/superadmin: basta pertencer à escola.
+        const sv = await c.query(
+          `SELECT 1 FROM public.students WHERE id=$1 AND school_id=$2 LIMIT 1`,
+          [p.data.student_id, sid],
+        );
+        if (sv.rows.length === 0) return { error: 'invalid_student' as const };
+      }
     }
 
     const { rows } = await c.query(
@@ -266,10 +304,14 @@ messagesRouter.post('/', async (req, res) => {
   });
 
   if ('error' in result) {
-    const message = result.error === 'invalid_recipient'
-      ? 'Destinatário inválido para esta escola.'
-      : 'Aluno inválido para esta escola.';
-    return res.status(400).json({ code: result.error, message });
+    if (result.error === 'invalid_recipient') {
+      return res.status(400).json({ code: 'invalid_recipient', message: 'Destinatário inválido para esta escola.' });
+    }
+    if (result.error === 'student_forbidden') {
+      // 403 deliberadamente vago: não confirma se o aluno existe.
+      return res.status(403).json({ code: 'forbidden', message: 'Aluno não encontrado.' });
+    }
+    return res.status(400).json({ code: result.error, message: 'Aluno inválido para esta escola.' });
   }
   res.status(201).json({ ok: true, data: result.data });
 });
