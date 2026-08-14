@@ -238,6 +238,7 @@ async function main() {
     check('GET /students?class_id=inexistente (vazio, nao 403)', (await call(a, `/students?class_id=${FAKE_UUID}`)).status, [200]);
 
     console.log('GESTOR — IDOR cross-tenant em turmas (teacher_id de outra escola):');
+    const all = await call(a, '/classes');
     // Tenta criar turma com teacher_id que nao existe nesta escola (UUID falso).
     // Deve ser rejeitado com 400 teacher_not_found — nunca inserido silenciosamente.
     const badTeacher = await call(a, '/classes', {
@@ -262,6 +263,24 @@ async function main() {
         body: JSON.stringify({ name: firstClass.name, year: firstClass.year, shift: firstClass.shift, teacher_id: FAKE_UUID }),
       });
       check('PUT /classes/:id com teacher_id invalido', badPut.status, [400], 'teacher_not_found esperado');
+    }
+
+    console.log('GESTOR — IDOR cross-tenant em schedules.user_id:');
+    // Tenta criar jornada para user_id que nao existe nesta escola.
+    // O backend valida em profiles antes do INSERT — nunca permite school A + profileId school B.
+    const badUserSched = await call(a, '/schedules', {
+      method: 'POST',
+      body: JSON.stringify({ user_id: FAKE_UUID, weekday: 1, start_time: '08:00', end_time: '12:00' }),
+    });
+    check('POST /schedules com user_id invalido', badUserSched.status, [400], 'user_not_found esperado');
+    if (badUserSched.status === 400) {
+      const code = badUserSched.body?.code;
+      if (code === 'user_not_found') {
+        console.log('  PASSA  code=user_not_found recebido corretamente');
+      } else {
+        console.log(`  FALHA  esperava code=user_not_found, recebeu code=${code}`);
+        results.push({ ok: false, name: 'POST /schedules user_not_found code', actual: code, expected: 'user_not_found', detail: '' });
+      }
     }
 
     console.log('GESTOR — IDOR cross-tenant em students.class_id:');

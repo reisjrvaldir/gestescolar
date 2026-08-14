@@ -49,7 +49,14 @@ const scheduleSchema = z.object({
 schedulesRouter.post('/', requireRole('school_admin', 'superadmin'), async (req, res) => {
   const p = scheduleSchema.safeParse(req.body);
   if (!p.success) return res.status(400).json({ code: 'validation', message: p.error.issues[0]?.message });
-  const created = await withTenant(req.ctx!, async (c) => {
+  const result = await withTenant(req.ctx!, async (c) => {
+    // Garante que user_id pertence a esta escola antes do INSERT.
+    // Impede que um admin da escola A crie jornada para um perfil da escola B.
+    const uv = await c.query(
+      `select id from public.profiles where id = $1 and school_id = $2 limit 1`,
+      [p.data.user_id, req.ctx!.schoolId],
+    );
+    if (uv.rows.length === 0) return { error: 'user_not_found' as const };
     const { rows } = await c.query(
       `insert into public.work_schedules (school_id, user_id, weekday, start_time, end_time)
        values ($1, $2, $3, $4, $5)
@@ -57,9 +64,10 @@ schedulesRouter.post('/', requireRole('school_admin', 'superadmin'), async (req,
        returning id, weekday, start_time, end_time`,
       [req.ctx!.schoolId, p.data.user_id, p.data.weekday, p.data.start_time, p.data.end_time],
     );
-    return rows[0];
+    return { data: rows[0] };
   });
-  res.status(201).json({ ok: true, data: created });
+  if ('error' in result) return res.status(400).json({ code: result.error });
+  res.status(201).json({ ok: true, data: result.data });
 });
 
 schedulesRouter.delete('/:id', requireRole('school_admin', 'superadmin'), async (req, res) => {
