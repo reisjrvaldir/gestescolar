@@ -3,6 +3,7 @@ import { z } from 'zod';
 import type { PoolClient } from '@neondatabase/serverless';
 import { withTenant } from '../../db/withTenant';
 import { requireAuth, requireRole } from '../../middleware/auth';
+import { teacherCanAccessClass } from '../../lib/classAccess';
 
 export const classesRouter = Router();
 
@@ -109,6 +110,7 @@ classesRouter.get('/mine', requireRole('teacher', 'coordinator', 'school_admin',
 // GET /api/classes/:id/students — alunos da turma.
 classesRouter.get('/:id/students', requireRole(...STAFF), async (req, res) => {
   const data = await withTenant(req.ctx!, async (c) => {
+    if (!(await teacherCanAccessClass(c, req.ctx!, req.params.id))) return null;
     const { rows } = await c.query(
       `select s.id, s.name, s.registration_number, s.status
          from public.students s
@@ -118,12 +120,14 @@ classesRouter.get('/:id/students', requireRole(...STAFF), async (req, res) => {
     );
     return rows;
   });
+  if (data === null) return res.status(403).json({ code: 'forbidden', message: 'Você não leciona nesta turma.' });
   res.json({ ok: true, data });
 });
 
 // GET /api/classes/:id/subjects — matérias da turma (para chamada/notas).
 classesRouter.get('/:id/subjects', requireRole(...STAFF), async (req, res) => {
   const data = await withTenant(req.ctx!, async (c) => {
+    if (!(await teacherCanAccessClass(c, req.ctx!, req.params.id))) return null;
     const { rows } = await c.query(
       `select sub.id, sub.name
          from public.class_subjects cs
@@ -134,6 +138,7 @@ classesRouter.get('/:id/subjects', requireRole(...STAFF), async (req, res) => {
     );
     return rows;
   });
+  if (data === null) return res.status(403).json({ code: 'forbidden', message: 'Você não leciona nesta turma.' });
   res.json({ ok: true, data });
 });
 

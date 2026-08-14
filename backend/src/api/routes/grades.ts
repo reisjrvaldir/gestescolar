@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { z } from 'zod';
 import { withTenant } from '../../db/withTenant';
 import { requireAuth, requireRole } from '../../middleware/auth';
+import { teacherCanAccessClass } from '../../lib/classAccess';
 
 export const gradesRouter = Router();
 
@@ -52,6 +53,7 @@ gradesRouter.get('/', requireRole(...STAFF), async (req, res) => {
     return res.status(400).json({ code: 'validation', message: 'class_id, subject e period são obrigatórios' });
   }
   const data = await withTenant(req.ctx!, async (c) => {
+    if (!(await teacherCanAccessClass(c, req.ctx!, String(class_id)))) return null;
     const { rows } = await c.query(
       `select g.student_id,
               s.name as student_name,
@@ -69,6 +71,7 @@ gradesRouter.get('/', requireRole(...STAFF), async (req, res) => {
     );
     return rows;
   });
+  if (data === null) return res.status(403).json({ code: 'forbidden', message: 'Você não leciona nesta turma.' });
   const locked = data.some((r: any) => r.av1 !== null || r.av2 !== null);
   res.json({ ok: true, data, locked });
 });
@@ -78,6 +81,7 @@ gradesRouter.get('/boletim', requireRole(...STAFF), async (req, res) => {
   const { class_id } = req.query;
   if (!class_id) return res.status(400).json({ code: 'validation', message: 'class_id é obrigatório' });
   const result = await withTenant(req.ctx!, async (c) => {
+    if (!(await teacherCanAccessClass(c, req.ctx!, String(class_id)))) return null;
     const students = await c.query(
       `select s.id, s.name, s.registration_number
          from public.students s where s.school_id=$1 and s.class_id=$2 order by s.name`,
@@ -90,6 +94,7 @@ gradesRouter.get('/boletim', requireRole(...STAFF), async (req, res) => {
     );
     return { students: students.rows, grades: grades.rows };
   });
+  if (result === null) return res.status(403).json({ code: 'forbidden', message: 'Você não leciona nesta turma.' });
   res.json({ ok: true, data: result });
 });
 
@@ -157,6 +162,7 @@ gradesRouter.get('/summary', requireRole(...STAFF), async (req, res) => {
   const { class_id, period } = req.query;
   if (!class_id || !period) return res.status(400).json({ code: 'validation', message: 'class_id e period são obrigatórios' });
   const data = await withTenant(req.ctx!, async (c) => {
+    if (!(await teacherCanAccessClass(c, req.ctx!, String(class_id)))) return null;
     const settings = await c.query(
       `select passing_grade::float8, final_passing_grade::float8
          from public.school_grade_settings where school_id=$1`,
@@ -213,6 +219,7 @@ gradesRouter.get('/summary', requireRole(...STAFF), async (req, res) => {
 
     return { statusCounts, bySubject, passingGrade: pg, finalPassingGrade: fpg };
   });
+  if (data === null) return res.status(403).json({ code: 'forbidden', message: 'Você não leciona nesta turma.' });
   res.json({ ok: true, data });
 });
 
@@ -237,6 +244,8 @@ gradesRouter.post('/batch', requireRole('school_admin', 'teacher', 'superadmin')
   const result = await withTenant(req.ctx!, async (c) => {
     const cls = await c.query(`select 1 from public.classes where id=$1 and school_id=$2 limit 1`, [class_id, req.ctx!.schoolId]);
     if (cls.rows.length === 0) return { error: 'class_not_found' as const };
+    // Escrever nota em turma alheia é pior que ler: checa posse antes.
+    if (!(await teacherCanAccessClass(c, req.ctx!, class_id))) return { error: 'not_my_class' as const };
 
     const ids = [...new Set(entries.map((e) => e.student_id))];
     if (ids.length > 0) {
@@ -288,6 +297,9 @@ gradesRouter.post('/batch', requireRole('school_admin', 'teacher', 'superadmin')
   if ('error' in result) {
     if (result.error === 'already_locked') {
       return res.status(403).json({ code: 'already_locked', message: 'AV1/AV2 já lançadas. Somente a gestão pode alterá-las.' });
+    }
+    if (result.error === 'not_my_class') {
+      return res.status(403).json({ code: 'forbidden', message: 'Você não leciona nesta turma.' });
     }
     const msg = result.error === 'class_not_found' ? 'Turma não encontrada.' : 'Aluno inválido.';
     return res.status(result.error === 'class_not_found' ? 404 : 400).json({ code: result.error, message: msg });

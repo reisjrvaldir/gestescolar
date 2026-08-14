@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { z } from 'zod';
 import { withTenant } from '../../db/withTenant';
 import { requireAuth, requireRole } from '../../middleware/auth';
+import { teacherCanAccessClass } from '../../lib/classAccess';
 
 export const attendanceRouter = Router();
 
@@ -31,6 +32,7 @@ attendanceRouter.get('/', requireRole(...STAFF), async (req, res) => {
     return res.status(400).json({ code: 'validation', message: 'class_id e date são obrigatórios' });
   }
   const result = await withTenant(req.ctx!, async (c) => {
+    if (!(await teacherCanAccessClass(c, req.ctx!, String(class_id)))) return null;
     const { rows } = await c.query(
       `select a.id, a.student_id, a.status, a.justification, s.name as student_name, s.registration_number
          from public.attendance a
@@ -43,6 +45,7 @@ attendanceRouter.get('/', requireRole(...STAFF), async (req, res) => {
     );
     return rows;
   });
+  if (result === null) return res.status(403).json({ code: 'forbidden', message: 'Você não leciona nesta turma.' });
   res.json({ ok: true, data: result, locked: result.length > 0 });
 });
 
@@ -53,6 +56,7 @@ attendanceRouter.get('/calendar', requireRole(...STAFF), async (req, res) => {
     return res.status(400).json({ code: 'validation', message: 'class_id, year e month são obrigatórios' });
   }
   const data = await withTenant(req.ctx!, async (c) => {
+    if (!(await teacherCanAccessClass(c, req.ctx!, String(class_id)))) return null;
     const { rows } = await c.query(
       `select
           a.date::text as date,
@@ -74,6 +78,7 @@ attendanceRouter.get('/calendar', requireRole(...STAFF), async (req, res) => {
     );
     return rows;
   });
+  if (data === null) return res.status(403).json({ code: 'forbidden', message: 'Você não leciona nesta turma.' });
   res.json({ ok: true, data });
 });
 
@@ -82,6 +87,8 @@ attendanceRouter.get('/summary', requireRole(...STAFF), async (req, res) => {
   const classId = (req.query.class_id as string | undefined) || null;
   const scope = req.query.scope === '30d' ? '30d' : 'month';
   const data = await withTenant(req.ctx!, async (c) => {
+    // Sem class_id o recorte é a escola inteira — negado para professor.
+    if (!(await teacherCanAccessClass(c, req.ctx!, classId))) return null;
     const { rows } = await c.query(
       `select
           count(*) filter (where status = 'present')   as present,
@@ -98,6 +105,7 @@ attendanceRouter.get('/summary', requireRole(...STAFF), async (req, res) => {
     );
     return rows[0];
   });
+  if (data === null) return res.status(403).json({ code: 'forbidden', message: 'Você não leciona nesta turma.' });
   res.json({ ok: true, data });
 });
 
@@ -109,6 +117,8 @@ attendanceRouter.get('/top-absences', requireRole(...STAFF), async (req, res) =>
   const year  = req.query.year  ? Number(req.query.year)  : now.getFullYear();
   const month = req.query.month ? Number(req.query.month) : now.getMonth() + 1;
   const data = await withTenant(req.ctx!, async (c) => {
+    // Sem class_id o recorte é a escola inteira — negado para professor.
+    if (!(await teacherCanAccessClass(c, req.ctx!, classId))) return null;
     const { rows } = await c.query(
       // Ausência = qualquer status que não seja presença: falta simples,
       // justificada, com atestado em análise (attested) ou já abonada por
@@ -131,6 +141,7 @@ attendanceRouter.get('/top-absences', requireRole(...STAFF), async (req, res) =>
     );
     return rows;
   });
+  if (data === null) return res.status(403).json({ code: 'forbidden', message: 'Você não leciona nesta turma.' });
   res.json({ ok: true, data });
 });
 
@@ -479,6 +490,8 @@ attendanceRouter.post('/batch', requireRole('school_admin', 'teacher', 'superadm
       [class_id, req.ctx!.schoolId],
     );
     if (cls.rows.length === 0) return { error: 'class_not_found' as const };
+    // Registrar chamada em turma alheia é pior que ler: checa posse antes.
+    if (!(await teacherCanAccessClass(c, req.ctx!, class_id))) return { error: 'not_my_class' as const };
 
     if (subjectId) {
       const sub = await c.query(`select 1 from public.subjects where id=$1 and school_id=$2 limit 1`, [subjectId, req.ctx!.schoolId]);
@@ -530,6 +543,9 @@ attendanceRouter.post('/batch', requireRole('school_admin', 'teacher', 'superadm
   if ('error' in result) {
     if (result.error === 'already_locked') {
       return res.status(403).json({ code: 'already_locked', message: 'Chamada já encerrada. Somente a gestão pode alterá-la.' });
+    }
+    if (result.error === 'not_my_class') {
+      return res.status(403).json({ code: 'forbidden', message: 'Você não leciona nesta turma.' });
     }
     const msg = result.error === 'class_not_found' ? 'Turma não encontrada nesta escola.'
       : result.error === 'invalid_subject' ? 'Matéria inválida para esta escola.'
