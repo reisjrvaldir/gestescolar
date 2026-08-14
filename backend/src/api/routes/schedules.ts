@@ -6,15 +6,26 @@ import { requireAuth, requireRole } from '../../middleware/auth';
 export const schedulesRouter = Router();
 schedulesRouter.use(requireAuth);
 
+// financial mantido: gestão de folha/RH precisa consultar jornadas para cálculo de horas.
 schedulesRouter.get('/', requireRole('school_admin', 'financial', 'teacher', 'superadmin'), async (req, res) => {
-  const userId = req.query.user_id as string | undefined;
   const data = await withTenant(req.ctx!, async (c) => {
     const params: unknown[] = [req.ctx!.schoolId];
     let filter = '';
-    if (userId) {
+
+    if (req.ctx!.role === 'teacher') {
+      // Professor: força o próprio profileId (JWT) — req.query.user_id é ignorado.
+      // Impede que um professor consulte a jornada de outro passando um UUID válido.
       filter = ' and ws.user_id = $2';
-      params.push(userId);
+      params.push(req.ctx!.profileId);
+    } else {
+      // Admin/financeiro: pode filtrar por user_id ou ver toda a escola.
+      const userId = req.query.user_id as string | undefined;
+      if (userId) {
+        filter = ' and ws.user_id = $2';
+        params.push(userId);
+      }
     }
+
     const { rows } = await c.query(
       `select ws.id, ws.user_id, ws.weekday, ws.start_time, ws.end_time, p.name as user_name
          from public.work_schedules ws

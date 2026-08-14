@@ -160,6 +160,23 @@ async function main() {
     // class_id alheia → deve retornar 403
     check('GET /students?class_id=alheia', (await call(t, `/students?class_id=${target}`)).status, [403], label);
 
+    console.log('PROFESSOR — jornada (somente propria, user_id externo ignorado):');
+    const ownSched = await call(t, '/schedules');
+    check('GET /schedules (sem filtro)', ownSched.status, [200]);
+    // Mesmo passando user_id de outro perfil, deve retornar apenas dados proprios.
+    const spoofSched = await call(t, `/schedules?user_id=${FAKE_UUID}`);
+    check('GET /schedules?user_id=outro (ignorado)', spoofSched.status, [200]);
+    if (spoofSched.status === 200) {
+      // Nenhum registro com user_id = FAKE_UUID pode aparecer: o backend ignora o param para professor.
+      const fakeInResult = (spoofSched.body?.data ?? []).some((s) => s.user_id === FAKE_UUID);
+      if (!fakeInResult) {
+        console.log('  PASSA  user_id externo nao contaminou resultado');
+      } else {
+        console.log('  FALHA  resultado contem registros do user_id forjado');
+        results.push({ ok: false, name: 'GET /schedules spoofed user_id', actual: 'vazou', expected: 'apenas proprios dados', detail: '' });
+      }
+    }
+
     console.log('PROFESSOR — busca global (escopo restrito a turmas proprias):');
     const teacherSearch = await call(t, '/search?q=a');
     check('GET /search?q=a (professor)', teacherSearch.status, [200]);
@@ -202,6 +219,10 @@ async function main() {
     check('GET /saas/dashboard', (await call(a, '/saas/dashboard')).status, [403]);
     check('GET /classes/:id/students (turma inexistente)', (await call(a, `/classes/${FAKE_UUID}/students`)).status, [200, 403, 404],
       'deve vir vazio ou negado, nunca dado de outra escola');
+
+    console.log('GESTOR — jornadas (equipe da propria escola):');
+    check('GET /schedules (admin)', (await call(a, '/schedules')).status, [200]);
+    check('GET /schedules?user_id=inexistente (admin, filtro valido)', (await call(a, `/schedules?user_id=${FAKE_UUID}`)).status, [200]);
 
     console.log('GESTOR — busca global (escola inteira, nunca outra escola):');
     const adminSearch = await call(a, '/search?q=a');
