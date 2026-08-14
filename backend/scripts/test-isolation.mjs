@@ -96,6 +96,27 @@ async function main() {
     check('GET /grades/my-boletim', (await call(g, '/grades/my-boletim')).status, [200]);
     check('GET /attendance/my-children', (await call(g, '/attendance/my-children')).status, [200]);
     check('GET /invoices/mine', (await call(g, '/invoices/mine')).status, [200]);
+
+    console.log('RESPONSAVEL — contatos de mensagens (nunca lista outros responsaveis):');
+    const guardianContacts = await call(g, '/messages/contacts');
+    check('GET /messages/contacts (guardian)', guardianContacts.status, [200]);
+    if (guardianContacts.status === 200) {
+      const contacts = guardianContacts.body?.data ?? [];
+      const otherGuardians = contacts.filter((c) => c.role === 'guardian');
+      const hasEmail = contacts.some((c) => c.email !== undefined);
+      if (otherGuardians.length === 0) {
+        console.log('  PASSA  nenhum responsavel exposto nos contatos');
+      } else {
+        console.log(`  FALHA  ${otherGuardians.length} responsaveis vazaram nos contatos`);
+        results.push({ ok: false, name: 'GET /messages/contacts guardian leak', actual: 'guardian presente', expected: 'sem guardians', detail: '' });
+      }
+      if (!hasEmail) {
+        console.log('  PASSA  e-mail nao exposto nos contatos');
+      } else {
+        console.log('  FALHA  e-mail exposto nos contatos do responsavel');
+        results.push({ ok: false, name: 'GET /messages/contacts email exposed (guardian)', actual: 'email presente', expected: 'sem email', detail: '' });
+      }
+    }
     console.log('');
   }
 
@@ -192,6 +213,30 @@ async function main() {
       } else {
         console.log(`  FALHA  turmas alheias na busca: ${foreignClasses.map((c) => c.id).slice(0, 3).join(', ')}`);
         results.push({ ok: false, name: 'GET /search turma alheia vazou', actual: 'vazou', expected: 'escopo restrito', detail: '' });
+      }
+    }
+
+    console.log('PROFESSOR — contatos de mensagens (apenas admin + responsaveis das turmas proprias):');
+    const teacherContacts = await call(t, '/messages/contacts');
+    check('GET /messages/contacts (teacher)', teacherContacts.status, [200]);
+    if (teacherContacts.status === 200) {
+      const contacts = teacherContacts.body?.data ?? [];
+      // Nenhum e-mail pode vazar.
+      const hasEmail = contacts.some((c) => c.email !== undefined);
+      if (!hasEmail) {
+        console.log('  PASSA  e-mail nao exposto nos contatos do professor');
+      } else {
+        console.log('  FALHA  e-mail exposto nos contatos do professor');
+        results.push({ ok: false, name: 'GET /messages/contacts email exposed (teacher)', actual: 'email presente', expected: 'sem email', detail: '' });
+      }
+      // Professores nao devem aparecer nos contatos de um professor
+      // (o endpoint retorna apenas admin/coord + responsaveis das turmas).
+      const teachersInContacts = contacts.filter((c) => c.role === 'teacher');
+      if (teachersInContacts.length === 0) {
+        console.log('  PASSA  nenhum professor exposto nos contatos de professor');
+      } else {
+        console.log(`  FALHA  ${teachersInContacts.length} professores vazaram nos contatos (esperado: apenas admin/coord/guardian)`);
+        results.push({ ok: false, name: 'GET /messages/contacts teacher role in teacher contacts', actual: 'teacher presente', expected: 'sem teachers', detail: '' });
       }
     }
 

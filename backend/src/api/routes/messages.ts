@@ -79,17 +79,104 @@ messagesRouter.get('/unread-count', async (req, res) => {
   }
 });
 
-// GET /api/messages/contacts — lista pessoas para destinar mensagem
+// GET /api/messages/contacts — lista pessoas para destinar mensagem.
+// Retorna apenas id/name/role — nunca e-mail, CPF ou telefone.
+// O conjunto varia por papel para respeitar privacidade e isolamento.
 messagesRouter.get('/contacts', async (req, res) => {
+  const { role, profileId, schoolId } = req.ctx!;
+
   const data = await withTenant(req.ctx!, async (c) => {
-    const { rows } = await c.query(
-      `select id, name, role, email from public.profiles
-        where school_id = $1 and status = 'active' and id != $2
-        order by name`,
-      [req.ctx!.schoolId, req.ctx!.profileId],
-    );
-    return rows;
+    if (role === 'guardian') {
+      // Responsável vê: admin/coordenadores + professores das turmas dos filhos.
+      // Outros responsáveis nunca são expostos.
+      const { rows } = await c.query(
+        `SELECT DISTINCT p.id, p.name, p.role
+           FROM public.profiles p
+          WHERE p.school_id = $1 AND p.status = 'active' AND p.id != $2
+            AND p.role IN ('school_admin', 'coordinator')
+
+         UNION
+
+         SELECT DISTINCT p.id, p.name, p.role
+           FROM public.guardians g
+           JOIN public.students s  ON s.guardian_id = g.id
+                                  AND s.school_id   = $1
+                                  AND s.status      = 'active'
+           JOIN public.classes  cl ON cl.id          = s.class_id
+                                  AND cl.school_id   = $1
+           JOIN public.teachers t  ON t.school_id    = $1
+                                  AND (
+                                    t.id = cl.teacher_id
+                                    OR EXISTS (
+                                      SELECT 1 FROM public.class_subjects cs
+                                       WHERE cs.class_id   = cl.id
+                                         AND cs.teacher_id = t.id
+                                         AND cs.school_id  = $1
+                                    )
+                                  )
+           JOIN public.profiles p  ON p.id          = t.user_id
+                                  AND p.school_id   = $1
+                                  AND p.status      = 'active'
+                                  AND p.id         != $2
+          WHERE g.user_id = $2 AND g.school_id = $1
+
+          ORDER BY name`,
+        [schoolId, profileId],
+      );
+      return rows;
+
+    } else if (role === 'teacher') {
+      // Professor vê: admin/coordenadores + responsáveis dos alunos das turmas que leciona.
+      // Não lista outros professores nem responsáveis de turmas alheias.
+      const { rows } = await c.query(
+        `SELECT DISTINCT p.id, p.name, p.role
+           FROM public.profiles p
+          WHERE p.school_id = $1 AND p.status = 'active' AND p.id != $2
+            AND p.role IN ('school_admin', 'coordinator')
+
+         UNION
+
+         SELECT DISTINCT p.id, p.name, p.role
+           FROM public.teachers t
+           JOIN public.classes  cl ON cl.school_id = $1
+                                  AND (
+                                    cl.teacher_id = t.id
+                                    OR EXISTS (
+                                      SELECT 1 FROM public.class_subjects cs
+                                       WHERE cs.class_id   = cl.id
+                                         AND cs.teacher_id = t.id
+                                         AND cs.school_id  = $1
+                                    )
+                                  )
+           JOIN public.students s  ON s.class_id   = cl.id
+                                  AND s.school_id   = $1
+                                  AND s.status      = 'active'
+           JOIN public.guardians g ON g.id          = s.guardian_id
+                                  AND g.school_id   = $1
+           JOIN public.profiles p  ON p.id          = g.user_id
+                                  AND p.school_id   = $1
+                                  AND p.status      = 'active'
+                                  AND p.id         != $2
+          WHERE t.user_id = $2 AND t.school_id = $1
+
+          ORDER BY name`,
+        [schoolId, profileId],
+      );
+      return rows;
+
+    } else {
+      // Admin, financeiro, superadmin: todos os profiles ativos da escola.
+      const { rows } = await c.query(
+        `SELECT id, name, role
+           FROM public.profiles
+          WHERE school_id = $1 AND status = 'active' AND id != $2
+          ORDER BY name`,
+        [schoolId, profileId],
+      );
+      return rows;
+    }
   });
+
   res.json({ ok: true, data });
 });
 
