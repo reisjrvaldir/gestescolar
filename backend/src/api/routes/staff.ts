@@ -26,7 +26,7 @@ export const staffRouter = Router();
 
 staffRouter.use(requireAuth);
 
-staffRouter.get('/', requireRole('school_admin', 'financial', 'teacher', 'superadmin'), async (req, res) => {
+staffRouter.get('/', requireRole('school_admin', 'financial', 'superadmin'), async (req, res) => {
   const data = await withTenant(req.ctx!, async (c) => {
     // Dados pessoais sempre mascarados nas listagens — revelação via /personal-data/reveal
     const { rows } = await c.query(
@@ -46,6 +46,27 @@ staffRouter.get('/', requireRole('school_admin', 'financial', 'teacher', 'supera
     );
     return rows;
   });
+  res.json({ ok: true, data });
+});
+
+// GET /api/staff/me — professor consulta exclusivamente os próprios dados.
+// profileId vem do JWT: o frontend não pode forjar essa identidade.
+// Deve ficar ANTES de /:id/full para não ser capturado pelo parâmetro dinâmico.
+staffRouter.get('/me', requireRole('teacher', 'coordinator', 'school_admin', 'superadmin'), async (req, res) => {
+  const data = await withTenant(req.ctx!, async (c) => {
+    const { rows } = await c.query(
+      `select id, name, email, phone, cpf, registration_number, role_type, subject_teaches,
+              position, admission_date::text as admission_date, contract_type,
+              weekly_hours::float8 as weekly_hours,
+              coalesce(timeclock_enabled, true) as timeclock_enabled,
+              status, created_at
+         from public.teachers
+        where user_id = $1 and school_id = $2 limit 1`,
+      [req.ctx!.profileId, req.ctx!.schoolId],
+    );
+    return rows[0] ?? null;
+  });
+  if (!data) return res.status(404).json({ code: 'not_found' });
   res.json({ ok: true, data });
 });
 

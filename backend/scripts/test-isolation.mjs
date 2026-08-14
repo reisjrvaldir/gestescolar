@@ -160,12 +160,16 @@ async function main() {
     // class_id alheia → deve retornar 403
     check('GET /students?class_id=alheia', (await call(t, `/students?class_id=${target}`)).status, [403], label);
 
+    console.log('PROFESSOR — nao pode ver equipe alheia:');
+    check('GET /staff (listagem geral)', (await call(t, '/staff')).status, [403], 'professor nao pode listar equipe');
+    check('GET /staff/:id/full (dados sensiveis)', (await call(t, `/staff/${FAKE_UUID}/full`)).status, [403]);
+    check('GET /staff/me (proprios dados)', (await call(t, '/staff/me')).status, [200, 404], 'deve ver apenas os proprios dados');
+
     console.log('PROFESSOR — nao pode administrar:');
     check('POST /classes (criar turma)', (await call(t, '/classes', {
       method: 'POST',
       body: JSON.stringify({ name: 'teste', year: 2026, shift: 'morning' }),
     })).status, [403]);
-    check('GET /staff/:id/full (dados sensiveis)', (await call(t, `/staff/${FAKE_UUID}/full`)).status, [403]);
     check('GET /saas/schools (outras escolas)', (await call(t, '/saas/schools')).status, [403]);
     console.log('');
   }
@@ -180,6 +184,10 @@ async function main() {
     check('GET /saas/dashboard', (await call(a, '/saas/dashboard')).status, [403]);
     check('GET /classes/:id/students (turma inexistente)', (await call(a, `/classes/${FAKE_UUID}/students`)).status, [200, 403, 404],
       'deve vir vazio ou negado, nunca dado de outra escola');
+
+    console.log('GESTOR — listagem de equipe (acesso completo da propria escola):');
+    check('GET /staff (admin ve equipe)', (await call(a, '/staff')).status, [200]);
+    check('GET /staff/me (admin ve os proprios dados)', (await call(a, '/staff/me')).status, [200, 404]);
 
     console.log('GESTOR — listagem de alunos (acesso completo da propria escola):');
     const adminStudents = await call(a, '/students');
