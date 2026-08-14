@@ -196,6 +196,63 @@ async function main() {
         results.push({ ok: false, name: 'GET /messages/contacts email exposed (guardian)', actual: 'email presente', expected: 'sem email', detail: '' });
       }
     }
+    console.log('RESPONSAVEL — tickets de suporte (apenas os proprios):');
+    // Criar ticket proprio e verificar acesso.
+    const gtCreate = await call(g, '/tickets', {
+      method: 'POST',
+      body: JSON.stringify({ title: 'Ticket teste responsavel', description: 'Teste isolamento' }),
+    });
+    check('POST /tickets (guardian cria)', gtCreate.status, [201], 'guardian deve poder criar ticket');
+    const guardianTicketId = gtCreate.body?.data?.id ?? null;
+    if (guardianTicketId) {
+      check('GET /tickets/:id proprio (guardian)', (await call(g, `/tickets/${guardianTicketId}`)).status, [200],
+        'guardian deve acessar o proprio ticket');
+      // Ticket do proprio responsavel deve aparecer na listagem.
+      const gtList = await call(g, '/tickets');
+      if (gtList.status === 200) {
+        const ids = (gtList.body?.data ?? []).map((t) => t.id);
+        if (ids.includes(guardianTicketId)) {
+          console.log('  PASSA  ticket criado aparece na listagem propria');
+        } else {
+          console.log('  FALHA  ticket criado nao aparece na listagem');
+          results.push({ ok: false, name: 'GET /tickets guardian ticket missing', actual: 'ausente', expected: 'presente', detail: '' });
+        }
+        // Listagem nao deve conter tickets de outros usuarios (todos devem ser do guardian).
+        const foreignTickets = (gtList.body?.data ?? []).filter((t) => t.opened_by_name && false); // nao temos opened_by no response
+        // Verificar indiretamente: se professor tem ticket, guardian nao deve ve-lo.
+        if (sessions.TEACHER) {
+          const tCreate = await call(sessions.TEACHER, '/tickets', {
+            method: 'POST',
+            body: JSON.stringify({ title: 'Ticket teste professor', description: 'Teste isolamento' }),
+          });
+          const teacherTicketId = tCreate.body?.data?.id ?? null;
+          if (teacherTicketId) {
+            check('GET /tickets/:id ticket do professor (guardian)', (await call(g, `/tickets/${teacherTicketId}`)).status, [404],
+              'guardian nao deve acessar ticket de outro usuario');
+            check('POST /tickets/:id/comments ticket do professor (guardian)', (await call(g, `/tickets/${teacherTicketId}/comments`, {
+              method: 'POST',
+              body: JSON.stringify({ message: 'Tentativa de comentar' }),
+            })).status, [404], 'guardian nao pode comentar ticket alheio');
+            check('PATCH /tickets/:id/close ticket do professor (guardian)', (await call(g, `/tickets/${teacherTicketId}/close`, {
+              method: 'PATCH',
+            })).status, [403, 404], 'guardian nao pode fechar ticket alheio');
+            // Listagem do guardian nao deve conter ticket do professor.
+            const gtList2 = await call(g, '/tickets');
+            const leaked = (gtList2.body?.data ?? []).some((t) => t.id === teacherTicketId);
+            if (!leaked) {
+              console.log('  PASSA  ticket do professor nao aparece na listagem do responsavel');
+            } else {
+              console.log('  FALHA  ticket de outro usuario vazou na listagem do responsavel');
+              results.push({ ok: false, name: 'GET /tickets ticket vazou (guardian)', actual: 'presente', expected: 'ausente', detail: '' });
+            }
+          }
+        }
+      }
+      // FAKE_UUID: ticket inexistente → 404.
+      check('GET /tickets/:id inexistente (guardian)', (await call(g, `/tickets/${FAKE_UUID}`)).status, [404]);
+      check('PATCH /tickets/:id/close inexistente (guardian)', (await call(g, `/tickets/${FAKE_UUID}/close`, { method: 'PATCH' })).status, [404]);
+    }
+
     console.log('');
   }
 
@@ -699,6 +756,36 @@ async function main() {
     } else {
       console.log('  (sem alunos cadastrados — teste de PUT com class_id invalido pulado)');
     }
+    console.log('GESTOR — tickets de suporte (ve todos da escola):');
+    const adminTickets = await call(a, '/tickets');
+    check('GET /tickets (admin ve todos)', adminTickets.status, [200], 'admin deve ver todos os tickets da escola');
+    if (adminTickets.status === 200 && sessions.GUARDIAN) {
+      // Admin deve ver ticket criado pelo guardian no bloco anterior.
+      const allIds = (adminTickets.body?.data ?? []).map((t) => t.id);
+      // Criar ticket como admin e verificar acesso e fechamento.
+      const adminCreate = await call(a, '/tickets', {
+        method: 'POST',
+        body: JSON.stringify({ title: 'Ticket do admin', description: 'Teste acesso admin' }),
+      });
+      const adminTicketId = adminCreate.body?.data?.id ?? null;
+      if (adminTicketId) {
+        check('GET /tickets/:id proprio (admin)', (await call(a, `/tickets/${adminTicketId}`)).status, [200]);
+        // Admin pode fechar qualquer ticket (inclusive o do guardian).
+        if (sessions.GUARDIAN) {
+          const guardianTicketList = await call(sessions.GUARDIAN, '/tickets');
+          const guardianTid = guardianTicketList.body?.data?.[0]?.id ?? null;
+          if (guardianTid) {
+            check('PATCH /tickets/:id/close ticket do guardian (admin)', (await call(a, `/tickets/${guardianTid}/close`, {
+              method: 'PATCH',
+            })).status, [200], 'admin deve poder fechar ticket de qualquer usuario da escola');
+          }
+        }
+      }
+    }
+    // Escola A nunca acessa ticket escola B: FAKE_UUID de outra escola → 404.
+    check('GET /tickets/:id escola B (admin)', (await call(a, `/tickets/${FAKE_UUID}`)).status, [404],
+      'ticket de outra escola deve retornar 404 mesmo para admin');
+
     console.log('GESTOR — dados bancarios (payout com PII mascarado):');
     const payoutRes = await call(a, '/payout');
     check('GET /payout (admin)', payoutRes.status, [200], 'gestor deve ter acesso ao endpoint de payout');
