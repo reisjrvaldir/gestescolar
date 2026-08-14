@@ -803,6 +803,49 @@ async function main() {
         'teacher nao deve acessar campanhas administrativas');
     }
 
+    console.log('GESTOR — calendário: validação cross-tenant de class_id:');
+    // Busca uma turma real da escola A para usar no teste positivo.
+    const adminClasses = await call(a, '/classes');
+    const ownClassId = adminClasses.body?.data?.[0]?.id ?? null;
+    const calBase = {
+      title: 'Evento teste cross-tenant',
+      date_start: '2027-01-15',
+      event_type: 'event',
+    };
+    // 1. Evento global (sem class_id) → 201 permitido.
+    const calGlobal = await call(a, '/calendar', {
+      method: 'POST',
+      body: JSON.stringify(calBase),
+    });
+    check('POST /calendar global (class_id null)', calGlobal.status, [201],
+      'evento sem turma deve ser criado normalmente');
+    // 2. Evento com turma da própria escola → 201 permitido.
+    if (ownClassId) {
+      const calOwn = await call(a, '/calendar', {
+        method: 'POST',
+        body: JSON.stringify({ ...calBase, title: 'Evento turma propria', class_id: ownClassId }),
+      });
+      check('POST /calendar class_id da escola A', calOwn.status, [201],
+        'evento com turma propria deve ser criado normalmente');
+      // PUT com turma de outra escola (FAKE_UUID) → 404.
+      if (calOwn.status === 201) {
+        const evId = calOwn.body?.data?.id;
+        const calPutCross = await call(a, `/calendar/${evId}`, {
+          method: 'PUT',
+          body: JSON.stringify({ ...calBase, title: 'PUT cross-tenant', class_id: FAKE_UUID }),
+        });
+        check('PUT /calendar/:id class_id de outra escola → 404', calPutCross.status, [404],
+          'nao deve associar evento a turma de outra escola via PUT');
+      }
+    }
+    // 3. POST com class_id de outra escola (FAKE_UUID) → 404.
+    const calCross = await call(a, '/calendar', {
+      method: 'POST',
+      body: JSON.stringify({ ...calBase, title: 'Evento cross-tenant', class_id: FAKE_UUID }),
+    });
+    check('POST /calendar class_id de outra escola → 404', calCross.status, [404],
+      'nao deve criar evento vinculado a turma de outra escola');
+
     console.log('GESTOR — dados bancarios (payout com PII mascarado):');
     const payoutRes = await call(a, '/payout');
     check('GET /payout (admin)', payoutRes.status, [200], 'gestor deve ter acesso ao endpoint de payout');

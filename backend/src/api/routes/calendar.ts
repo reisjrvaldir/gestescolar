@@ -43,7 +43,9 @@ calendarRouter.get('/', async (req, res) => {
               to_char(sc.end_time,   'HH24:MI') as end_time,
               sc.created_at
          from public.school_calendar sc
-         left join public.classes cl ON cl.id = sc.class_id
+         left join public.classes cl
+           on cl.id = sc.class_id
+          and cl.school_id = sc.school_id
         where sc.school_id = $1${yearFilter}${classFilter}
         order by sc.date_start asc, sc.start_time asc nulls last`,
       params,
@@ -69,6 +71,13 @@ calendarRouter.post('/', requireRole('school_admin', 'superadmin'), async (req, 
   const p = eventSchema.safeParse(req.body);
   if (!p.success) return res.status(400).json({ code: 'validation', message: p.error.issues[0]?.message });
   const created = await withTenant(req.ctx!, async (c) => {
+    if (p.data.class_id) {
+      const cls = await c.query(
+        `select 1 from public.classes where id = $1 and school_id = $2 limit 1`,
+        [p.data.class_id, req.ctx!.schoolId],
+      );
+      if (cls.rows.length === 0) return { error: 'class_not_found' as const };
+    }
     const { rows } = await c.query(
       `insert into public.school_calendar
          (school_id, title, description, date_start, date_end, event_type, start_time, end_time, class_id)
@@ -80,6 +89,7 @@ calendarRouter.post('/', requireRole('school_admin', 'superadmin'), async (req, 
     );
     return rows[0];
   });
+  if (created && 'error' in created) return res.status(404).json({ code: created.error });
   res.status(201).json({ ok: true, data: created });
 });
 
@@ -87,6 +97,13 @@ calendarRouter.put('/:id', requireRole('school_admin', 'superadmin'), async (req
   const p = eventSchema.safeParse(req.body);
   if (!p.success) return res.status(400).json({ code: 'validation', message: p.error.issues[0]?.message });
   const updated = await withTenant(req.ctx!, async (c) => {
+    if (p.data.class_id) {
+      const cls = await c.query(
+        `select 1 from public.classes where id = $1 and school_id = $2 limit 1`,
+        [p.data.class_id, req.ctx!.schoolId],
+      );
+      if (cls.rows.length === 0) return { error: 'class_not_found' as const };
+    }
     const { rows } = await c.query(
       `update public.school_calendar set
           title=$1, description=$2, date_start=$3, date_end=$4,
@@ -102,9 +119,10 @@ calendarRouter.put('/:id', requireRole('school_admin', 'superadmin'), async (req
        p.data.start_time ?? null, p.data.end_time ?? null, p.data.class_id ?? null,
        req.params.id, req.ctx!.schoolId],
     );
-    return rows[0];
+    return rows[0] ?? null;
   });
   if (!updated) return res.status(404).json({ code: 'not_found' });
+  if ('error' in updated) return res.status(404).json({ code: updated.error });
   res.json({ ok: true, data: updated });
 });
 
