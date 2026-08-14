@@ -1,0 +1,185 @@
+/**
+ * Teste de isolamento multi-tenant e por papel.
+ *
+ * Roda contra um ambiente REAL e tenta cruzar dados de propósito: responsável
+ * lendo turma alheia, professor lendo/escrevendo turma que não leciona, e
+ * qualquer papel alcançando outra escola.
+ *
+ * As senhas ficam nas variáveis de ambiente da SUA máquina — nada é gravado
+ * em disco nem impresso. O script só mostra status HTTP.
+ *
+ * Uso (PowerShell):
+ *   $env:API_URL="https://backend-pi-snowy-15.vercel.app/api"
+ *   $env:AUTH_URL="https://ep-red-dew-ac308bfw.neonauth.sa-east-1.aws.neon.tech/neondb/auth"
+ *   $env:GUARDIAN_EMAIL="..."; $env:GUARDIAN_PASSWORD="..."
+ *   $env:TEACHER_EMAIL="...";  $env:TEACHER_PASSWORD="..."
+ *   $env:ADMIN_EMAIL="...";    $env:ADMIN_PASSWORD="..."
+ *   node backend/scripts/test-isolation.mjs
+ *
+ * Papéis opcionais: se um par de variáveis faltar, os testes dele são pulados.
+ */
+
+const API = process.env.API_URL || 'https://backend-pi-snowy-15.vercel.app/api';
+const AUTH = process.env.AUTH_URL;
+
+if (!AUTH) {
+  console.error('Defina AUTH_URL (URL do Neon Auth). Veja o cabeçalho deste arquivo.');
+  process.exit(1);
+}
+
+/** Autentica e devolve o JWT. A senha não sai desta função. */
+async function login(email, password) {
+  const r = await fetch(`${AUTH}/api/auth/sign-in/email`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email, password, rememberMe: false }),
+  });
+  const jwt = r.headers.get('set-auth-jwt');
+  if (!r.ok || !jwt) throw new Error(`login falhou (HTTP ${r.status})`);
+  return jwt;
+}
+
+async function call(token, path, init = {}) {
+  const r = await fetch(`${API}${path}`, {
+    ...init,
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${token}`,
+      ...(init.headers ?? {}),
+    },
+  });
+  let body = null;
+  try { body = await r.json(); } catch { /* resposta sem corpo */ }
+  return { status: r.status, body };
+}
+
+const results = [];
+function check(name, actual, expected, detail = '') {
+  const ok = expected.includes(actual);
+  results.push({ ok, name, actual, expected: expected.join('/'), detail });
+  console.log(`  ${ok ? 'PASSA ' : 'FALHA '} [${actual}] ${name}${detail ? ` — ${detail}` : ''}`);
+}
+
+/** Um id que com certeza não existe: prova que a rota nega por posse, não por dado ausente. */
+const FAKE_UUID = '00000000-0000-0000-0000-000000000000';
+
+async function main() {
+  const sessions = {};
+  for (const role of ['GUARDIAN', 'TEACHER', 'ADMIN']) {
+    const email = process.env[`${role}_EMAIL`];
+    const pwd = process.env[`${role}_PASSWORD`];
+    if (!email || !pwd) { console.log(`(pulando ${role}: variáveis não definidas)`); continue; }
+    try {
+      sessions[role] = await login(email, pwd);
+      console.log(`login ${role}: ok`);
+    } catch (e) {
+      console.log(`login ${role}: ${e.message}`);
+    }
+  }
+  console.log('');
+
+  // ---------------------------------------------------------------------
+  // 1. Responsável não pode ler turma nenhuma
+  // ---------------------------------------------------------------------
+  if (sessions.GUARDIAN) {
+    console.log('RESPONSAVEL — nao pode ler dados de turma:');
+    const g = sessions.GUARDIAN;
+    check('GET /grades/boletim', (await call(g, `/grades/boletim?class_id=${FAKE_UUID}`)).status, [403]);
+    check('GET /grades', (await call(g, `/grades?class_id=${FAKE_UUID}&subject=x&period=1`)).status, [403]);
+    check('GET /attendance', (await call(g, `/attendance?class_id=${FAKE_UUID}&date=2026-01-01`)).status, [403]);
+    check('GET /attendance/top-absences', (await call(g, `/attendance/top-absences?class_id=${FAKE_UUID}`)).status, [403]);
+    check('GET /classes/:id/students', (await call(g, `/classes/${FAKE_UUID}/students`)).status, [403]);
+    check('GET /students (lista da escola)', (await call(g, '/students')).status, [403]);
+    check('GET /staff (equipe)', (await call(g, '/staff')).status, [403]);
+
+    console.log('RESPONSAVEL — deve conseguir ver os proprios filhos:');
+    check('GET /grades/my-boletim', (await call(g, '/grades/my-boletim')).status, [200]);
+    check('GET /attendance/my-children', (await call(g, '/attendance/my-children')).status, [200]);
+    check('GET /invoices/mine', (await call(g, '/invoices/mine')).status, [200]);
+    console.log('');
+  }
+
+  // ---------------------------------------------------------------------
+  // 2. Professor só acessa turma que leciona
+  // ---------------------------------------------------------------------
+  if (sessions.TEACHER) {
+    console.log('PROFESSOR — turmas proprias:');
+    const t = sessions.TEACHER;
+    const mine = await call(t, '/classes/mine');
+    check('GET /classes/mine', mine.status, [200]);
+    const myClass = mine.body?.data?.[0]?.id ?? null;
+    if (myClass) {
+      check('GET /classes/:id/students (turma dele)', (await call(t, `/classes/${myClass}/students`)).status, [200]);
+      check('GET /attendance (turma dele)', (await call(t, `/attendance?class_id=${myClass}&date=2026-01-01`)).status, [200]);
+    } else {
+      console.log('  (professor sem turma vinculada — testes de turma propria pulados)');
+    }
+
+    console.log('PROFESSOR — turma que NAO leciona:');
+    // Descobre uma turma de outro professor usando o admin, se disponível.
+    let otherClass = null;
+    if (sessions.ADMIN) {
+      const all = await call(sessions.ADMIN, '/classes');
+      otherClass = (all.body?.data ?? []).map((c) => c.id).find((id) => id !== myClass) ?? null;
+    }
+    const target = otherClass ?? FAKE_UUID;
+    const label = otherClass ? 'turma real de outro professor' : 'id inexistente (sem admin p/ achar turma real)';
+    check('GET /classes/:id/students', (await call(t, `/classes/${target}/students`)).status, [403], label);
+    check('GET /grades/boletim', (await call(t, `/grades/boletim?class_id=${target}`)).status, [403], label);
+    check('GET /attendance', (await call(t, `/attendance?class_id=${target}&date=2026-01-01`)).status, [403], label);
+
+    console.log('PROFESSOR — ESCRITA em turma alheia (mais grave):');
+    check('POST /grades/batch', (await call(t, '/grades/batch', {
+      method: 'POST',
+      body: JSON.stringify({ class_id: target, subject: 'Matematica', period: '1', entries: [] }),
+    })).status, [403, 400], label);
+    check('POST /attendance/batch', (await call(t, '/attendance/batch', {
+      method: 'POST',
+      body: JSON.stringify({ class_id: target, date: '2026-01-01', entries: [] }),
+    })).status, [403, 400], label);
+
+    console.log('PROFESSOR — nao pode administrar:');
+    check('POST /classes (criar turma)', (await call(t, '/classes', {
+      method: 'POST',
+      body: JSON.stringify({ name: 'teste', year: 2026, shift: 'morning' }),
+    })).status, [403]);
+    check('GET /staff/:id/full (dados sensiveis)', (await call(t, `/staff/${FAKE_UUID}/full`)).status, [403]);
+    check('GET /saas/schools (outras escolas)', (await call(t, '/saas/schools')).status, [403]);
+    console.log('');
+  }
+
+  // ---------------------------------------------------------------------
+  // 3. Gestor não alcança outra escola nem o painel da plataforma
+  // ---------------------------------------------------------------------
+  if (sessions.ADMIN) {
+    console.log('GESTOR — limites:');
+    const a = sessions.ADMIN;
+    check('GET /saas/schools (painel da plataforma)', (await call(a, '/saas/schools')).status, [403]);
+    check('GET /saas/dashboard', (await call(a, '/saas/dashboard')).status, [403]);
+    check('GET /classes/:id/students (turma inexistente)', (await call(a, `/classes/${FAKE_UUID}/students`)).status, [200, 403, 404],
+      'deve vir vazio ou negado, nunca dado de outra escola');
+    console.log('');
+  }
+
+  // ---------------------------------------------------------------------
+  // 4. Sem token
+  // ---------------------------------------------------------------------
+  console.log('SEM TOKEN:');
+  for (const p of ['/students', '/grades/boletim?class_id=x', '/invoices/mine', '/saas/schools', '/recurring']) {
+    const r = await fetch(`${API}${p}`);
+    check(`GET ${p}`, r.status, [401]);
+  }
+
+  // ---------------------------------------------------------------------
+  const falhas = results.filter((r) => !r.ok);
+  console.log(`\n${'='.repeat(60)}`);
+  console.log(`${results.length - falhas.length}/${results.length} passaram`);
+  if (falhas.length) {
+    console.log('\nFALHAS:');
+    for (const f of falhas) console.log(`  - ${f.name}: recebeu ${f.actual}, esperava ${f.expected}`);
+    process.exit(1);
+  }
+  console.log('Isolamento OK.');
+}
+
+main().catch((e) => { console.error('erro:', e.message); process.exit(1); });
