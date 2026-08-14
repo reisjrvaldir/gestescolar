@@ -59,12 +59,12 @@ const CLASS_SELECT = `
              'subject_id', cs.subject_id, 'subject_name', sub.name,
              'teacher_id', cs.teacher_id, 'teacher_name', tt.name))
            from public.class_subjects cs
-           left join public.subjects sub on sub.id = cs.subject_id
-           left join public.teachers tt on tt.id = cs.teacher_id
+           left join public.subjects sub on sub.id = cs.subject_id and sub.school_id = cs.school_id
+           left join public.teachers tt on tt.id = cs.teacher_id and tt.school_id = cs.school_id
           where cs.class_id = c.id
          ), '[]'::json) as subjects
     from public.classes c
-    left join public.teachers t on t.id = c.teacher_id`;
+    left join public.teachers t on t.id = c.teacher_id and t.school_id = c.school_id`;
 
 const STAFF = ['school_admin', 'financial', 'teacher', 'superadmin'] as const;
 
@@ -148,7 +148,14 @@ classesRouter.post('/', requireRole('school_admin', 'superadmin'), async (req, r
     return res.status(400).json({ code: 'validation', message: parsed.error.issues[0]?.message });
   }
   const d = parsed.data;
-  const created = await withTenant(req.ctx!, async (c) => {
+  const result = await withTenant(req.ctx!, async (c) => {
+    if (d.teacher_id) {
+      const tv = await c.query(
+        `select 1 from public.teachers where id=$1 and school_id=$2 limit 1`,
+        [d.teacher_id, req.ctx!.schoolId],
+      );
+      if (tv.rows.length === 0) return { error: 'teacher_not_found' as const };
+    }
     const { rows } = await c.query(
       `insert into public.classes (school_id, name, year, level, shift, teacher_id)
        values ($1, $2, $3, $4, $5, $6)
@@ -158,9 +165,12 @@ classesRouter.post('/', requireRole('school_admin', 'superadmin'), async (req, r
     const id = rows[0].id;
     await saveClassSubjects(c, req.ctx!.schoolId!, id, subjectItems(d));
     const { rows: full } = await c.query(`${CLASS_SELECT} where c.id = $1 and c.school_id = $2`, [id, req.ctx!.schoolId]);
-    return full[0];
+    return { data: full[0] };
   });
-  res.status(201).json({ ok: true, data: created });
+  if ('error' in result) {
+    return res.status(400).json({ code: result.error, message: 'Professor não encontrado nesta escola.' });
+  }
+  res.status(201).json({ ok: true, data: result.data });
 });
 
 classesRouter.put('/:id', requireRole('school_admin', 'superadmin'), async (req, res) => {
@@ -169,7 +179,14 @@ classesRouter.put('/:id', requireRole('school_admin', 'superadmin'), async (req,
     return res.status(400).json({ code: 'validation', message: parsed.error.issues[0]?.message });
   }
   const d = parsed.data;
-  const updated = await withTenant(req.ctx!, async (c) => {
+  const result = await withTenant(req.ctx!, async (c) => {
+    if (d.teacher_id) {
+      const tv = await c.query(
+        `select 1 from public.teachers where id=$1 and school_id=$2 limit 1`,
+        [d.teacher_id, req.ctx!.schoolId],
+      );
+      if (tv.rows.length === 0) return { error: 'teacher_not_found' as const };
+    }
     await c.query(
       `update public.classes set name=$1, year=$2, level=$3, shift=$4, teacher_id=$5
         where id=$6 and school_id=$7`,
@@ -177,10 +194,13 @@ classesRouter.put('/:id', requireRole('school_admin', 'superadmin'), async (req,
     );
     await saveClassSubjects(c, req.ctx!.schoolId!, req.params.id, subjectItems(d));
     const { rows } = await c.query(`${CLASS_SELECT} where c.id = $1 and c.school_id = $2`, [req.params.id, req.ctx!.schoolId]);
-    return rows[0];
+    return { data: rows[0] };
   });
-  if (!updated) return res.status(404).json({ code: 'not_found' });
-  res.json({ ok: true, data: updated });
+  if ('error' in result) {
+    return res.status(400).json({ code: result.error, message: 'Professor não encontrado nesta escola.' });
+  }
+  if (!result.data) return res.status(404).json({ code: 'not_found' });
+  res.json({ ok: true, data: result.data });
 });
 
 classesRouter.delete('/:id', requireRole('school_admin', 'superadmin'), async (req, res) => {

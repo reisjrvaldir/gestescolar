@@ -184,8 +184,34 @@ async function main() {
     console.log('GESTOR — listagem de alunos (acesso completo da propria escola):');
     const adminStudents = await call(a, '/students');
     check('GET /students (gestor ve todos)', adminStudents.status, [200]);
-    // Gestor não recebe 403 mesmo com class_id inexistente (UUID fora da escola → array vazio)
     check('GET /students?class_id=inexistente (vazio, nao 403)', (await call(a, `/students?class_id=${FAKE_UUID}`)).status, [200]);
+
+    console.log('GESTOR — IDOR cross-tenant em turmas (teacher_id de outra escola):');
+    // Tenta criar turma com teacher_id que nao existe nesta escola (UUID falso).
+    // Deve ser rejeitado com 400 teacher_not_found — nunca inserido silenciosamente.
+    const badTeacher = await call(a, '/classes', {
+      method: 'POST',
+      body: JSON.stringify({ name: 'turma-idor-test', year: 2026, shift: 'morning', teacher_id: FAKE_UUID }),
+    });
+    check('POST /classes com teacher_id invalido', badTeacher.status, [400], 'teacher_not_found esperado');
+    if (badTeacher.status === 400) {
+      const code = badTeacher.body?.code;
+      if (code === 'teacher_not_found') {
+        console.log('  PASSA  code=teacher_not_found recebido corretamente');
+      } else {
+        console.log(`  FALHA  esperava code=teacher_not_found, recebeu code=${code}`);
+        results.push({ ok: false, name: 'POST /classes teacher_not_found code', actual: code, expected: 'teacher_not_found', detail: '' });
+      }
+    }
+    // PUT com teacher_id invalido tambem deve ser 400.
+    if (all.body?.data?.length) {
+      const firstClass = all.body.data[0];
+      const badPut = await call(a, `/classes/${firstClass.id}`, {
+        method: 'PUT',
+        body: JSON.stringify({ name: firstClass.name, year: firstClass.year, shift: firstClass.shift, teacher_id: FAKE_UUID }),
+      });
+      check('PUT /classes/:id com teacher_id invalido', badPut.status, [400], 'teacher_not_found esperado');
+    }
     console.log('');
   }
 
