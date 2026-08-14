@@ -10,14 +10,18 @@ export const chargesRouter = Router();
 chargesRouter.use(requireAuth);
 
 // GET /api/charges — lista as campanhas de cobrança avulsa da escola.
-chargesRouter.get('/', async (req, res) => {
+// Restrito a school_admin, financial e superadmin.
+chargesRouter.get('/', requireRole('school_admin', 'financial', 'superadmin'), async (req, res) => {
   const data = await withTenant(req.ctx!, async (c) => {
     const { rows } = await c.query(
       `select b.id, b.title, b.description, b.amount::float8 as amount, b.due_date, b.scope,
               b.class_id, cl.name as class_name, b.invoices_count, b.created_at,
-              (select count(*)::int from public.invoices i where i.batch_id = b.id and i.status = 'paid') as paid_count
+              (select count(*)::int from public.invoices i
+                where i.batch_id = b.id and i.school_id = b.school_id and i.status = 'paid') as paid_count
          from public.charge_batches b
-         left join public.classes cl on cl.id = b.class_id
+         left join public.classes cl
+           on cl.id = b.class_id
+          and cl.school_id = b.school_id
         where b.school_id = $1
         order by b.created_at desc`,
       [req.ctx!.schoolId],

@@ -786,6 +786,23 @@ async function main() {
     check('GET /tickets/:id escola B (admin)', (await call(a, `/tickets/${FAKE_UUID}`)).status, [404],
       'ticket de outra escola deve retornar 404 mesmo para admin');
 
+    console.log('GESTOR — campanhas de cobrança (/charges):');
+    // Admin e financial podem listar campanhas; guardian e teacher não.
+    check('GET /charges (admin)', (await call(a, '/charges')).status, [200],
+      'school_admin deve acessar campanhas de cobrança');
+    if (sessions.FINANCIAL) {
+      check('GET /charges (financial)', (await call(sessions.FINANCIAL, '/charges')).status, [200],
+        'financial deve acessar campanhas de cobrança');
+    }
+    if (sessions.GUARDIAN) {
+      check('GET /charges (guardian) → 403', (await call(sessions.GUARDIAN, '/charges')).status, [403],
+        'guardian nao deve acessar campanhas administrativas');
+    }
+    if (sessions.TEACHER) {
+      check('GET /charges (teacher) → 403', (await call(sessions.TEACHER, '/charges')).status, [403],
+        'teacher nao deve acessar campanhas administrativas');
+    }
+
     console.log('GESTOR — dados bancarios (payout com PII mascarado):');
     const payoutRes = await call(a, '/payout');
     check('GET /payout (admin)', payoutRes.status, [200], 'gestor deve ter acesso ao endpoint de payout');
