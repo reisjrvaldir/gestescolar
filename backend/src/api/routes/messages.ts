@@ -4,6 +4,7 @@ import { withTenant } from '../../db/withTenant';
 import { requireAuth } from '../../middleware/auth';
 import { audit } from '../../lib/audit';
 import { teacherCanAccessClass } from '../../lib/classAccess';
+import { canMessageRecipient } from '../../lib/messageAccess';
 
 export const messagesRouter = Router();
 messagesRouter.use(requireAuth);
@@ -236,11 +237,21 @@ messagesRouter.post('/', async (req, res) => {
   const p = messageSchema.safeParse(req.body);
   if (!p.success) return res.status(400).json({ code: 'validation', message: p.error.issues[0]?.message });
   const result = await withTenant(req.ctx!, async (c) => {
-    const recip = await c.query(
-      `select 1 from public.profiles where id=$1 and school_id=$2 and status='active' limit 1`,
-      [p.data.recipient_id, req.ctx!.schoolId],
-    );
-    if (recip.rows.length === 0) return { error: 'invalid_recipient' as const };
+    const { role } = req.ctx!;
+
+    if (role === 'guardian' || role === 'teacher') {
+      // Guardian e teacher: helper verifica existência + autorização juntos.
+      // Retorna 403 deliberadamente vago — não revela se o perfil existe.
+      const allowed = await canMessageRecipient(c, req.ctx!, p.data.recipient_id);
+      if (!allowed) return { error: 'recipient_forbidden' as const };
+    } else {
+      // Admin, financeiro, superadmin: basta pertencer à escola e estar ativo.
+      const recip = await c.query(
+        `select 1 from public.profiles where id=$1 and school_id=$2 and status='active' limit 1`,
+        [p.data.recipient_id, req.ctx!.schoolId],
+      );
+      if (recip.rows.length === 0) return { error: 'invalid_recipient' as const };
+    }
 
     if (p.data.student_id) {
       const { role, profileId, schoolId: sid } = req.ctx!;
@@ -306,6 +317,10 @@ messagesRouter.post('/', async (req, res) => {
   if ('error' in result) {
     if (result.error === 'invalid_recipient') {
       return res.status(400).json({ code: 'invalid_recipient', message: 'Destinatário inválido para esta escola.' });
+    }
+    if (result.error === 'recipient_forbidden') {
+      // 403 vago: não revela se o perfil existe ou se é de outra escola.
+      return res.status(403).json({ code: 'forbidden', message: 'Você não tem permissão para enviar mensagem a este destinatário.' });
     }
     if (result.error === 'student_forbidden') {
       // 403 deliberadamente vago: não confirma se o aluno existe.

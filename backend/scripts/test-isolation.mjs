@@ -131,6 +131,36 @@ async function main() {
       }
     }
 
+    console.log('RESPONSAVEL — autorizacao de destinatario (POST /messages):');
+    // Destinatario inexistente/nao autorizado: 403 (nao 400 — nao revelar existencia).
+    check('POST /messages destinatario nao autorizado (guardian → 403)', (await call(g, '/messages', {
+      method: 'POST',
+      body: JSON.stringify({ recipient_id: FAKE_UUID, subject: 'Test', body: 'Test' }),
+    })).status, [403], 'guardian deve receber 403, nunca 400, para destinatario invalido');
+    // Se admin disponivel: pegar profile de outro guardian e confirmar 403.
+    if (sessions.ADMIN) {
+      // Admin ve todos os profiles; procura um guardian diferente do atual.
+      const allProfiles = await call(sessions.ADMIN, '/messages/contacts');
+      const otherGuardian = (allProfiles.body?.data ?? []).find((p) => p.role === 'guardian');
+      if (otherGuardian) {
+        check('POST /messages guardian → outro guardian = 403', (await call(g, '/messages', {
+          method: 'POST',
+          body: JSON.stringify({ recipient_id: otherGuardian.id, subject: 'Test', body: 'Test' }),
+        })).status, [403], 'guardian nao pode enviar msg para outro guardian');
+      }
+      // Positivo: pegar um contato autorizado (professor do filho) e verificar 201.
+      const guardianContacts2 = await call(g, '/messages/contacts');
+      const allowedTeacher = (guardianContacts2.body?.data ?? []).find((p) => p.role === 'teacher');
+      if (allowedTeacher) {
+        check('POST /messages guardian → professor do filho = 201', (await call(g, '/messages', {
+          method: 'POST',
+          body: JSON.stringify({ recipient_id: allowedTeacher.id, subject: 'Teste autorizado', body: 'Mensagem de teste' }),
+        })).status, [201], 'guardian DEVE poder enviar mensagem ao professor do filho');
+      } else {
+        console.log('  (sem professor vinculado ao filho — teste positivo de guardian→teacher pulado)');
+      }
+    }
+
     console.log('RESPONSAVEL — IDOR student_id em mensagens:');
     // student_id de UUID falso: responsavel nao pode referenciar aluno alheio.
     // Deve retornar 403 (nao 400/invalid_student) para nao confirmar existencia.
@@ -391,6 +421,42 @@ async function main() {
         });
         check('POST /attendance/attestation aluno outra turma + class_id propria (teacher)', attPostCrossStudent.status, [404],
           'aluno nao pertence a essa turma — validacao atomica deve barrar (404)');
+      }
+    }
+
+    console.log('PROFESSOR — autorizacao de destinatario (POST /messages):');
+    // Destinatario inexistente/nao autorizado: 403, nunca 400.
+    check('POST /messages destinatario nao autorizado (teacher → 403)', (await call(t, '/messages', {
+      method: 'POST',
+      body: JSON.stringify({ recipient_id: FAKE_UUID, subject: 'Test', body: 'Test' }),
+    })).status, [403], 'professor deve receber 403, nunca 400, para destinatario invalido');
+    // Positivo: pegar responsavel autorizado dos proprios contatos e testar 201.
+    const teacherContacts2 = await call(t, '/messages/contacts');
+    const allowedGuardian = (teacherContacts2.body?.data ?? []).find((p) => p.role === 'guardian');
+    if (allowedGuardian) {
+      check('POST /messages teacher → responsavel do proprio aluno = 201', (await call(t, '/messages', {
+        method: 'POST',
+        body: JSON.stringify({ recipient_id: allowedGuardian.id, subject: 'Teste autorizado', body: 'Mensagem de teste' }),
+      })).status, [201], 'professor DEVE poder enviar mensagem ao responsavel de aluno da propria turma');
+    } else {
+      console.log('  (sem responsavel vinculado a turma do professor — teste positivo de teacher→guardian pulado)');
+    }
+    // Negativo: guardian de turma alheia (via admin) → 403.
+    if (sessions.ADMIN && otherClass) {
+      const otherStudents2 = await call(sessions.ADMIN, `/students?class_id=${otherClass}`);
+      const otherStu2 = otherStudents2.body?.data?.[0];
+      if (otherStu2?.guardian_id) {
+        // Buscar profile do guardian via admin contacts
+        const adminContacts = await call(sessions.ADMIN, '/messages/contacts');
+        const otherGuardianProfile = (adminContacts.body?.data ?? []).find(
+          (p) => p.role === 'guardian' && !(teacherContacts2.body?.data ?? []).some((tc) => tc.id === p.id)
+        );
+        if (otherGuardianProfile) {
+          check('POST /messages teacher → responsavel turma alheia = 403', (await call(t, '/messages', {
+            method: 'POST',
+            body: JSON.stringify({ recipient_id: otherGuardianProfile.id, subject: 'IDOR', body: 'Test' }),
+          })).status, [403], 'professor nao pode msg responsavel de turma que nao leciona');
+        }
       }
     }
 
