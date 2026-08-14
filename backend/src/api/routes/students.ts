@@ -63,7 +63,7 @@ studentsRouter.get('/', requireRole('school_admin', 'financial', 'teacher', 'sup
               case when g.phone  is null then null else '(**) ****-'  || right(g.phone,4)                                    end as guardian_phone,
               case when g.phone2 is null then null else '(**) ****-'  || right(g.phone2,4)                                   end as guardian_phone2
          from public.students s
-         left join public.classes cl on cl.id = s.class_id
+         left join public.classes cl on cl.id = s.class_id and cl.school_id = s.school_id
          left join public.guardians g on g.id = s.guardian_id
         where s.school_id = $1${filter}
         order by s.name asc`,
@@ -131,6 +131,16 @@ studentsRouter.post('/', requireRole('school_admin', 'superadmin'), validateBody
       const baseEnroll = rawEnroll == null ? 0 : Number(rawEnroll);
       if (Number.isNaN(baseMonthly) || Number.isNaN(baseEnroll)) {
         throw Object.assign(new Error('Plano com valores inválidos'), { http: 400, code: 'invalid_plan_fee' });
+      }
+      // Valida class_id antes de qualquer efeito colateral (auth user, guardian, etc.)
+      if (s.class_id) {
+        const cv = await c.query(
+          `select 1 from public.classes where id=$1 and school_id=$2 limit 1`,
+          [s.class_id, req.ctx!.schoolId],
+        );
+        if (cv.rows.length === 0) {
+          throw Object.assign(new Error('Turma não encontrada nesta escola.'), { http: 400, code: 'class_not_found' });
+        }
       }
       const { applyDiscount } = await import('../../lib/billing/studentInvoices');
       const monthlyFee = applyDiscount(baseMonthly, discountPct);
@@ -267,7 +277,14 @@ studentsRouter.post('/', requireRole('school_admin', 'superadmin'), validateBody
 
 studentsRouter.put('/:id', requireRole('school_admin', 'superadmin'), validateBody(studentUpdateSchema), async (req, res) => {
   const s = req.body as import('../../../../shared/schemas').StudentUpdateOutput;
-  const updated = await withTenant(req.ctx!, async (c) => {
+  const result = await withTenant(req.ctx!, async (c) => {
+    if (s.class_id) {
+      const cv = await c.query(
+        `select 1 from public.classes where id=$1 and school_id=$2 limit 1`,
+        [s.class_id, req.ctx!.schoolId],
+      );
+      if (cv.rows.length === 0) return { error: 'class_not_found' as const };
+    }
     const { rows } = await c.query(
       `update public.students set
           name=coalesce($1,name),
@@ -293,10 +310,13 @@ studentsRouter.put('/:id', requireRole('school_admin', 'superadmin'), validateBo
        s.class_id ?? null, s.plan_id ?? null,
        req.params.id, req.ctx!.schoolId],
     );
-    return rows[0];
+    return { data: rows[0] };
   });
-  if (!updated) return res.status(404).json({ code: 'not_found' });
-  res.json({ ok: true, data: updated });
+  if ('error' in result) {
+    return res.status(400).json({ code: result.error, message: 'Turma não encontrada nesta escola.' });
+  }
+  if (!result.data) return res.status(404).json({ code: 'not_found' });
+  res.json({ ok: true, data: result.data });
 });
 
 studentsRouter.delete('/:id', requireRole('school_admin', 'superadmin'), async (req, res) => {

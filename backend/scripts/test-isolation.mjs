@@ -212,6 +212,33 @@ async function main() {
       });
       check('PUT /classes/:id com teacher_id invalido', badPut.status, [400], 'teacher_not_found esperado');
     }
+
+    console.log('GESTOR — IDOR cross-tenant em students.class_id:');
+    // POST com class_id de outra escola (UUID falso) deve ser rejeitado antes de criar qualquer usuario.
+    // Usamos dados minimos; o erro deve ser 400 class_not_found antes de chegar na criacao de auth.
+    const badClassPost = await call(a, '/students', {
+      method: 'POST',
+      body: JSON.stringify({
+        name: 'Teste IDOR', cpf: '000.000.000-00', birth_date: '2010-01-01',
+        father_name: 'Pai', mother_name: 'Mae',
+        class_id: FAKE_UUID,
+        plan_id: FAKE_UUID,
+        guardian: { name: 'Resp IDOR', email: `idor-${Date.now()}@example.com`, cpf: '000.000.000-00' },
+      }),
+    });
+    check('POST /students com class_id invalido', badClassPost.status, [400], 'class_not_found ou plan_not_found esperado');
+
+    // PUT: tenta mover aluno para turma de outra escola.
+    const firstStudent = adminStudents.body?.data?.[0];
+    if (firstStudent) {
+      const badClassPut = await call(a, `/students/${firstStudent.id}`, {
+        method: 'PUT',
+        body: JSON.stringify({ class_id: FAKE_UUID }),
+      });
+      check('PUT /students/:id com class_id invalido', badClassPut.status, [400], 'class_not_found esperado');
+    } else {
+      console.log('  (sem alunos cadastrados — teste de PUT com class_id invalido pulado)');
+    }
     console.log('');
   }
 
