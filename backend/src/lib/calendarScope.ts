@@ -24,3 +24,29 @@ export function guardianCalendarWhere(
       AND s.class_id IS NOT NULL
   ))`;
 }
+
+/**
+ * Fragmento SQL canônico de visibilidade de eventos do calendário para o
+ * professor:
+ *   - eventos globais  → class_id IS NULL
+ *   - eventos de turma → class_id de turma que leciona (regente OU matéria)
+ *
+ * Espelha exatamente a regra de teacherCanAccessClass para evitar divergência.
+ */
+export function teacherCalendarWhere(
+  classIdCol: string,
+  schoolIdParam: number,
+  userIdParam: number,
+): string {
+  return `(${classIdCol} IS NULL OR ${classIdCol} IN (
+    SELECT cl.id FROM public.classes cl
+    JOIN public.teachers t
+      ON t.user_id = $${userIdParam} AND t.school_id = $${schoolIdParam}
+    WHERE cl.school_id = $${schoolIdParam}
+      AND (cl.teacher_id = t.id
+           OR EXISTS (
+             SELECT 1 FROM public.class_subjects cs
+              WHERE cs.class_id = cl.id AND cs.teacher_id = t.id
+           ))
+  ))`;
+}

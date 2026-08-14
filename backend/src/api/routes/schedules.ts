@@ -50,10 +50,10 @@ schedulesRouter.post('/', requireRole('school_admin', 'superadmin'), async (req,
   const p = scheduleSchema.safeParse(req.body);
   if (!p.success) return res.status(400).json({ code: 'validation', message: p.error.issues[0]?.message });
   const result = await withTenant(req.ctx!, async (c) => {
-    // Garante que user_id pertence a esta escola antes do INSERT.
-    // Impede que um admin da escola A crie jornada para um perfil da escola B.
+    // Garante que user_id é um professor ativo desta escola antes do INSERT.
+    // Impede criar jornada para responsável ou perfil de outra escola.
     const uv = await c.query(
-      `select id from public.profiles where id = $1 and school_id = $2 limit 1`,
+      `select 1 from public.teachers where user_id = $1 and school_id = $2 and status = 'active' limit 1`,
       [p.data.user_id, req.ctx!.schoolId],
     );
     if (uv.rows.length === 0) return { error: 'user_not_found' as const };

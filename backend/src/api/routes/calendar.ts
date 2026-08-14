@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { withTenant } from '../../db/withTenant';
 import { requireAuth, requireRole } from '../../middleware/auth';
 import { dateSchema } from '../../lib/validation';
-import { guardianCalendarWhere } from '../../lib/calendarScope';
+import { guardianCalendarWhere, teacherCalendarWhere } from '../../lib/calendarScope';
 
 export const calendarRouter = Router();
 calendarRouter.use(requireAuth);
@@ -23,11 +23,7 @@ calendarRouter.get('/', async (req, res) => {
     let classFilter = '';
     if (role === 'teacher') {
       params.push(profileId);
-      classFilter = ` and (sc.class_id IS NULL OR sc.class_id IN (
-        SELECT cs.class_id FROM public.class_subjects cs
-        JOIN public.teachers t ON t.id = cs.teacher_id
-        WHERE t.user_id = $${params.length} AND cs.school_id = $1
-      ))`;
+      classFilter = ` and ${teacherCalendarWhere('sc.class_id', 1, params.length)}`;
     } else if (role === 'guardian') {
       params.push(profileId);
       classFilter = ` and ${guardianCalendarWhere('sc.class_id', 1, params.length)}`;

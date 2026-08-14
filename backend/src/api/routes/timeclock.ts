@@ -146,6 +146,13 @@ timeclockRouter.post('/clock-in', async (req, res) => {
   }
 
   const result = await withTenant(req.ctx!, async (c) => {
+    // Apenas professores/colaboradores (registro em teachers) podem bater ponto.
+    const tcCheck = await c.query(
+      `select 1 from public.teachers where user_id=$1 and school_id=$2 and status='active' limit 1`,
+      [req.ctx!.profileId, req.ctx!.schoolId],
+    );
+    if (tcCheck.rows.length === 0) return { error: 'not_a_teacher' as const };
+
     // Habilitado para bater ponto?
     const enabled = await c.query(
       `select coalesce(timeclock_enabled, true) as en from public.teachers
@@ -205,6 +212,7 @@ timeclockRouter.post('/clock-in', async (req, res) => {
 
   if ('error' in result) {
     const map: Record<string, { http: number; message: string }> = {
+      not_a_teacher: { http: 403, message: 'Apenas professores e colaboradores cadastrados podem registrar ponto.' },
       not_enabled: { http: 403, message: 'Você não está habilitado para bater ponto. Fale com a gestão da escola.' },
       already_clocked_in: { http: 409, message: 'Você já tem um ponto em aberto. Registre a saída primeiro.' },
       no_schedule: { http: 403, message: 'Você não possui jornada cadastrada para hoje. Fale com a gestão da escola.' },
@@ -255,9 +263,9 @@ timeclockRouter.post('/manual', requireRole('school_admin', 'superadmin'), async
   const { user_id, date, clock_in, clock_out, notes } = p.data;
 
   const created = await withTenant(req.ctx!, async (c) => {
-    // Confirma que o colaborador pertence à escola.
+    // Confirma que o colaborador é um professor ativo desta escola.
     const prof = await c.query(
-      `select id from public.profiles where id=$1 and school_id=$2 limit 1`,
+      `select 1 from public.teachers where user_id=$1 and school_id=$2 and status='active' limit 1`,
       [user_id, req.ctx!.schoolId],
     );
     if (prof.rows.length === 0) return { error: 'invalid_user' as const };

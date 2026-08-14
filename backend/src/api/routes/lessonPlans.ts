@@ -4,6 +4,7 @@ import { withTenant } from '../../db/withTenant';
 import { requireAuth, requireRole } from '../../middleware/auth';
 import { dateSchema } from '../../lib/validation';
 import { notify, notifyMany } from '../../lib/notifications';
+import { teacherCanAccessClass } from '../../lib/classAccess';
 
 export const lessonPlansRouter = Router();
 lessonPlansRouter.use(requireAuth);
@@ -66,10 +67,10 @@ const PLAN_SELECT = `
            else null
          end as awaiting_from
     from public.lesson_plans lp
-    join public.classes  cl on cl.id = lp.class_id
-    join public.teachers t  on t.id  = lp.teacher_id
-    left join public.subjects s  on s.id  = lp.subject_id
-    left join public.profiles rv on rv.id = lp.reviewed_by
+    join public.classes  cl on cl.id = lp.class_id  and cl.school_id = lp.school_id
+    join public.teachers t  on t.id  = lp.teacher_id and t.school_id  = lp.school_id
+    left join public.subjects s  on s.id  = lp.subject_id and s.school_id  = lp.school_id
+    left join public.profiles rv on rv.id = lp.reviewed_by and rv.school_id = lp.school_id
     left join lateral (
       select p2.role as author_role, cm.created_at
         from public.lesson_plan_comments cm
@@ -339,10 +340,46 @@ lessonPlansRouter.post('/', async (req, res) => {
   if (!p.success) return res.status(400).json({ code: 'validation', message: p.error.issues[0]?.message });
 
   const out = await withTenant(req.ctx!, async (c) => {
-    let teacherId = await myTeacherId(c, req.ctx!);
-    // Coordenação/direção pode lançar em nome de um professor.
-    if (isReviewer(req.ctx!.role) && req.body?.teacher_id) teacherId = req.body.teacher_id;
+    let teacherId: string | null = null;
+
+    if (isReviewer(req.ctx!.role)) {
+      if (req.body?.teacher_id) {
+        // Valida que o professor pertence a esta escola e está ativo.
+        const tcCheck = await c.query(
+          `select id from public.teachers where id=$1 and school_id=$2 and status='active' limit 1`,
+          [req.body.teacher_id, req.ctx!.schoolId],
+        );
+        if (tcCheck.rows.length === 0) return 'teacher_not_found';
+        teacherId = req.body.teacher_id;
+      } else {
+        teacherId = await myTeacherId(c, req.ctx!);
+      }
+      // Valida que a turma pertence a esta escola.
+      const clsCheck = await c.query(
+        `select 1 from public.classes where id=$1 and school_id=$2 limit 1`,
+        [p.data.class_id, req.ctx!.schoolId],
+      );
+      if (clsCheck.rows.length === 0) return 'class_not_found';
+    } else {
+      // Professor: deriva da sessão — nunca confia no body.
+      teacherId = await myTeacherId(c, req.ctx!);
+      if (!teacherId) return 'no_teacher';
+      // Valida que o professor realmente leciona esta turma.
+      const allowed = await teacherCanAccessClass(c, req.ctx!, p.data.class_id);
+      if (!allowed) return 'class_forbidden';
+    }
+
     if (!teacherId) return 'no_teacher';
+
+    // Valida que a matéria pertence à turma (quando informada).
+    if (p.data.subject_id) {
+      const subCheck = await c.query(
+        `select 1 from public.class_subjects
+          where class_id=$1 and subject_id=$2 and school_id=$3 limit 1`,
+        [p.data.class_id, p.data.subject_id, req.ctx!.schoolId],
+      );
+      if (subCheck.rows.length === 0) return 'subject_not_in_class';
+    }
 
     const week = mondayOf(p.data.week_start);
     const { rows } = await c.query(
@@ -361,12 +398,12 @@ lessonPlansRouter.post('/', async (req, res) => {
     return rows[0].id;
   });
 
-  if (out === 'no_teacher') {
-    return res.status(400).json({ code: 'validation', message: 'Seu usuário não está vinculado a um professor.' });
-  }
-  if (out === 'duplicate') {
-    return res.status(409).json({ code: 'conflict', message: 'Já existe um plano para esta turma, matéria e semana.' });
-  }
+  if (out === 'no_teacher') return res.status(400).json({ code: 'validation', message: 'Seu usuário não está vinculado a um professor.' });
+  if (out === 'teacher_not_found') return res.status(404).json({ code: 'teacher_not_found', message: 'Professor não encontrado nesta escola.' });
+  if (out === 'class_not_found') return res.status(404).json({ code: 'class_not_found', message: 'Turma não encontrada nesta escola.' });
+  if (out === 'class_forbidden') return res.status(403).json({ code: 'forbidden', message: 'Você não leciona nesta turma.' });
+  if (out === 'subject_not_in_class') return res.status(400).json({ code: 'validation', message: 'Matéria não vinculada a esta turma.' });
+  if (out === 'duplicate') return res.status(409).json({ code: 'conflict', message: 'Já existe um plano para esta turma, matéria e semana.' });
   res.status(201).json({ ok: true, data: { id: out } });
 });
 

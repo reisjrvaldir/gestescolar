@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { withTenant } from '../../db/withTenant';
 import { requireAuth, requireRole } from '../../middleware/auth';
 import { teacherCanAccessClass } from '../../lib/classAccess';
+import { guardianCalendarWhere, teacherCalendarWhere } from '../../lib/calendarScope';
 
 export const attendanceRouter = Router();
 
@@ -145,22 +146,35 @@ attendanceRouter.get('/top-absences', requireRole(...STAFF), async (req, res) =>
   res.json({ ok: true, data });
 });
 
-// GET /attendance/school-events?year=&month= → eventos do calendário escolar no mês
+// GET /attendance/school-events?year=&month= → eventos do calendário escolar no mês.
+// Aplica o mesmo escopo de visibilidade de GET /calendar: guardian vê apenas
+// eventos globais ou de turmas dos filhos; teacher vê apenas os da própria turma.
 attendanceRouter.get('/school-events', async (req, res) => {
+  const { role, profileId, schoolId } = req.ctx!;
   const now = new Date();
   const year  = req.query.year  ? Number(req.query.year)  : now.getFullYear();
   const month = req.query.month ? Number(req.query.month) : now.getMonth() + 1;
   const firstDay = `${year}-${String(month).padStart(2, '0')}-01`;
   const lastDay  = new Date(year, month, 0).toISOString().slice(0, 10);
   const data = await withTenant(req.ctx!, async (c) => {
+    const params: unknown[] = [schoolId, lastDay, firstDay];
+    let classFilter = '';
+    if (role === 'teacher') {
+      params.push(profileId);
+      classFilter = ` and ${teacherCalendarWhere('sc.class_id', 1, params.length)}`;
+    } else if (role === 'guardian') {
+      params.push(profileId);
+      classFilter = ` and ${guardianCalendarWhere('sc.class_id', 1, params.length)}`;
+    }
     const { rows } = await c.query(
-      `select id, title, date_start::text, date_end::text, event_type
-         from public.school_calendar
-        where school_id = $1
-          and date_start <= $2
-          and (date_end is null or date_end >= $3)
-        order by date_start`,
-      [req.ctx!.schoolId, lastDay, firstDay],
+      `select sc.id, sc.title, sc.date_start::text, sc.date_end::text, sc.event_type
+         from public.school_calendar sc
+        where sc.school_id = $1
+          and sc.date_start <= $2
+          and (sc.date_end is null or sc.date_end >= $3)
+          ${classFilter}
+        order by sc.date_start`,
+      params,
     );
     return rows;
   });
