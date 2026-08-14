@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { withTenant } from '../../db/withTenant';
 import { requireAuth, requireRole } from '../../middleware/auth';
+import { teacherCanAccessClass } from '../../lib/classAccess';
 import { signUpGuardian } from '../../lib/authSignup';
 import { DEFAULT_GUARDIAN_PASSWORD, toStoredPassword } from '../../lib/validation';
 import { insertMonthlyInvoices, insertEnrollmentInvoice, generatePixForNewInvoices, type FirstDueRule } from '../../lib/billing/studentInvoices';
@@ -18,6 +19,26 @@ studentsRouter.get('/', requireRole('school_admin', 'financial', 'teacher', 'sup
   const data = await withTenant(req.ctx!, async (c) => {
     const params: unknown[] = [req.ctx!.schoolId];
     let filter = '';
+
+    if (req.ctx!.role === 'teacher') {
+      // class_id específico: verifica posse antes de devolver qualquer dado.
+      if (classId && !(await teacherCanAccessClass(c, req.ctx!, classId))) return null;
+      // Restringe ao conjunto de turmas que o professor leciona (regente ou matéria).
+      // profileId vem do JWT — o frontend não pode forjar esse valor.
+      params.push(req.ctx!.profileId);
+      filter += ` and s.class_id in (
+        select cl.id from public.classes cl
+        join public.teachers t
+          on t.user_id = $${params.length} and t.school_id = $1
+        where cl.school_id = $1
+          and (cl.teacher_id = t.id
+               or exists (
+                 select 1 from public.class_subjects cs
+                  where cs.class_id = cl.id and cs.teacher_id = t.id
+               ))
+      )`;
+    }
+
     if (classId) {
       params.push(classId);
       filter += ` and s.class_id = $${params.length}`;
@@ -50,6 +71,7 @@ studentsRouter.get('/', requireRole('school_admin', 'financial', 'teacher', 'sup
     );
     return rows;
   });
+  if (data === null) return res.status(403).json({ code: 'forbidden', message: 'Você não leciona nesta turma.' });
   res.json({ ok: true, data });
 });
 

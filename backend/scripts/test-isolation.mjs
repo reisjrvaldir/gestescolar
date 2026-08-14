@@ -138,6 +138,28 @@ async function main() {
       body: JSON.stringify({ class_id: target, date: '2026-01-01', entries: [] }),
     })).status, [403, 400], label);
 
+    console.log('PROFESSOR — listagem de alunos (escopo por turma):');
+    // Sem filtro: deve devolver APENAS alunos das turmas do professor (200, não escola inteira).
+    const studentsAll = await call(t, '/students');
+    check('GET /students (sem filtro, escopo restrito)', studentsAll.status, [200]);
+    if (studentsAll.status === 200 && myClass) {
+      // Todos os alunos retornados devem pertencer a turmas do professor.
+      const ids = (studentsAll.body?.data ?? []).map((s) => s.class_id);
+      const leaked = ids.filter((id) => id !== myClass && id !== null);
+      if (leaked.length === 0) {
+        console.log('  PASSA  alunos retornados pertencem apenas a turmas proprias');
+      } else {
+        console.log(`  FALHA  alunos de turmas alheias vazaram: ${leaked.slice(0, 3).join(', ')}`);
+        results.push({ ok: false, name: 'GET /students sem filtro (leak de turma alheia)', actual: 'vazou', expected: 'escopo restrito', detail: '' });
+      }
+    }
+    if (myClass) {
+      // class_id própria → deve funcionar
+      check('GET /students?class_id=propria', (await call(t, `/students?class_id=${myClass}`)).status, [200], 'turma do professor');
+    }
+    // class_id alheia → deve retornar 403
+    check('GET /students?class_id=alheia', (await call(t, `/students?class_id=${target}`)).status, [403], label);
+
     console.log('PROFESSOR — nao pode administrar:');
     check('POST /classes (criar turma)', (await call(t, '/classes', {
       method: 'POST',
@@ -158,6 +180,12 @@ async function main() {
     check('GET /saas/dashboard', (await call(a, '/saas/dashboard')).status, [403]);
     check('GET /classes/:id/students (turma inexistente)', (await call(a, `/classes/${FAKE_UUID}/students`)).status, [200, 403, 404],
       'deve vir vazio ou negado, nunca dado de outra escola');
+
+    console.log('GESTOR — listagem de alunos (acesso completo da propria escola):');
+    const adminStudents = await call(a, '/students');
+    check('GET /students (gestor ve todos)', adminStudents.status, [200]);
+    // Gestor não recebe 403 mesmo com class_id inexistente (UUID fora da escola → array vazio)
+    check('GET /students?class_id=inexistente (vazio, nao 403)', (await call(a, `/students?class_id=${FAKE_UUID}`)).status, [200]);
     console.log('');
   }
 
