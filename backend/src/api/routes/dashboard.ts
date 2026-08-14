@@ -103,10 +103,85 @@ dashboardRouter.get('/stats', async (req, res) => {
 
     // ---------- Dashboard de STAFF ----------
     // Dados financeiros (receita, inadimplência, despesas, PIX, cobranças com
-    // nomes de alunos) só para gestão/financeiro. Professor/coordenador recebem
-    // apenas os indicadores operacionais.
+    // nomes de alunos) só para gestão/financeiro.
     const canSeeFinance = ['school_admin', 'financial', 'superadmin'].includes(role);
 
+    // ---- Professor: escopo estrito às próprias turmas ----
+    // Nenhuma query abaixo deve tocar alunos, turmas ou frequência fora das
+    // turmas onde o professor é regente ou docente de disciplina.
+    if (role === 'teacher') {
+      const teacherRow = await c.query(
+        `SELECT id FROM public.teachers WHERE user_id=$1 AND school_id=$2 LIMIT 1`,
+        [req.ctx!.profileId, schoolId],
+      );
+      const teacherId: string | null = teacherRow.rows[0]?.id ?? null;
+      if (!teacherId) {
+        return { role: 'teacher', students: 0, classes: 0, attendance_today: 0, presence_pct: null, recent_activities: [] };
+      }
+
+      // Predicado reutilizado: turma pertence ao professor (regente ou disciplina).
+      const myClassPred = `(c2.teacher_id=$2
+          OR EXISTS (SELECT 1 FROM public.class_subjects cs2
+                      WHERE cs2.class_id=c2.id AND cs2.teacher_id=$2))`;
+
+      const [students, classes, attendanceToday, presenceToday] = await Promise.all([
+        c.query(
+          `SELECT count(*)::int AS total
+             FROM public.students s
+            WHERE s.school_id=$1 AND s.status='active'
+              AND EXISTS (SELECT 1 FROM public.classes c2
+                           WHERE c2.id=s.class_id AND c2.school_id=$1 AND c2.status='active'
+                             AND ${myClassPred})`,
+          [schoolId, teacherId],
+        ),
+        c.query(
+          `SELECT count(*)::int AS total
+             FROM public.classes c2
+            WHERE c2.school_id=$1 AND c2.status='active' AND ${myClassPred}`,
+          [schoolId, teacherId],
+        ),
+        c.query(
+          `SELECT count(DISTINCT a.class_id)::int AS total
+             FROM public.attendance a
+            WHERE a.school_id=$1 AND a.date=current_date
+              AND EXISTS (SELECT 1 FROM public.classes c2
+                           WHERE c2.id=a.class_id AND c2.school_id=$1 AND ${myClassPred})`,
+          [schoolId, teacherId],
+        ),
+        c.query(
+          `SELECT round(100.0 * count(*) FILTER (WHERE a.status='present') / nullif(count(*),0))::int AS pct
+             FROM public.attendance a
+            WHERE a.school_id=$1 AND a.date=current_date
+              AND EXISTS (SELECT 1 FROM public.classes c2
+                           WHERE c2.id=a.class_id AND c2.school_id=$1 AND ${myClassPred})`,
+          [schoolId, teacherId],
+        ),
+      ]);
+
+      const acts = await c.query(
+        `SELECT 'student' AS type, 'Novo aluno cadastrado' AS title, s.name AS subtitle, s.created_at AS at
+           FROM public.students s
+          WHERE s.school_id=$1
+            AND EXISTS (SELECT 1 FROM public.classes c2
+                         WHERE c2.id=s.class_id AND c2.school_id=$1 AND c2.status='active'
+                           AND ${myClassPred})
+          ORDER BY s.created_at DESC LIMIT 6`,
+        [schoolId, teacherId],
+      );
+
+      return {
+        role: 'teacher',
+        students: students.rows[0].total,
+        classes: classes.rows[0].total,
+        attendance_today: attendanceToday.rows[0].total,
+        presence_pct: presenceToday.rows[0].pct,
+        recent_activities: acts.rows.map((r: any) => ({
+          type: r.type, title: r.title, subtitle: r.subtitle, at: r.at,
+        })),
+      };
+    }
+
+    // ---- Coordinator e demais papéis de staff não-financeiro ----
     const [students, classes, teachers, attendanceToday, presenceToday, trialInfo] = await Promise.all([
       c.query(`select count(*)::int as total from public.students where school_id=$1 and status='active'`, [schoolId]),
       c.query(`select count(*)::int as total from public.classes where school_id=$1 and status='active'`, [schoolId]),
@@ -138,7 +213,7 @@ dashboardRouter.get('/stats', async (req, res) => {
       trial_days_left: canSeeFinance ? trialDaysLeft : null,
     };
 
-    // Professor/coordenador: só atividade operacional (novos alunos), sem financeiro.
+    // Coordenador: atividade operacional (novos alunos), sem financeiro.
     if (!canSeeFinance) {
       const acts = await c.query(
         `select 'student' as type, 'Novo aluno cadastrado' as title, s.name as subtitle, s.created_at as at

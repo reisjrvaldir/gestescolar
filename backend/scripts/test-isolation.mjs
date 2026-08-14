@@ -234,6 +234,50 @@ async function main() {
     // class_id alheia → deve retornar 403
     check('GET /students?class_id=alheia', (await call(t, `/students?class_id=${target}`)).status, [403], label);
 
+    console.log('PROFESSOR — dashboard escopo restrito (proprias turmas):');
+    const teacherDash = await call(t, '/dashboard/stats');
+    check('GET /dashboard/stats (teacher)', teacherDash.status, [200]);
+    if (teacherDash.status === 200) {
+      const td = teacherDash.body?.data ?? {};
+      // Contagem de turmas do dashboard deve bater com /classes/mine.
+      const mineCount = (mine.body?.data ?? []).length;
+      if (td.classes === mineCount) {
+        console.log(`  PASSA  dashboard.classes=${td.classes} bate com /classes/mine (${mineCount})`);
+      } else {
+        console.log(`  FALHA  dashboard.classes=${td.classes} != /classes/mine=${mineCount} — escola inteira vazou?`);
+        results.push({ ok: false, name: 'GET /dashboard/stats classes count (teacher)', actual: String(td.classes), expected: String(mineCount), detail: '' });
+      }
+      // professor nao deve receber contagem de professores da escola (campo teachers).
+      if ('teachers' in td) {
+        console.log(`  FALHA  dashboard de professor expoe teachers=${td.teachers} (dado da escola inteira)`);
+        results.push({ ok: false, name: 'GET /dashboard/stats teachers exposed (teacher)', actual: String(td.teachers), expected: 'campo ausente', detail: '' });
+      } else {
+        console.log('  PASSA  campo teachers ausente no dashboard do professor');
+      }
+      // Se admin disponivel, confirmar que professor nao recebe escola inteira.
+      if (sessions.ADMIN) {
+        const adminDash = await call(sessions.ADMIN, '/dashboard/stats');
+        if (adminDash.status === 200) {
+          const ad = adminDash.body?.data ?? {};
+          if (ad.classes > mineCount) {
+            if (td.classes <= mineCount) {
+              console.log(`  PASSA  escola tem ${ad.classes} turmas, professor ve apenas ${td.classes} (subconjunto correto)`);
+            } else {
+              console.log(`  FALHA  professor recebeu ${td.classes} turmas mas deveria ver no maximo ${mineCount}`);
+              results.push({ ok: false, name: 'GET /dashboard/stats teacher classes > mine', actual: String(td.classes), expected: `<=${mineCount}`, detail: '' });
+            }
+          }
+          // Alunos do professor devem ser subconjunto dos da escola.
+          if (ad.students >= td.students) {
+            console.log(`  PASSA  dashboard.students professor (${td.students}) <= escola (${ad.students})`);
+          } else {
+            console.log(`  FALHA  professor reporta mais alunos (${td.students}) que a escola (${ad.students})`);
+            results.push({ ok: false, name: 'GET /dashboard/stats teacher students > school', actual: String(td.students), expected: `<=${ad.students}`, detail: '' });
+          }
+        }
+      }
+    }
+
     console.log('PROFESSOR — jornada (somente propria, user_id externo ignorado):');
     const ownSched = await call(t, '/schedules');
     check('GET /schedules (sem filtro)', ownSched.status, [200]);
