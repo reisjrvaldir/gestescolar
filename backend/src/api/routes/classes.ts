@@ -69,8 +69,33 @@ const CLASS_SELECT = `
 const STAFF = ['school_admin', 'financial', 'teacher', 'superadmin'] as const;
 
 classesRouter.get('/', requireRole(...STAFF), async (req, res) => {
+  const { role, profileId, schoolId } = req.ctx!;
   const data = await withTenant(req.ctx!, async (c) => {
-    const { rows } = await c.query(`${CLASS_SELECT} where c.school_id = $1 order by c.name asc`, [req.ctx!.schoolId]);
+    // Professor: escopo restrito às próprias turmas (idêntico a /classes/mine).
+    // Evita que um professor veja turmas de colegas e seus professores associados.
+    if (role === 'teacher') {
+      const t = await c.query(
+        `select id from public.teachers where user_id=$1 and school_id=$2 limit 1`,
+        [profileId, schoolId],
+      );
+      if (t.rows.length === 0) return [];
+      const teacherId = t.rows[0].id;
+      const { rows } = await c.query(
+        `${CLASS_SELECT}
+           where c.school_id = $1 and c.status = 'active'
+             and (c.teacher_id = $2
+                  or exists (select 1 from public.class_subjects cs
+                              where cs.class_id = c.id and cs.teacher_id = $2))
+           order by c.name asc`,
+        [schoolId, teacherId],
+      );
+      return rows;
+    }
+    // Admin / financial / superadmin: todas as turmas da escola.
+    const { rows } = await c.query(
+      `${CLASS_SELECT} where c.school_id = $1 order by c.name asc`,
+      [schoolId],
+    );
     return rows;
   });
   res.json({ ok: true, data });

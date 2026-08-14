@@ -157,6 +157,38 @@ async function main() {
       console.log('  (professor sem turma vinculada — testes de turma propria pulados)');
     }
 
+    console.log('PROFESSOR — GET /classes escopo restrito (nao ve escola inteira):');
+    // GET /classes deve retornar o mesmo escopo de /classes/mine — nunca todas as turmas.
+    const classesAll = await call(t, '/classes');
+    check('GET /classes (professor)', classesAll.status, [200]);
+    if (classesAll.status === 200) {
+      const returned = (classesAll.body?.data ?? []).map((c) => c.id);
+      const mineIds = new Set((mine.body?.data ?? []).map((c) => c.id));
+      const leaked = returned.filter((id) => !mineIds.has(id));
+      if (leaked.length === 0) {
+        console.log('  PASSA  GET /classes retornou apenas turmas proprias do professor');
+      } else {
+        console.log(`  FALHA  ${leaked.length} turma(s) alheia(s) vazaram em GET /classes`);
+        results.push({ ok: false, name: 'GET /classes turmas alheias (teacher)', actual: `${leaked.length} turmas extras`, expected: 'apenas proprias', detail: leaked.slice(0, 3).join(', ') });
+      }
+      // teacher_name de professores de outras turmas nao deve aparecer.
+      if (leaked.length === 0 && sessions.ADMIN) {
+        const allAdmin = await call(sessions.ADMIN, '/classes');
+        const allIds = new Set((allAdmin.body?.data ?? []).map((c) => c.id));
+        const notMine = [...allIds].filter((id) => !mineIds.has(id));
+        if (notMine.length > 0) {
+          const returnedIds = new Set(returned);
+          const exposedOther = notMine.filter((id) => returnedIds.has(id));
+          if (exposedOther.length === 0) {
+            console.log('  PASSA  turmas de outros professores nao expostas');
+          } else {
+            console.log(`  FALHA  ${exposedOther.length} turma(s) de outros professores presentes`);
+            results.push({ ok: false, name: 'GET /classes teacher_name de turmas alheias', actual: 'expostas', expected: 'ausentes', detail: '' });
+          }
+        }
+      }
+    }
+
     console.log('PROFESSOR — turma que NAO leciona:');
     // Descobre uma turma de outro professor usando o admin, se disponível.
     let otherClass = null;
@@ -443,8 +475,22 @@ async function main() {
     check('GET /students (gestor ve todos)', adminStudents.status, [200]);
     check('GET /students?class_id=inexistente (vazio, nao 403)', (await call(a, `/students?class_id=${FAKE_UUID}`)).status, [200]);
 
-    console.log('GESTOR — IDOR cross-tenant em turmas (teacher_id de outra escola):');
+    console.log('GESTOR — GET /classes ve todas as turmas da propria escola:');
     const all = await call(a, '/classes');
+    check('GET /classes (admin)', all.status, [200], 'gestor deve ver todas as turmas');
+    if (all.status === 200 && sessions.TEACHER) {
+      const adminCount = (all.body?.data ?? []).length;
+      const teacherClassesAll = await call(sessions.TEACHER, '/classes');
+      const teacherCount = (teacherClassesAll.body?.data ?? []).length;
+      if (adminCount >= teacherCount) {
+        console.log(`  PASSA  admin ve ${adminCount} turma(s), professor ve ${teacherCount} turma(s) (subconjunto correto)`);
+      } else {
+        console.log(`  FALHA  admin (${adminCount}) ve menos turmas que professor (${teacherCount}) — inesperado`);
+        results.push({ ok: false, name: 'GET /classes admin >= teacher count', actual: `admin=${adminCount} teacher=${teacherCount}`, expected: 'admin>=teacher', detail: '' });
+      }
+    }
+
+    console.log('GESTOR — IDOR cross-tenant em turmas (teacher_id de outra escola):')
     // Tenta criar turma com teacher_id que nao existe nesta escola (UUID falso).
     // Deve ser rejeitado com 400 teacher_not_found — nunca inserido silenciosamente.
     const badTeacher = await call(a, '/classes', {
