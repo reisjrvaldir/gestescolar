@@ -17,39 +17,66 @@ import {
 export const payoutRouter = Router();
 payoutRouter.use(requireAuth);
 
-// GET /api/payout — dados da conta de recebimento da escola.
-payoutRouter.get('/', async (req, res) => {
+// --- mascaramento de PII para o GET administrativo ---
+function maskCpf(v: string | null | undefined): string {
+  if (!v) return '';
+  const d = v.replace(/\D/g, '');
+  return d.length >= 2 ? `•••.•••.•••-${d.slice(-2)}` : '•••';
+}
+function maskCnpj(v: string | null | undefined): string {
+  if (!v) return '';
+  const d = v.replace(/\D/g, '');
+  return d.length >= 2 ? `••.•••.•••/••••-${d.slice(-2)}` : '•••';
+}
+function maskEmail(v: string | null | undefined): string {
+  if (!v || !v.includes('@')) return v ?? '';
+  const [user, domain] = v.split('@');
+  return `${user.slice(0, 1)}•••@${domain}`;
+}
+function maskPixKey(key: string | null, type: string | null): string | null {
+  if (!key) return null;
+  switch (type) {
+    case 'CPF':   return maskCpf(key);
+    case 'CNPJ':  return maskCnpj(key);
+    case 'EMAIL': return maskEmail(key);
+    case 'PHONE': { const d = key.replace(/\D/g, ''); return `(••) •••••-${d.slice(-4)}`; }
+    case 'EVP':   return `${key.slice(0, 4)}••••••••••••••••••••••${key.slice(-4)}`;
+    default:      return key.slice(0, 2) + '••••';
+  }
+}
+function maskBirthDate(v: string | null | undefined): string {
+  if (!v) return '';
+  return v.slice(0, 4) + '-**-**';
+}
+
+// GET /api/payout — dados da conta de recebimento (somente gestão).
+// wallet_id e account_id (IDs internos do ASAAS) não são expostos; o campo
+// `status` já comunica o estado da subconta ao frontend.
+payoutRouter.get('/', requireRole('school_admin', 'superadmin'), async (req, res) => {
   const data = await withTenant(req.ctx!, async (c) => {
     const acc = await c.query(
       `select status, pix_key, pix_key_type, legal_name, cnpj,
-              responsible_name, responsible_cpf, phone, email, bank_data_json, provider_account_id
+              responsible_name, responsible_cpf, phone, email, bank_data_json
          from public.nuvende_accounts where school_id = $1 limit 1`,
-      [req.ctx!.schoolId],
-    );
-    const school = await c.query(
-      `select asaas_wallet_id from public.schools where id = $1`,
       [req.ctx!.schoolId],
     );
     const row = acc.rows[0] ?? {};
     const bank = (row.bank_data_json ?? {}) as Record<string, any>;
     return {
       status: row.status ?? 'not_started',
-      pix_key: row.pix_key ?? null,
+      pix_key: maskPixKey(row.pix_key ?? null, row.pix_key_type ?? null),
       pix_key_type: row.pix_key_type ?? null,
-      wallet_id: school.rows[0]?.asaas_wallet_id ?? null,
-      account_id: row.provider_account_id ?? null,
-      account_email: row.email ?? null,
       asaas_configured: isAsaasConfigured,
       onboarding: {
         legal_name: row.legal_name ?? '',
-        cnpj: row.cnpj ?? '',
+        cnpj: maskCnpj(row.cnpj),
         responsible_name: row.responsible_name ?? '',
-        responsible_cpf: row.responsible_cpf ?? '',
-        email: row.email ?? '',
+        responsible_cpf: maskCpf(row.responsible_cpf),
+        email: maskEmail(row.email),
         phone: row.phone ?? '',
         income_value: bank.income_value ?? null,
         company_type: bank.company_type ?? 'LIMITED',
-        birth_date: bank.birth_date ?? '',
+        birth_date: maskBirthDate(bank.birth_date),
         address: bank.address ?? '',
         address_number: bank.address_number ?? '',
         complement: bank.complement ?? '',

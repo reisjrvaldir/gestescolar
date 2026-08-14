@@ -95,6 +95,8 @@ async function main() {
     check('GET /classes/:id/students', (await call(g, `/classes/${FAKE_UUID}/students`)).status, [403]);
     check('GET /students (lista da escola)', (await call(g, '/students')).status, [403]);
     check('GET /staff (equipe)', (await call(g, '/staff')).status, [403]);
+    check('GET /payout (guardian)', (await call(g, '/payout')).status, [403],
+      'responsavel nao pode ver dados bancarios da escola');
 
     console.log('RESPONSAVEL — deve conseguir ver os proprios filhos:');
     check('GET /grades/my-boletim', (await call(g, '/grades/my-boletim')).status, [200]);
@@ -373,6 +375,9 @@ async function main() {
       body: JSON.stringify({ subject: 'Tentativa', body: 'Teste', class_id: FAKE_UUID }),
     })).status, [403], 'turma inexistente deve ser 403 para professor');
 
+    check('GET /payout (teacher)', (await call(t, '/payout')).status, [403],
+      'professor nao pode ver dados bancarios da escola');
+
     console.log('PROFESSOR — nao pode administrar:');
     check('POST /classes (criar turma)', (await call(t, '/classes', {
       method: 'POST',
@@ -510,6 +515,29 @@ async function main() {
     } else {
       console.log('  (sem alunos cadastrados — teste de PUT com class_id invalido pulado)');
     }
+    console.log('GESTOR — dados bancarios (payout com PII mascarado):');
+    const payoutRes = await call(a, '/payout');
+    check('GET /payout (admin)', payoutRes.status, [200], 'gestor deve ter acesso ao endpoint de payout');
+    if (payoutRes.status === 200) {
+      const pd = payoutRes.body?.data ?? {};
+      // wallet_id e account_id nao devem mais ser retornados.
+      const hasInternalIds = 'wallet_id' in pd || 'account_id' in pd;
+      if (!hasInternalIds) {
+        console.log('  PASSA  wallet_id e account_id nao expostos');
+      } else {
+        console.log('  FALHA  IDs internos do ASAAS expostos no GET /payout');
+        results.push({ ok: false, name: 'GET /payout wallet_id/account_id exposed', actual: 'IDs presentes', expected: 'sem IDs internos', detail: '' });
+      }
+      // CPF nao pode estar em plain text — se preenchido, precisa conter •.
+      const cpf = pd.onboarding?.responsible_cpf ?? '';
+      if (!cpf || cpf.includes('•')) {
+        console.log('  PASSA  CPF mascarado ou vazio');
+      } else {
+        console.log(`  FALHA  CPF em plain text exposto: ${cpf.slice(0, 4)}***`);
+        results.push({ ok: false, name: 'GET /payout CPF nao mascarado', actual: 'plain text', expected: 'mascarado com •', detail: '' });
+      }
+    }
+
     console.log('');
   }
 
